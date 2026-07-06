@@ -1,5 +1,5 @@
 # Odyssey
-Odyssey is a Minecraft plugin for Java Edition that allows players to navigate around the server more easily. It exists today as a version that I developed off-and-on for 5 years and I want to rewrite it as Odyssey 2.0 from the ground up using the knowledge I've since gained and using AI to write the initial implementation and much of the starting boilerplate.
+Odyssey is a Minecraft plugin for Java Edition that allows players to navigate around the server more easily. It exists today as a plugin called Journey that I developed off-and-on for 5 years and I want to rewrite it as "Odyssey" from the ground up using the knowledge I've since gained and using AI to write the initial implementation and much of the starting boilerplate.
 
 The general idea is that a user will request to navigate from an origin to a destination. The response will be a future to a calculation that runs asynchronously by requesting information about the player who whomever is navigating and about the world to give a navigable path back to the user. Finally, the plugin will display this path to the user in some visual nature, like particles floating above the ground through which the player may walk.
 
@@ -224,14 +224,17 @@ There should also be admin commands that is under the root command `/odysseus`. 
 ## Minecraft Plugin Integrations
 Each of these are additional plugins that we should make. They're only purpose is, upon startup, connect the given plugin to Odysseus by registering Tunnel, Navigator, or Destination providers so Odysseus can be used in the larger Minecraft plugin ecosystem.
 - OdysseusCitizens
+  - Only for Paper (not Folia, I don't believe it's supported)
   - Citizens is a plugin that provides an API to puppet entities in Minecraft. Dummy players can be spawned and told to move around, for example, or even animals like Foxes or Turtles. The integration plugin creates a Navigator with the id `guide`, which uses the `PathString` from the Navigation Result after a search to spawn an animal of the player's choosing to "guide" the player to the destination. This requires some special logic to spawn the entity, tell it navigate to a certain number of blocks ahead of the player in the current path, wait for the player to get close enough before continuing to walk along the path, teleporting through Tunnels if there are any, and finally despawning when the destination is reached.
 - OdysseusEssentials
+  - Only for Paper
   - Essentials is a plugin that provides `/spawn` and `/home` for players, which are methods of teleportation. These should be provided to players via `DestinationProvider` in appropriate subtrees and appropriate IDs and names in addition to `TunnelProvider` for teleporting as long as the player has the Essentials permission to actually perform the teleport.
 - OdysseusTowny
+  - Only for Paper
   - Towny is a plugin that allows players to great "Towns" that have chunks claimed as chunks for a town. Players should be able to navigate to any of the towns on the server, so OdysseusTowny provides them in a DestinationProvider.
 - Quest plugins:
-  - All of the following integration plugins are integrations for quest plugins. These are plugins that allow the server owner to register quests for players to explore. We should add `DestinationProviders` anywhere necessary like whatever the players' "current quest" destination is.
-  - OdysseusTypewriter: (Typewriter: gabby235)
+  - All of the following integration plugins are integrations for quest plugins. (only for Paper) These are plugins that allow the server owner to register quests for players to explore. We should add `DestinationProviders` anywhere necessary like whatever the players' "current quest" destination is.
+  - OdysseusTypewriter: (Typewriter: gabby235) (I'm not really sure how Typewriter works internally, I haven't ever used it personally)
   - OdysseusQuests: (Quests: PikaMug)
   - OdysseusNotQuests: (NotQuests: Alessio)
   - OdysseusBetonQuest: (BetonQuest: Wolf2323)
@@ -279,13 +282,15 @@ Do not do casting checks if possible, everything should be strong-typed and heav
 Anything that can be pushed up into more abstract libraries should
 This document should basically contain the design for the entire project
 
+Java or Kotlin? I'm open to suggestion about which one to use, learning Kotlin could be fun!
+
 ## External resources
 - PaperMC API
 - SpongeAPI
 - Citizens API
 - Essentials API
 - Towny API
-- Typewriter API
+- Typewriter repo
 - Quests API
 - NotQuests API
 - BetonQuest API
