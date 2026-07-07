@@ -4,7 +4,7 @@ Canonical vocabulary for the entire project. Every design document uses these te
 If a term here conflicts with older notes in `odyssey/design.md`, this document wins.
 
 ## Naming conventions
-- **Project / plugin name:** **Odyssey** (never "Odysseus" — that was a typo in the original draft).
+- **Project / plugin name:** **Odyssey**
 - **User command root:** `/navigate` (alias `/nav`).
 - **Admin + player-utility command root:** `/odyssey` (reload, portal cache, waypoints).
 - **Integration plugin names:** `OdysseyCitizens`, `OdysseyEssentials`, `OdysseyTowny`, etc.
@@ -12,57 +12,64 @@ If a term here conflicts with older notes in `odyssey/design.md`, this document 
   (see `01-modules-and-build.md`) so the shaded uberjars merge cleanly.
 - **Config parameter keys:** period-delimited, snake_case leaves (e.g. `navigators.trail.particle_type`).
 
+## Generic type parameters
+Three type parameters flow through the search so downstream code stays cast-free:
+- **`A extends Agent`** — the agent type (e.g. `OdysseyPlayer`).
+- **`T extends Enum<T>`** — the **`StepType`** enum (e.g. `MinecraftStepType`).
+- **`I`** — the **`Instruction`** payload type (e.g. `MinecraftInstruction`); may be `Void` when unused.
+
 ## Core spatial types
 | Term | Meaning |
 |------|---------|
 | **Cell** | Immutable `(x, y, z)` integer triple. One 1×1×1 unit of space. No domain attached. Atomic unit of all algorithms. |
 | **Domain** | A contiguous coordinate space (≈ a Minecraft world). Identified internally by an `int` domain id. Cells in different domains are never adjacent. |
-| **Position** | Immutable `(Cell, int domainId)` pair. Used everywhere a located point is needed, to avoid threading `(Cell, Domain)` through every signature. |
-| **DomainId registry** | Bidirectional mapping between an external string key (e.g. Minecraft `"minecraft:overworld"`) and the internal `int` domain id. Owned by the API service instance — **not** a static global. |
+| **Position** | Immutable `(Cell, int domainId)` pair. Used everywhere a located point is needed. |
+| **DomainRegistry** | Bidirectional mapping between an external string key (e.g. `"minecraft:overworld"`) and the internal `int` domain id. Owned by the API service instance — **not** a static global. |
+| **DomainRegion** | A region of cells within one domain: `contains(Cell)` + `nearestBoundaryCell(Cell)` (+ geometry accessors heuristics may need). A single cell, a 2×3 portal plane, or a whole town are all `DomainRegion`s. Replaces the old "DomainDestination". |
 
 ## Movement & search types
 | Term | Meaning |
 |------|---------|
-| **Agent** | Generic marker for "the thing that is navigating." Supplies the set of `Mode`s and `Tunnel`s available to it. Minimal at `core-api`; extended downstream (`MinecraftAgent`, `OdysseyPlayer`). |
-| **Mode** | A method of transportation (walk, swim, fly, mine, fall, boat, horse …). Given a `Position` and agent context, it produces the set of reachable neighbor cells and their step costs. Generic on the agent type: `Mode<A extends Agent>`. |
-| **ModeType** | An enum value tagging a `Mode` (so callers can, e.g., render a different particle per mode). `Mode` is generic on its mode-type enum. |
-| **Movement** | The output unit of a `Mode.step`: a reachable neighbor `Cell` + the cost to reach it + the resulting `TraversalState`. |
-| **TraversalState** | Small, immutable, hashable record of mutable agent condition accumulated during a search (e.g. `vehicle = NONE/BOAT/HORSE`, `boatConsumed`). Carried per search node and passed to successors. |
-| **Step** | One entry in a solved `Path`: a `Cell`, cumulative cost to reach it, the `ModeType` used to get there, and the `TraversalState` at that point. |
-| **Search** | A single asynchronous path-solving session (formerly overloaded as "Navigation"). Resumable object driven by the `Scheduler`; produces a `NavigationResult`. |
-| **NavigationResult** | The outcome of a `Search`: either a solved `PathString` or a failure reason. |
+| **Agent** | Generic marker for "the thing that is navigating." Supplies the set of `Mode`s and `Transition`s available to it. Minimal at `core-api`; extended downstream (`MinecraftAgent`, `OdysseyPlayer`). |
+| **Mode** | A method of transportation (walk, swim, fly, mine, fall, boat, horse …). Given a cell + agent context + `TraversalState`, produces reachable neighbor `Movement`s. `Mode<A, T, I>`. |
+| **StepType** | The enum tagging every `Step` (formerly "ModeType"). Both `Movement`s and `Transition`s declare one. Drives result interpretation + particle choice. Minecraft values include `WALK`/`FLY`/… and action types like `COMMAND`/`MOUNT_HORSE`/`PLACE_BOAT`. |
+| **Movement** | The output unit of `Mode.step`: a reachable neighbor `Cell`, the cost, the resulting `TraversalState`, a `StepType`, and a nullable `Instruction`. |
+| **Instruction** | Optional, caller-supplied payload attached to a step that requires the player to *do* something (chiefly `CommandInstruction` carrying a command string). Generic `I` on `Mode`/`Transition`/`Movement`/`Step`. |
+| **TraversalState** | Immutable, sparse, hashable **typed key→value map** (`TraversalKey<V> → V`) of accumulated agent condition (e.g. `VEHICLE → HORSE`). `DEFAULT` = the empty map. Internal to the search — **not** exposed on the result `Step`. |
+| **Step** | One entry in the result `Path`: `Cell`, `int domainId`, cumulative cost, `StepType`, and a nullable `Instruction`. (No `TraversalState`.) |
+| **Search** | A single asynchronous path-solving session. Resumable object driven by the `Scheduler`. |
+| **SearchHandle** | What `navigate(...)` returns: holds the `CompletableFuture<NavigationResult>` (`future()`) and `cancel()`. |
+| **NavigationResult** | Sealed `Success(Path)` \| `Failure(FailureReason)`. |
 
 ## Path types
 | Term | Meaning |
 |------|---------|
-| **Path** | An ordered series of `Step`s within a **single** `Domain`. The solved form of a `VirtualPath`. |
-| **Tunnel** | A single-step traversal between two `Position`s that may cross domains, and may optionally apply a `TraversalState` transformation. Has a traversal cost. One-directional. Examples: nether portal, horse mount, teleport command. |
-| **VirtualPath** | An *unsolved* (or partially/fully solved) edge in the Tier-1 graph between two tunnel endpoints in the same domain. Holds an optimistic cost estimate until solved by Tier-2 A* into a concrete `Path`. Mutable and memoized across recalculations. |
-| **PathString** | The full end-to-end result: an alternating sequence of `Tunnel`s (nodes) and `Path`s (edges) that connects origin to destination, possibly across multiple domains. |
+| **Path** | The flattened end-to-end result: an ordered `List<Step>` from origin to destination. **No** single `domainId` — each `Step` carries its own domain, and a domain change / an `Instruction` marks a `Transition` point. (Replaces the old alternating `PathString`.) |
+| **Transition** | One-directional single-step jump between a `DomainRegion` **origin** and a `Position` **destination** that may cross domains and/or transform `TraversalState`, optionally carrying an `Instruction`. Has a cost and a `StepType`. Examples: nether portal, `/home` teleport, horse mount. (Renamed from "Tunnel".) |
+| **VirtualPath** | An *unsolved* (or partially/fully solved) edge in the Tier-1 graph between two `Transition` endpoints in the same domain. Holds an optimistic cost estimate until Tier-2 A* solves it into concrete `Step`s. Mutable, memoized across recalculations. |
 
 ## Destinations
 | Term | Meaning |
 |------|---------|
-| **DomainDestination** | A destination confined to one domain: a completion predicate (`isSatisfiedBy(Cell)`) + an admissible approximate-cost/heuristic function. Usually just "this exact cell." |
-| **Destination** | A mapping of `domainId → DomainDestination`. Lets a single logical destination span domains / many endpoints (e.g. "the closest Towny town"). Modeled in Tier-1 as a virtual super-sink. |
+| **Destination** | `Collection<DomainRegion> regions()` — one logical destination, possibly spanning domains / many endpoints (e.g. "the closest Towny town"). Modeled in Tier-1 as a virtual super-sink. |
 | **DestinationTree** | (Plugin layer) A lazily-evaluated tree of named sub-trees and named `MinecraftDestination`s, provided per-agent by a `DestinationProvider`. Drives command tab-completion and resolution. |
-| **MinecraftDestination** | (Plugin layer) A `Destination` plus an Adventure display-name `Component` and a list of required permission strings. |
+| **MinecraftDestination** | (Plugin layer) A `Destination` plus an Adventure display-name `Component` and required permission strings. |
 
 ## Display / following
 | Term | Meaning |
 |------|---------|
-| **Navigator** | A pluggable *display strategy* that shows a solved `PathString` to a player (e.g. `TrailNavigator` renders particles; `OdysseyCitizens` provides a `guide` animal). Built by a `NavigatorFactory`. |
-| **Trip** | An *active, per-player* guided session: a `Navigator` bound to a player + current `PathString`. May be **live** (periodically re-searches and hot-swaps its `PathString`). A player may have several `Trip`s at once. |
+| **Navigator** | A pluggable *display strategy* that shows a solved `Path` to a player (e.g. `TrailNavigator` renders particles; `OdysseyCitizens` provides a `guide` animal), prompting the player when it reaches a `Step` bearing an `Instruction`. Built by a `NavigatorFactory`. |
+| **Trip** | An *active, per-player* guided session: a `Navigator` bound to a player + current `Path`. May be **live** (periodically re-searches and hot-swaps its `Path`). A player may have several `Trip`s at once. |
 
 ## Infrastructure
 | Term | Meaning |
 |------|---------|
-| **FutureOr\<T\>** | A value that is *either* an immediately-available `T` *or* a pending `CompletableFuture<T>` — never both. Lets the search consume cache hits synchronously and park only on cache misses. |
-| **Scheduler** | Platform abstraction for running work: `runAsync` (worker thread), `runAtPosition(Position, task)` (the thread that owns that location — Folia region / Paper main / Sponge server), `runGlobal`. |
+| **FutureOr\<T\>** | Sealed sum type — *either* an immediate `T` *or* a pending `CompletableFuture<T>`. Lets the search consume cache hits synchronously and park only on cache misses. |
+| **Scheduler** | Platform abstraction: `runAsync` (worker thread), `runAtPosition(Position, task)` (thread owning that location — Folia region / Paper main / Sponge server), `runGlobal`. |
 | **ChunkProvider** | Thread-safe LRU cache of `OdysseyChunk` snapshots, backed by `PlatformApi`, with staleness eviction and read-ahead prefetch. Returns blocks as `FutureOr`. |
 | **PlatformApi** | The seam a platform implementation fills: fetch chunk snapshots, display particles, spawn entities, etc. |
 
 ## Cost
 Cost is measured in **seconds of real traversal/heal time** throughout. All heuristics and mode
 costs reduce to time. Damage-inducing actions are costed as a configurable multiplier × the time
-it would take to heal that damage. `int`-free: costs are `double`.
+it would take to heal that damage. Costs are `double`.

@@ -6,31 +6,51 @@ Paper/Sponge types). `minecraft-api` is the thin, publishable, developer-facing 
 
 ## Module split (authoritative placement)
 **`minecraft-api`** (`net.whimxiqal.odyssey.minecraft.api`) — interfaces external devs touch:
-`MinecraftModeType`, `MinecraftMode`, `MinecraftAgent`, `OdysseyPlayer`, `Direction`, the
-Minecraft-flavored `MinecraftOdysseyApi` façade, `TunnelProvider` re-exposed with MC types.
+`MinecraftStepType`, `MinecraftInstruction` (sealed), `MinecraftMode`, `MinecraftAgent`,
+`OdysseyPlayer`, `Direction`, the Minecraft-flavored `MinecraftOdysseyApi` façade, and
+`TransitionProvider` (the per-agent async supplier).
 
 **`minecraft`** (`net.whimxiqal.odyssey.minecraft`) — the world model + implementations:
 `OdysseyBlock`, `OdysseyChunk`, `OdysseyWorld`, `ChunkProvider`, `PlatformApi`, `Scheduler` (impl
-of the core `Scheduler` seam plus MC additions), `MinecraftTraversalState`, and all `Mode`s
+of the core `Scheduler` seam plus MC additions), the concrete `TraversalKey`s, and all `Mode`s
 (`WalkMode`, `JumpMode`, `SwimMode`, `FlyMode`, `MineMode`, `FallMode`, `BoatMode`, `HorseMode`),
 plus rail/highway segment support.
 
 ## `minecraft-api`
 
-### `MinecraftModeType`
+### `MinecraftStepType`
+The `StepType` enum for Minecraft — both movement types and discrete-action types.
 ```java
-public enum MinecraftModeType {
+public enum MinecraftStepType {
+  // movement (produced by Modes)
   WALK, JUMP, SWIM, FLY, MINE, FALL, BOAT, HORSE,
-  ELYTRA,          // reserved, unimplemented in v1
+  // discrete actions (produced by Transitions, or by the first movement of a vehicle mode)
+  PORTAL,          // walk-through vanilla portal (no player action)
+  COMMAND,         // player must run a command (payload in CommandInstruction)
+  MOUNT_HORSE,     // player mounts their horse
+  PLACE_BOAT,      // player places & enters a boat
+  // reserved
+  ELYTRA,          // unimplemented in v1
   RIDE_MINECART;   // supplied as cached segments, not a live step-mode in v1
 }
+```
+
+### `MinecraftInstruction` (sealed)
+The concrete `I` for Minecraft. Navigators exhaustively `switch` on it to decide how to prompt.
+Parameterless actions are conveyed by `StepType` alone, so most steps have a `null` instruction; the
+essential payload-bearing case is `COMMAND`.
+```java
+public sealed interface MinecraftInstruction
+    permits CommandInstruction /* , future: PlaceBoatInstruction, MountInstruction, … */ {
+}
+public record CommandInstruction(String command) implements MinecraftInstruction {}
 ```
 
 ### `MinecraftMode`
 ```java
 public interface MinecraftMode<A extends MinecraftAgent>
-        extends Mode<A, MinecraftModeType> {
-  @Override MinecraftModeType type();
+        extends Mode<A, MinecraftStepType, MinecraftInstruction> {
+  @Override MinecraftStepType stepType();
 }
 ```
 
@@ -47,7 +67,7 @@ public interface OdysseyPlayer extends MinecraftAgent {
   boolean hasPermission(String node);
   boolean canFly();                     // creative/spectator/allow-flight
   boolean hasBoatInInventory();
-  Optional<Position> lastRiddenHorse(); // for the horse mount tunnel
+  Optional<Position> lastRiddenHorse(); // for the horse mount transition
   Locale locale();                      // for i18n message lookup
 }
 ```
@@ -60,6 +80,17 @@ public enum Direction {
   UP, DOWN, NORTH, SOUTH, EAST, WEST;
   public int dx(); public int dy(); public int dz();
   public Direction opposite();
+}
+```
+
+### `TransitionProvider`
+The lazy, per-agent, async supplier of `Transition`s (lives here, not in `core-api`, since `navigate`
+takes a pre-assembled list). Developers register these to expose custom teleports/portals.
+```java
+@FunctionalInterface
+public interface TransitionProvider {
+  CompletableFuture<List<? extends Transition<MinecraftStepType, MinecraftInstruction>>>
+      compute(OdysseyPlayer player);
 }
 ```
 
@@ -213,41 +244,42 @@ into water/hay/slime/powder-snow at the bottom is free regardless of distance. F
 true) can forbid any damaging fall. All numbers config-driven.
 
 ### `BoatMode` (vehicle → uses `TraversalState`)
-In the mode list only when `agent.hasBoatInInventory()` or state already `vehicle=BOAT`.
-- Entering a `supportsBoat` (water) cell from land transitions `state.vehicle = NONE→BOAT` and sets
-  `boatConsumed=true` (the inventory boat is now placed).
-- While `vehicle=BOAT`, movement is fast horizontal travel across water surface; the wider footprint
-  is approximated by also requiring direction-adjacent water cells clear.
-- Leaving water to land transitions back to `vehicle=NONE` (boat left behind). Cost includes the
-  small enter/exit overhead.
+In the mode list only when `agent.hasBoatInInventory()` or state already holds `VEHICLE == BOAT`.
+- Entering a `supportsBoat` (water) cell from land emits a movement that sets `VEHICLE = BOAT` (and
+  `BOAT_CONSUMED = true`); this first movement carries `stepType = PLACE_BOAT` so the navigator
+  prompts the player to place & enter a boat.
+- While `VEHICLE == BOAT`, movements are `stepType = BOAT`: fast horizontal travel across water
+  surface; the wider footprint is approximated by also requiring direction-adjacent water cells clear.
+- Leaving water to land clears `VEHICLE` (boat left behind). Cost includes small enter/exit overhead.
 
-### `HorseMode` (vehicle → via mount tunnel, see below)
-In the mode list only when `state.vehicle == HORSE`. Fast ground movement (like `WALK`/`JUMP` but
-lower per-cell cost and can jump higher). The player *enters* horse state by traversing the
-**horse mount tunnel**, not by a step-mode transition — this localizes "you must first reach your
-horse" to the Tier-1 graph.
+### `HorseMode` (vehicle → via mount transition, see below)
+In the mode list only when state holds `VEHICLE == HORSE`. Fast ground movement (like `WALK`/`JUMP`
+but lower per-cell cost, higher jump), `stepType = HORSE`. The player *enters* horse state by
+traversing the **horse mount transition**, not by a step-mode change — this localizes "you must
+first reach your horse" to the Tier-1 graph.
 
-## `MinecraftTraversalState`
-Concrete `TraversalState` for MC. Immutable, hashable, canonical (interned) so equal states share
-identity and the visited-set stays small.
+## `TraversalKey`s defined by the Minecraft layer
+There is no MC-specific `TraversalState` subtype — state is the generic KV map from `core-api`, and
+`minecraft` just defines the keys:
 ```java
-public final class MinecraftTraversalState implements TraversalState {
-  enum Vehicle { NONE, BOAT, HORSE }
-  Vehicle vehicle();
-  boolean boatConsumed();
-  static final MinecraftTraversalState DEFAULT; // vehicle=NONE, boatConsumed=false
+public final class MinecraftKeys {
+  public enum Vehicle { BOAT, HORSE }
+  public static final TraversalKey<Vehicle> VEHICLE = new TraversalKey<>("vehicle");
+  public static final TraversalKey<Boolean>  BOAT_CONSUMED = new TraversalKey<>("boat_consumed");
 }
 ```
-Visited-set key = `(cell, state)`. In the common (no-vehicle) search every node is `DEFAULT`, so this
-is effectively cell-only. (A config flag `collapse_visited_by_cell` can force cell-only keying to
-save memory, at the documented cost of possibly discarding a better-state branch.)
+No key present ⇒ on foot (the `DEFAULT` empty map). Visited-set key = `(cell, TraversalState)`; in a
+no-vehicle search every node is `DEFAULT`, so it's effectively cell-only. (A config flag
+`collapse_visited_by_cell` can force cell-only keying to save memory, at the documented cost of
+possibly discarding a better-state branch.)
 
-## Tunnels supplied by the Minecraft layer
-- **Mount tunnel:** for a player with `lastRiddenHorse()`, a `Tunnel` whose origin & destination are
-  that `Position`, `cost ≈ 0`, and `apply(state) → state.withVehicle(HORSE)`. From its destination,
-  only `HorseMode` applies, so Tier-1 sees a cheaper edge out of the horse's location.
-- **Vanilla portal tunnels & rail/highway segments:** discovered/managed at the plugin layer (`06`),
-  but consumed here as ordinary `Tunnel`s / pre-solved edges.
+## Transitions supplied by the Minecraft layer
+- **Mount transition:** for a player with `lastRiddenHorse()`, a `Transition` whose origin region is
+  that cell and destination is that `Position`, `cost ≈ 0`, `stepType = MOUNT_HORSE`, and
+  `apply(state) → state.with(VEHICLE, HORSE)`. From its destination only `HorseMode` applies, so
+  Tier-1's state-aware estimate sees a cheaper edge out of the horse's location.
+- **Vanilla portal transitions** (`stepType = PORTAL`) **& rail/highway segments:** discovered/managed
+  at the plugin layer (`06`), consumed here as ordinary `Transition`s / pre-solved edges.
 
 ## Rail & highway cached segments (v1-lite)
 A `CachedSegment` is a stored, directional line-string with a known traversal cost, injected into

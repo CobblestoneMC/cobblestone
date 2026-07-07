@@ -5,9 +5,10 @@ A test-support engine that stands in for Minecraft so the algorithms can be exer
 plus the actual algorithm tests. Depends on `core` (and hence `core-api`).
 
 ### Test modes
-Simple `Mode<TestAgent, TestModeType>` implementations over a synthetic world:
+Simple `Mode<TestAgent, TestStepType, Void>` implementations (instruction type `I = Void`) over a
+synthetic world:
 ```java
-enum TestModeType { FLY, WALK, DIG }
+enum TestStepType { FLY, WALK, DIG }
 ```
 - **`FlyMode`** — moves to any neighbor (cardinal, 2D-diagonal, 3D-diagonal) that is `AIR`. Uniform
   per-cell cost.
@@ -23,15 +24,16 @@ fast path.
 - Block types (v1): `SOLID`, `AIR`. Chunks are made of these.
 - **World JSON format:** a list of prismatic regions, each two 3D corners + a block type; a default
   fill (AIR) and later-region-wins overlap rule. Multiple domains per file (each with min/max Y and a
-  string key mapped through the `DomainRegistry`). Tunnels may be declared between positions.
+  string key mapped through the `DomainRegistry`). `Transition`s may be declared between positions
+  (origin as a single-cell region for tests).
 ```json
 {
   "domains": [
     { "key": "test:alpha", "minY": 0, "maxY": 64, "fill": "AIR",
       "regions": [ { "from": [0,0,0], "to": [10,0,10], "type": "SOLID" } ] }
   ],
-  "tunnels": [ { "from": {"domain":"test:alpha","cell":[5,1,5]},
-                 "to":   {"domain":"test:beta","cell":[0,1,0]}, "cost": 2.0 } ]
+  "transitions": [ { "from": {"domain":"test:alpha","cell":[5,1,5]},
+                     "to":   {"domain":"test:beta","cell":[0,1,0]}, "cost": 2.0 } ]
 }
 ```
 - **`WorldManager`** loads these into `TestWorld`s exposing `getBlockType(Cell)` and metadata; also
@@ -48,13 +50,15 @@ run `RunningAverageHeuristic` asserting "valid & within X% of optimal."
 - **Wall tunnelling:** same wall, `WALK`+`DIG`, dig cost < detour cost → path digs through; make the
   wall thick enough and it should route around instead (tests the running-average heuristic's
   wall-thickness behavior).
-- **Multi-domain:** destination only reachable via a `Tunnel` to another domain → `PathString` uses
-  the tunnel; verify alternating structure and total cost.
-- **Multi-endpoint destination:** several `DomainDestination`s → cheapest reached (super-sink).
-- **Vehicle/state:** a state-transforming tunnel (mount) yields a lower-cost onward path; verify the
-  `(cell, state)` visited keying keeps the vehicle branch alive where a cell-collapse would drop it.
-- **Failure cases:** destination walled off with no `DIG` → `DESTINATION_UNREACHABLE`; no tunnel to
-  the destination's domain → `NO_ROUTE`; over `maxCellsVisited`/`maxWallClock` → the right failure.
+- **Multi-domain:** destination only reachable via a `Transition` to another domain → the flat `Path`
+  contains a transition `Step` (domain changes across it); verify order and total cost.
+- **Multi-endpoint destination:** a `Destination` with several `DomainRegion`s → cheapest reached
+  (super-sink).
+- **Vehicle/state:** a state-transforming `Transition` (mount) yields a lower-cost onward path;
+  verify the `(cell, state)` visited keying keeps the vehicle branch alive where a cell-collapse
+  would drop it.
+- **Failure cases:** destination walled off with no `DIG` → `DESTINATION_UNREACHABLE`; no transition
+  to the destination's domain → `NO_ROUTE`; over `maxCellsVisited`/`maxWallClock` → the right failure.
 - **Cancellation:** cancel mid-search → future completes `CANCELLED`, no further work scheduled.
 
 ### Test scheduler
@@ -70,8 +74,8 @@ Features:
 - Load a `core-test` world JSON; render `SOLID` blocks as cubes, with a toggle to reduce solid-block
   opacity (so paths that pass *through* solids — `DIG`/`MINE` — are visible).
 - WASD + mouse camera movement around the space.
-- Run a navigation and draw the resulting `PathString` as red line segments through the cells.
+- Run a navigation and draw the resulting `Path` as red line segments through the cells.
 - Step/animate the **algorithm itself**: visualize the A* `visited` set growing and the `candidate`
   frontier, and Tier-1 edge selection/recalc, with playback controls.
-- Multiple domains rendered side-by-side with an air gap between them; `Tunnel`s drawn as ring/
+- Multiple domains rendered side-by-side with an air gap between them; `Transition`s drawn as ring/
   cylinder shapes to illustrate warping.

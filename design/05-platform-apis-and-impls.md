@@ -15,10 +15,11 @@ Each platform re-exposes the generic operations with native types so plugin devs
 abstractions. Example (Paper/Folia):
 ```java
 public interface PaperOdysseyApi {
-  CompletableFuture<NavigationResult<MinecraftModeType>> navigatePlayer(Player player, Location destination);
-  CompletableFuture<NavigationResult<MinecraftModeType>> navigatePlayer(Player player, Destination destination);
+  // returns a SearchHandle (future + cancel), typed to the Minecraft step/instruction generics
+  SearchHandle<MinecraftStepType, MinecraftInstruction> navigatePlayer(Player player, Location destination);
+  SearchHandle<MinecraftStepType, MinecraftInstruction> navigatePlayer(Player player, Destination destination);
 
-  void registerTunnelProvider(PaperTunnelProvider provider);         // Function<Player, Future<List<Tunnel>>>
+  void registerTransitionProvider(PaperTransitionProvider provider); // Function<Player, Future<List<Transition>>>
   void registerNavigatorFactory(String id, PaperNavigatorFactory f); // id lowercased; see 06
   void registerDestinationProvider(PaperDestinationProvider p);      // see 06
 
@@ -76,7 +77,7 @@ the destination label hovering over the trail.
 | `OdysseyBlock` | wraps snapshot block state; material→predicate table |
 | `OdysseyPlayer` | wraps native player |
 | `Scheduler` | native scheduler mapping (region-aware on Folia) |
-| façade impl (`PaperOdysseyApiImpl`) | builds mode lists, gathers tunnels, calls `core().navigate`, registers services |
+| façade impl (`PaperOdysseyApiImpl`) | builds mode lists, gathers transitions, calls `core().navigate`, registers services |
 
 ## Threading contract (restated for platform authors)
 1. Never call a native world/entity method off its owning thread. Route through `runAtPosition`.

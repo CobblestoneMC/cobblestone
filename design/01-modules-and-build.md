@@ -1,33 +1,41 @@
 # Odyssey — Modules & Build
 
 ## Subproject graph
-Arrows = "depends on". All modules are Gradle subprojects of one root build. Single repo-wide
-version to start (see Versioning).
+`X → Y` reads "**X depends on Y**". All modules are Gradle subprojects of one root build.
+Single repo-wide version to start (see Versioning).
 
 ```
-core-api  ─────────────┐
-   ▲                   │
-   │                   ▼
-  core            minecraft-api ──► (Adventure NOT here; see plugin-api)
-   ▲                   ▲
-   │                   │
-core-test          minecraft ──────────────────────────┐
-   ▲                   ▲                                │
-   │            ┌──────┴───────┐                        │
-playground   folia-api      sponge-16-api               │
-                 ▲              ▲                        │
-                 │              │                        │
-               folia        sponge-16                    │
-                 ▲              ▲                         │
-                 │              │              minecraft-plugin-api (+ Adventure)
-                 │              │                         ▲
-                 │              │              minecraft-plugin (+ config lib, data layer)
-                 │              │                    ▲          ▲
-                 └────────┐     └───────┐            │          │
-                   folia-plugin     sponge-plugin ───┘          │
-                        ▲                 ▲                      │
-                        └── integration plugins (OdysseyCitizens, …) ──┘
+core-api                       (root; no deps)
+  ▲
+  ├── core ──────────────► core-api
+  │     ▲
+  │     ├── core-test ───► core
+  │     │     ▲
+  │     │     └── playground ───► core-test
+  │     │
+  │     └── minecraft ───► core, minecraft-api
+  │            ▲
+  └── minecraft-api ────► core-api
+         ▲
+         ├── folia-api ──────► minecraft-api
+         │      ▲
+         │      └── folia ───► minecraft, folia-api
+         │             ▲
+         ├── sponge-16-api ──► minecraft-api
+         │      ▲
+         │      └── sponge-16 ─► minecraft, sponge-16-api
+         │
+         └── minecraft-plugin-api ─► minecraft-api  (+ Adventure, provided)
+                ▲
+                └── minecraft-plugin ─► minecraft, minecraft-plugin-api  (+ config lib, data layer)
+                       ▲
+   folia-plugin ─► folia, minecraft-plugin
+   sponge-16-plugin ─► sponge-16, minecraft-plugin
+   integration plugins (OdysseyCitizens, …) ─► a platform plugin/api + the 3rd-party plugin API
 ```
+No module depends on anything "above" it here — in particular **`core-api` depends on nothing**,
+and `minecraft-api` depends only on `core-api`. Adventure enters only at `minecraft-plugin-api`
+and downstream.
 
 Textual dependency list (authoritative):
 - **core-api** → (none). Pure Java, no third-party deps.
@@ -40,7 +48,7 @@ Textual dependency list (authoritative):
 - **folia** → minecraft, folia-api.  **sponge-16** → minecraft, sponge-16-api.
 - **minecraft-plugin-api** → minecraft-api (+ Kyori Adventure, `compileOnly`/provided).
 - **minecraft-plugin** → minecraft, minecraft-plugin-api (+ config lib + data-layer drivers).
-- **folia-plugin** → folia, minecraft-plugin.  **sponge-plugin** → sponge-16, minecraft-plugin.
+- **folia-plugin** → folia, minecraft-plugin.  **sponge-16-plugin** → sponge-16, minecraft-plugin.
 - **integration plugins** → the relevant platform plugin/api + the third-party plugin API.
 
 The graph is acyclic. `core-api` is the universal root; `minecraft-api` is the Minecraft root;
@@ -65,7 +73,7 @@ collision:
 | minecraft-plugin-api | `net.whimxiqal.odyssey.plugin.api` |
 | minecraft-plugin | `net.whimxiqal.odyssey.plugin` |
 | folia-plugin | `net.whimxiqal.odyssey.folia.plugin` |
-| sponge-plugin | `net.whimxiqal.odyssey.sponge16.plugin` |
+| sponge-16-plugin | `net.whimxiqal.odyssey.sponge16.plugin` |
 | integrations | `net.whimxiqal.odyssey.integration.<name>` |
 
 ## Gradle structure
@@ -91,12 +99,22 @@ Our own `net.whimxiqal.odyssey.*` packages are **never relocated**; the unique-s
 already prevents collisions when everything is merged into one plugin jar.
 
 ## Publishing (Maven)
-Published (thin) for downstream developers:
-`core-api`, `core`, `minecraft-api`, `minecraft`, `folia-api`, `sponge-16-api`, `folia`,
-`sponge-16`, `minecraft-plugin-api`.
+**Supported / documented** artifacts (thin jars) for downstream developers:
+- `core-api`, `core` — for developers using Odyssey with something *other* than Minecraft.
+- `folia-api`, `sponge-16-api` — for developers writing against Odyssey when the Odyssey plugin is
+  already present on the server.
+- `folia`, `sponge-16` — for developers who want to shade the algorithm implementation into their
+  own platform-dependent project.
 
-Not published: `minecraft-plugin` (internal glue), the `*-plugin` shaded artifacts (released as
-plugin jars, not libraries), `core-test`, `playground`.
+**Published but internal/unsupported:** `minecraft-api`, `minecraft`. We don't *want* to advertise
+these as a stable API, **but Maven publishing must be dependency-closed** — `folia`/`folia-api` and
+`sponge-16`/`sponge-16-api` compile against `minecraft`/`minecraft-api`, so a consumer of the
+supported platform artifacts must be able to resolve them transitively. They are published with a
+docs note that their surface may change without a minor bump. (The alternative — shading them into a
+fat platform artifact — is worse for API types we want shared, so we don't.)
+
+**Not published:** `minecraft-plugin-api`, `minecraft-plugin` (internal glue), the `*-plugin` shaded
+artifacts (released as *plugin jars*, not libraries), `core-test`, `playground`.
 
 ## Versioning
 Single repo-wide semantic version to start. Bump **minor** when any published API module changes
@@ -109,6 +127,6 @@ Revisit per-module versioning only if release cadence diverges painfully.
   takes shape). A key custom rule: forbid unchecked/needless casts to enforce the no-downcast pillar.
 - `CONTRIBUTING.md` and `README.md` at the repo root (tracked in `10-metrics-and-ops.md`).
 
-## External references (in `resources/`)
-Full clones of Paper, SpongeAPI, Folia, and the integration-target plugins live under `resources/`
+## External references (in `../resources/`)
+Full clones of Paper, SpongeAPI, Folia, and the integration-target plugins live under `../resources/`
 for API reference while implementing.

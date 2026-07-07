@@ -3,7 +3,7 @@
 `minecraft-plugin-api` is the **developer integration surface** (destinations, navigators). It is
 the first module to depend on **Kyori Adventure** (provided), so destination names and messages are
 rich `Component`s. `minecraft-plugin` holds the **shared plugin behavior** every platform plugin
-reuses: config, data layer, waypoints, vanilla portal-tunnel discovery, Trip management, command
+reuses: config, data layer, waypoints, vanilla portal-transition discovery, Trip management, command
 support, and i18n.
 
 ---
@@ -15,7 +15,7 @@ support, and i18n.
 #### `MinecraftDestination`
 ```java
 public interface MinecraftDestination {
-  Destination destination();       // core Destination (domain → DomainDestination)
+  Destination destination();       // core Destination (a Collection<DomainRegion>)
   Component displayName();         // Adventure rich text
   List<String> permissions();      // ALL must be held for a player to use it
 }
@@ -49,24 +49,31 @@ Towny, quests) register providers here; so does Odyssey itself for **waypoints**
 ### Navigators
 
 #### `Navigator`
-A display strategy bound to a player + `PathString`. Ticked by the Trip manager.
+A display strategy bound to a player + `Path`. Ticked by the Trip manager.
 ```java
 public interface Navigator {
   void start();
   void tick();                       // called on a schedule; render/advance
-  void update(PathString<MinecraftModeType> newPath); // hot-swap for live trips
+  void update(Path<MinecraftStepType, MinecraftInstruction> newPath); // hot-swap for live trips
   void stop();
   boolean isComplete();              // destination reached
 }
 
 @FunctionalInterface
 public interface NavigatorFactory {
-  Navigator create(OdysseyPlayer player, PathString<MinecraftModeType> path, NavigatorContext ctx);
+  Navigator create(OdysseyPlayer player,
+                   Path<MinecraftStepType, MinecraftInstruction> path,
+                   NavigatorContext ctx);
 }
 ```
 `NavigatorContext` exposes `PlatformApi` output methods, config, and i18n. Factories are registered
 by id (lower-cased) via `registerNavigatorFactory`; developers can add their own (e.g. Citizens'
 `guide`). Odyssey ships the default `trail` factory.
+
+**Prompting on instruction steps.** When a `Navigator` reaches a `Step` whose `stepType` is an action
+(`COMMAND`/`MOUNT_HORSE`/`PLACE_BOAT`/…) or that carries a non-null `MinecraftInstruction`, it prompts
+the player — e.g. a `CommandInstruction` shows a clickable "run `/home`" message; `PLACE_BOAT` shows
+"place a boat here." The navigator exhaustively `switch`es on the sealed `MinecraftInstruction`.
 
 ---
 
@@ -108,7 +115,7 @@ Abstract persistence with pluggable backends; admin selects backend + credential
 ```java
 public interface DataStore {
   void init();                      // create/migrate schema
-  PortalTunnelDao portalTunnels();
+  PortalTransitionDao portalTransitions();
   SegmentDao railHighwaySegments();
   WaypointDao waypoints();
   PlayerPrefsDao playerPrefs();
@@ -122,7 +129,7 @@ public interface DataStore {
   persistence is only relevant when Odyssey runs as a plugin — the core library is standalone. Base
   JDBC helpers usable across backends may sit in `minecraft` if reused by non-plugin embedders;
   otherwise they stay here.
-- **What's stored:** vanilla portal tunnels; rail/highway `CachedSegment`s; player waypoints; player
+- **What's stored:** vanilla portal transitions; rail/highway `CachedSegment`s; player waypoints; player
   preferences. (No path-result caching — dropped by design.)
 
 ### Waypoints
@@ -133,36 +140,42 @@ Odyssey-owned destinations, exposed as their own `DestinationProvider` (tree key
 - Persisted via `WaypointDao` (per-player + global scopes). The provider yields a `waypoint` sub-tree
   of the player's personal + global waypoints as `MinecraftDestination`s.
 
-### Vanilla portal tunnel discovery
+### Vanilla portal transition discovery
 No platform API reveals where a portal leads (the game decides, possibly generating the far portal).
 So Odyssey discovers empirically:
-- Listen for player portal teleports. On teleport, capture the set of portal blocks at the entry and
-  the arrival `Position`; create a one-directional `Tunnel` (entry portal → arrival) and persist it.
+- Listen for player portal teleports. On teleport, capture the portal-block plane at the entry as a
+  `DomainRegion` origin and the arrival `Position`; create a one-directional `Transition`
+  (`stepType = PORTAL`, entry plane → arrival) and persist it.
 - The reverse direction is **not** assumed (nether linking is asymmetric); it's created only when a
   player travels back the other way.
 - Same process for End portals (and the End exit).
 - Admin `/odyssey portals clear` wipes the cache (for buggy/oversized linking).
-- These persisted tunnels are surfaced to searches via an internal `TunnelProvider`.
+- These persisted transitions are surfaced to searches via an internal `TransitionProvider`.
 
 ### Trip management (following the path)
 ```java
 public final class TripManager {
-  Trip startTrip(OdysseyPlayer player, PathString<MinecraftModeType> path, String navigatorId, boolean live);
+  Trip startTrip(OdysseyPlayer player,
+                 Path<MinecraftStepType, MinecraftInstruction> path,
+                 String navigatorId, boolean live);
   List<Trip> trips(UUID player);
   void stopTrip(Trip trip);
   void stopAll(UUID player);   // on logout
 }
 ```
 - A **`Trip`** owns a `Navigator` and (if live) a re-search loop. Ticked on a schedule.
-- **Follow logic (default `TrailNavigator`):** each `Step` is a vector; project the player's current
-  position onto the foremost step's vector; if the projection passes the step's end, mark it
-  completed and advance. This tolerates small deviations (a player who cuts a corner still "completes"
-  steps in the right direction). The particle buffer always covers the next ~100 cells (configurable).
+- **Follow logic (default `TrailNavigator`):** consecutive movement `Step`s form vectors; project the
+  player's current position onto the foremost step's vector; if the projection passes the step's end,
+  mark it completed and advance. This tolerates small deviations (a player who cuts a corner still
+  "completes" steps in the right direction). The particle buffer always covers the next ~100 cells
+  (configurable). When the foremost step is an **action step** (an `Instruction`/action `stepType`),
+  the navigator pauses trail advancement and prompts the player instead (see Prompting above),
+  resuming once the player is past it (e.g. after the command teleport lands them in the next domain).
 - **Return-to-trail:** additionally render a direct particle line from the player to the foremost
   *untraversed* step's origin, so a player who wanders off is guided back cheaply (no re-search).
 - **Label:** hovering destination-name text (`showTrailText`) over the trail.
 - **Live trips:** periodically re-run the full search and `update()` the navigator with the new
-  `PathString` (hot-swap) — no world-change listening, no movement tracking required. Interval is
+  `Path` (hot-swap) — no world-change listening, no movement tracking required. Interval is
   configurable.
 - **Concurrency reconciliation (two knobs):**
   - `search_limits.max_concurrent_searches_per_player` (default **1**) — CPU protection; manual
@@ -185,5 +198,5 @@ The actual command *trees* are defined per platform (`07`), but the reusable log
   navigator choice the platform command passes into the search request.
 - **Mode-list assembly** for a player: start from all `MinecraftMode`s, drop those gated out
   (`FlyMode` unless `canFly()`, `BoatMode` unless boat in inventory) and those excluded by flags.
-- **Tunnel gathering:** union of registered `TunnelProvider`s + vanilla portal tunnels + horse mount
-  tunnel + rail/highway segments, filtered by relevance.
+- **Transition gathering:** union of registered `TransitionProvider`s + vanilla portal transitions +
+  horse mount transition + rail/highway segments, filtered by relevance.

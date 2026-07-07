@@ -13,7 +13,7 @@ how to get from a deep mineshaft back to base.
 
 ## Design pillars
 1. **The pathfinding core knows nothing about Minecraft.** All algorithms operate on abstract
-   `Cell`/`Domain`/`Mode`/`Tunnel`/`Destination` types (`core-api` + `core`). Minecraft is one
+   `Cell`/`Domain`/`Mode`/`Transition`/`Destination` types (`core-api` + `core`). Minecraft is one
    *implementation* of those abstractions, and each server platform (Paper/Folia, Sponge) is one
    *implementation* of the Minecraft seam.
 2. **Abstract up, never downcast.** Anything that can live in a more abstract module does. Types
@@ -34,26 +34,26 @@ how to get from a deep mineshaft back to base.
 player runs /nav <destination>
         │
         ▼
-platform plugin (folia-plugin / sponge-plugin)
+platform plugin (folia-plugin / sponge-16-plugin)
   • parses command via native command API
   • resolves destination via DestinationTree
   • builds the agent's Mode list (canFly() → FlyMode, boat in inv → BoatMode, …)
-  • gathers Tunnels from registered TunnelProviders (+ vanilla portal tunnels, rail/highway segments)
-        │  OdysseyApi.navigate(origin Position, Destination, Modes, Tunnels)
+  • gathers Transitions from registered TransitionProviders (+ vanilla portal transitions, rail/highway segments)
+        │  OdysseyApi.navigate(origin Position, Destination, Modes, Transitions) → SearchHandle
         ▼
 core Search (async, on a Scheduler worker)
-  Tier 1 — graph/Dijkstra over Tunnels(nodes) + VirtualPaths(edges), optimistic costs, lazy edges
+  Tier 1 — graph/Dijkstra over Transitions(nodes) + VirtualPaths(edges), optimistic costs, lazy edges
   Tier 2 — per VirtualPath, A* within one Domain using the Modes; blocks via ChunkProvider(FutureOr)
   recalc — if a solved edge overshoots its estimate by >threshold, raise its cost & re-run Tier 1
-        │  CompletableFuture<NavigationResult>
+        │  SearchHandle.future() → NavigationResult (sealed Success(Path) | Failure)
         ▼
 platform plugin creates/updates a Trip
-  • Navigator (default TrailNavigator) renders the PathString
-  • live Trips periodically re-search and hot-swap the PathString
+  • Navigator (default TrailNavigator) renders the flat Path, prompting on instruction steps
+  • live Trips periodically re-search and hot-swap the Path
 ```
 
 ## Scope of v1
-**In:** Walk, Jump, Swim, Fly, Mine, Fall, Boat, Horse modes; nether/end portal tunnels; minecart
+**In:** Walk, Jump, Swim, Fly, Mine, Fall, Boat, Horse modes; nether/end portal transitions; minecart
 rail + plugin highway cached segments (lite); multi-domain routing; trail navigator with
 follow/return-to-trail logic; live trips; waypoints; destination providers; SQL/Mongo persistence;
 i18n; Paper/Folia + Sponge plugins; Citizens/Essentials/Towny/quest integrations; core-test engine;
@@ -66,7 +66,7 @@ region-protection break checks (extension API stub only); powered-rail speed nua
 - Odyssey never modifies the world. `Mine` mode only means "the route passes through blocks the
   player is expected to break"; Odyssey does not break them.
 - Odyssey does not guarantee globally optimal routes.
-- Odyssey does not add teleportation of its own (integrations may expose existing teleports as tunnels).
+- Odyssey does not add teleportation of its own (integrations may expose existing teleports as transitions).
 
 ## Reading order
 `glossary.md` → this file → `01-modules-and-build.md` → `02-core-api.md` → `03-core-algorithm.md`
