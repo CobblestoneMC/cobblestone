@@ -1,5 +1,13 @@
 # Odyssey — Modules & Build
 
+> **Status: implemented (Phase 0 done), doc not reconciled.** The build skeleton exists and builds
+> green under `project/`. Since then the layout was reorganized into nested folders and several
+> modules were renamed (`core-api`→`api`, `minecraft`→`minecraft-core`, `minecraft-plugin-api`→
+> `plugin-api`, `minecraft-plugin`→`plugin-core`, `folia*`→`paper*`, `sponge-16`→`sponge-16-core`).
+> **The authoritative module list, names, and dependency edges now live in
+> `project/settings.gradle.kts` and each module's `build.gradle.kts`** — trust those over the names
+> written below in this document.
+
 ## Subproject graph
 `X → Y` reads "**X depends on Y**". All modules are Gradle subprojects of one root build.
 Single repo-wide version to start (see Versioning).

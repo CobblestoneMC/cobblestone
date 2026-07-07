@@ -4,11 +4,19 @@ The pure, Minecraft-agnostic contract. No third-party dependencies. Package
 `net.whimxiqal.odyssey.api`. Everything here is designed so `core` can implement the algorithms
 and so any embedder (Minecraft or otherwise) can drive navigation over abstract space.
 
-> Stubs show intent, not final formatting. Costs are `double` (seconds). Three generic parameters
+> Stubs show intent, not final formatting. Costs are `double` (seconds). Four generic parameters
 > flow through the whole search so downstream code never downcasts:
 > - **`A extends Agent`** — the agent type.
 > - **`T extends Enum<T>`** — the `StepType` enum.
 > - **`I`** — the caller-supplied `Instruction` payload type (unbounded; `Void` when unused).
+> - **`D extends Domain`** — the domain type (e.g. `OdysseyWorld`, `TestWorld`).
+>
+> `A`, `T`, `I`, `D` are each **singular over a whole search**: one agent, one step-type enum, one
+> instruction type, and **one domain type**. Different worlds (Overworld, Nether) are different
+> *instances* of the same `D`, so `Step.domain()` returns a concrete `OdysseyWorld` with no lookup or
+> cast. **Contract:** an embedder must use exactly one concrete `Domain` implementation and
+> distinguish dimensions with a field/method (`environment()`), never with subtypes — subclassing
+> `Domain` per dimension would make cross-dimension `Transition`s mismatch on `D`.
 
 ## Spatial primitives
 
@@ -29,35 +37,26 @@ public final class Cell {
 No domain. Cells are compared only within a known domain context.
 
 ### `Position`
-Final, immutable `(Cell, domainId)`.
+Final, immutable `(Cell, Domain)`.
 ```java
-public final class Position {
-  public Position(Cell cell, int domainId);
-  public Cell cell(); public int domainId();
+public final class Position<D extends Domain> {
+  public Position(Cell cell, D domain);
+  public Cell cell(); public D domain();
   // value-based equals/hashCode
 }
 ```
 
 ### `Domain`
+Used directly as a first-class object — there is no `DomainRegistry` and no integer id (removed as
+clunky). Implementations **must** provide stable value-based `equals`/`hashCode` (Minecraft delegates
+to the world's `NamespacedKey`, e.g. `minecraft:overworld`), since a `Domain` flows into `Position`
+equality and is used as a map key.
 ```java
 public interface Domain {
-  int id();                      // internal integer id (from DomainRegistry)
   int minY();                    // inclusive world floor
   int maxY();                    // inclusive world ceiling (overworld ≈ -64..320)
   boolean contains(Cell cell);   // within [minY, maxY]
-}
-```
-
-### `DomainRegistry`
-Bidirectional `String key ↔ int id` map. **Instance-scoped**, owned by `OdysseyApi` (not static).
-Thread-safe (concurrent maps + an `AtomicInteger`).
-```java
-public interface DomainRegistry {
-  int idFor(String key);          // assigns a new id if unseen
-  String keyFor(int id);
-  boolean isRegistered(String key);
-  Domain domain(int id);
-  void register(String key, int minY, int maxY);
+  // MUST implement value-based equals/hashCode (identity of the underlying world)
 }
 ```
 
@@ -67,8 +66,8 @@ a 2×3 nether-portal plane, and a whole town are all `DomainRegion`s. (Replaces 
 `DomainDestination`.) It exposes **geometry only**; the cost estimate lives in the pluggable A*
 heuristic (`03`), not here.
 ```java
-public interface DomainRegion {
-  int domainId();
+public interface DomainRegion<D extends Domain> {
+  D domain();
   boolean contains(Cell cell);
   /** Closest cell of this region to {@code from} (vector-algebra nearest entry for prisms);
    *  returns {@code from} if already inside. The heuristic picks its own metric over this. */
@@ -76,7 +75,7 @@ public interface DomainRegion {
   // additional geometry accessors (center(), averageY(), …) added as heuristics need them
 }
 
-public final class CellRegion implements DomainRegion { /* a single-cell region */ }
+public final class CellRegion<D extends Domain> implements DomainRegion<D> { /* a single-cell region */ }
 ```
 Note on metrics: exposing the nearest cell (rather than a baked-in distance) lets an admissible
 heuristic use euclidean/octile distance while a cheap/fast heuristic may use manhattan — manhattan
@@ -143,7 +142,7 @@ public final class Movement<T extends Enum<T>, I> {
 
 ### `Mode`
 ```java
-public interface Mode<A extends Agent, T extends Enum<T>, I> {
+public interface Mode<A extends Agent, T extends Enum<T>, I, D extends Domain> {
   T stepType();   // the mode's primary step type (used for `-no-mode` exclusion + default tagging)
   /**
    * From {@code from} in {@code domain}, using {@code agent} + {@code state}, produce all cells this
@@ -151,7 +150,7 @@ public interface Mode<A extends Agent, T extends Enum<T>, I> {
    * through the ChunkProvider (Minecraft) and surface as FutureOr, so this returns a FutureOr of the
    * movement set. Pure/test modes with no IO return an immediate value.
    */
-  FutureOr<Collection<Movement<T, I>>> step(A agent, Cell from, Domain domain, TraversalState state);
+  FutureOr<Collection<Movement<T, I>>> step(A agent, Cell from, D domain, TraversalState state);
 }
 ```
 Ability/permission gating happens when the mode **list** is assembled (e.g. `FlyMode` only when
@@ -164,9 +163,9 @@ One-directional single-step jump (renamed from "Tunnel"). Its **origin is a `Dom
 2×3 portal plane), its **destination is a `Position`** (you arrive at a point), and it may cross
 domains and/or transform `TraversalState`. Carries a `StepType` and optional `Instruction`.
 ```java
-public interface Transition<T extends Enum<T>, I> {
-  DomainRegion origin();                   // entry area you must reach to use it
-  Position destination();                  // where you arrive
+public interface Transition<T extends Enum<T>, I, D extends Domain> {
+  DomainRegion<D> origin();                // entry area you must reach to use it
+  Position<D> destination();               // where you arrive (may be a different D instance / world)
   double cost();                           // seconds
   T stepType();                            // e.g. PORTAL, COMMAND, MOUNT_HORSE
   /** @Nullable — e.g. CommandInstruction("/home"); null for a walk-through portal. */
@@ -175,6 +174,8 @@ public interface Transition<T extends Enum<T>, I> {
   default TraversalState apply(TraversalState in) { return in; }
 }
 ```
+(Origin and destination are the same domain *type* `D` but usually different *instances* — a nether
+portal goes from one `OdysseyWorld` to another.)
 (No `isPseudo`: the origin/destination bookends of a search are an internal `core` concern — the
 algorithm recognizes its own synthetic transitions by reference and never leaks a flag to consumers.
 `apply` is also used in **Tier 1** to make optimistic estimates state-aware — e.g. after a mount, the
@@ -185,12 +186,12 @@ outbound estimates use horse speed; see `03`.)
 
 ## Destinations
 ```java
-public interface Destination {
-  Collection<DomainRegion> regions();   // one logical destination; may span domains / many endpoints
+public interface Destination<D extends Domain> {
+  Collection<DomainRegion<D>> regions();   // one logical destination; may span domain instances / endpoints
 }
 ```
-A `SingleDestination` wraps one `DomainRegion` (or a `CellRegion`) for the common case. The Tier-1
-builder groups `regions()` by domain itself (no `byDomain()` map needed).
+A `SingleDestination<D>` wraps one `DomainRegion<D>` (or a `CellRegion<D>`) for the common case. The
+Tier-1 builder groups `regions()` by domain instance itself (no `byDomain()` map needed).
 
 ## Result
 
@@ -199,27 +200,29 @@ The end-to-end result is **flattened** into a single `Path` — an ordered list 
 single domain. A `Transition` appears as a `Step` whose `stepType` is a transition type (and which
 may carry an `instruction`); a domain change between consecutive steps marks where you crossed one.
 ```java
-public final class Step<T extends Enum<T>, I> {
+public final class Step<T extends Enum<T>, I, D extends Domain> {
   public Cell cell();
-  public int domainId();
+  public D domain();          // concrete domain instance — no id lookup needed by the caller
   public double cumulativeCost();
   public T stepType();
   public /* @Nullable */ I instruction();
 }
 
-public interface Path<T extends Enum<T>, I> {
-  List<Step<T, I>> steps();   // ordered origin → destination
+public interface Path<T extends Enum<T>, I, D extends Domain> {
+  List<Step<T, I, D>> steps();   // ordered origin → destination (may cross domain instances)
   double cost();
-  Step<T, I> first(); Step<T, I> last();
+  Step<T, I, D> first(); Step<T, I, D> last();
 }
 ```
 
 ### `NavigationResult` (sealed)
 ```java
-public sealed interface NavigationResult<T extends Enum<T>, I>
+public sealed interface NavigationResult<T extends Enum<T>, I, D extends Domain>
     permits NavigationResult.Success, NavigationResult.Failure {
-  record Success<T extends Enum<T>, I>(Path<T, I> path) implements NavigationResult<T, I> {}
-  record Failure<T extends Enum<T>, I>(FailureReason reason) implements NavigationResult<T, I> {}
+  record Success<T extends Enum<T>, I, D extends Domain>(Path<T, I, D> path)
+      implements NavigationResult<T, I, D> {}
+  record Failure<T extends Enum<T>, I, D extends Domain>(FailureReason reason)
+      implements NavigationResult<T, I, D> {}
 }
 
 public enum FailureReason { NO_ROUTE, DESTINATION_UNREACHABLE, LIMIT_EXCEEDED, CANCELLED, TIMED_OUT, ERROR }
@@ -228,8 +231,8 @@ public enum FailureReason { NO_ROUTE, DESTINATION_UNREACHABLE, LIMIT_EXCEEDED, C
 ### `SearchHandle`
 What `navigate` returns — the future plus cancellation, together.
 ```java
-public interface SearchHandle<T extends Enum<T>, I> {
-  CompletableFuture<NavigationResult<T, I>> future();
+public interface SearchHandle<T extends Enum<T>, I, D extends Domain> {
+  CompletableFuture<NavigationResult<T, I, D>> future();
   void cancel();   // e.g. player logs off; completes the future with FailureReason.CANCELLED
 }
 ```
@@ -261,17 +264,20 @@ public final class SearchSettings {
 ### `OdysseyApi`
 ```java
 public interface OdysseyApi {
-  DomainRegistry domains();
-
-  <A extends Agent, T extends Enum<T>, I> SearchHandle<T, I> navigate(
+  <A extends Agent, T extends Enum<T>, I, D extends Domain> SearchHandle<T, I, D> navigate(
       A agent,
-      Position origin,
-      Destination destination,
-      List<? extends Mode<A, T, I>> modes,
-      List<? extends Transition<T, I>> transitions,
+      Position<D> origin,
+      Destination<D> destination,
+      List<? extends Mode<A, T, I, D>> modes,
+      List<? extends Transition<T, I, D>> transitions,
       SearchSettings settings);
 }
 ```
+The five type parameters are verbose here, but downstream façades bind them all to concrete types
+(`OdysseyPlayer`, `MinecraftStepType`, `MinecraftInstruction`, `OdysseyWorld`) so end users of
+`navigatePlayer(...)` never see a generic. `Movement<T, I>` is the one flow type with no `D` — it
+carries no domain (the domain is implied by the `step` call), so `core` stamps the domain onto the
+`Step` it builds from each `Movement`.
 `navigate` returns immediately with a `SearchHandle`; the `Search` (see `03`) runs on the
 `Scheduler`, and cancellation is via `handle.cancel()`.
 
