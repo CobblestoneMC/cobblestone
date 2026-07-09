@@ -56,7 +56,7 @@ class SearchIntegrationTest {
   }
 
   @Test
-  void crossesDomainThroughATransition() {
+  void crossesDomainThroughTransition() {
     TestDomain overworld = new TestDomain("overworld");
     TestDomain nether = new TestDomain("nether");
     TestTransition portal = new TestTransition(
