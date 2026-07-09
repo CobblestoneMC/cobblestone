@@ -27,16 +27,23 @@ import net.whimxiqal.odyssey.api.DomainRegion;
 import net.whimxiqal.odyssey.api.FutureOr;
 import net.whimxiqal.odyssey.api.Mode;
 import net.whimxiqal.odyssey.api.Movement;
+import net.whimxiqal.odyssey.api.Position;
 import net.whimxiqal.odyssey.api.TraversalState;
 
 /**
- * A single-domain A* solve for one {@link VirtualPath}, implemented as a <b>resumable</b> object so
- * it can run cooperatively: {@link #advance()} consumes cache-hit movements in a tight synchronous
- * loop and only <i>parks</i> (freeing its worker) when a mode's {@link FutureOr} is pending, then
+ * A single-domain A* solve for one {@link VirtualPath}, implemented as a
+ * <b>resumable</b> object so
+ * it can run cooperatively: {@link #advance()} consumes cache-hit movements in
+ * a tight synchronous
+ * loop and only <i>parks</i> (freeing its worker) when a mode's
+ * {@link FutureOr} is pending, then
  * resumes on the {@link Executor} once the block(s) arrive.
  *
- * <p>The visited set is keyed on {@code (cell, TraversalState)}; the heuristic is consistent, so a
- * closed-set A* returns least-cost paths for the explored terrain. Completes {@link #solve()}'s
+ * <p>
+ * The visited set is keyed on {@code (cell, TraversalState)}; the heuristic is
+ * consistent, so a
+ * closed-set A* returns least-cost paths for the explored terrain. Completes
+ * {@link #solve()}'s
  * future with a {@link Tier2Result}.
  *
  * @param <A> the agent type
@@ -48,18 +55,18 @@ final class Tier2Search<A extends Agent, T extends Enum<T>, I, D extends Domain>
 
   private final A agent;
   private final D domain;
+
   private final DomainRegion<D> target;
   private final List<? extends Mode<A, T, I, D>> modes;
   private final HeuristicStrategy heuristic;
   private final int maxCellsVisited;
   private final BooleanSupplier cancelled;
   private final Executor executor;
-
-  private final Map<CellState, Double> gScore = new HashMap<>();
+  private final Map<CellState, Double> bestCosts = new HashMap<>();
   private final Map<CellState, Came<T, I>> cameFrom = new HashMap<>();
   private final Set<CellState> closed = new HashSet<>();
-  private final PriorityQueue<OpenEntry> open =
-      new PriorityQueue<>((a, b) -> Double.compare(a.f(), b.f()));
+  private final PriorityQueue<OpenEntry> open = new PriorityQueue<>(
+      (a, b) -> Double.compare(a.estimatedTotalCost(), b.estimatedTotalCost()));
   private final CompletableFuture<Tier2Result<T, I, D>> result = new CompletableFuture<>();
 
   private int cellsVisited;
@@ -83,7 +90,7 @@ final class Tier2Search<A extends Agent, T extends Enum<T>, I, D extends Domain>
     this.executor = executor;
 
     CellState start = new CellState(virtualPath.fromCell(), virtualPath.state());
-    gScore.put(start, 0.0);
+    bestCosts.put(start, 0.0);
     open.add(new OpenEntry(start, 0.0, heuristic.estimate(start.cell(), target, start.state())));
   }
 
@@ -101,7 +108,7 @@ final class Tier2Search<A extends Agent, T extends Enum<T>, I, D extends Domain>
         if (pendingExpansion != null) {
           PendingExpansion<T, I> expansion = pendingExpansion;
           pendingExpansion = null;
-          relax(expansion.node(), expansion.g(), resolve(expansion.results()));
+          relax(expansion.node(), expansion.g(), unwrap(expansion.results()));
           continue;
         }
         if (open.isEmpty()) {
@@ -110,12 +117,12 @@ final class Tier2Search<A extends Agent, T extends Enum<T>, I, D extends Domain>
         }
         OpenEntry entry = open.poll();
         CellState node = entry.key();
-        if (closed.contains(node) || entry.g() > gScore.getOrDefault(node, Double.POSITIVE_INFINITY)) {
+        if (closed.contains(node) || entry.currentCost() > bestCosts.getOrDefault(node, Double.POSITIVE_INFINITY)) {
           continue; // stale duplicate
         }
         closed.add(node);
         if (target.contains(node.cell())) {
-          result.complete(Tier2Result.solved(reconstruct(node), entry.g()));
+          result.complete(Tier2Result.solved(reconstruct(node), entry.currentCost()));
           return;
         }
         if (++cellsVisited > maxCellsVisited) {
@@ -131,10 +138,10 @@ final class Tier2Search<A extends Agent, T extends Enum<T>, I, D extends Domain>
           anyPending |= !movements.isImmediate();
         }
         if (anyPending) {
-          park(node, entry.g(), results);
+          park(node, entry.currentCost(), results);
           return;
         }
-        relax(node, entry.g(), resolve(results));
+        relax(node, entry.currentCost(), unwrap(results));
       }
     } catch (Throwable throwable) {
       result.completeExceptionally(throwable);
@@ -159,11 +166,10 @@ final class Tier2Search<A extends Agent, T extends Enum<T>, I, D extends Domain>
         }, executor);
   }
 
-  private List<Movement<T, I>> resolve(List<FutureOr<Collection<Movement<T, I>>>> results) {
+  private List<Movement<T, I>> unwrap(List<FutureOr<Collection<Movement<T, I>>>> results) {
     List<Movement<T, I>> movements = new ArrayList<>();
     for (FutureOr<Collection<Movement<T, I>>> futureOr : results) {
-      Collection<Movement<T, I>> value =
-          futureOr.isImmediate() ? futureOr.value() : futureOr.future().getNow(null);
+      Collection<Movement<T, I>> value = futureOr.value();
       if (value != null) {
         movements.addAll(value);
       }
@@ -175,11 +181,11 @@ final class Tier2Search<A extends Agent, T extends Enum<T>, I, D extends Domain>
     for (Movement<T, I> movement : movements) {
       CellState neighbor = new CellState(movement.cell(), movement.state());
       double tentative = nodeCost + movement.cost();
-      if (tentative < gScore.getOrDefault(neighbor, Double.POSITIVE_INFINITY)) {
-        gScore.put(neighbor, tentative);
+      if (tentative < bestCosts.getOrDefault(neighbor, Double.POSITIVE_INFINITY)) {
+        bestCosts.put(neighbor, tentative);
         cameFrom.put(neighbor, new Came<>(node, movement));
-        double f = tentative + heuristic.estimate(movement.cell(), target, movement.state());
-        open.add(new OpenEntry(neighbor, tentative, f));
+        open.add(new OpenEntry(neighbor, tentative,
+            tentative + heuristic.estimate(movement.cell(), target, movement.state())));
       }
     }
   }
@@ -190,7 +196,9 @@ final class Tier2Search<A extends Agent, T extends Enum<T>, I, D extends Domain>
     while (cameFrom.containsKey(cursor)) {
       Came<T, I> came = cameFrom.get(cursor);
       Movement<T, I> movement = came.movement();
-      steps.addFirst(new RawStep<>(cursor.cell(), domain, movement.cost(), movement.stepType(), movement.instruction()));
+      steps
+          .addFirst(new RawStep<>(new Position<>(cursor.cell(), domain), movement.cost(), movement.stepType(),
+              movement.instruction()));
       cursor = came.parent();
     }
     return new ArrayList<>(steps);
@@ -199,7 +207,7 @@ final class Tier2Search<A extends Agent, T extends Enum<T>, I, D extends Domain>
   private record CellState(Cell cell, TraversalState state) {
   }
 
-  private record OpenEntry(CellState key, double g, double f) {
+  private record OpenEntry(CellState key, double currentCost, double estimatedTotalCost) {
   }
 
   private record Came<T extends Enum<T>, I>(CellState parent, Movement<T, I> movement) {

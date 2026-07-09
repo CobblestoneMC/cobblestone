@@ -18,15 +18,13 @@ package net.whimxiqal.odyssey.api;
  * @param <T> the step-type enum
  * @param <I> the instruction payload type
  * @param <D> the domain type
- * @param cell the cell occupied at this step
- * @param domain the domain the cell lives in
+ * @param position the cell occupied at this step and its domain
  * @param cumulativeCost the total cost in seconds to reach this step from the origin
  * @param stepType the step type
  * @param instruction an optional player instruction, or {@code null}
  */
 public record Step<T extends Enum<T>, I, D extends Domain>(
-    Cell cell,
-    D domain,
+    Position<D> position,
     double cumulativeCost,
     T stepType,
     I instruction) {

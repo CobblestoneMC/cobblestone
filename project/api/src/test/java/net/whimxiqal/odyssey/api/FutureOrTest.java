@@ -27,12 +27,20 @@ class FutureOrTest {
   }
 
   @Test
-  void pendingExposesFutureAndRejectsValue() {
+  void pendingExposesFuture() {
     CompletableFuture<String> future = new CompletableFuture<>();
     FutureOr<String> fo = FutureOr.ofFuture(future);
     assertFalse(fo.isImmediate());
     assertEquals(future, fo.future());
+  }
+
+  @Test
+  void pendingValueThrowsWhileIncompleteThenReturnsAfterCompletion() {
+    CompletableFuture<String> future = new CompletableFuture<>();
+    FutureOr<String> fo = FutureOr.ofFuture(future);
     assertThrows(IllegalStateException.class, fo::value);
+    future.complete("ready");
+    assertEquals("ready", fo.value());
   }
 
   @Test

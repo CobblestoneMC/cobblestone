@@ -28,14 +28,21 @@ import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.api.Transition;
 
 /**
- * Orchestrates one search: runs Tier-1 Dijkstra, solves each chosen {@link VirtualPath} with a
- * cooperative {@link Tier2Search}, and re-plans after every solve so alternative routes are
- * reconsidered as true edge costs become known (the anytime recalc loop). Everything runs on the
+ * Orchestrates one search: runs Tier-1 Dijkstra, solves each chosen
+ * {@link VirtualPath} with a
+ * cooperative {@link Tier2Search}, and re-plans after every solve so
+ * alternative routes are
+ * reconsidered as true edge costs become known (the anytime recalc loop).
+ * Everything runs on the
  * {@link Scheduler}; the search never blocks a thread.
  *
- * <p>Phase-2 note: this re-plans after <i>every</i> edge solve rather than only on a threshold
- * overshoot, and solves each edge to completion rather than pausing mid-solve — a simpler, still
- * terminating and still result-optimal realization of the design's recalc loop. The
+ * <p>
+ * Phase-2 note: this re-plans after <i>every</i> edge solve rather than only on
+ * a threshold
+ * overshoot, and solves each edge to completion rather than pausing mid-solve —
+ * a simpler, still
+ * terminating and still result-optimal realization of the design's recalc loop.
+ * The
  * {@code tier1RecalcThreshold} knob is therefore not yet consulted.
  *
  * @param <A> the agent type
@@ -105,15 +112,15 @@ final class SearchImpl<A extends Agent, T extends Enum<T>, I, D extends Domain>
     }
     try {
       if (graphPath == null) {
-        Optional<GraphPath<Tier1Node<T, I, D>, Tier1Edge<T, I, D>>> found =
-            tier1.shortestPath(tier1.originNode(), tier1::isGoal);
+        Optional<GraphPath<Tier1Node<T, I, D>, Tier1Edge<T, I, D>>> found = tier1.shortestPath(tier1.originNode(),
+            tier1::isGoal);
         if (found.isEmpty()) {
           finish(new NavigationResult.Failure<>(FailureReason.NO_ROUTE));
           return;
         }
         graphPath = found.get();
       }
-      Tier1Edge.VirtualPathEdge<T, I, D> edge = firstUnsolvedEdge(graphPath);
+      Tier1Edge<T, I, D> edge = firstUnsolvedEdge(graphPath);
       if (edge == null) {
         finish(new NavigationResult.Success<>(buildPath(graphPath)));
         return;
@@ -142,11 +149,11 @@ final class SearchImpl<A extends Agent, T extends Enum<T>, I, D extends Domain>
     }
   }
 
-  private Tier1Edge.VirtualPathEdge<T, I, D> firstUnsolvedEdge(
+  private Tier1Edge<T, I, D> firstUnsolvedEdge(
       GraphPath<Tier1Node<T, I, D>, Tier1Edge<T, I, D>> path) {
     for (Tier1Edge<T, I, D> edge : path.edges()) {
-      if (edge instanceof Tier1Edge.VirtualPathEdge<T, I, D> vpe && !vpe.virtualPath().isResolved()) {
-        return vpe;
+      if (!edge.virtualPath().isResolved()) {
+        return edge;
       }
     }
     return null;
@@ -156,19 +163,16 @@ final class SearchImpl<A extends Agent, T extends Enum<T>, I, D extends Domain>
     List<Step<T, I, D>> steps = new ArrayList<>();
     double global = 0.0;
     for (Tier1Edge<T, I, D> edge : path.edges()) {
-      if (!(edge instanceof Tier1Edge.VirtualPathEdge<T, I, D> vpe)) {
-        continue; // sink edge contributes nothing
-      }
-      for (RawStep<T, I, D> raw : vpe.virtualPath().solvedSteps()) {
+      for (RawStep<T, I, D> raw : edge.virtualPath().solvedSteps()) {
         global += raw.stepCost();
-        steps.add(new Step<>(raw.cell(), raw.domain(), global, raw.stepType(), raw.instruction()));
+        steps.add(new Step<>(raw.position(), global, raw.stepType(), raw.instruction()));
       }
-      Transition<T, I, D> target = vpe.targetTransition();
-      if (!(target instanceof SyntheticTransition<T, I, D>)) {
-        global += target.cost();
-        steps.add(new Step<>(
-            target.destination().cell(), target.destination().domain(), global,
-            target.stepType(), target.instruction()));
+      Tier1Node<T, I, D> target = edge.target();
+      global += target.cost();
+      if (target instanceof Tier1Node.AtTransition<T, I, D> atTransition) {
+        steps.add(new Step<T, I, D>(
+            atTransition.transition().destination(), global,
+            atTransition.transition().stepType(), atTransition.transition().instruction()));
       }
     }
     return new PathImpl<>(steps, global);

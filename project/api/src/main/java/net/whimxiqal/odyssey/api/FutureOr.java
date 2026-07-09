@@ -55,10 +55,11 @@ public sealed interface FutureOr<T> permits FutureOr.Immediate, FutureOr.Pending
   boolean isImmediate();
 
   /**
-   * Returns the immediate value.
+   * Returns the value: the immediate value directly, or — for a pending {@code FutureOr} — the
+   * completed future's value.
    *
    * @return the value
-   * @throws IllegalStateException if this is {@link Pending}
+   * @throws IllegalStateException if this is pending and its future has not yet completed
    */
   T value();
 
@@ -133,7 +134,10 @@ public sealed interface FutureOr<T> permits FutureOr.Immediate, FutureOr.Pending
 
     @Override
     public T value() {
-      throw new IllegalStateException("FutureOr is pending, not immediate");
+      if (!future.isDone()) {
+        throw new IllegalStateException("FutureOr is pending and its future has not yet completed");
+      }
+      return future.getNow(null);
     }
 
     @Override
