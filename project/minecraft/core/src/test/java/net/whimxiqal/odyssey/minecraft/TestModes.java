@@ -1,0 +1,46 @@
+/*
+ * Odyssey — a Minecraft navigation plugin.
+ * Copyright (c) 2026 whimxiqal.
+ *
+ * Licensed under the MIT License. See the LICENSE file in the project root for full text.
+ */
+
+package net.whimxiqal.odyssey.minecraft;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.HashMap;
+import java.util.Map;
+import net.whimxiqal.odyssey.api.Cell;
+import net.whimxiqal.odyssey.api.FutureOr;
+import net.whimxiqal.odyssey.api.Movement;
+import net.whimxiqal.odyssey.api.TraversalState;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftMode;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
+import net.whimxiqal.odyssey.minecraft.api.OdysseyPlayer;
+
+/** Test helper: runs a mode's immediate step and indexes the resulting movements by destination cell. */
+final class TestModes {
+
+  private TestModes() {
+  }
+
+  static Map<Cell, Movement<MinecraftStepType, MinecraftInstruction>> from(
+      MinecraftMode<OdysseyPlayer> mode, OdysseyPlayer player, TestWorld world, Cell origin,
+      TraversalState state) {
+    FutureOr<java.util.Collection<Movement<MinecraftStepType, MinecraftInstruction>>> result =
+        mode.step(player, origin, world, state);
+    assertTrue(result.isImmediate(), "test worlds serve blocks immediately");
+    Map<Cell, Movement<MinecraftStepType, MinecraftInstruction>> byCell = new HashMap<>();
+    for (Movement<MinecraftStepType, MinecraftInstruction> movement : result.value()) {
+      byCell.put(movement.cell(), movement);
+    }
+    return byCell;
+  }
+
+  static Map<Cell, Movement<MinecraftStepType, MinecraftInstruction>> from(
+      MinecraftMode<OdysseyPlayer> mode, OdysseyPlayer player, TestWorld world, Cell origin) {
+    return from(mode, player, world, origin, TraversalState.DEFAULT);
+  }
+}

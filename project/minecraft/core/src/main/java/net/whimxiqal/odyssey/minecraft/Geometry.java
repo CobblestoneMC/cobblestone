@@ -1,0 +1,38 @@
+/*
+ * Odyssey — a Minecraft navigation plugin.
+ * Copyright (c) 2026 whimxiqal.
+ *
+ * Licensed under the MIT License. See the LICENSE file in the project root for full text.
+ */
+
+package net.whimxiqal.odyssey.minecraft;
+
+import net.whimxiqal.odyssey.api.Cell;
+
+/**
+ * Shared coarse-body geometry helpers for the 1×1×1 movement model: a body needs two blocks of
+ * vertical clearance and solid footing to stand.
+ */
+final class Geometry {
+
+  private Geometry() {
+  }
+
+  /** Whether a body fits in {@code cell} — the cell and the cell above it are both passable. */
+  static boolean bodyFits(BlockView view, Cell cell) {
+    return view.at(cell).isPassable() && view.at(cell, 0, 1, 0).isPassable();
+  }
+
+  /** Whether a body can stand in {@code cell}: it fits and the block below has a solid top. */
+  static boolean standable(BlockView view, Cell cell) {
+    return bodyFits(view, cell) && view.at(cell, 0, -1, 0).isSolidTop();
+  }
+
+  /**
+   * Whether a diagonal move between two same-level cells is blocked by a solid corner (you may not
+   * cut through a solid block diagonally). Both orthogonal corner cells must allow a body.
+   */
+  static boolean cornerBlocked(BlockView view, Cell from, int dx, int dz) {
+    return !bodyFits(view, from.plus(dx, 0, 0)) || !bodyFits(view, from.plus(0, 0, dz));
+  }
+}
