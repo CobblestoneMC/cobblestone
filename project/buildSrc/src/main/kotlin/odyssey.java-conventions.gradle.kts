@@ -16,6 +16,8 @@ repositories {
 }
 
 java {
+    // Default toolchain for core/minecraft libraries is Java 21 (broad consumer compatibility).
+    // Platform modules that compile against a newer server API override this.
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
     }

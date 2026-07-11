@@ -23,8 +23,8 @@ fast path.
 ### Block & world model
 - Block types (v1): `SOLID`, `AIR`. Chunks are made of these.
 - **World JSON format:** a list of prismatic regions, each two 3D corners + a block type; a default
-  fill (AIR) and later-region-wins overlap rule. Multiple domains per file (each with min/max Y and a
-  string key mapped through the `DomainRegistry`). `Transition`s may be declared between positions
+  fill (AIR) and later-region-wins overlap rule. Multiple domains per file (each with min/max Y).
+  `Transition`s may be declared between positions
   (origin as a single-cell region for tests).
 ```json
 {

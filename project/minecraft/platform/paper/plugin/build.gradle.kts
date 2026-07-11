@@ -4,6 +4,12 @@ plugins {
     id("odyssey.java-conventions")
 }
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
 dependencies {
     implementation(project(":minecraft:platform:paper:paper-core"))
     implementation(project(":minecraft:plugin:plugin-core"))

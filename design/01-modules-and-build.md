@@ -135,6 +135,6 @@ Revisit per-module versioning only if release cadence diverges painfully.
   takes shape). A key custom rule: forbid unchecked/needless casts to enforce the no-downcast pillar.
 - `CONTRIBUTING.md` and `README.md` at the repo root (tracked in `10-metrics-and-ops.md`).
 
-## External references (in `../resources/`)
+## External references (in `local/resources/`)
 Full clones of Paper, SpongeAPI, Folia, and the integration-target plugins live under `../resources/`
 for API reference while implementing.
