@@ -14,7 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import net.whimxiqal.odyssey.api.Cell;
-import net.whimxiqal.odyssey.api.CellRegion;
 import net.whimxiqal.odyssey.api.TraversalState;
 import org.junit.jupiter.api.Test;
 

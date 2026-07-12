@@ -77,7 +77,7 @@ final class VirtualPath<T extends Enum<T>, I, D extends Domain> {
    * Returns the current cost used by Tier-1 Dijkstra: the true cost once solved, {@code +∞} if
    * infeasible, otherwise the optimistic estimate from {@code heuristic}.
    */
-  double cost(HeuristicStrategy heuristic) {
+  double cost(net.whimxiqal.odyssey.api.HeuristicStrategy heuristic) {
     return switch (status) {
       case SOLVED -> trueCost;
       case INFEASIBLE -> Double.POSITIVE_INFINITY;

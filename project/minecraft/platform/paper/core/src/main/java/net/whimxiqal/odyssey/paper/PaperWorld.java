@@ -20,24 +20,28 @@ import org.bukkit.World;
  */
 final class PaperWorld implements MinecraftWorld {
 
-  private final World world;
   private final ChunkProvider provider;
   private final String key;
+  private final int minY;
+  private final int maxY;
+  private final World.Environment environment;
 
   PaperWorld(World world, ChunkProvider provider) {
-    this.world = world;
     this.provider = provider;
     this.key = world.getKey().asString();
+    this.minY = world.getMinHeight();
+    this.maxY = world.getMaxHeight() - 1;
+    this.environment = world.getEnvironment();
   }
 
   @Override
   public int minY() {
-    return world.getMinHeight();
+    return this.minY;
   }
 
   @Override
   public int maxY() {
-    return world.getMaxHeight() - 1;
+    return this.maxY;
   }
 
   @Override
@@ -47,7 +51,7 @@ final class PaperWorld implements MinecraftWorld {
 
   @Override
   public Environment environment() {
-    return switch (world.getEnvironment()) {
+    return switch (this.environment) {
       case NORMAL -> Environment.OVERWORLD;
       case NETHER -> Environment.NETHER;
       case THE_END -> Environment.END;

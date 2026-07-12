@@ -10,11 +10,9 @@ package net.whimxiqal.odyssey.api;
 /**
  * The outcome of a search: either a solved {@link Path} or a {@link FailureReason}.
  *
- * @param <T> the step-type enum
- * @param <I> the instruction payload type
- * @param <D> the domain type
+ * @param <S> the step type
  */
-public sealed interface NavigationResult<T extends Enum<T>, I, D extends Domain>
+public sealed interface NavigationResult<S>
     permits NavigationResult.Success, NavigationResult.Failure {
 
   /**
@@ -27,13 +25,11 @@ public sealed interface NavigationResult<T extends Enum<T>, I, D extends Domain>
   /**
    * A successful result carrying the solved path.
    *
-   * @param <T> the step-type enum
-   * @param <I> the instruction payload type
-   * @param <D> the domain type
+   * @param <S> the step type
    * @param path the solved path
    */
-  record Success<T extends Enum<T>, I, D extends Domain>(Path<T, I, D> path)
-      implements NavigationResult<T, I, D> {
+  record Success<S>(Path<S> path)
+      implements NavigationResult<S> {
 
     @Override
     public boolean success() {
@@ -44,13 +40,11 @@ public sealed interface NavigationResult<T extends Enum<T>, I, D extends Domain>
   /**
    * A failed result carrying the reason.
    *
-   * @param <T> the step-type enum
-   * @param <I> the instruction payload type
-   * @param <D> the domain type
+   * @param <S> the step type
    * @param reason why the search failed
    */
-  record Failure<T extends Enum<T>, I, D extends Domain>(FailureReason reason)
-      implements NavigationResult<T, I, D> {
+  record Failure<S>(FailureReason reason)
+      implements NavigationResult<S> {
 
     @Override
     public boolean success() {

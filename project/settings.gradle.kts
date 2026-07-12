@@ -1,8 +1,3 @@
-plugins {
-    // Allows Gradle to auto-provision the Java 21 toolchain if it's not already installed.
-    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
-}
-
 rootProject.name = "odyssey"
 
 // All subprojects live flat under project/ and are named exactly as in design/01-modules-and-build.md.

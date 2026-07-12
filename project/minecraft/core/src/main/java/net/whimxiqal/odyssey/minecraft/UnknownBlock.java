@@ -13,7 +13,7 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftBlock;
  * The sentinel block returned for cells whose chunk isn't available under the current load policy:
  * impassable and unbreakable, so modes treat it exactly like a wall they can't get through.
  */
-enum UnknownBlock implements MinecraftBlock {
+public enum UnknownBlock implements MinecraftBlock {
 
   INSTANCE;
 

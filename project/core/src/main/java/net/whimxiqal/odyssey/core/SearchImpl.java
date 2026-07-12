@@ -51,11 +51,11 @@ import net.whimxiqal.odyssey.api.Transition;
  * @param <D> the domain type
  */
 final class SearchImpl<A extends Agent, T extends Enum<T>, I, D extends Domain>
-    implements SearchHandle<T, I, D> {
+    implements SearchHandle<Step<Position<D>, T, I>> {
 
   private final Scheduler scheduler;
   private final Executor executor;
-  private final HeuristicStrategy heuristic;
+  private final net.whimxiqal.odyssey.api.HeuristicStrategy heuristic;
   private final A agent;
   private final List<? extends Mode<A, T, I, D>> modes;
   private final SearchSettings settings;
@@ -63,13 +63,13 @@ final class SearchImpl<A extends Agent, T extends Enum<T>, I, D extends Domain>
   private final long deadlineMillis;
 
   private final AtomicBoolean cancelled = new AtomicBoolean(false);
-  private final CompletableFuture<NavigationResult<T, I, D>> future = new CompletableFuture<>();
+  private final CompletableFuture<NavigationResult<Step<Position<D>, T, I>>> future = new CompletableFuture<>();
 
   private GraphPath<Tier1Node<T, I, D>, Tier1Edge<T, I, D>> graphPath;
 
   SearchImpl(
       Scheduler scheduler,
-      HeuristicStrategy heuristic,
+      net.whimxiqal.odyssey.api.HeuristicStrategy heuristic,
       A agent,
       Position<D> origin,
       Destination<D> destination,
@@ -91,7 +91,7 @@ final class SearchImpl<A extends Agent, T extends Enum<T>, I, D extends Domain>
   }
 
   @Override
-  public CompletableFuture<NavigationResult<T, I, D>> future() {
+  public CompletableFuture<NavigationResult<Step<Position<D>, T, I>>> future() {
     return future;
   }
 
@@ -159,8 +159,8 @@ final class SearchImpl<A extends Agent, T extends Enum<T>, I, D extends Domain>
     return null;
   }
 
-  private Path<T, I, D> buildPath(GraphPath<Tier1Node<T, I, D>, Tier1Edge<T, I, D>> path) {
-    List<Step<T, I, D>> steps = new ArrayList<>();
+  private Path<Step<Position<D>, T, I>> buildPath(GraphPath<Tier1Node<T, I, D>, Tier1Edge<T, I, D>> path) {
+    List<Step<Position<D>, T, I>> steps = new ArrayList<>();
     double global = 0.0;
     for (Tier1Edge<T, I, D> edge : path.edges()) {
       for (RawStep<T, I, D> raw : edge.virtualPath().solvedSteps()) {
@@ -170,7 +170,7 @@ final class SearchImpl<A extends Agent, T extends Enum<T>, I, D extends Domain>
       Tier1Node<T, I, D> target = edge.target();
       global += target.cost();
       if (target instanceof Tier1Node.AtTransition<T, I, D> atTransition) {
-        steps.add(new Step<T, I, D>(
+        steps.add(new Step<>(
             atTransition.transition().destination(), global,
             atTransition.transition().stepType(), atTransition.transition().instruction()));
       }
@@ -178,7 +178,7 @@ final class SearchImpl<A extends Agent, T extends Enum<T>, I, D extends Domain>
     return new PathImpl<>(steps, global);
   }
 
-  private void finish(NavigationResult<T, I, D> result) {
+  private void finish(NavigationResult<Step<Position<D>, T, I>> result) {
     future.complete(result);
   }
 }

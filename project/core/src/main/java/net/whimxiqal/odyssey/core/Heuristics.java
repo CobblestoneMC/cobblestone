@@ -8,7 +8,7 @@
 package net.whimxiqal.odyssey.core;
 
 /**
- * Factory for the built-in {@link HeuristicStrategy} implementations.
+ * Factory for the built-in {@link net.whimxiqal.odyssey.api.HeuristicStrategy} implementations.
  *
  * <p>
  * The {@code RunningAverageHeuristic} described in the design (which needs
@@ -28,7 +28,7 @@ public final class Heuristics {
    *
    * @return the zero heuristic
    */
-  public static HeuristicStrategy zero() {
+  public static net.whimxiqal.odyssey.api.HeuristicStrategy zero() {
     return (from, target, state) -> 0.0;
   }
 
@@ -49,7 +49,7 @@ public final class Heuristics {
    *                             seconds
    * @return the euclidean heuristic
    */
-  public static HeuristicStrategy euclidean(double cheapestCostPerBlock) {
+  public static net.whimxiqal.odyssey.api.HeuristicStrategy euclidean(double cheapestCostPerBlock) {
     if (cheapestCostPerBlock < 0) {
       throw new IllegalArgumentException("cheapestCostPerBlock must be >= 0: " + cheapestCostPerBlock);
     }

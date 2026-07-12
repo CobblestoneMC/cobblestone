@@ -19,7 +19,7 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
  * An in-memory {@link MinecraftWorld} for mode tests. Cells default to air; set blocks with the
  * builder. Every block is served immediately (no parking), exercising the cache-hit path.
  */
-final class TestWorld implements MinecraftWorld {
+public final class TestWorld implements MinecraftWorld {
 
   private final String key;
   private final Map<Cell, MinecraftBlock> grid;
@@ -30,7 +30,7 @@ final class TestWorld implements MinecraftWorld {
     this.grid = grid;
   }
 
-  static Builder builder(String key) {
+  public static Builder builder(String key) {
     return new Builder(key);
   }
 
@@ -70,7 +70,7 @@ final class TestWorld implements MinecraftWorld {
   }
 
   /** Builds a {@link TestWorld}. */
-  static final class Builder {
+  public static final class Builder {
 
     private final String key;
     private final Map<Cell, MinecraftBlock> grid = new HashMap<>();
@@ -79,13 +79,13 @@ final class TestWorld implements MinecraftWorld {
       this.key = key;
     }
 
-    Builder set(int x, int y, int z, MinecraftBlock block) {
+    public Builder set(int x, int y, int z, MinecraftBlock block) {
       grid.put(new Cell(x, y, z), block);
       return this;
     }
 
     /** Fills a solid floor at {@code y} over the inclusive x/z rectangle. */
-    Builder floor(int y, int x0, int z0, int x1, int z1, MinecraftBlock block) {
+    public Builder floor(int y, int x0, int z0, int x1, int z1, MinecraftBlock block) {
       for (int x = x0; x <= x1; x++) {
         for (int z = z0; z <= z1; z++) {
           grid.put(new Cell(x, y, z), block);
@@ -94,7 +94,7 @@ final class TestWorld implements MinecraftWorld {
       return this;
     }
 
-    TestWorld build() {
+    public TestWorld build() {
       return new TestWorld(key, grid);
     }
   }

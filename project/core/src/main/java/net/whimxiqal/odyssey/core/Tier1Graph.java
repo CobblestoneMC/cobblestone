@@ -40,7 +40,7 @@ import net.whimxiqal.odyssey.api.TraversalState;
 final class Tier1Graph<T extends Enum<T>, I, D extends Domain>
     extends Graph<Tier1Node<T, I, D>, Tier1Edge<T, I, D>> {
 
-  private final HeuristicStrategy heuristic;
+  private final net.whimxiqal.odyssey.api.HeuristicStrategy heuristic;
   private final Map<Tier1Node<T, I, D>, Iterable<Tier1Edge<T, I, D>>> edgeMap = new HashMap<>();
   private final Map<D, List<Transition<T, I, D>>> transitionsByOriginDomain = new HashMap<>();
   private final Map<D, List<DomainRegion<D>>> destinationsByDomain = new HashMap<>();
@@ -50,7 +50,7 @@ final class Tier1Graph<T extends Enum<T>, I, D extends Domain>
       Position<D> origin,
       List<? extends Transition<T, I, D>> transitions,
       Collection<? extends DomainRegion<D>> destinationRegions,
-      HeuristicStrategy heuristic) {
+      net.whimxiqal.odyssey.api.HeuristicStrategy heuristic) {
     this.heuristic = heuristic;
     this.originNode = new Tier1Node.Source<>(origin, TraversalState.DEFAULT);
     for (Transition<T, I, D> transition : transitions) {

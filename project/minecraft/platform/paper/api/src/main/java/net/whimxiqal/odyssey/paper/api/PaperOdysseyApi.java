@@ -7,54 +7,26 @@
 
 package net.whimxiqal.odyssey.paper.api;
 
-import net.whimxiqal.odyssey.api.Destination;
-import net.whimxiqal.odyssey.api.OdysseyApi;
-import net.whimxiqal.odyssey.api.SearchHandle;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
-import net.whimxiqal.odyssey.minecraft.api.TransitionProvider;
+import net.whimxiqal.odyssey.minecraft.api.PlatformOdysseyApi;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.RegisteredServiceProvider;
 
 /**
- * The Paper-flavored developer entry point, registered in Bukkit's service manager by the Odyssey
- * plugin. It lets other Paper plugins request navigation in native terms ({@link Player},
+ * The Paper-flavored developer entry point, registered in Bukkit's {@code ServicesManager} by the
+ * Odyssey plugin. It lets other Paper plugins request navigation in native terms ({@link Player},
  * {@link Location}) without touching Odyssey's generic core types.
+ * <p>
+ * Use the following pattern to load the API.
+ * {@snippet :
+ *     RegisteredServiceProvider<PaperOdysseyApi> registration =
+ *         Bukkit.getServicesManager().getRegistration(PaperOdysseyApi.class);
+ *     if (registration == null) {
+ *       // handle error, which happens if the Odyssey plugin is not enabled
+ *     }
+ *     PaperOdysseyApi odysseyApi = registration.getProvider();
+ * }
  */
-public interface PaperOdysseyApi {
-
-  /**
-   * Navigates a player toward a block location.
-   *
-   * @param player the player to guide
-   * @param destination the target location
-   * @return a handle to the in-flight search
-   */
-  SearchHandle<MinecraftStepType, MinecraftInstruction, MinecraftWorld> navigatePlayer(
-      Player player, Location destination);
-
-  /**
-   * Navigates a player toward a (possibly multi-region) destination.
-   *
-   * @param player the player to guide
-   * @param destination the destination
-   * @return a handle to the in-flight search
-   */
-  SearchHandle<MinecraftStepType, MinecraftInstruction, MinecraftWorld> navigatePlayer(
-      Player player, Destination<MinecraftWorld> destination);
-
-  /**
-   * Registers a source of transitions (custom portals/teleports) available to searches.
-   *
-   * @param provider the transition provider
-   */
-  void registerTransitionProvider(TransitionProvider provider);
-
-  /**
-   * Returns the underlying generic API, for advanced use.
-   *
-   * @return the core API
-   */
-  OdysseyApi core();
+public interface PaperOdysseyApi extends PlatformOdysseyApi<Player, Location> {
 }

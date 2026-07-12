@@ -58,7 +58,7 @@ final class Tier2Search<A extends Agent, T extends Enum<T>, I, D extends Domain>
 
   private final DomainRegion<D> target;
   private final List<? extends Mode<A, T, I, D>> modes;
-  private final HeuristicStrategy heuristic;
+  private final net.whimxiqal.odyssey.api.HeuristicStrategy heuristic;
   private final int maxCellsVisited;
   private final BooleanSupplier cancelled;
   private final Executor executor;
@@ -76,7 +76,7 @@ final class Tier2Search<A extends Agent, T extends Enum<T>, I, D extends Domain>
       A agent,
       VirtualPath<T, I, D> virtualPath,
       List<? extends Mode<A, T, I, D>> modes,
-      HeuristicStrategy heuristic,
+      net.whimxiqal.odyssey.api.HeuristicStrategy heuristic,
       int maxCellsVisited,
       BooleanSupplier cancelled,
       Executor executor) {

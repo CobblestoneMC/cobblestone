@@ -21,14 +21,14 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 import net.whimxiqal.odyssey.minecraft.api.OdysseyPlayer;
 
 /** Test helper: runs a mode's immediate step and indexes the resulting movements by destination cell. */
-final class TestModes {
+public final class TestModes {
 
   private TestModes() {
   }
 
-  static Map<Cell, Movement<MinecraftStepType, MinecraftInstruction>> from(
-      MinecraftMode<OdysseyPlayer> mode, OdysseyPlayer player, TestWorld world, Cell origin,
-      TraversalState state) {
+  public static Map<Cell, Movement<MinecraftStepType, MinecraftInstruction>> from(
+          MinecraftMode<OdysseyPlayer> mode, OdysseyPlayer player, TestWorld world, Cell origin,
+          TraversalState state) {
     FutureOr<java.util.Collection<Movement<MinecraftStepType, MinecraftInstruction>>> result =
         mode.step(player, origin, world, state);
     assertTrue(result.isImmediate(), "test worlds serve blocks immediately");
@@ -39,8 +39,8 @@ final class TestModes {
     return byCell;
   }
 
-  static Map<Cell, Movement<MinecraftStepType, MinecraftInstruction>> from(
-      MinecraftMode<OdysseyPlayer> mode, OdysseyPlayer player, TestWorld world, Cell origin) {
+  public static Map<Cell, Movement<MinecraftStepType, MinecraftInstruction>> from(
+          MinecraftMode<OdysseyPlayer> mode, OdysseyPlayer player, TestWorld world, Cell origin) {
     return from(mode, player, world, origin, TraversalState.DEFAULT);
   }
 }

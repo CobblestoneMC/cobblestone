@@ -8,6 +8,7 @@
 package net.whimxiqal.odyssey.api;
 
 import java.util.List;
+import java.util.ServiceLoader;
 
 /**
  * The generic, Minecraft-agnostic navigation service.
@@ -19,6 +20,10 @@ import java.util.List;
  * see a generic.
  */
 public interface OdysseyApi {
+
+  static OdysseyApi load() {
+    return ServiceLoader.load(OdysseyApi.class).findFirst().orElseThrow();
+  }
 
   /**
    * Begins a search from {@code origin} toward {@code destination}.
@@ -35,11 +40,13 @@ public interface OdysseyApi {
    * @param <D> the domain type
    * @return a handle to the in-flight search
    */
-  <A extends Agent, T extends Enum<T>, I, D extends Domain> SearchHandle<T, I, D> navigate(
+  <A extends Agent, T extends Enum<T>, I, D extends Domain> SearchHandle<Step<Position<D>, T, I>> navigate(
+          Scheduler scheduler,
       A agent,
       Position<D> origin,
       Destination<D> destination,
       List<? extends Mode<A, T, I, D>> modes,
       List<? extends Transition<T, I, D>> transitions,
+      HeuristicStrategy heuristic,
       SearchSettings settings);
 }

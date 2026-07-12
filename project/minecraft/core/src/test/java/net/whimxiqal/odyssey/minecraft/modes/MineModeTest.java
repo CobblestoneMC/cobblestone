@@ -1,0 +1,65 @@
+/*
+ * Odyssey — a Minecraft navigation plugin.
+ * Copyright (c) 2026 whimxiqal.
+ *
+ * Licensed under the MIT License. See the LICENSE file in the project root for full text.
+ */
+
+package net.whimxiqal.odyssey.minecraft.modes;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
+import java.util.Map;
+import net.whimxiqal.odyssey.api.Cell;
+import net.whimxiqal.odyssey.api.Movement;
+import net.whimxiqal.odyssey.minecraft.TestBlocks;
+import net.whimxiqal.odyssey.minecraft.TestModes;
+import net.whimxiqal.odyssey.minecraft.TestPlayer;
+import net.whimxiqal.odyssey.minecraft.TestWorld;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
+import net.whimxiqal.odyssey.minecraft.api.OdysseyPlayer;
+import org.junit.jupiter.api.Test;
+
+class MineModeTest {
+
+  private final MineMode<OdysseyPlayer> mine = new MineMode<>();
+
+  private static TestWorld wallTo(int wallX, net.whimxiqal.odyssey.minecraft.api.MinecraftBlock feet,
+                                  net.whimxiqal.odyssey.minecraft.api.MinecraftBlock head) {
+    return TestWorld.builder("w")
+        .floor(0, -1, -1, 2, 1, TestBlocks.solid())
+        .set(wallX, 1, 0, feet)
+        .set(wallX, 2, 0, head)
+        .build();
+  }
+
+  @Test
+  void tunnelsThroughBreakableWall() {
+    TestWorld world = wallTo(1, TestBlocks.solid(2.0), TestBlocks.solid(2.0));
+    Map<Cell, Movement<MinecraftStepType, MinecraftInstruction>> moves =
+        TestModes.from(mine, TestPlayer.walker(), world, new Cell(0, 1, 0));
+
+    Movement<MinecraftStepType, MinecraftInstruction> dig = moves.get(new Cell(1, 1, 0));
+    assertEquals(MinecraftStepType.MINE, dig.stepType());
+    // break feet (2s) + head (2s) + a walk step
+    assertEquals(2.0 + 2.0 + MovementCosts.WALK, dig.cost(), 1e-9);
+  }
+
+  @Test
+  void willNotMineUnbreakableBlocks() {
+    TestWorld world = wallTo(1, TestBlocks.
+            bedrock(), TestBlocks.solid(2.0));
+    assertFalse(TestModes.from(mine, TestPlayer.walker(), world, new Cell(0, 1, 0))
+        .containsKey(new Cell(1, 1, 0)));
+  }
+
+  @Test
+  void willNotMineWhenBreakingIsNotAllowed() {
+    TestWorld world = wallTo(1, TestBlocks.solid(2.0), TestBlocks.solid(2.0));
+    OdysseyPlayer cannotBreak = TestPlayer.create(false, false, false);
+    assertFalse(TestModes.from(mine, cannotBreak, world, new Cell(0, 1, 0))
+        .containsKey(new Cell(1, 1, 0)));
+  }
+}

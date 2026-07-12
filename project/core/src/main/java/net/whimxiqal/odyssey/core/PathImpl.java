@@ -10,6 +10,7 @@ package net.whimxiqal.odyssey.core;
 import java.util.List;
 import net.whimxiqal.odyssey.api.Domain;
 import net.whimxiqal.odyssey.api.Path;
+import net.whimxiqal.odyssey.api.Position;
 import net.whimxiqal.odyssey.api.Step;
 
 /**
@@ -21,8 +22,8 @@ import net.whimxiqal.odyssey.api.Step;
  * @param steps the ordered steps
  * @param cost the total cost in seconds
  */
-record PathImpl<T extends Enum<T>, I, D extends Domain>(List<Step<T, I, D>> steps, double cost)
-    implements Path<T, I, D> {
+record PathImpl<T extends Enum<T>, I, D extends Domain>(List<Step<Position<D>, T, I>> steps, double cost)
+    implements Path<Step<Position<D>, T, I>> {
 
   PathImpl {
     steps = List.copyOf(steps);

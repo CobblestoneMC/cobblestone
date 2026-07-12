@@ -16,7 +16,7 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
 import net.whimxiqal.odyssey.minecraft.api.OdysseyPlayer;
 
 /** A configurable {@link OdysseyPlayer} for mode/assembly tests. */
-final class TestPlayer implements OdysseyPlayer {
+public final class TestPlayer implements OdysseyPlayer {
 
   private final boolean canFly;
   private final boolean hasBoat;
@@ -28,11 +28,11 @@ final class TestPlayer implements OdysseyPlayer {
     this.canBreak = canBreak;
   }
 
-  static TestPlayer walker() {
+  public static TestPlayer walker() {
     return new TestPlayer(false, false, true);
   }
 
-  static TestPlayer create(boolean canFly, boolean hasBoat, boolean canBreak) {
+  public static TestPlayer create(boolean canFly, boolean hasBoat, boolean canBreak) {
     return new TestPlayer(canFly, hasBoat, canBreak);
   }
 

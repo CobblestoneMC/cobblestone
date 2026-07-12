@@ -10,7 +10,7 @@ package net.whimxiqal.odyssey.minecraft;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftBlock;
 
 /** Factory helpers producing {@link MinecraftBlock}s for mode tests. */
-final class TestBlocks {
+public final class TestBlocks {
 
   private TestBlocks() {
   }
@@ -39,11 +39,11 @@ final class TestBlocks {
     };
   }
 
-  static MinecraftBlock solid() {
+  public static MinecraftBlock solid() {
     return solid(1.0, 1.0);
   }
 
-  static MinecraftBlock solid(double breakTime) {
+  public static MinecraftBlock solid(double breakTime) {
     return solid(breakTime, 1.0);
   }
 
@@ -82,19 +82,19 @@ final class TestBlocks {
     };
   }
 
-  static MinecraftBlock bedrock() {
+  public static MinecraftBlock bedrock() {
     return solid(Double.POSITIVE_INFINITY, 1.0);
   }
 
-  static MinecraftBlock ice() {
+  public static MinecraftBlock ice() {
     return solid(1.0, 2.0);
   }
 
-  static MinecraftBlock soulSand() {
+  public static MinecraftBlock soulSand() {
     return solid(1.0, 0.4);
   }
 
-  static MinecraftBlock slab() {
+  public static MinecraftBlock slab() {
     return new MinecraftBlock() {
       @Override
       public String typeKey() {
@@ -128,7 +128,7 @@ final class TestBlocks {
     };
   }
 
-  static MinecraftBlock water() {
+  public static MinecraftBlock water() {
     return new MinecraftBlock() {
       @Override
       public String typeKey() {
@@ -152,7 +152,7 @@ final class TestBlocks {
     };
   }
 
-  static MinecraftBlock pressurePlate() {
+  public static MinecraftBlock pressurePlate() {
     return new MinecraftBlock() {
       @Override
       public String typeKey() {
@@ -181,7 +181,7 @@ final class TestBlocks {
     };
   }
 
-  static MinecraftBlock closedDoor(boolean opensByHand) {
+  public static MinecraftBlock closedDoor(boolean opensByHand) {
     return new MinecraftBlock() {
       @Override
       public String typeKey() {
