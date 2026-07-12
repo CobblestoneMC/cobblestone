@@ -34,12 +34,12 @@ how to get from a deep mineshaft back to base.
 player runs /nav <destination>
         │
         ▼
-platform plugin (folia-plugin / sponge-16-plugin)
+platform plugin (paper-plugin / sponge-16-plugin)
   • parses command via native command API
   • resolves destination via DestinationTree
   • builds the agent's Mode list (canFly() → FlyMode, boat in inv → BoatMode, …)
   • gathers Transitions from registered TransitionProviders (+ vanilla portal transitions, rail/highway segments)
-        │  OdysseyApi.navigate(origin Position, Destination, Modes, Transitions) → SearchHandle
+        │  OdysseyApi.navigate(Scheduler, origin Position, Destination, Modes, Transitions, Heuristic, Settings) → SearchHandle
         ▼
 core Search (async, on a Scheduler worker)
   Tier 1 — graph/Dijkstra over Transitions(nodes) + VirtualPaths(edges), optimistic costs, lazy edges

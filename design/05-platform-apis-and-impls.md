@@ -1,37 +1,58 @@
 # Odyssey — Platform APIs & Implementations
 
-Two layers per platform:
-- **`*-api`** (`folia-api`, `sponge-16-api`): thin, publishable, developer-facing façade in
+Two layers per platform, and — new since Phase 5 — a clean split between the **platform layer** (a
+navigation *library*) and the **plugin layer** (Odyssey's opinionated plugin, `06`):
+- **`*-api`** (`paper-api`, `sponge-16-api`): thin, publishable, developer-facing façade in
   *platform terms* (`Player`, `Location`, `World`). Depends on `minecraft-api`.
-- **`*` impl** (`folia`, `sponge-16`): fills the `PlatformApi`/`Scheduler` seam and wraps native
-  objects into the `minecraft` world model. Depends on `minecraft` + its `*-api`.
+- **`*` impl** (`paper-core`, `sponge-16-core`): fills the `PlatformApi`/`Scheduler` seam, wraps
+  native objects into the `minecraft` world model, and implements the façade. Depends on
+  `minecraft-core` + its `*-api`. **Published** (see `01`) so a developer can shade the platform
+  library into their own Odyssey-based plugin.
 
 Fabric is deferred (no module yet). Sponge is targeted at **SpongeAPI 16** first; the module is
 named `sponge-16` so a future `sponge-<n>` can coexist for divergent API versions (loaded per the
 version discovered at startup).
 
-## Platform API façade (developer-facing)
-Each platform re-exposes the generic operations with native types so plugin devs never see core
-abstractions. Example (Paper/Folia):
+## Platform API façade (developer-facing, fully native)
+The façade is one generic interface parameterized by a platform's native **player `P`** and
+**location `L`** types, so all platforms share one shape and one set of default methods. Neither the
+inputs nor the results mention core abstractions — even a result `Step` is located by the native
+type `L` (not `Position`).
 ```java
-public interface PaperOdysseyApi {
-  // returns a SearchHandle (future + cancel), typed to the Minecraft step/instruction generics
-  SearchHandle<MinecraftStepType, MinecraftInstruction> navigatePlayer(Player player, Location destination);
-  SearchHandle<MinecraftStepType, MinecraftInstruction> navigatePlayer(Player player, Destination destination);
+// minecraft-api — platform-agnostic; P and L are unbound so this module never sees Bukkit/Sponge
+public interface PlatformOdysseyApi<P, L> {
+  SearchHandle<Step<L, MinecraftStepType, MinecraftInstruction>> navigatePlayer(P player, L destination, SearchSettings s);
+  default SearchHandle<Step<L, MinecraftStepType, MinecraftInstruction>> navigatePlayer(P player, L destination) { … }
 
-  void registerTransitionProvider(PaperTransitionProvider provider); // Function<Player, Future<List<Transition>>>
-  void registerNavigatorFactory(String id, PaperNavigatorFactory f); // id lowercased; see 06
-  void registerDestinationProvider(PaperDestinationProvider p);      // see 06
+  SearchHandle<Step<L, MinecraftStepType, MinecraftInstruction>> navigatePlayerToRegion(P player, L a, L b, SearchSettings s);
+  default SearchHandle<Step<L, MinecraftStepType, MinecraftInstruction>> navigatePlayerToRegion(P player, L a, L b) { … }
 
-  OdysseyApi core();                 // escape hatch to the generic API
+  void registerTransitionProvider(PlatformSingleCellTransitionProvider<P, L> provider);
 }
-```
-Sponge mirrors this as `SpongeOdysseyApi` with `ServerPlayer`/`ServerLocation`. The `*-api` modules
-declare these interfaces; the impl modules provide them and register the instance in the platform's
-service manager (Bukkit `ServicesManager`, Sponge service registry) so other plugins can fetch it.
 
-Rationale for platform-specific façades: taking `OdysseyPlayer` as an input is too restrictive for
-third-party devs, and lets us change `OdysseyPlayer` freely without breaking their code.
+// paper-api — binds the generics to Bukkit types
+public interface PaperOdysseyApi extends PlatformOdysseyApi<Player, Location> {}
+```
+Sponge mirrors this as `SpongeOdysseyApi extends PlatformOdysseyApi<ServerPlayer, ServerLocation>`.
+Developer-supplied transitions are also native: `PlatformSingleCellTransition<L>` (a single origin
+`L`, a destination `L`, cost, step type, instruction) and its async
+`PlatformSingleCellTransitionProvider<P, L>`; the impl adapts each into a core `Transition`
+(origin `L` → one-cell `DomainRegion`, destination `L` → `Position`).
+
+### The platform impl is a *library you instantiate*, not a service
+`PaperOdysseyApiImpl` takes the owning plugin and a **plugin-owned** `TransitionRegistry<P, L>`:
+```java
+public PaperOdysseyApiImpl(Plugin plugin, TransitionRegistry<Player, Location> transitions) { … }
+```
+It builds the `PaperScheduler` + `ChunkProvider`, loads the stateless core via `OdysseyApi.load()`,
+and reads/writes the registry it was given (it never owns it — see `06`). It is **not** registered
+in any service manager: a developer writing their own Odyssey plugin simply constructs it. Odyssey's
+own plugin registers the *plugin-layer* API instead (below and `06`), which exposes this platform
+API through an accessor — so exactly one service is registered.
+
+Rationale for platform-specific façades: taking `OdysseyPlayer`/`Position` as inputs or returning
+them is too restrictive for third-party devs; native `P`/`L` in and native `Step<L, …>` out lets us
+evolve the internal types freely without breaking their code.
 
 ## `PlatformApi` / `Scheduler` implementation
 
@@ -77,7 +98,7 @@ the destination label hovering over the trail.
 | `OdysseyBlock` | wraps snapshot block state; material→predicate table |
 | `OdysseyPlayer` | wraps native player |
 | `Scheduler` | native scheduler mapping (region-aware on Folia) |
-| façade impl (`PaperOdysseyApiImpl`) | builds mode lists, gathers transitions, calls `core().navigate`, registers services |
+| façade impl (`PaperOdysseyApiImpl`) | builds mode lists, gathers transitions from the injected `TransitionRegistry`, calls `OdysseyApi.load().navigate(scheduler, …, heuristic, settings)`, maps `Position`→`Location` on the returned handle. **Does not** register services (the plugin layer does). |
 
 ## Threading contract (restated for platform authors)
 1. Never call a native world/entity method off its owning thread. Route through `runAtPosition`.

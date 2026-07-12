@@ -75,8 +75,13 @@ public interface DomainRegion<D extends Domain> {
   // additional geometry accessors (center(), averageY(), …) added as heuristics need them
 }
 
+// concrete DomainRegion impls (CellRegion, BoxRegion) live in `core`, not `core-api`
 public final class CellRegion<D extends Domain> implements DomainRegion<D> { /* a single-cell region */ }
+public final class BoxRegion<D extends Domain> implements DomainRegion<D> { /* an axis-aligned prism */ }
 ```
+> **Placement:** `core-api` holds only the region/destination *interfaces* (`DomainRegion`,
+> `Destination`). Their concrete value types (`CellRegion`, `BoxRegion`, `SingleDestination`) live in
+> `core`, so embedders build them from `core` while the pure contract stays dependency-free.
 Note on metrics: exposing the nearest cell (rather than a baked-in distance) lets an admissible
 heuristic use euclidean/octile distance while a cheap/fast heuristic may use manhattan — manhattan
 alone would overestimate when diagonal movement is allowed, so we keep the choice in the heuristic.
@@ -190,39 +195,45 @@ public interface Destination<D extends Domain> {
   Collection<DomainRegion<D>> regions();   // one logical destination; may span domain instances / endpoints
 }
 ```
-A `SingleDestination<D>` wraps one `DomainRegion<D>` (or a `CellRegion<D>`) for the common case. The
-Tier-1 builder groups `regions()` by domain instance itself (no `byDomain()` map needed).
+A `SingleDestination<D>` (in `core`) wraps one `DomainRegion<D>` (or a `CellRegion<D>`) for the
+common case. The Tier-1 builder groups `regions()` by domain instance itself (no `byDomain()` map
+needed).
 
 ## Result
 
-### `Step` & `Path`
-The end-to-end result is **flattened** into a single `Path` — an ordered list of `Step`s with no
-single domain. A `Transition` appears as a `Step` whose `stepType` is a transition type (and which
-may carry an `instruction`); a domain change between consecutive steps marks where you crossed one.
-```java
-public final class Step<T extends Enum<T>, I, D extends Domain> {
-  public Cell cell();
-  public D domain();          // concrete domain instance — no id lookup needed by the caller
-  public double cumulativeCost();
-  public T stepType();
-  public /* @Nullable */ I instruction();
-}
+### `Step` & `Path` — parameterized by *step type*, not domain
+The end-to-end result is **flattened** into a single `Path` — an ordered list of `Step`s. A
+`Transition` appears as a `Step` whose `stepType` is a transition type (and which may carry an
+`instruction`); a domain change between consecutive steps marks where you crossed one.
 
-public interface Path<T extends Enum<T>, I, D extends Domain> {
-  List<Step<T, I, D>> steps();   // ordered origin → destination (may cross domain instances)
+`Step` is generic in the **position type `P`** rather than in a domain: it holds one `P position`
+instead of a `(Cell, D domain)` pair. Core binds `P = Position<D>` (so `step.position().cell()` /
+`.domain()` recover the old accessors); a platform façade can re-bind `P` to its own located type
+(e.g. `org.bukkit.Location`) and hand back the very same `Path`/`SearchHandle` types. Because of
+this, the *result containers* (`Path`, `NavigationResult`, `SearchHandle`) are generic in a **single
+whole-step type `S`**, not in `(T, I, D)` — the step's own generics live inside `S`.
+```java
+public record Step<P, T extends Enum<T>, I>(
+    P position,               // Position<D> in core; a native located type in a façade
+    double cumulativeCost,    // seconds from origin
+    T stepType,
+    /* @Nullable */ I instruction) {}
+
+public interface Path<S> {
+  List<S> steps();            // ordered origin → destination (S is a Step<…>)
   double cost();
-  Step<T, I, D> first(); Step<T, I, D> last();
 }
 ```
+(`Path` no longer exposes `first()`/`last()`; callers read `steps()`. The concrete `PathImpl` lives
+in `core`.)
 
 ### `NavigationResult` (sealed)
 ```java
-public sealed interface NavigationResult<T extends Enum<T>, I, D extends Domain>
+public sealed interface NavigationResult<S>
     permits NavigationResult.Success, NavigationResult.Failure {
-  record Success<T extends Enum<T>, I, D extends Domain>(Path<T, I, D> path)
-      implements NavigationResult<T, I, D> {}
-  record Failure<T extends Enum<T>, I, D extends Domain>(FailureReason reason)
-      implements NavigationResult<T, I, D> {}
+  boolean success();
+  record Success<S>(Path<S> path) implements NavigationResult<S> { /* success() → true  */ }
+  record Failure<S>(FailureReason reason) implements NavigationResult<S> { /* success() → false */ }
 }
 
 public enum FailureReason { NO_ROUTE, DESTINATION_UNREACHABLE, LIMIT_EXCEEDED, CANCELLED, TIMED_OUT, ERROR }
@@ -231,11 +242,13 @@ public enum FailureReason { NO_ROUTE, DESTINATION_UNREACHABLE, LIMIT_EXCEEDED, C
 ### `SearchHandle`
 What `navigate` returns — the future plus cancellation, together.
 ```java
-public interface SearchHandle<T extends Enum<T>, I, D extends Domain> {
-  CompletableFuture<NavigationResult<T, I, D>> future();
+public interface SearchHandle<S> {
+  CompletableFuture<NavigationResult<S>> future();
   void cancel();   // e.g. player logs off; completes the future with FailureReason.CANCELLED
 }
 ```
+A façade that re-locates steps (Position → Location) returns a `SearchHandle<Step<Location, …>>`
+that wraps the core `SearchHandle<Step<Position<D>, …>>` and maps each step as the future completes.
 
 ## The search entry point
 
@@ -264,22 +277,30 @@ public final class SearchSettings {
 ### `OdysseyApi`
 ```java
 public interface OdysseyApi {
-  <A extends Agent, T extends Enum<T>, I, D extends Domain> SearchHandle<T, I, D> navigate(
+  static OdysseyApi load();   // ServiceLoader; core registers OdysseyApiImpl in META-INF/services
+
+  <A extends Agent, T extends Enum<T>, I, D extends Domain> SearchHandle<Step<Position<D>, T, I>> navigate(
+      Scheduler scheduler,           // the search runs here; passed in (impl is stateless)
       A agent,
       Position<D> origin,
       Destination<D> destination,
       List<? extends Mode<A, T, I, D>> modes,
       List<? extends Transition<T, I, D>> transitions,
+      HeuristicStrategy heuristic,   // pluggable; also passed in per search
       SearchSettings settings);
 }
 ```
-The five type parameters are verbose here, but downstream façades bind them all to concrete types
-(`OdysseyPlayer`, `MinecraftStepType`, `MinecraftInstruction`, `OdysseyWorld`) so end users of
-`navigatePlayer(...)` never see a generic. `Movement<T, I>` is the one flow type with no `D` — it
-carries no domain (the domain is implied by the `step` call), so `core` stamps the domain onto the
-`Step` it builds from each `Movement`.
-`navigate` returns immediately with a `SearchHandle`; the `Search` (see `03`) runs on the
-`Scheduler`, and cancellation is via `handle.cancel()`.
+The type parameters are verbose here, but downstream façades bind them all to concrete types
+(`OdysseyPlayer`, `MinecraftStepType`, `MinecraftInstruction`, `MinecraftWorld`) so end users of
+`navigatePlayer(...)` never see a generic. The result step type is `Step<Position<D>, T, I>`.
+`Movement<T, I>` is the one flow type with no `D` — it carries no domain (the domain is implied by
+the `step` call), so `core` stamps the domain onto each `Step`'s `Position` as it builds it from a
+`Movement`.
+
+`OdysseyApiImpl` is **stateless**: the `Scheduler` and `HeuristicStrategy` are per-search arguments
+rather than construction state, so a single loaded instance serves every caller. `navigate` returns
+immediately with a `SearchHandle`; the `Search` (see `03`) runs on the given `Scheduler`, and
+cancellation is via `handle.cancel()`.
 
 ## `FutureOr` (sealed)
 ```java

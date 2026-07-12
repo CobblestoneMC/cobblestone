@@ -40,15 +40,15 @@ over a whole search** — one agent, one step-type enum, one instruction type, o
 | **Movement** | The output unit of `Mode.step`: a reachable neighbor `Cell`, the cost, the resulting `TraversalState`, a `StepType`, and a nullable `Instruction`. |
 | **Instruction** | Optional, caller-supplied payload attached to a step that requires the player to *do* something (chiefly `CommandInstruction` carrying a command string). Generic `I` on `Mode`/`Transition`/`Movement`/`Step`. |
 | **TraversalState** | Immutable, sparse, hashable **typed key→value map** (`TraversalKey<V> → V`) of accumulated agent condition (e.g. `VEHICLE → HORSE`). `DEFAULT` = the empty map. Internal to the search — **not** exposed on the result `Step`. |
-| **Step** | One entry in the result `Path`: `Cell`, `D domain` (concrete world object), cumulative cost, `StepType`, and a nullable `Instruction`. `Step<T, I, D>`. (No `TraversalState`.) |
+| **Step** | One entry in the result `Path`: a `P position`, cumulative cost, `StepType`, and a nullable `Instruction`. `Step<P, T, I>` — generic in the **position type** (`Position<D>` in core; a native located type like `org.bukkit.Location` in a platform façade), not in the domain. No `TraversalState`. |
 | **Search** | A single asynchronous path-solving session. Resumable object driven by the `Scheduler`. |
-| **SearchHandle** | `SearchHandle<T, I, D>` — what `navigate(...)` returns: holds the `CompletableFuture<NavigationResult<T,I,D>>` (`future()`) and `cancel()`. |
-| **NavigationResult** | Sealed `Success(Path<T,I,D>)` \| `Failure(FailureReason)`; `NavigationResult<T,I,D>`. |
+| **SearchHandle** | `SearchHandle<S>` — what `navigate(...)` returns: holds the `CompletableFuture<NavigationResult<S>>` (`future()`) and `cancel()`. `S` is the whole step type, e.g. `Step<Position<D>, T, I>`. |
+| **NavigationResult** | Sealed `Success(Path<S>)` \| `Failure(FailureReason)`, plus `success()`; `NavigationResult<S>`. |
 
 ## Path types
 | Term | Meaning |
 |------|---------|
-| **Path** | `Path<T, I, D>` — the flattened end-to-end result: an ordered `List<Step<T,I,D>>` from origin to destination. Each `Step` carries its own `D domain` (all the same *type*, possibly different *instances*); a domain change / an `Instruction` marks a `Transition` point. (Replaces the old alternating `PathString`.) |
+| **Path** | `Path<S>` — the flattened end-to-end result: an ordered `List<S>` (`S` a `Step<…>`) from origin to destination. Each `Step`'s `position` carries its domain (all the same *type*, possibly different *instances*); a domain change / an `Instruction` marks a `Transition` point. Exposes `steps()` + `cost()` (no `first()`/`last()`). |
 | **Transition** | `Transition<T, I, D>` — one-directional single-step jump between a `DomainRegion<D>` **origin** and a `Position<D>` **destination** (same domain *type*, usually different world *instances*) that may transform `TraversalState`, optionally carrying an `Instruction`. Has a cost and a `StepType`. Examples: nether portal, `/home` teleport, horse mount. (Renamed from "Tunnel".) |
 | **VirtualPath** | An *unsolved* (or partially/fully solved) edge in the Tier-1 graph between two `Transition` endpoints in the same domain. Holds an optimistic cost estimate until Tier-2 A* solves it into concrete `Step`s. Mutable, memoized across recalculations. |
 

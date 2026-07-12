@@ -107,22 +107,28 @@ Our own `net.whimxiqal.odyssey.*` packages are **never relocated**; the unique-s
 already prevents collisions when everything is merged into one plugin jar.
 
 ## Publishing (Maven)
+> **Two developer entry points** (see `05`/`06`): the **platform** layer (`*-api` + `*-core`) is a
+> navigation *library* you instantiate; the **plugin** layer (`*-plugin-api`) is the surface for
+> extending Odyssey's running plugin. Both are published; the shipped `*-plugin` uberjars are not.
+
 **Supported / documented** artifacts (thin jars) for downstream developers:
 - `core-api`, `core` — for developers using Odyssey with something *other* than Minecraft.
-- `folia-api`, `sponge-16-api` — for developers writing against Odyssey when the Odyssey plugin is
-  already present on the server.
-- `folia`, `sponge-16` — for developers who want to shade the algorithm implementation into their
-  own platform-dependent project.
+- `paper-api`, `sponge-16-api` — the native platform navigation façade (`PlatformOdysseyApi<P,L>`
+  bindings), for developers building their own Odyssey-based plugin.
+- `paper-core`, `sponge-16-core` — the platform **impl** (`PaperOdysseyApiImpl`, wrappers, adapters),
+  for developers who want to shade the algorithm implementation into their own platform project.
+- `paper-plugin-api`, `sponge-16-plugin-api` — the plugin-extension surface
+  (`PlatformOdysseyPluginApi<P,L>` bindings: register destinations/navigators, reach navigation via
+  `.platform()`), for plugins integrating with the *installed* Odyssey plugin.
 
-**Published but internal/unsupported:** `minecraft-api`, `minecraft`. We don't *want* to advertise
-these as a stable API, **but Maven publishing must be dependency-closed** — `folia`/`folia-api` and
-`sponge-16`/`sponge-16-api` compile against `minecraft`/`minecraft-api`, so a consumer of the
-supported platform artifacts must be able to resolve them transitively. They are published with a
-docs note that their surface may change without a minor bump. (The alternative — shading them into a
-fat platform artifact — is worse for API types we want shared, so we don't.)
+**Published but internal/unsupported:** `minecraft-api`, `minecraft-core`, `minecraft-plugin-api`. We
+don't *want* to advertise these as stable, **but Maven publishing must be dependency-closed** — the
+supported `paper-*`/`sponge-*` artifacts compile against them (e.g. `paper-plugin-api` extends
+`PlatformOdysseyPluginApi` from `minecraft-plugin-api`), so consumers must resolve them transitively.
+Published with a docs note that their surface may change without a minor bump.
 
-**Not published:** `minecraft-plugin-api`, `minecraft-plugin` (internal glue), the `*-plugin` shaded
-artifacts (released as *plugin jars*, not libraries), `core-test`, `playground`.
+**Not published:** `minecraft-plugin` (internal glue), the `*-plugin` shaded artifacts (released as
+*plugin jars*, not libraries), `core-test`, `playground`.
 
 ## Versioning
 Single repo-wide semantic version to start. Bump **minor** when any published API module changes

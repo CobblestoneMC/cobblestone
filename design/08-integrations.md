@@ -49,9 +49,10 @@ me." Separate plugins (thin, same pattern), one per quest framework:
 ## Shared integration pattern
 ```
 onEnable:
-  api = server.services.get(PaperOdysseyApi.class)      // provided by folia-plugin
+  api = server.services.get(PaperOdysseyPluginApi.class)   // the one service paper-plugin registers
   if api == null: warn("Odyssey not installed"); disable; return
-  api.registerDestinationProvider(...)   // and/or transition/navigator providers
+  api.registerDestinationProvider(...)   // and/or navigator providers
+  api.platform().registerTransitionProvider(...)   // transitions live on the platform API
 ```
 Integrations ship no config of their own beyond enabling/disabling and a few knobs (e.g. guide entity
 type). They contribute nothing to the core algorithm — only data.

@@ -1,23 +1,51 @@
 # Odyssey — `minecraft-plugin-api` & `minecraft-plugin`
 
-`minecraft-plugin-api` is the **developer integration surface** (destinations, navigators). It is
-the first module to depend on **Kyori Adventure** (provided), so destination names and messages are
-rich `Component`s. `minecraft-plugin` holds the **shared plugin behavior** every platform plugin
-reuses: config, data layer, waypoints, vanilla portal-transition discovery, Trip management, command
-support, and i18n.
+`minecraft-plugin-api` is the **developer integration surface** (the plugin API object,
+destinations, navigators). It is the first module to depend on **Kyori Adventure** (provided), so
+destination names and messages are rich `Component`s. `minecraft-plugin` holds the **shared plugin
+behavior** every platform plugin reuses: config, data layer, waypoints, vanilla portal-transition
+discovery, Trip management, command support, and i18n.
+
+> **Two API objects, one registered service.** The *platform* API (`PlatformOdysseyApi<P,L>`, `05`)
+> is a navigation library you instantiate yourself. The *plugin* API defined here
+> (`PlatformOdysseyPluginApi<P,L>`) is the opinionated surface — register destinations and
+> navigators — and it is the single thing Odyssey's plugin registers in the server's service
+> manager. It exposes the platform API through an accessor, so one lookup yields both.
 
 ---
 
 ## `minecraft-plugin-api` (`net.whimxiqal.odyssey.plugin.api`)
+
+### The plugin API object
+Mirrors `PlatformOdysseyApi<P,L>` one layer up, generic over the same native `P`/`L` so every
+platform shares one shape:
+```java
+// minecraft-plugin-api
+public interface PlatformOdysseyPluginApi<P, L> {
+  PlatformOdysseyApi<P, L> platform();                          // accessor to the navigation library
+
+  void registerDestinationProvider(DestinationProvider provider);   // see below
+  void registerNavigatorFactory(String id, NavigatorFactory factory);  // id lower-cased
+  // waypoints, trips, config/i18n access surface added as the subsystems land (Phase 6b/6c)
+}
+```
+Each platform binds it (in a small published `*-plugin-api` module, e.g. `paper-plugin-api`):
+```java
+public interface PaperOdysseyPluginApi extends PlatformOdysseyPluginApi<Player, Location> {}
+```
+Odyssey's plugin registers **one** instance of `PaperOdysseyPluginApi` in Bukkit's `ServicesManager`
+(Sponge: the service registry); other plugins fetch it and reach navigation via `.platform()`.
+`registerTransitionProvider` stays on the *platform* API (transitions are an algorithm-graph concern,
+not a plugin opinion); destinations and navigators are plugin opinions and live here.
 
 ### Destinations
 
 #### `MinecraftDestination`
 ```java
 public interface MinecraftDestination {
-  Destination destination();       // core Destination (a Collection<DomainRegion>)
-  Component displayName();         // Adventure rich text
-  List<String> permissions();      // ALL must be held for a player to use it
+  Destination<MinecraftWorld> destination();   // core Destination (a Collection<DomainRegion>)
+  Component displayName();                      // Adventure rich text
+  List<String> permissions();                  // ALL must be held for a player to use it
 }
 ```
 
@@ -43,32 +71,35 @@ public interface DestinationProvider {
   DestinationTree provide(OdysseyPlayer player);
 }
 ```
-Registered via the platform façade's `registerDestinationProvider`. Integration plugins (Essentials,
-Towny, quests) register providers here; so does Odyssey itself for **waypoints**.
+Registered via the plugin API's `registerDestinationProvider` (`PlatformOdysseyPluginApi`, above).
+Integration plugins (Essentials, Towny, quests) register providers here; so does Odyssey itself for
+**waypoints**.
 
 ### Navigators
 
 #### `Navigator`
-A display strategy bound to a player + `Path`. Ticked by the Trip manager.
+A display strategy bound to a player + `Path`. Ticked by the Trip manager. The plugin layer works in
+the **core-located** path type (positions, not native locations); for brevity call it
+`MinecraftPath = Path<Step<Position<MinecraftWorld>, MinecraftStepType, MinecraftInstruction>>`.
 ```java
 public interface Navigator {
   void start();
   void tick();                       // called on a schedule; render/advance
-  void update(Path<MinecraftStepType, MinecraftInstruction> newPath); // hot-swap for live trips
+  void update(MinecraftPath newPath); // hot-swap for live trips
   void stop();
   boolean isComplete();              // destination reached
 }
 
 @FunctionalInterface
 public interface NavigatorFactory {
-  Navigator create(OdysseyPlayer player,
-                   Path<MinecraftStepType, MinecraftInstruction> path,
-                   NavigatorContext ctx);
+  Navigator create(OdysseyPlayer player, MinecraftPath path, NavigatorContext ctx);
 }
 ```
 `NavigatorContext` exposes `PlatformApi` output methods, config, and i18n. Factories are registered
-by id (lower-cased) via `registerNavigatorFactory`; developers can add their own (e.g. Citizens'
-`guide`). Odyssey ships the default `trail` factory.
+by id (lower-cased) via the plugin API's `registerNavigatorFactory`; developers can add their own
+(e.g. Citizens' `guide`). Odyssey ships the default `trail` factory. (A navigator renders in
+Minecraft space, so it uses the `Position`-located `MinecraftPath`, not the native-`Location` path a
+third-party platform-API caller would receive.)
 
 **Prompting on instruction steps.** When a `Navigator` reaches a `Step` whose `stepType` is an action
 (`COMMAND`/`MOUNT_HORSE`/`PLACE_BOAT`/…) or that carries a non-null `MinecraftInstruction`, it prompts
@@ -155,9 +186,7 @@ So Odyssey discovers empirically:
 ### Trip management (following the path)
 ```java
 public final class TripManager {
-  Trip startTrip(OdysseyPlayer player,
-                 Path<MinecraftStepType, MinecraftInstruction> path,
-                 String navigatorId, boolean live);
+  Trip startTrip(OdysseyPlayer player, MinecraftPath path, String navigatorId, boolean live);
   List<Trip> trips(UUID player);
   void stopTrip(Trip trip);
   void stopAll(UUID player);   // on logout
