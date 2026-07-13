@@ -36,7 +36,6 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
   private PaperOdysseyApiImpl platformApi;
 
   @Override
-  @SuppressWarnings("UnstableApiUsage")
   public void onEnable() {
     OdysseyLogger log = new JulOdysseyLogger(getLogger());
 
