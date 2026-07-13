@@ -44,7 +44,8 @@ final class OdysseyCommand {
     return Commands.literal("odyssey")
         .executes(ctx -> {
           CommandSender sender = ctx.getSource().getSender();
-          messages.send(sender, localeOf(sender, messages), OdysseyMessages.ODYSSEY_USAGE);
+          // TODO write a splash message for user, containing version number
+          messages.send(sender, localeOf(sender, messages), OdysseyMessages.ODYSSEY_USAGE, "/odyssey <subcommand>");
           return Command.SINGLE_SUCCESS;
         })
         .then(Commands.literal("reload")

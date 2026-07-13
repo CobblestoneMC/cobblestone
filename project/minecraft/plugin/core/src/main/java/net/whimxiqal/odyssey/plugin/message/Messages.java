@@ -202,12 +202,12 @@ public final class Messages {
         int close = template.indexOf('}', index + 1);
         if (close > index) {
           int paramIndex = parseIndex(template.substring(index + 1, close));
-          if (paramIndex >= 1 && paramIndex <= args.length) {
-            if (literal.length() > 0) {
+          if (paramIndex >= 0 && paramIndex < args.length) {
+            if (!literal.isEmpty()) {
               builder.append(Component.text(literal.toString(), category.baseColor()));
               literal.setLength(0);
             }
-            builder.append(param(args[paramIndex - 1]));
+            builder.append(param(args[paramIndex]));
             index = close + 1;
             continue;
           }
@@ -216,7 +216,7 @@ public final class Messages {
       literal.append(c);
       index++;
     }
-    if (literal.length() > 0) {
+    if (!literal.isEmpty()) {
       builder.append(Component.text(literal.toString(), category.baseColor()));
     }
   }

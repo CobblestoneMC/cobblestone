@@ -23,7 +23,7 @@ public final class OdysseyMessages {
   public static final Message1 UNKNOWN_SUBCOMMAND = Message1.error("command.unknown_subcommand");
 
   /** The {@code /odyssey} usage hint. */
-  public static final Message0 ODYSSEY_USAGE = Message0.info("command.odyssey.usage");
+  public static final Message1 ODYSSEY_USAGE = Message1.info("command.odyssey.usage");
 
   /** Confirms a successful {@code /odyssey reload}. */
   public static final Message0 RELOAD_SUCCESS = Message0.success("command.odyssey.reload.success");
