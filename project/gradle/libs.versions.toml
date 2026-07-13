@@ -1,12 +1,28 @@
 # Version catalog for module-level dependencies.
 # Build-plugin versions (checkstyle tool, spotless) are pinned in buildSrc/ where the convention
-# plugins live. External platform/library deps (adventure, paper-api, spongeapi, JavaFX, JDBC
-# drivers, config lib, bStats, prometheus) get added here in their respective implementation phases.
+# plugins live. External platform/library deps are added here in their respective implementation
+# phases.
 
 [versions]
 junit = "5.12.1"
+# Kyori Adventure enters at the plugin-api layer (rich Component messages). Provided at runtime by
+# Paper/Sponge, so it is only ever compileOnly.
+adventure = "4.17.0"
+# Paper server API (compileOnly; provided by the server). Also bundles Adventure at runtime.
+paper = "26.1.2.build.+"
+# YAML parser for the platform-neutral ConfigManager. Resolved at runtime by the paper-plugin loader
+# (Paper's MavenLibraryResolver), so it stays compileOnly at compile time.
+snakeyaml = "2.3"
+# GradleUp shadow — bundles only our own net.whimxiqal.odyssey.* modules into the shipped plugin jar.
+shadow = "9.0.0"
 
 [libraries]
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+adventure-api = { module = "net.kyori:adventure-api", version.ref = "adventure" }
+paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
+snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
+
+[plugins]
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }

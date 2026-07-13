@@ -1,0 +1,25 @@
+# ============================================================================================
+#  Odyssey — configuration
+#
+#  Odyssey is a Minecraft navigation plugin. This file controls its behavior.
+#
+#  Reloading: run "/odyssey reload" to re-read this file. Most values apply immediately. Values
+#  marked "(requires restart)" are only applied on a full server restart; changing one and
+#  reloading will warn you in the console and keep the old value until you restart.
+#
+#  More sections (search tuning, chunk cache, navigators, trips, data storage, metrics) will
+#  appear here as those features are enabled in later releases.
+# ============================================================================================
+
+# Localization settings.
+locale:
+  # Language for console and system messages, as a BCP-47 tag (e.g. "en", "en-US", "fr").
+  # Player-facing messages prefer each player's own client language when a translation exists,
+  # and fall back to this. (requires restart)
+  default: en
+
+# How Odyssey's chat messages look.
+messages:
+  # Whether to prepend the "[✦]" badge to every message Odyssey sends to a player. Set to false
+  # for a cleaner, prefix-free look.
+  show_prefix: true

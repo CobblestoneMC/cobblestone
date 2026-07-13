@@ -10,33 +10,41 @@ discovery, Trip management, command support, and i18n.
 > is a navigation library you instantiate yourself. The *plugin* API defined here
 > (`PlatformOdysseyPluginApi<P,L>`) is the opinionated surface — register destinations and
 > navigators — and it is the single thing Odyssey's plugin registers in the server's service
-> manager. It exposes the platform API through an accessor, so one lookup yields both.
+> manager. It **extends** the platform API (rather than exposing it through an accessor), so one
+> lookup yields navigation *and* registration with no intermediate hop.
 
 ---
 
 ## `minecraft-plugin-api` (`net.whimxiqal.odyssey.plugin.api`)
 
 ### The plugin API object
-Mirrors `PlatformOdysseyApi<P,L>` one layer up, generic over the same native `P`/`L` so every
-platform shares one shape:
+**Extends** `PlatformOdysseyApi<P,L>` (it *is* the navigation library) and adds the register methods,
+generic over the same native `P`/`L`. The **entire developer-facing surface is native-typed** — no
+`OdysseyPlayer`, no `Position` — so a platform developer touches only their own types:
 ```java
 // minecraft-plugin-api
-public interface PlatformOdysseyPluginApi<P, L> {
-  PlatformOdysseyApi<P, L> platform();                          // accessor to the navigation library
-
-  void registerDestinationProvider(DestinationProvider provider);   // see below
-  void registerNavigatorFactory(String id, NavigatorFactory factory);  // id lower-cased
+public interface PlatformOdysseyPluginApi<P, L> extends PlatformOdysseyApi<P, L> {
+  void registerDestinationProvider(DestinationProvider<P> provider);        // see below
+  void registerNavigatorFactory(String id, NavigatorFactory<P, L> factory); // id lower-cased
   // waypoints, trips, config/i18n access surface added as the subsystems land (Phase 6b/6c)
 }
 ```
-Each platform binds it (in a small published `*-plugin-api` module, e.g. `paper-plugin-api`):
+Each platform binds it (in a small published `*-plugin-api` module, e.g. `paper-plugin-api`) by
+extending **both** its native platform API and this surface — a clean same-type interface diamond:
 ```java
-public interface PaperOdysseyPluginApi extends PlatformOdysseyPluginApi<Player, Location> {}
+public interface PaperOdysseyPluginApi extends PaperOdysseyApi, PlatformOdysseyPluginApi<Player, Location> {}
 ```
 Odyssey's plugin registers **one** instance of `PaperOdysseyPluginApi` in Bukkit's `ServicesManager`
-(Sponge: the service registry); other plugins fetch it and reach navigation via `.platform()`.
-`registerTransitionProvider` stays on the *platform* API (transitions are an algorithm-graph concern,
-not a plugin opinion); destinations and navigators are plugin opinions and live here.
+(Sponge: the service registry); other plugins fetch it and both navigate (`odyssey.navigatePlayer(…)`)
+and register (`odyssey.registerDestinationProvider(…)`) on the one object. `registerTransitionProvider`
+is inherited from the *platform* API (transitions are an algorithm-graph concern, not a plugin opinion);
+destinations and navigators are plugin opinions and are added here.
+
+**Impl by delegation, not inheritance.** The shared `OdysseyPluginApiImpl<P,L>` (in `minecraft-plugin`)
+*composes* a `PlatformOdysseyApi<P,L>` and forwards navigation to it while owning the register state;
+each platform's impl (`PaperOdysseyPluginApiImpl extends OdysseyPluginApiImpl<Player,Location>`) reuses
+its unchanged platform-API impl. Odyssey's own internal providers adapt `P → OdysseyPlayer` at the
+platform layer (as `PaperPlayer` already wraps `Player`).
 
 ### Destinations
 
@@ -64,11 +72,12 @@ public interface DestinationTree {
 ```
 
 #### `DestinationProvider`
-Root functional interface, evaluated per agent (so results can depend on the player):
+Root functional interface, evaluated per player in **native** terms (so results can depend on the
+player, and integrators never touch `OdysseyPlayer`):
 ```java
 @FunctionalInterface
-public interface DestinationProvider {
-  DestinationTree provide(OdysseyPlayer player);
+public interface DestinationProvider<P> {
+  DestinationTree provide(P player);
 }
 ```
 Registered via the plugin API's `registerDestinationProvider` (`PlatformOdysseyPluginApi`, above).
@@ -78,28 +87,29 @@ Integration plugins (Essentials, Towny, quests) register providers here; so does
 ### Navigators
 
 #### `Navigator`
-A display strategy bound to a player + `Path`. Ticked by the Trip manager. The plugin layer works in
-the **core-located** path type (positions, not native locations); for brevity call it
-`MinecraftPath = Path<Step<Position<MinecraftWorld>, MinecraftStepType, MinecraftInstruction>>`.
+A display strategy bound to a player + `Path`. Ticked by the Trip manager. Like the rest of the
+plugin surface it is **native-typed**: the path is located by the platform's native `L`, so a
+navigator renders directly in `org.bukkit.Location` (etc.). For brevity call it
+`MinecraftPath<L> = Path<Step<L, MinecraftStepType, MinecraftInstruction>>` — the same located-step
+shape a platform-API search returns; the Trip layer adapts a core result into it.
 ```java
-public interface Navigator {
+public interface Navigator<L> {
   void start();
-  void tick();                       // called on a schedule; render/advance
-  void update(MinecraftPath newPath); // hot-swap for live trips
+  void tick();                          // called on a schedule; render/advance
+  void update(MinecraftPath<L> newPath); // hot-swap for live trips
   void stop();
-  boolean isComplete();              // destination reached
+  boolean isComplete();                 // destination reached
 }
 
 @FunctionalInterface
-public interface NavigatorFactory {
-  Navigator create(OdysseyPlayer player, MinecraftPath path, NavigatorContext ctx);
+public interface NavigatorFactory<P, L> {
+  Navigator<L> create(P player, MinecraftPath<L> path, NavigatorContext<P> ctx);
 }
 ```
-`NavigatorContext` exposes `PlatformApi` output methods, config, and i18n. Factories are registered
-by id (lower-cased) via the plugin API's `registerNavigatorFactory`; developers can add their own
-(e.g. Citizens' `guide`). Odyssey ships the default `trail` factory. (A navigator renders in
-Minecraft space, so it uses the `Position`-located `MinecraftPath`, not the native-`Location` path a
-third-party platform-API caller would receive.)
+`NavigatorContext<P>` exposes the native `player()` and its Adventure `Audience`; output helpers,
+config, and i18n accessors land with the Trip subsystem (Phase 6c). Factories are registered by id
+(lower-cased) via the plugin API's `registerNavigatorFactory`; developers can add their own (e.g.
+Citizens' `guide`). Odyssey ships the default `trail` factory.
 
 **Prompting on instruction steps.** When a `Navigator` reaches a `Step` whose `stepType` is an action
 (`COMMAND`/`MOUNT_HORSE`/`PLACE_BOAT`/…) or that carries a non-null `MinecraftInstruction`, it prompts
