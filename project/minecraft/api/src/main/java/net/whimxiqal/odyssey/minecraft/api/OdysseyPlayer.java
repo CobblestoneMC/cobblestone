@@ -47,6 +47,8 @@ public interface OdysseyPlayer extends MinecraftAgent {
    */
   boolean hasBoatInInventory();
 
+  boolean isInBoat();
+
   /**
    * Returns the position of the player's most recently ridden horse, if known — used to build the
    * horse mount transition.

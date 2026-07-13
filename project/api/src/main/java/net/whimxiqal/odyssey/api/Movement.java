@@ -14,18 +14,15 @@ package net.whimxiqal.odyssey.api;
  * search stamps that domain onto the {@link Step} it builds. The {@code instruction} is
  * {@code null} unless this step requires the player to act.
  *
- * @param <T> the step-type enum
- * @param <I> the instruction payload type
+ * @param <T> the payload type
  * @param cell the reachable destination cell
  * @param cost the cost in seconds to perform this step
- * @param stepType the step type (usually the mode's primary type; may differ, e.g. boat entry)
+ * @param payload the payload to send through to the search response
  * @param state the resulting traversal state after the step
- * @param instruction an optional player instruction, or {@code null}
  */
-public record Movement<T extends Enum<T>, I>(
+public record Movement<T>(
     Cell cell,
     double cost,
-    T stepType,
-    TraversalState state,
-    I instruction) {
+    T payload,
+    TraversalState state) {
 }

@@ -17,16 +17,11 @@ import net.whimxiqal.odyssey.api.Transition;
  * @param origin the entry region
  * @param destination the arrival position
  * @param cost the traversal cost
- * @param stepType the step type
+ * @param payload the step type
  */
 record TestTransition(
     DomainRegion<TestDomain> origin,
     Position<TestDomain> destination,
     double cost,
-    TestStep stepType) implements Transition<TestStep, Void, TestDomain> {
-
-  @Override
-  public Void instruction() {
-    return null;
-  }
+    TestStep payload) implements Transition<TestStep, TestDomain> {
 }

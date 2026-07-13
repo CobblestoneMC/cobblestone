@@ -14,10 +14,7 @@ import java.util.Set;
 import net.whimxiqal.odyssey.api.Cell;
 import net.whimxiqal.odyssey.api.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftAgent;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftKeys;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
+import net.whimxiqal.odyssey.minecraft.api.*;
 
 /**
  * Walking (and single-block step-up/step-down) on solid ground. Cardinal and horizontal-diagonal
@@ -33,10 +30,6 @@ final class WalkMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
       {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}
   };
 
-  WalkMode() {
-    super(MinecraftStepType.WALK);
-  }
-
   @Override
   protected boolean applies(A agent, TraversalState state) {
     return state.get(MinecraftKeys.VEHICLE) == null;
@@ -48,9 +41,9 @@ final class WalkMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
   }
 
   @Override
-  protected Collection<Movement<MinecraftStepType, MinecraftInstruction>> computeMovements(
+  protected Collection<Movement<MinecraftStepPayload>> computeMovements(
       A agent, Cell from, TraversalState state, BlockView view) {
-    List<Movement<MinecraftStepType, MinecraftInstruction>> moves = new ArrayList<>();
+    List<Movement<MinecraftStepPayload>> moves = new ArrayList<>();
     for (int[] dir : HORIZONTAL) {
       int dx = dir[0];
       int dz = dir[1];
@@ -73,7 +66,7 @@ final class WalkMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
 
   private void addStepUpOrDown(
       Cell from, int dx, int dz, BlockView view, TraversalState state,
-      List<Movement<MinecraftStepType, MinecraftInstruction>> moves) {
+      List<Movement<MinecraftStepPayload>> moves) {
     Cell up = from.plus(dx, 1, dz);
     if (Geometry.standable(view, up) && view.at(from, 0, 2, 0).isPassable()) {
       boolean half = view.at(from.plus(dx, 0, dz)).isHalfHeight();

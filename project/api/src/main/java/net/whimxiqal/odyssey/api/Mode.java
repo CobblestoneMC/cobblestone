@@ -21,19 +21,10 @@ import java.util.Collection;
  * fly mode is only included when the agent can fly), never inside {@code step}.
  *
  * @param <A> the agent type
- * @param <T> the step-type enum
- * @param <I> the instruction payload type
+ * @param <T> the payload type
  * @param <D> the domain type
  */
-public interface Mode<A extends Agent, T extends Enum<T>, I, D extends Domain> {
-
-  /**
-   * Returns this mode's primary step type, used for {@code -no-mode} exclusion and as the default
-   * tag on the movements it produces.
-   *
-   * @return the primary step type
-   */
-  T stepType();
+public interface Mode<A extends Agent, T, D extends Domain> {
 
   /**
    * Produces every cell reachable from {@code from} in a single step of this mode.
@@ -44,5 +35,5 @@ public interface Mode<A extends Agent, T extends Enum<T>, I, D extends Domain> {
    * @param state the current traversal state
    * @return the reachable movements, possibly pending on block I/O
    */
-  FutureOr<Collection<Movement<T, I>>> step(A agent, Cell from, D domain, TraversalState state);
+  FutureOr<Collection<Movement<T>>> step(A agent, Cell from, D domain, TraversalState state);
 }

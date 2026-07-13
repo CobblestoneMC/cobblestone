@@ -90,7 +90,7 @@ Integration plugins (Essentials, Towny, quests) register providers here; so does
 A display strategy bound to a player + `Path`. Ticked by the Trip manager. Like the rest of the
 plugin surface it is **native-typed**: the path is located by the platform's native `L`, so a
 navigator renders directly in `org.bukkit.Location` (etc.). For brevity call it
-`MinecraftPath<L> = Path<Step<L, MinecraftStepType, MinecraftInstruction>>` — the same located-step
+`MinecraftPath<L> = Path<Step<L, MinecraftStepPayload>>` — the same located-step
 shape a platform-API search returns; the Trip layer adapts a core result into it.
 ```java
 public interface Navigator<L> {

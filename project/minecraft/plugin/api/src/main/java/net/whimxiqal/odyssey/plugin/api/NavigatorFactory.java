@@ -7,6 +7,10 @@
 
 package net.whimxiqal.odyssey.plugin.api;
 
+import net.whimxiqal.odyssey.api.Path;
+import net.whimxiqal.odyssey.api.Step;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
+
 /**
  * Creates a {@link Navigator} for a player + path, entirely in native terms. Registered by
  * (lower-cased) id via
@@ -27,5 +31,5 @@ public interface NavigatorFactory<P, L> {
    * @param context the navigator's runtime services
    * @return the navigator
    */
-  Navigator<L> create(P player, MinecraftPath<L> path, NavigatorContext<P> context);
+  Navigator<L> create(P player, Path<Step<L, MinecraftStepPayload>> path, NavigatorContext<P> context);
 }

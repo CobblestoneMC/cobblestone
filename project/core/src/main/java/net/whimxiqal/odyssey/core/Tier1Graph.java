@@ -29,31 +29,30 @@ import net.whimxiqal.odyssey.api.TraversalState;
  * <p>
  * Edges are produced lazily and their {@link VirtualPath}s are memoized so
  * their solve results
- * persist across Dijkstra re-plans. Bookend {@link SyntheticTransition}s
+ * persist across Dijkstra re-plans. Bookends
  * connect the player's origin
  * and the goal regions (via a super-sink).
  *
- * @param <T> the step-type enum
- * @param <I> the instruction payload type
+ * @param <T> the payload type
  * @param <D> the domain type
  */
-final class Tier1Graph<T extends Enum<T>, I, D extends Domain>
-    extends Graph<Tier1Node<T, I, D>, Tier1Edge<T, I, D>> {
+final class Tier1Graph<T, D extends Domain>
+    extends Graph<Tier1Node<T, D>, Tier1Edge<T, D>> {
 
   private final net.whimxiqal.odyssey.api.HeuristicStrategy heuristic;
-  private final Map<Tier1Node<T, I, D>, Iterable<Tier1Edge<T, I, D>>> edgeMap = new HashMap<>();
-  private final Map<D, List<Transition<T, I, D>>> transitionsByOriginDomain = new HashMap<>();
+  private final Map<Tier1Node<T, D>, Iterable<Tier1Edge<T, D>>> edgeMap = new HashMap<>();
+  private final Map<D, List<Transition<T, D>>> transitionsByOriginDomain = new HashMap<>();
   private final Map<D, List<DomainRegion<D>>> destinationsByDomain = new HashMap<>();
-  private final Tier1Node.Source<T, I, D> originNode;
+  private final Tier1Node.Source<T, D> originNode;
 
   Tier1Graph(
       Position<D> origin,
-      List<? extends Transition<T, I, D>> transitions,
+      List<? extends Transition<T, D>> transitions,
       Collection<? extends DomainRegion<D>> destinationRegions,
       net.whimxiqal.odyssey.api.HeuristicStrategy heuristic) {
     this.heuristic = heuristic;
     this.originNode = new Tier1Node.Source<>(origin, TraversalState.DEFAULT);
-    for (Transition<T, I, D> transition : transitions) {
+    for (Transition<T, D> transition : transitions) {
       transitionsByOriginDomain.computeIfAbsent(transition.origin().domain(), key -> new ArrayList<>()).add(transition);
     }
     for (DomainRegion<D> region : destinationRegions) {
@@ -61,29 +60,29 @@ final class Tier1Graph<T extends Enum<T>, I, D extends Domain>
     }
   }
 
-  Tier1Node.Source<T, I, D> originNode() {
+  Tier1Node.Source<T, D> originNode() {
     return originNode;
   }
 
-  boolean isGoal(Tier1Node<T, I, D> node) {
-    return node instanceof Tier1Node.Sink<T, I, D>;
+  boolean isGoal(Tier1Node<T, D> node) {
+    return node instanceof Tier1Node.Sink<T, D>;
   }
 
   @Override
-  protected Iterable<Tier1Edge<T, I, D>> outboundEdges(Tier1Node<T, I, D> node) {
+  protected Iterable<Tier1Edge<T, D>> outboundEdges(Tier1Node<T, D> node) {
     if (edgeMap.containsKey(node)) {
       // already cached
       return edgeMap.get(node);
     }
-    Iterable<Tier1Edge<T, I, D>> edges;
+    Iterable<Tier1Edge<T, D>> edges;
     switch (node) {
-      case Tier1Node.Source<T, I, D> sourceNode -> {
+      case Tier1Node.Source<T, D> sourceNode -> {
         edges = computeEdges(sourceNode.position(), sourceNode.state());
       }
-      case Tier1Node.AtTransition<T, I, D> transitionNode -> {
+      case Tier1Node.AtTransition<T, D> transitionNode -> {
         edges = computeEdges(transitionNode.transition().destination(), transitionNode.state());
       }
-      case Tier1Node.Sink<T, I, D> sinkNode -> {
+      case Tier1Node.Sink<T, D> sinkNode -> {
         return List.of();
       }
     }
@@ -91,23 +90,23 @@ final class Tier1Graph<T extends Enum<T>, I, D extends Domain>
     return edges;
   }
 
-  private Iterable<Tier1Edge<T, I, D>> computeEdges(Position<D> position, TraversalState state) {
+  private Iterable<Tier1Edge<T, D>> computeEdges(Position<D> position, TraversalState state) {
     D destinationDomain = position.domain();
     Cell fromCell = position.cell();
-    List<Transition<T, I, D>> transitionTargets = transitionsByOriginDomain.getOrDefault(destinationDomain, List.of());
+    List<Transition<T, D>> transitionTargets = transitionsByOriginDomain.getOrDefault(destinationDomain, List.of());
     List<DomainRegion<D>> destinationTargets = destinationsByDomain.getOrDefault(destinationDomain, List.of());
-    List<Tier1Edge<T, I, D>> edges = new ArrayList<>(transitionTargets.size() + destinationTargets.size());
-    for (Transition<T, I, D> target : transitionTargets) {
+    List<Tier1Edge<T, D>> edges = new ArrayList<>(transitionTargets.size() + destinationTargets.size());
+    for (Transition<T, D> target : transitionTargets) {
       edges.add(
-          new Tier1Edge<T, I, D>(
-              new VirtualPath<T, I, D>(fromCell, destinationDomain, target.origin(), state),
+          new Tier1Edge<T, D>(
+              new VirtualPath<T, D>(fromCell, destinationDomain, target.origin(), state),
               new Tier1Node.AtTransition<>(target, target.apply(state)),
               state));
     }
     for (DomainRegion<D> target : destinationTargets) {
       edges.add(
-          new Tier1Edge<T, I, D>(
-              new VirtualPath<T, I, D>(fromCell, destinationDomain, target, state),
+          new Tier1Edge<T, D>(
+              new VirtualPath<T, D>(fromCell, destinationDomain, target, state),
               new Tier1Node.Sink<>(),
               state));
     }
@@ -115,12 +114,12 @@ final class Tier1Graph<T extends Enum<T>, I, D extends Domain>
   }
 
   @Override
-  protected Tier1Node<T, I, D> head(Tier1Edge<T, I, D> edge) {
+  protected Tier1Node<T, D> head(Tier1Edge<T, D> edge) {
     return edge.target();
   }
 
   @Override
-  protected double cost(Tier1Edge<T, I, D> edge) {
+  protected double cost(Tier1Edge<T, D> edge) {
     return edge.virtualPath().cost(heuristic) + edge.target().cost();
   }
 

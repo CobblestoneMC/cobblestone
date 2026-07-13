@@ -17,6 +17,7 @@ import net.whimxiqal.odyssey.api.Position;
 import net.whimxiqal.odyssey.api.SearchHandle;
 import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
 import org.bukkit.Location;
@@ -33,15 +34,15 @@ import org.bukkit.Location;
  * </ul>
  */
 final class PaperSearchHandle
-    implements SearchHandle<Step<Location, MinecraftStepType, MinecraftInstruction>> {
+    implements SearchHandle<Step<Location, MinecraftStepPayload>> {
 
-  private final CompletableFuture<NavigationResult<Step<Location, MinecraftStepType, MinecraftInstruction>>>
+  private final CompletableFuture<NavigationResult<Step<Location, MinecraftStepPayload>>>
       future = new CompletableFuture<>();
-  private volatile SearchHandle<Step<Position<MinecraftWorld>, MinecraftStepType, MinecraftInstruction>> inner;
+  private volatile SearchHandle<Step<Position<MinecraftWorld>, MinecraftStepPayload>> inner;
   private volatile boolean cancelled;
 
   PaperSearchHandle(
-      CompletableFuture<SearchHandle<Step<Position<MinecraftWorld>, MinecraftStepType, MinecraftInstruction>>>
+      CompletableFuture<SearchHandle<Step<Position<MinecraftWorld>, MinecraftStepPayload>>>
           handleFuture) {
     handleFuture.whenComplete((handle, error) -> {
       if (error != null || handle == null) {
@@ -62,34 +63,32 @@ final class PaperSearchHandle
     });
   }
 
-  private static NavigationResult<Step<Location, MinecraftStepType, MinecraftInstruction>> map(
-      NavigationResult<Step<Position<MinecraftWorld>, MinecraftStepType, MinecraftInstruction>> result) {
-    if (result instanceof NavigationResult.Success<Step<Position<MinecraftWorld>, MinecraftStepType,
-            MinecraftInstruction>>(Path<Step<Position<MinecraftWorld>, MinecraftStepType, MinecraftInstruction>> path)) {
-        List<Step<Location, MinecraftStepType, MinecraftInstruction>> steps = new ArrayList<>();
-      for (Step<Position<MinecraftWorld>, MinecraftStepType, MinecraftInstruction> step : path.steps()) {
+  private static NavigationResult<Step<Location, MinecraftStepPayload>> map(
+      NavigationResult<Step<Position<MinecraftWorld>, MinecraftStepPayload>> result) {
+    if (result instanceof NavigationResult.Success<Step<Position<MinecraftWorld>, MinecraftStepPayload>>(Path<Step<Position<MinecraftWorld>, MinecraftStepPayload>> path)) {
+        List<Step<Location, MinecraftStepPayload>> steps = new ArrayList<>();
+      for (Step<Position<MinecraftWorld>, MinecraftStepPayload> step : path.steps()) {
         steps.add(new Step<>(
             PaperConversions.location(step.position()),
             step.cumulativeCost(),
-            step.stepType(),
-            step.instruction()));
+            step.payload()));
       }
       return new NavigationResult.Success<>(new PaperPath(steps, path.cost()));
     }
-    NavigationResult.Failure<Step<Position<MinecraftWorld>, MinecraftStepType, MinecraftInstruction>> failure =
-        (NavigationResult.Failure<Step<Position<MinecraftWorld>, MinecraftStepType, MinecraftInstruction>>) result;
+    NavigationResult.Failure<Step<Position<MinecraftWorld>, MinecraftStepPayload>> failure =
+        (NavigationResult.Failure<Step<Position<MinecraftWorld>, MinecraftStepPayload>>) result;
     return new NavigationResult.Failure<>(failure.reason());
   }
 
   @Override
-  public CompletableFuture<NavigationResult<Step<Location, MinecraftStepType, MinecraftInstruction>>> future() {
+  public CompletableFuture<NavigationResult<Step<Location, MinecraftStepPayload>>> future() {
     return future;
   }
 
   @Override
   public void cancel() {
     cancelled = true;
-    SearchHandle<Step<Position<MinecraftWorld>, MinecraftStepType, MinecraftInstruction>> handle = inner;
+    SearchHandle<Step<Position<MinecraftWorld>, MinecraftStepPayload>> handle = inner;
     if (handle != null) {
       handle.cancel();
     }

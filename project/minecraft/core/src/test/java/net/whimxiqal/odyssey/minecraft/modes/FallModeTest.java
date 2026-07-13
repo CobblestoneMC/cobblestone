@@ -18,6 +18,7 @@ import net.whimxiqal.odyssey.minecraft.TestModes;
 import net.whimxiqal.odyssey.minecraft.TestPlayer;
 import net.whimxiqal.odyssey.minecraft.TestWorld;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 import net.whimxiqal.odyssey.minecraft.api.OdysseyPlayer;
 import org.junit.jupiter.api.Test;
@@ -33,11 +34,11 @@ class FallModeTest {
         .set(0, 4, 0, TestBlocks.solid())
         .set(1, 0, 0, TestBlocks.solid())
         .build();
-    Map<Cell, Movement<MinecraftStepType, MinecraftInstruction>> moves =
+    Map<Cell, Movement<MinecraftStepPayload>> moves =
         TestModes.from(fall, TestPlayer.walker(), world, new Cell(0, 5, 0));
 
-    Movement<MinecraftStepType, MinecraftInstruction> landing = moves.get(new Cell(1, 1, 0));
-    assertEquals(MinecraftStepType.FALL, landing.stepType());
+    Movement<MinecraftStepPayload> landing = moves.get(new Cell(1, 1, 0));
+    assertEquals(MinecraftStepType.FALL, landing.payload().stepType());
     double distance = 4;
     double expected = MovementCosts.WALK
         + MovementCosts.FALL_PER_BLOCK * distance
@@ -53,7 +54,7 @@ class FallModeTest {
         .set(0, 4, 0, TestBlocks.solid())
         .set(1, 3, 0, TestBlocks.solid())
         .build();
-    Map<Cell, Movement<MinecraftStepType, MinecraftInstruction>> moves =
+    Map<Cell, Movement<MinecraftStepPayload>> moves =
         TestModes.from(fall, TestPlayer.walker(), world, new Cell(0, 5, 0));
     assertFalse(moves.containsKey(new Cell(1, 4, 0)));
   }

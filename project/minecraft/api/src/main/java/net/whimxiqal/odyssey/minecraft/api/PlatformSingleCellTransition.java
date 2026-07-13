@@ -43,19 +43,11 @@ public interface PlatformSingleCellTransition<L> {
   double cost();
 
   /**
-   * Returns the step type for this transition (e.g. {@code PORTAL}, {@code COMMAND}).
+   * Returns the payload for this transition (e.g. {@code PORTAL}, {@code COMMAND} step type).
    *
-   * @return the step type
+   * @return the payload
    */
-  MinecraftStepType stepType();
-
-  /**
-   * Returns the instruction the player must perform to traverse this transition, or {@code null}
-   * for an automatic one.
-   *
-   * @return the instruction, or {@code null}
-   */
-  MinecraftInstruction instruction();
+  MinecraftStepPayload payload();
 
   /**
    * Transforms the incoming traversal state on traversal; the default is the identity.

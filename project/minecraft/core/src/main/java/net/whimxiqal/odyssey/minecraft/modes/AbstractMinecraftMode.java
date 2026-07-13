@@ -14,11 +14,7 @@ import net.whimxiqal.odyssey.api.Cell;
 import net.whimxiqal.odyssey.api.FutureOr;
 import net.whimxiqal.odyssey.api.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftAgent;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftMode;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
+import net.whimxiqal.odyssey.minecraft.api.*;
 
 /**
  * Base class for the Minecraft modes. It handles the common plumbing — gating by state, fetching the
@@ -29,19 +25,8 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
  */
 abstract class AbstractMinecraftMode<A extends MinecraftAgent> implements MinecraftMode<A> {
 
-  private final MinecraftStepType stepType;
-
-  AbstractMinecraftMode(MinecraftStepType stepType) {
-    this.stepType = stepType;
-  }
-
   @Override
-  public final MinecraftStepType stepType() {
-    return stepType;
-  }
-
-  @Override
-  public final FutureOr<Collection<Movement<MinecraftStepType, MinecraftInstruction>>> step(
+  public final FutureOr<Collection<Movement<MinecraftStepPayload>>> step(
       A agent, Cell from, MinecraftWorld world, TraversalState state) {
     if (!applies(agent, state)) {
       return FutureOr.of(List.of());
@@ -62,18 +47,18 @@ abstract class AbstractMinecraftMode<A extends MinecraftAgent> implements Minecr
   protected abstract Set<Cell> requiredCells(Cell from);
 
   /** Turns the fetched blocks into the movements this mode offers from {@code from}. */
-  protected abstract Collection<Movement<MinecraftStepType, MinecraftInstruction>> computeMovements(
+  protected abstract Collection<Movement<MinecraftStepPayload>> computeMovements(
       A agent, Cell from, TraversalState state, BlockView view);
 
   /** Builds a movement with no instruction. */
-  protected static Movement<MinecraftStepType, MinecraftInstruction> move(
+  protected static Movement<MinecraftStepPayload> move(
       Cell cell, double cost, MinecraftStepType type, TraversalState state) {
-    return new Movement<>(cell, cost, type, state, null);
+    return new Movement<>(cell, cost, new MinecraftStepPayload(type, new MinecraftInstruction.None()), state);
   }
 
   /** Builds a movement carrying an instruction. */
-  protected static Movement<MinecraftStepType, MinecraftInstruction> move(
+  protected static Movement<MinecraftStepPayload> move(
       Cell cell, double cost, MinecraftStepType type, TraversalState state, MinecraftInstruction instruction) {
-    return new Movement<>(cell, cost, type, state, instruction);
+    return new Movement<>(cell, cost, new MinecraftStepPayload(type, instruction), state);
   }
 }

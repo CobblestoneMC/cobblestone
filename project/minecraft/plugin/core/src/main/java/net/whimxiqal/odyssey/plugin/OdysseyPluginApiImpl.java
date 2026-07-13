@@ -16,10 +16,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import net.whimxiqal.odyssey.api.SearchHandle;
 import net.whimxiqal.odyssey.api.SearchSettings;
 import net.whimxiqal.odyssey.api.Step;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
-import net.whimxiqal.odyssey.minecraft.api.PlatformOdysseyApi;
-import net.whimxiqal.odyssey.minecraft.api.PlatformSingleCellTransitionProvider;
+import net.whimxiqal.odyssey.minecraft.api.*;
 import net.whimxiqal.odyssey.plugin.api.DestinationProvider;
 import net.whimxiqal.odyssey.plugin.api.NavigatorFactory;
 import net.whimxiqal.odyssey.plugin.api.PlatformOdysseyPluginApi;
@@ -54,13 +51,13 @@ public class OdysseyPluginApiImpl<P, L> implements PlatformOdysseyPluginApi<P, L
   }
 
   @Override
-  public SearchHandle<Step<L, MinecraftStepType, MinecraftInstruction>> navigatePlayer(
+  public SearchHandle<Step<L, MinecraftStepPayload>> navigatePlayer(
       P player, L destination, SearchSettings settings) {
     return platform.navigatePlayer(player, destination, settings);
   }
 
   @Override
-  public SearchHandle<Step<L, MinecraftStepType, MinecraftInstruction>> navigatePlayerToRegion(
+  public SearchHandle<Step<L, MinecraftStepPayload>> navigatePlayerToRegion(
       P player, L location1, L location2, SearchSettings settings) {
     return platform.navigatePlayerToRegion(player, location1, location2, settings);
   }

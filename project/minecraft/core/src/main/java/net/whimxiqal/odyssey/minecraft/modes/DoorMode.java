@@ -15,11 +15,7 @@ import java.util.Set;
 import net.whimxiqal.odyssey.api.Cell;
 import net.whimxiqal.odyssey.api.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftAgent;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftBlock;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftKeys;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
+import net.whimxiqal.odyssey.minecraft.api.*;
 
 /**
  * Passing through a closed-but-openable door to the cell on the far side (open doors are just
@@ -35,12 +31,13 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 final class DoorMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> {
 
   private static final int[][] HORIZONTAL = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+  private final boolean canOpenDoor;
 
-  DoorMode() {
-    super(MinecraftStepType.OPEN_DOOR);
+  DoorMode(boolean canOpenDoor) {
+      this.canOpenDoor = canOpenDoor;
   }
 
-  @Override
+    @Override
   protected boolean applies(A agent, TraversalState state) {
     return state.get(MinecraftKeys.VEHICLE) == null;
   }
@@ -61,9 +58,9 @@ final class DoorMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
   }
 
   @Override
-  protected Collection<Movement<MinecraftStepType, MinecraftInstruction>> computeMovements(
+  protected Collection<Movement<MinecraftStepPayload>> computeMovements(
       A agent, Cell from, TraversalState state, BlockView view) {
-    List<Movement<MinecraftStepType, MinecraftInstruction>> moves = new ArrayList<>();
+    List<Movement<MinecraftStepPayload>> moves = new ArrayList<>();
     boolean standingOnPlate = view.at(from).isPressurePlate();
     for (int[] dir : HORIZONTAL) {
       Cell doorway = from.plus(dir[0], 0, dir[1]);

@@ -22,16 +22,16 @@ import net.whimxiqal.odyssey.api.*;
 public final class OdysseyApiImpl implements OdysseyApi {
 
   @Override
-  public <A extends Agent, T extends Enum<T>, I, D extends Domain> SearchHandle<Step<Position<D>, T, I>> navigate(
+  public <A extends Agent, T, D extends Domain> SearchHandle<Step<Position<D>, T>> navigate(
           Scheduler scheduler,
       A agent,
       Position<D> origin,
       Destination<D> destination,
-      List<? extends Mode<A, T, I, D>> modes,
-      List<? extends Transition<T, I, D>> transitions,
+      List<? extends Mode<A, T, D>> modes,
+      List<? extends Transition<T, D>> transitions,
       HeuristicStrategy heuristic,
       SearchSettings settings) {
-    SearchImpl<A, T, I, D> search = new SearchImpl<>(
+    SearchImpl<A, T, D> search = new SearchImpl<>(
         scheduler, heuristic, agent, origin, destination, modes, transitions, settings);
     search.start();
     return search;

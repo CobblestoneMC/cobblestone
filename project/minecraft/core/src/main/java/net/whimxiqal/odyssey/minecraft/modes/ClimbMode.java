@@ -14,10 +14,7 @@ import java.util.Set;
 import net.whimxiqal.odyssey.api.Cell;
 import net.whimxiqal.odyssey.api.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftAgent;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftKeys;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
+import net.whimxiqal.odyssey.minecraft.api.*;
 
 /**
  * Climbing ladders, vines, and scaffolding: up and down while on a climbable block, grabbing an
@@ -28,10 +25,6 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 final class ClimbMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> {
 
   private static final int[][] HORIZONTAL = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-
-  ClimbMode() {
-    super(MinecraftStepType.CLIMB);
-  }
 
   @Override
   protected boolean applies(A agent, TraversalState state) {
@@ -44,9 +37,9 @@ final class ClimbMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A>
   }
 
   @Override
-  protected Collection<Movement<MinecraftStepType, MinecraftInstruction>> computeMovements(
+  protected Collection<Movement<MinecraftStepPayload>> computeMovements(
       A agent, Cell from, TraversalState state, BlockView view) {
-    List<Movement<MinecraftStepType, MinecraftInstruction>> moves = new ArrayList<>();
+    List<Movement<MinecraftStepPayload>> moves = new ArrayList<>();
     boolean onClimbable = view.at(from).isClimbable();
     if (onClimbable) {
       Cell up = from.plus(0, 1, 0);

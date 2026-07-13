@@ -15,7 +15,10 @@ package net.whimxiqal.odyssey.minecraft.api;
  * the payload-bearing case, chiefly {@link CommandInstruction}. A navigator switches over it
  * exhaustively to decide how to prompt the player.
  */
-public sealed interface MinecraftInstruction permits MinecraftInstruction.CommandInstruction {
+public sealed interface MinecraftInstruction permits MinecraftInstruction.None, MinecraftInstruction.CommandInstruction {
+
+  record None() implements MinecraftInstruction {
+  }
 
   /**
    * Instructs the player to run a command (e.g. {@code /home}) to traverse a transition.

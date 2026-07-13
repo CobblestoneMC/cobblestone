@@ -21,21 +21,21 @@ class Tier2SearchTest {
 
   private static final TestDomain DOMAIN = new TestDomain("test");
 
-  private VirtualPath<TestStep, Void, TestDomain> virtualPath(Cell from, Cell target) {
+  private VirtualPath<TestStep, TestDomain> virtualPath(Cell from, Cell target) {
     return new VirtualPath<>(from, DOMAIN, new CellRegion<>(target, DOMAIN), TraversalState.DEFAULT);
   }
 
   @Test
   void immediateModeSolvesWithoutParking() {
     CorridorMode mode = new CorridorMode(false);
-    Tier2Search<TestAgent, TestStep, Void, TestDomain> search = new Tier2Search<>(
+    Tier2Search<TestAgent, TestStep, TestDomain> search = new Tier2Search<>(
         new TestAgent(), virtualPath(new Cell(0, 0, 0), new Cell(3, 0, 0)),
         List.of(mode), Heuristics.zero(), 1000, () -> false, Runnable::run);
 
-    CompletableFuture<Tier2Result<TestStep, Void, TestDomain>> future = search.solve();
+    CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
 
     assertTrue(future.isDone(), "an all-immediate solve should complete synchronously");
-    Tier2Result<TestStep, Void, TestDomain> result = future.getNow(null);
+    Tier2Result<TestStep, TestDomain> result = future.getNow(null);
     assertTrue(result.solved());
     assertEquals(3.0, result.cost(), 1e-9);
     assertEquals(3, result.steps().size());
@@ -44,11 +44,11 @@ class Tier2SearchTest {
   @Test
   void parksUntilBlocksArriveThenResumesToSolution() {
     CorridorMode mode = new CorridorMode(true);
-    Tier2Search<TestAgent, TestStep, Void, TestDomain> search = new Tier2Search<>(
+    Tier2Search<TestAgent, TestStep, TestDomain> search = new Tier2Search<>(
         new TestAgent(), virtualPath(new Cell(0, 0, 0), new Cell(2, 0, 0)),
         List.of(mode), Heuristics.zero(), 1000, () -> false, Runnable::run);
 
-    CompletableFuture<Tier2Result<TestStep, Void, TestDomain>> future = search.solve();
+    CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
 
     // Parked on the first expansion's pending block — not done yet.
     assertFalse(future.isDone());
@@ -62,7 +62,7 @@ class Tier2SearchTest {
     // Deliver the (1,0,0) blocks; the search reaches (2,0,0) and completes.
     mode.releaseNext();
     assertTrue(future.isDone());
-    Tier2Result<TestStep, Void, TestDomain> result = future.getNow(null);
+    Tier2Result<TestStep, TestDomain> result = future.getNow(null);
     assertTrue(result.solved());
     assertEquals(2.0, result.cost(), 1e-9);
     assertEquals(2, result.steps().size());
@@ -70,22 +70,22 @@ class Tier2SearchTest {
 
   @Test
   void reportsUnreachableWhenNoMovesAndNotAtTarget() {
-    Tier2Search<TestAgent, TestStep, Void, TestDomain> search = new Tier2Search<>(
+    Tier2Search<TestAgent, TestStep, TestDomain> search = new Tier2Search<>(
         new TestAgent(), virtualPath(new Cell(0, 0, 0), new Cell(5, 0, 0)),
         List.of(), Heuristics.zero(), 1000, () -> false, Runnable::run);
 
-    Tier2Result<TestStep, Void, TestDomain> result = search.solve().getNow(null);
+    Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
 
     assertFalse(result.solved());
   }
 
   @Test
   void startAlreadyInTargetSolvesWithZeroSteps() {
-    Tier2Search<TestAgent, TestStep, Void, TestDomain> search = new Tier2Search<>(
+    Tier2Search<TestAgent, TestStep, TestDomain> search = new Tier2Search<>(
         new TestAgent(), virtualPath(new Cell(7, 0, 0), new Cell(7, 0, 0)),
         List.of(new CorridorMode(false)), Heuristics.zero(), 1000, () -> false, Runnable::run);
 
-    Tier2Result<TestStep, Void, TestDomain> result = search.solve().getNow(null);
+    Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
 
     assertTrue(result.solved());
     assertEquals(0.0, result.cost(), 1e-9);

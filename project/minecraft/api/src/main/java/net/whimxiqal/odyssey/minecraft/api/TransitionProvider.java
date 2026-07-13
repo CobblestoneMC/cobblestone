@@ -26,6 +26,6 @@ public interface TransitionProvider {
    * @param player the player
    * @return a future of the available transitions
    */
-  CompletableFuture<List<? extends Transition<MinecraftStepType, MinecraftInstruction, MinecraftWorld>>>
+  CompletableFuture<List<? extends Transition<MinecraftStepPayload, MinecraftWorld>>>
       compute(OdysseyPlayer player);
 }

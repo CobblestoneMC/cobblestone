@@ -20,20 +20,22 @@ public final class TestPlayer implements OdysseyPlayer {
 
   private final boolean canFly;
   private final boolean hasBoat;
+  private final boolean inBoat;
   private final boolean canBreak;
 
-  private TestPlayer(boolean canFly, boolean hasBoat, boolean canBreak) {
+  private TestPlayer(boolean canFly, boolean hasBoat, boolean inBoat, boolean canBreak) {
     this.canFly = canFly;
     this.hasBoat = hasBoat;
+    this.inBoat = inBoat;
     this.canBreak = canBreak;
   }
 
   public static TestPlayer walker() {
-    return new TestPlayer(false, false, true);
+    return new TestPlayer(false, false, false, true);
   }
 
-  public static TestPlayer create(boolean canFly, boolean hasBoat, boolean canBreak) {
-    return new TestPlayer(canFly, hasBoat, canBreak);
+  public static TestPlayer create(boolean canFly, boolean hasBoat, boolean inBoat, boolean canBreak) {
+    return new TestPlayer(canFly, hasBoat, inBoat, canBreak);
   }
 
   @Override
@@ -59,6 +61,11 @@ public final class TestPlayer implements OdysseyPlayer {
   @Override
   public boolean hasBoatInInventory() {
     return hasBoat;
+  }
+
+  @Override
+  public boolean isInBoat() {
+    return inBoat;
   }
 
   @Override

@@ -14,10 +14,7 @@ import java.util.Set;
 import net.whimxiqal.odyssey.api.Cell;
 import net.whimxiqal.odyssey.api.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftAgent;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftKeys;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
+import net.whimxiqal.odyssey.minecraft.api.*;
 
 /**
  * Swimming through water — moves to any face-adjacent or horizontally-diagonal water cell. Exiting
@@ -33,10 +30,6 @@ final class SwimMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
       {1, 0, 1}, {1, 0, -1}, {-1, 0, 1}, {-1, 0, -1}
   };
 
-  SwimMode() {
-    super(MinecraftStepType.SWIM);
-  }
-
   @Override
   protected boolean applies(A agent, TraversalState state) {
     return state.get(MinecraftKeys.VEHICLE) == null;
@@ -48,9 +41,9 @@ final class SwimMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
   }
 
   @Override
-  protected Collection<Movement<MinecraftStepType, MinecraftInstruction>> computeMovements(
+  protected Collection<Movement<MinecraftStepPayload>> computeMovements(
       A agent, Cell from, TraversalState state, BlockView view) {
-    List<Movement<MinecraftStepType, MinecraftInstruction>> moves = new ArrayList<>();
+    List<Movement<MinecraftStepPayload>> moves = new ArrayList<>();
     for (int[] dir : DIRECTIONS) {
       Cell dest = from.plus(dir[0], dir[1], dir[2]);
       if (!view.at(dest).isWater()) {
