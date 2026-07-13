@@ -39,4 +39,33 @@ These are changes I made to the overall structure/design since initial implement
 ## Phase 6 split into three sub-phases — `11`
 - **6a Foundation** (API layering + Paper plugin bootstrap + config + i18n),
   **6b State** (data layer + waypoints + destinations),
-  **6c Experience** (navigators + trips + portal discovery + command trees + metrics). 
+  **6c Experience** (navigators + trips + portal discovery + command trees + metrics).
+
+## Phase 6a implemented — `06`, `07`, `01`
+- **Plugin API is fully native-typed and extends the platform API.**
+  `PlatformOdysseyPluginApi<P,L> extends PlatformOdysseyApi<P,L>` — the `platform()` accessor was
+  **removed**; the plugin API *is* the navigation API plus `registerDestinationProvider`/
+  `registerNavigatorFactory`. The whole developer surface is generic over native `P`/`L`:
+  `DestinationProvider<P>`, `NavigatorFactory<P,L>`, `NavigatorContext<P>`, `Navigator<L>`, and
+  `MinecraftPath<L> extends Path<Step<L,…>>` (native `L` in the step slot, not `Position<D>`).
+  `MinecraftDestination` stays core-typed (`Destination<MinecraftWorld>` — a multi-`DomainRegion`
+  goal that cannot collapse to one native `L`). `PaperOdysseyPluginApi extends PaperOdysseyApi,
+  PlatformOdysseyPluginApi<Player,Location>`.
+- **Impl by delegation:** `OdysseyPluginApiImpl<P,L>` (in `minecraft-plugin`) composes a
+  `PlatformOdysseyApi<P,L>` and forwards navigation; `PaperOdysseyPluginApiImpl` extends it and passes
+  the `PaperOdysseyApiImpl`. Registered as the single `PaperOdysseyPluginApi` service.
+- **New module** `paper-plugin-api` (published), package `net.whimxiqal.odyssey.paper.plugin.api`.
+  `minecraft-plugin-api` is now published (internal-but-required for closure).
+- **Packaging:** `paper-plugin` uses **GradleUp shadow** to bundle only our `net.whimxiqal.odyssey.*`
+  modules (they are not on a public Maven repo); third-party runtime libs are declared in the
+  `paper-plugin.yml` **loader** (`PaperOdysseyLoader` → `MavenLibraryResolver`, SnakeYAML for now) and
+  downloaded by Paper at runtime. Adventure + paper-api stay provided. `shadowJar` is wired into
+  `assemble`, so a plain `./gradlew build` emits the shippable jar. Modern `paper-plugin.yml`
+  (`loader`, no `bootstrapper`, Brigadier commands — no `commands:` block).
+- **Config:** platform-neutral `ConfigManager` + typed `ConfigKey`/`Codec` on SnakeYAML; documented
+  `config.yml`; mutable keys update on reload, immutable changes WARN and are reported to the admin.
+- **i18n:** `Messages` renders Adventure `Component`s from `messages.properties` with one-indexed
+  `{N}` placeholders (params in the secondary color); typed `Message0..3` enforce arity. Palette
+  (`OdysseyColors`): primary `#4AA8FF`, secondary `#FFC857`, info gray, success green, error red;
+  `[✦]` prefix toggled by `messages.show_prefix`. Prefix/send helpers live in `minecraft-plugin` so
+  Sponge reuses them. 

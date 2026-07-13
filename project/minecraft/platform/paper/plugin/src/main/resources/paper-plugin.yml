@@ -1,0 +1,11 @@
+name: Odyssey
+version: '0.1.0-SNAPSHOT'
+description: A Minecraft navigation plugin.
+author: whimxiqal
+website: https://github.com/whimxiqal/Odyssey
+# Modern Paper plugin: the JavaPlugin entry point plus a loader that supplies third-party runtime
+# libraries (SnakeYAML for now) via Paper's Maven resolver, so they need not be shaded. No
+# bootstrapper is needed. Commands are registered through the Brigadier API, not a `commands:` block.
+main: net.whimxiqal.odyssey.paper.plugin.OdysseyPaperPlugin
+loader: net.whimxiqal.odyssey.paper.plugin.PaperOdysseyLoader
+api-version: '1.21'

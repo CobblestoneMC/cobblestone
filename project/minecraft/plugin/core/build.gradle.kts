@@ -1,5 +1,6 @@
-// minecraft-plugin — shared plugin behavior (config, data layer, waypoints, trips, commands). (design/06)
-// Not published (internal glue reused by the platform plugins).
+// minecraft-plugin — shared, platform-neutral plugin behavior (config, i18n, and — as later
+// sub-phases land — data layer, waypoints, trips, command helpers). Not published; the platform
+// plugins bundle it. (design/06)
 plugins {
     id("odyssey.java-conventions")
 }
@@ -7,5 +8,8 @@ plugins {
 dependencies {
     implementation(project(":minecraft:minecraft-core"))
     api(project(":minecraft:plugin:plugin-api"))
-    // TODO(Phase 6): config (YAML) lib + JDBC drivers (SQLite/H2 first); shaded+relocated by plugins.
+    // Adventure (Components/Audience) and SnakeYAML are provided at runtime by the platform plugin —
+    // Adventure by the server, SnakeYAML by the paper-plugin loader (MavenLibraryResolver).
+    compileOnly(libs.adventure.api)
+    compileOnly(libs.snakeyaml)
 }

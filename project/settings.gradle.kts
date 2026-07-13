@@ -19,6 +19,8 @@ include(":minecraft:platform:paper:api")
 project(":minecraft:platform:paper:api").name = "paper-api"
 include(":minecraft:platform:paper:core")
 project(":minecraft:platform:paper:core").name = "paper-core"
+include(":minecraft:platform:paper:plugin-api")
+project(":minecraft:platform:paper:plugin-api").name = "paper-plugin-api"
 include(":minecraft:platform:paper:plugin")
 project(":minecraft:platform:paper:plugin").name = "paper-plugin"
 include(":minecraft:platform:sponge-16:api")

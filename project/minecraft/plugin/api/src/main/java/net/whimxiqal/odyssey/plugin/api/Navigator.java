@@ -1,0 +1,47 @@
+/*
+ * Odyssey — a Minecraft navigation plugin.
+ * Copyright (c) 2026 whimxiqal.
+ *
+ * Licensed under the MIT License. See the LICENSE file in the project root for full text.
+ */
+
+package net.whimxiqal.odyssey.plugin.api;
+
+/**
+ * A display strategy bound to a player and a {@link MinecraftPath}, ticked by the Trip manager. The
+ * default implementation renders a particle trail; developers can register their own (e.g. Citizens'
+ * guide NPC) via {@link PlatformOdysseyPluginApi#registerNavigatorFactory(String, NavigatorFactory)}.
+ *
+ * @param <L> the native location type the path is expressed in
+ */
+public interface Navigator<L> {
+
+  /**
+   * Called once when the trip begins.
+   */
+  void start();
+
+  /**
+   * Called on a schedule to render and advance the display.
+   */
+  void tick();
+
+  /**
+   * Hot-swaps the path being followed — used by live trips after a re-search.
+   *
+   * @param newPath the replacement path
+   */
+  void update(MinecraftPath<L> newPath);
+
+  /**
+   * Called once when the trip ends (completion, cancellation, or logout); releases any display state.
+   */
+  void stop();
+
+  /**
+   * Returns whether the destination has been reached.
+   *
+   * @return {@code true} if complete
+   */
+  boolean isComplete();
+}
