@@ -21,11 +21,11 @@ type `L` (not `Position`).
 ```java
 // minecraft-api — platform-agnostic; P and L are unbound so this module never sees Bukkit/Sponge
 public interface PlatformOdysseyApi<P, L> {
-  SearchHandle<Step<L, MinecraftStepType, MinecraftInstruction>> navigatePlayer(P player, L destination, SearchSettings s);
-  default SearchHandle<Step<L, MinecraftStepType, MinecraftInstruction>> navigatePlayer(P player, L destination) { … }
+  SearchHandle<Step<L, MinecraftStepPayload>> navigatePlayer(P player, L destination, SearchSettings s);
+  default SearchHandle<Step<L, MinecraftStepPayload>> navigatePlayer(P player, L destination) { … }
 
-  SearchHandle<Step<L, MinecraftStepType, MinecraftInstruction>> navigatePlayerToRegion(P player, L a, L b, SearchSettings s);
-  default SearchHandle<Step<L, MinecraftStepType, MinecraftInstruction>> navigatePlayerToRegion(P player, L a, L b) { … }
+  SearchHandle<Step<L, MinecraftStepPayload>> navigatePlayerToRegion(P player, L a, L b, SearchSettings s);
+  default SearchHandle<Step<L, MinecraftStepPayload>> navigatePlayerToRegion(P player, L a, L b) { … }
 
   void registerTransitionProvider(PlatformSingleCellTransitionProvider<P, L> provider);
 }

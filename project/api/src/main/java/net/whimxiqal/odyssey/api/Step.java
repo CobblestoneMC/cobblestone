@@ -15,17 +15,14 @@ package net.whimxiqal.odyssey.api;
  * an {@code instruction}) marks a transition point; a domain change between consecutive steps marks
  * a crossing. The internal traversal state is deliberately not exposed here.
  *
- * @param <T> the step-type enum
- * @param <I> the instruction payload type
  * @param <P> the position
+ * @param <T> the payload
  * @param position the cell occupied at this step and its domain
  * @param cumulativeCost the total cost in seconds to reach this step from the origin
- * @param stepType the step type
- * @param instruction an optional player instruction, or {@code null}
+ * @param payload the payload associated with each step, whether by movements or by transitions
  */
-public record Step<P, T extends Enum<T>, I>(
+public record Step<P, T>(
     P position,
     double cumulativeCost,
-    T stepType,
-    I instruction) {
+    T payload) {
 }

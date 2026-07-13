@@ -16,14 +16,13 @@ import net.whimxiqal.odyssey.api.Step;
 /**
  * The immutable {@link Path} implementation returned by a successful search.
  *
- * @param <T> the step-type enum
- * @param <I> the instruction payload type
+ * @param <T> the payload type
  * @param <D> the domain type
  * @param steps the ordered steps
  * @param cost the total cost in seconds
  */
-record PathImpl<T extends Enum<T>, I, D extends Domain>(List<Step<Position<D>, T, I>> steps, double cost)
-    implements Path<Step<Position<D>, T, I>> {
+record PathImpl<T, D extends Domain>(List<Step<Position<D>, T>> steps, double cost)
+    implements Path<Step<Position<D>, T>> {
 
   PathImpl {
     steps = List.copyOf(steps);

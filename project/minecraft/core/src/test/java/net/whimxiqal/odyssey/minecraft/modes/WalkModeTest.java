@@ -19,6 +19,7 @@ import net.whimxiqal.odyssey.minecraft.TestModes;
 import net.whimxiqal.odyssey.minecraft.TestPlayer;
 import net.whimxiqal.odyssey.minecraft.TestWorld;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 import net.whimxiqal.odyssey.minecraft.api.OdysseyPlayer;
 import org.junit.jupiter.api.Test;
@@ -31,13 +32,13 @@ class WalkModeTest {
   @Test
   void flatMovesInAllEightDirections() {
     TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
-    Map<Cell, Movement<MinecraftStepType, MinecraftInstruction>> moves =
+    Map<Cell, Movement<MinecraftStepPayload>> moves =
         TestModes.from(walk, player, world, new Cell(0, 1, 0));
 
     assertEquals(8, moves.size());
     assertEquals(MovementCosts.WALK, moves.get(new Cell(1, 1, 0)).cost(), 1e-9);
     assertEquals(MovementCosts.WALK * MovementCosts.DIAGONAL, moves.get(new Cell(1, 1, 1)).cost(), 1e-9);
-    assertEquals(MinecraftStepType.WALK, moves.get(new Cell(1, 1, 0)).stepType());
+    assertEquals(MinecraftStepType.WALK, moves.get(new Cell(1, 1, 0)).payload().stepType());
   }
 
   @Test
@@ -46,7 +47,7 @@ class WalkModeTest {
         .floor(0, -1, -1, 1, 1, TestBlocks.solid())
         .set(1, 1, 0, TestBlocks.solid()) // one corner of the NE-ish diagonal is a wall
         .build();
-    Map<Cell, Movement<MinecraftStepType, MinecraftInstruction>> moves =
+    Map<Cell, Movement<MinecraftStepPayload>> moves =
         TestModes.from(walk, player, world, new Cell(0, 1, 0));
 
     assertFalse(moves.containsKey(new Cell(1, 1, 1)), "cannot cut the corner through a solid block");
@@ -59,18 +60,18 @@ class WalkModeTest {
         .floor(0, -1, -1, 1, 1, TestBlocks.solid())
         .set(1, 1, 0, TestBlocks.solid())
         .build();
-    Movement<MinecraftStepType, MinecraftInstruction> jump =
+    Movement<MinecraftStepPayload> jump =
         TestModes.from(walk, player, full, new Cell(0, 1, 0)).get(new Cell(1, 2, 0));
-    assertEquals(MinecraftStepType.JUMP, jump.stepType());
+    assertEquals(MinecraftStepType.JUMP, jump.payload().stepType());
     assertEquals(MovementCosts.WALK + MovementCosts.JUMP_EXTRA, jump.cost(), 1e-9);
 
     TestWorld slab = TestWorld.builder("w")
         .floor(0, -1, -1, 1, 1, TestBlocks.solid())
         .set(1, 1, 0, TestBlocks.slab())
         .build();
-    Movement<MinecraftStepType, MinecraftInstruction> step =
+    Movement<MinecraftStepPayload> step =
         TestModes.from(walk, player, slab, new Cell(0, 1, 0)).get(new Cell(1, 2, 0));
-    assertEquals(MinecraftStepType.WALK, step.stepType());
+    assertEquals(MinecraftStepType.WALK, step.payload().stepType());
     assertEquals(MovementCosts.WALK, step.cost(), 1e-9);
   }
 

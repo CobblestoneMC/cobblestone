@@ -32,7 +32,7 @@ public interface PlatformOdysseyApi<P, L> {
    * @param settings the search limits and knobs
    * @return a handle to the in-flight search, yielding native-located steps
    */
-  SearchHandle<Step<L, MinecraftStepType, MinecraftInstruction>> navigatePlayer(
+  SearchHandle<Step<L, MinecraftStepPayload>> navigatePlayer(
       P player, L destination, SearchSettings settings);
 
   /**
@@ -42,7 +42,7 @@ public interface PlatformOdysseyApi<P, L> {
    * @param destination the goal location
    * @return a handle to the in-flight search
    */
-  default SearchHandle<Step<L, MinecraftStepType, MinecraftInstruction>> navigatePlayer(
+  default SearchHandle<Step<L, MinecraftStepPayload>> navigatePlayer(
       P player, L destination) {
     return navigatePlayer(player, destination, SearchSettings.defaults());
   }
@@ -57,7 +57,7 @@ public interface PlatformOdysseyApi<P, L> {
    * @param settings the search limits and knobs
    * @return a handle to the in-flight search, yielding native-located steps
    */
-  SearchHandle<Step<L, MinecraftStepType, MinecraftInstruction>> navigatePlayerToRegion(
+  SearchHandle<Step<L, MinecraftStepPayload>> navigatePlayerToRegion(
       P player, L location1, L location2, SearchSettings settings);
 
   /**
@@ -68,7 +68,7 @@ public interface PlatformOdysseyApi<P, L> {
    * @param location2 the opposite corner of the target region
    * @return a handle to the in-flight search
    */
-  default SearchHandle<Step<L, MinecraftStepType, MinecraftInstruction>> navigatePlayerToRegion(
+  default SearchHandle<Step<L, MinecraftStepPayload>> navigatePlayerToRegion(
       P player, L location1, L location2) {
     return navigatePlayerToRegion(player, location1, location2, SearchSettings.defaults());
   }

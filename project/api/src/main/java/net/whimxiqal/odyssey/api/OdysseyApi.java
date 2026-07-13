@@ -35,18 +35,17 @@ public interface OdysseyApi {
    * @param transitions the transitions (portals, teleports, mounts, …) available to the agent
    * @param settings the search limits and knobs
    * @param <A> the agent type
-   * @param <T> the step-type enum
-   * @param <I> the instruction payload type
+   * @param <T> the payload type
    * @param <D> the domain type
    * @return a handle to the in-flight search
    */
-  <A extends Agent, T extends Enum<T>, I, D extends Domain> SearchHandle<Step<Position<D>, T, I>> navigate(
+  <A extends Agent, T, D extends Domain> SearchHandle<Step<Position<D>, T>> navigate(
           Scheduler scheduler,
       A agent,
       Position<D> origin,
       Destination<D> destination,
-      List<? extends Mode<A, T, I, D>> modes,
-      List<? extends Transition<T, I, D>> transitions,
+      List<? extends Mode<A, T, D>> modes,
+      List<? extends Transition<T, D>> transitions,
       HeuristicStrategy heuristic,
       SearchSettings settings);
 }

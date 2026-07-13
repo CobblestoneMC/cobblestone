@@ -13,10 +13,7 @@ import net.whimxiqal.odyssey.api.DomainRegion;
 import net.whimxiqal.odyssey.api.Position;
 import net.whimxiqal.odyssey.api.TraversalState;
 import net.whimxiqal.odyssey.api.Transition;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
-import net.whimxiqal.odyssey.minecraft.api.PlatformSingleCellTransition;
+import net.whimxiqal.odyssey.minecraft.api.*;
 import org.bukkit.Location;
 import org.bukkit.World;
 
@@ -26,13 +23,13 @@ import org.bukkit.World;
  * the destination location becomes a {@link Position}. Endpoints are resolved eagerly at
  * construction so the core never re-does the lookup.
  */
-final class PaperTransition implements Transition<MinecraftStepType, MinecraftInstruction, MinecraftWorld> {
+final class PaperSingleCellTransition implements Transition<MinecraftStepPayload, MinecraftWorld> {
 
   private final PlatformSingleCellTransition<Location> delegate;
   private final DomainRegion<MinecraftWorld> origin;
   private final Position<MinecraftWorld> destination;
 
-  PaperTransition(
+  PaperSingleCellTransition(
       PlatformSingleCellTransition<Location> delegate, Function<World, MinecraftWorld> worldWrapper) {
     this.delegate = delegate;
     Location originLocation = delegate.origin();
@@ -59,13 +56,8 @@ final class PaperTransition implements Transition<MinecraftStepType, MinecraftIn
   }
 
   @Override
-  public MinecraftStepType stepType() {
-    return delegate.stepType();
-  }
-
-  @Override
-  public MinecraftInstruction instruction() {
-    return delegate.instruction();
+  public MinecraftStepPayload payload() {
+    return delegate.payload();
   }
 
   @Override

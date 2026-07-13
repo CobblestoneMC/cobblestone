@@ -11,6 +11,7 @@ import java.util.List;
 import net.whimxiqal.odyssey.api.Path;
 import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 import org.bukkit.Location;
 
@@ -21,8 +22,8 @@ import org.bukkit.Location;
  * @param steps the ordered steps, origin first
  * @param cost the total cost in seconds
  */
-record PaperPath(List<Step<Location, MinecraftStepType, MinecraftInstruction>> steps, double cost)
-    implements Path<Step<Location, MinecraftStepType, MinecraftInstruction>> {
+record PaperPath(List<Step<Location, MinecraftStepPayload>> steps, double cost)
+    implements Path<Step<Location, MinecraftStepPayload>> {
 
   PaperPath {
     steps = List.copyOf(steps);

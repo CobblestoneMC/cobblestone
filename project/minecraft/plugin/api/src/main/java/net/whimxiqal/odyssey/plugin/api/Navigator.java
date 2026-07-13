@@ -7,8 +7,12 @@
 
 package net.whimxiqal.odyssey.plugin.api;
 
+import net.whimxiqal.odyssey.api.Path;
+import net.whimxiqal.odyssey.api.Step;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
+
 /**
- * A display strategy bound to a player and a {@link MinecraftPath}, ticked by the Trip manager. The
+ * A display strategy bound to a player and a {@link net.whimxiqal.odyssey.api.Path}, ticked by the Trip manager. The
  * default implementation renders a particle trail; developers can register their own (e.g. Citizens'
  * guide NPC) via {@link PlatformOdysseyPluginApi#registerNavigatorFactory(String, NavigatorFactory)}.
  *
@@ -31,7 +35,7 @@ public interface Navigator<L> {
    *
    * @param newPath the replacement path
    */
-  void update(MinecraftPath<L> newPath);
+  void update(Path<Step<L, MinecraftStepPayload>> newPath);
 
   /**
    * Called once when the trip ends (completion, cancellation, or logout); releases any display state.

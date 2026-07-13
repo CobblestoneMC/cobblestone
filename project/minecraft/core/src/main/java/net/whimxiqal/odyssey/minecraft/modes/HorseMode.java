@@ -14,10 +14,7 @@ import java.util.Set;
 import net.whimxiqal.odyssey.api.Cell;
 import net.whimxiqal.odyssey.api.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftAgent;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftKeys;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
+import net.whimxiqal.odyssey.minecraft.api.*;
 
 /**
  * Fast ground travel while mounted. Only active when {@code VEHICLE = HORSE} — a state entered via
@@ -32,10 +29,6 @@ final class HorseMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A>
       {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}
   };
 
-  HorseMode() {
-    super(MinecraftStepType.HORSE);
-  }
-
   @Override
   protected boolean applies(A agent, TraversalState state) {
     return state.get(MinecraftKeys.VEHICLE) == MinecraftKeys.Vehicle.HORSE;
@@ -47,9 +40,9 @@ final class HorseMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A>
   }
 
   @Override
-  protected Collection<Movement<MinecraftStepType, MinecraftInstruction>> computeMovements(
+  protected Collection<Movement<MinecraftStepPayload>> computeMovements(
       A agent, Cell from, TraversalState state, BlockView view) {
-    List<Movement<MinecraftStepType, MinecraftInstruction>> moves = new ArrayList<>();
+    List<Movement<MinecraftStepPayload>> moves = new ArrayList<>();
     for (int[] dir : HORIZONTAL) {
       int dx = dir[0];
       int dz = dir[1];

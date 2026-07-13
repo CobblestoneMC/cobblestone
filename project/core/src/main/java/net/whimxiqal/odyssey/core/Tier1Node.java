@@ -15,19 +15,18 @@ import net.whimxiqal.odyssey.api.TraversalState;
 /**
  * A node in the Tier-1 transition graph.
  *
- * @param <T> the step-type enum
- * @param <I> the instruction payload type
+ * @param <T> the payload type
  * @param <D> the domain type
  */
-sealed interface Tier1Node<T extends Enum<T>, I, D extends Domain>
+sealed interface Tier1Node<T, D extends Domain>
     permits Tier1Node.Source, Tier1Node.AtTransition, Tier1Node.Sink {
 
   default double cost() {
     return 0.0;
   }
 
-  record Source<T extends Enum<T>, I, D extends Domain>(Position<D> position, TraversalState state)
-      implements Tier1Node<T, I, D> {
+  record Source<T, D extends Domain>(Position<D> position, TraversalState state)
+      implements Tier1Node<T, D> {
   }
 
   /**
@@ -36,14 +35,13 @@ sealed interface Tier1Node<T extends Enum<T>, I, D extends Domain>
    * Value-based equality on {@code (transition, state)} keys the Dijkstra
    * frontier.
    *
-   * @param <T>        the step-type enum
-   * @param <I>        the instruction payload type
+   * @param <T>        the payload type
    * @param <D>        the domain type
    * @param transition the transition whose destination this node sits at
    * @param state      the accumulated traversal state on arrival
    */
-  record AtTransition<T extends Enum<T>, I, D extends Domain>(
-      Transition<T, I, D> transition, TraversalState state) implements Tier1Node<T, I, D> {
+  record AtTransition<T, D extends Domain>(
+      Transition<T, D> transition, TraversalState state) implements Tier1Node<T, D> {
     @Override
     public double cost() {
       return transition.cost();
@@ -55,10 +53,9 @@ sealed interface Tier1Node<T extends Enum<T>, I, D extends Domain>
    * identity equality is
    * sufficient.
    *
-   * @param <T> the step-type enum
-   * @param <I> the instruction payload type
+   * @param <T> the payload type
    * @param <D> the domain type
    */
-  record Sink<T extends Enum<T>, I, D extends Domain>() implements Tier1Node<T, I, D> {
+  record Sink<T, D extends Domain>() implements Tier1Node<T, D> {
   }
 }

@@ -17,11 +17,10 @@ package net.whimxiqal.odyssey.api;
  * the {@link TraversalState} on traversal (e.g. mounting a horse) and may carry an instruction the
  * player must perform (e.g. run a command).
  *
- * @param <T> the step-type enum
- * @param <I> the instruction payload type
+ * @param <T> the payload type
  * @param <D> the domain type
  */
-public interface Transition<T extends Enum<T>, I, D extends Domain> {
+public interface Transition<T, D extends Domain> {
 
   /**
    * Returns the entry area the agent must reach to use this transition.
@@ -45,20 +44,11 @@ public interface Transition<T extends Enum<T>, I, D extends Domain> {
   double cost();
 
   /**
-   * Returns the step type for this transition (e.g. {@code PORTAL}, {@code COMMAND},
-   * {@code MOUNT_HORSE}).
+   * Returns the payload to send through to the final Steps in the search result.
    *
-   * @return the step type
+   * @return the payload
    */
-  T stepType();
-
-  /**
-   * Returns the instruction the player must perform to traverse this transition, or {@code null}
-   * for an automatic one (e.g. walking through a portal).
-   *
-   * @return the instruction, or {@code null}
-   */
-  I instruction();
+  T payload();
 
   /**
    * Transforms the incoming traversal state on traversal. The default is the identity (a plain

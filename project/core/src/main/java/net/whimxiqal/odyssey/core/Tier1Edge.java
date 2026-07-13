@@ -18,15 +18,14 @@ import net.whimxiqal.odyssey.api.TraversalState;
  * is
  * {@code AtTransition(targetTransition, targetTransition.apply(sourceState))}.
  *
- * @param <T>              the step-type enum
- * @param <I>              the instruction payload type
+ * @param <T>              the payload type
  * @param <D>              the domain type
  * @param virtualPath      the same-domain hop to the target's origin region
  * @param targetTransition the transition traversed at the end of the hop
  * @param sourceState      the accumulated state at the edge's source node
  */
-record Tier1Edge<T extends Enum<T>, I, D extends Domain>(
-        VirtualPath<T, I, D> virtualPath,
-        Tier1Node<T, I, D> target,
+record Tier1Edge<T, D extends Domain>(
+        VirtualPath<T, D> virtualPath,
+        Tier1Node<T, D> target,
         TraversalState sourceState) {
 }

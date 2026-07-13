@@ -17,16 +17,13 @@ import net.whimxiqal.odyssey.minecraft.TestBlocks;
 import net.whimxiqal.odyssey.minecraft.TestModes;
 import net.whimxiqal.odyssey.minecraft.TestPlayer;
 import net.whimxiqal.odyssey.minecraft.TestWorld;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftKeys;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
-import net.whimxiqal.odyssey.minecraft.api.OdysseyPlayer;
+import net.whimxiqal.odyssey.minecraft.api.*;
 import org.junit.jupiter.api.Test;
 
 class BoatModeTest {
 
   private final BoatMode<OdysseyPlayer> boat = new BoatMode<>();
-  private final OdysseyPlayer withBoat = TestPlayer.create(false, true, true);
+  private final OdysseyPlayer withBoat = TestPlayer.create(false, true, false, true);
 
   @Test
   void enteringWaterPlacesBoatAndSetsVehicleState() {
@@ -34,10 +31,10 @@ class BoatModeTest {
         .floor(0, -1, -1, 0, 1, TestBlocks.solid())
         .set(1, 1, 0, TestBlocks.water())
         .build();
-    Movement<MinecraftStepType, MinecraftInstruction> place =
+    Movement<MinecraftStepPayload> place =
         TestModes.from(boat, withBoat, world, new Cell(0, 1, 0)).get(new Cell(1, 1, 0));
 
-    assertEquals(MinecraftStepType.PLACE_BOAT, place.stepType());
+    assertEquals(MinecraftStepType.PLACE_BOAT, place.payload().stepType());
     assertEquals(MovementCosts.PLACE_BOAT, place.cost(), 1e-9);
     assertEquals(MinecraftKeys.Vehicle.BOAT, place.state().get(MinecraftKeys.VEHICLE));
   }
@@ -49,10 +46,10 @@ class BoatModeTest {
         .set(2, 1, 0, TestBlocks.water())
         .build();
     TraversalState boating = TraversalState.DEFAULT.with(MinecraftKeys.VEHICLE, MinecraftKeys.Vehicle.BOAT);
-    Movement<MinecraftStepType, MinecraftInstruction> travel =
+    Movement<MinecraftStepPayload> travel =
         TestModes.from(boat, withBoat, world, new Cell(1, 1, 0), boating).get(new Cell(2, 1, 0));
 
-    assertEquals(MinecraftStepType.BOAT, travel.stepType());
+    assertEquals(MinecraftStepType.BOAT, travel.payload().stepType());
     assertEquals(MovementCosts.BOAT, travel.cost(), 1e-9);
     assertEquals(MinecraftKeys.Vehicle.BOAT, travel.state().get(MinecraftKeys.VEHICLE));
   }

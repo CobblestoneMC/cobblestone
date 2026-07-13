@@ -25,7 +25,7 @@ import net.whimxiqal.odyssey.api.TraversalState;
  * completes on demand via {@link #releaseNext()}, exercising the search's park/resume machinery.
  * Otherwise it returns immediate results (the cache-hit fast path).
  */
-final class CorridorMode implements Mode<TestAgent, TestStep, Void, TestDomain> {
+final class CorridorMode implements Mode<TestAgent, TestStep, TestDomain> {
 
   private final boolean gated;
   private final List<Gate> gates = new ArrayList<>();
@@ -36,19 +36,14 @@ final class CorridorMode implements Mode<TestAgent, TestStep, Void, TestDomain> 
   }
 
   @Override
-  public TestStep stepType() {
-    return TestStep.MOVE;
-  }
-
-  @Override
-  public FutureOr<Collection<Movement<TestStep, Void>>> step(
+  public FutureOr<Collection<Movement<TestStep>>> step(
       TestAgent agent, Cell from, TestDomain domain, TraversalState state) {
-    Collection<Movement<TestStep, Void>> movements =
-        List.of(new Movement<TestStep, Void>(from.plus(1, 0, 0), 1.0, TestStep.MOVE, state, null));
+    Collection<Movement<TestStep>> movements =
+        List.of(new Movement<>(from.plus(1, 0, 0), 1.0, TestStep.MOVE, state));
     if (!gated) {
       return FutureOr.of(movements);
     }
-    CompletableFuture<Collection<Movement<TestStep, Void>>> future = new CompletableFuture<>();
+    CompletableFuture<Collection<Movement<TestStep>>> future = new CompletableFuture<>();
     gates.add(new Gate(future, movements));
     return FutureOr.ofFuture(future);
   }
@@ -63,7 +58,7 @@ final class CorridorMode implements Mode<TestAgent, TestStep, Void, TestDomain> 
   }
 
   private record Gate(
-      CompletableFuture<Collection<Movement<TestStep, Void>>> future,
-      Collection<Movement<TestStep, Void>> movements) {
+      CompletableFuture<Collection<Movement<TestStep>>> future,
+      Collection<Movement<TestStep>> movements) {
   }
 }

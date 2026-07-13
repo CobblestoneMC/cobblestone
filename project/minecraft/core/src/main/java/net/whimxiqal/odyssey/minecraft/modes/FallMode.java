@@ -15,11 +15,7 @@ import java.util.Set;
 import net.whimxiqal.odyssey.api.Cell;
 import net.whimxiqal.odyssey.api.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftAgent;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftBlock;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftKeys;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
+import net.whimxiqal.odyssey.minecraft.api.*;
 
 /**
  * Falling: stepping off a cardinal edge (or straight down) and dropping to the first supported cell
@@ -33,10 +29,6 @@ final class FallMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
 
   private static final int[][] HORIZONTAL = {{0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1}};
   private static final int MAX_FALL_SCAN = 16;
-
-  FallMode() {
-    super(MinecraftStepType.FALL);
-  }
 
   @Override
   protected boolean applies(A agent, TraversalState state) {
@@ -57,9 +49,9 @@ final class FallMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
   }
 
   @Override
-  protected Collection<Movement<MinecraftStepType, MinecraftInstruction>> computeMovements(
+  protected Collection<Movement<MinecraftStepPayload>> computeMovements(
       A agent, Cell from, TraversalState state, BlockView view) {
-    List<Movement<MinecraftStepType, MinecraftInstruction>> moves = new ArrayList<>();
+    List<Movement<MinecraftStepPayload>> moves = new ArrayList<>();
     for (int[] dir : HORIZONTAL) {
       boolean straightDown = dir[0] == 0 && dir[1] == 0;
       Cell entry = from.plus(dir[0], 0, dir[1]);
@@ -80,7 +72,7 @@ final class FallMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
 
   private void addFall(
       Cell from, Cell entry, BlockView view, TraversalState state, double stepOff,
-      List<Movement<MinecraftStepType, MinecraftInstruction>> moves) {
+      List<Movement<MinecraftStepPayload>> moves) {
     for (int d = 0; d <= MAX_FALL_SCAN; d++) {
       Cell here = entry.plus(0, -d, 0);
       MinecraftBlock block = view.at(here);
@@ -102,7 +94,7 @@ final class FallMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
 
   private void addLanding(
       Cell landing, int distance, double stepOff, boolean onSolid, BlockView view,
-      TraversalState state, List<Movement<MinecraftStepType, MinecraftInstruction>> moves) {
+      TraversalState state, List<Movement<MinecraftStepPayload>> moves) {
     if (distance < 2) {
       return; // one-block drops are WalkMode's job
     }

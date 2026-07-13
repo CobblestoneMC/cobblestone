@@ -21,11 +21,10 @@ import net.whimxiqal.odyssey.api.TraversalState;
  * <p>Instances are memoized by the Tier-1 graph and reused across Dijkstra re-plans, so a solve
  * result persists: once {@link #solve} or {@link #markInfeasible} is called the cost is fixed.
  *
- * @param <T> the step-type enum
- * @param <I> the instruction payload type
+ * @param <T> the payload type
  * @param <D> the domain type
  */
-final class VirtualPath<T extends Enum<T>, I, D extends Domain> {
+final class VirtualPath<T, D extends Domain> {
 
   private enum Status { UNSOLVED, SOLVED, INFEASIBLE }
 
@@ -35,7 +34,7 @@ final class VirtualPath<T extends Enum<T>, I, D extends Domain> {
   private final TraversalState state;
 
   private Status status = Status.UNSOLVED;
-  private List<RawStep<T, I, D>> solvedSteps = List.of();
+  private List<RawStep<T, D>> solvedSteps = List.of();
   private double trueCost;
 
   VirtualPath(Cell fromCell, D domain, DomainRegion<D> targetRegion, TraversalState state) {
@@ -69,7 +68,7 @@ final class VirtualPath<T extends Enum<T>, I, D extends Domain> {
     return status != Status.UNSOLVED;
   }
 
-  List<RawStep<T, I, D>> solvedSteps() {
+  List<RawStep<T, D>> solvedSteps() {
     return solvedSteps;
   }
 
@@ -85,7 +84,7 @@ final class VirtualPath<T extends Enum<T>, I, D extends Domain> {
     };
   }
 
-  void solve(List<RawStep<T, I, D>> steps, double cost) {
+  void solve(List<RawStep<T, D>> steps, double cost) {
     this.solvedSteps = List.copyOf(steps);
     this.trueCost = cost;
     this.status = Status.SOLVED;

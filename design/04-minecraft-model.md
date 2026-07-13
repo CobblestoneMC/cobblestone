@@ -49,7 +49,7 @@ public record CommandInstruction(String command) implements MinecraftInstruction
 ### `MinecraftMode`
 ```java
 public interface MinecraftMode<A extends MinecraftAgent>
-        extends Mode<A, MinecraftStepType, MinecraftInstruction> {
+        extends Mode<A, MinecraftStepPayload> {
   @Override MinecraftStepType stepType();
 }
 ```
@@ -89,7 +89,7 @@ takes a pre-assembled list). Developers register these to expose custom teleport
 ```java
 @FunctionalInterface
 public interface TransitionProvider {
-  CompletableFuture<List<? extends Transition<MinecraftStepType, MinecraftInstruction>>>
+  CompletableFuture<List<? extends Transition<MinecraftStepPayload>>>
       compute(OdysseyPlayer player);
 }
 ```

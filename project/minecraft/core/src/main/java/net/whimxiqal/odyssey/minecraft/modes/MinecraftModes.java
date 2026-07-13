@@ -35,20 +35,31 @@ public final class MinecraftModes {
   public static List<MinecraftMode<OdysseyPlayer>> forPlayer(
       OdysseyPlayer player, Set<MinecraftStepType> excluded) {
     List<MinecraftMode<OdysseyPlayer>> modes = new ArrayList<>();
-    modes.add(new WalkMode<>());
-    modes.add(new FallMode<>());
-    modes.add(new SwimMode<>());
-    modes.add(new ClimbMode<>());
-    modes.add(new DoorMode<>());
-    modes.add(new MineMode<>());
-    modes.add(new HorseMode<>());
-    if (player.canFly()) {
+    if (!excluded.contains(MinecraftStepType.WALK)) {
+      modes.add(new WalkMode<>());
+      modes.add(new DoorMode<>(!excluded.contains(MinecraftStepType.OPEN_DOOR)));
+      if (!excluded.contains(MinecraftStepType.MINE)) {
+        modes.add(new MineMode<>());
+      }
+    }
+    if (!excluded.contains(MinecraftStepType.FALL)) {
+      modes.add(new FallMode<>());
+    }
+    if (!excluded.contains(MinecraftStepType.SWIM)) {
+      modes.add(new SwimMode<>());
+    }
+    if (!excluded.contains(MinecraftStepType.CLIMB)) {
+      modes.add(new ClimbMode<>());
+    }
+    if (!excluded.contains(MinecraftStepType.HORSE)) {
+      modes.add(new HorseMode<>());
+    }
+    if (!excluded.contains(MinecraftStepType.FLY) && player.canFly()) {
       modes.add(new FlyMode<>());
     }
-    if (player.hasBoatInInventory()) {
+    if (!excluded.contains(MinecraftStepType.BOAT) && player.hasBoatInInventory() || player.isInBoat()) {
       modes.add(new BoatMode<>());
     }
-    modes.removeIf(mode -> excluded.contains(mode.stepType()));
     return modes;
   }
 }

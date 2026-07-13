@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 
 class DoorModeTest {
 
-  private final DoorMode<OdysseyPlayer> door = new DoorMode<>();
+  private final DoorMode<OdysseyPlayer> door = new DoorMode<>(true);
 
   @Test
   void walksThroughClosedWoodenDoorToTheFarSide() {
@@ -33,7 +33,7 @@ class DoorModeTest {
     var moves = TestModes.from(door, TestPlayer.walker(), world, new Cell(0, 1, 0));
 
     assertTrue(moves.containsKey(new Cell(2, 1, 0)));
-    assertEquals(MinecraftStepType.OPEN_DOOR, moves.get(new Cell(2, 1, 0)).stepType());
+    assertEquals(MinecraftStepType.OPEN_DOOR, moves.get(new Cell(2, 1, 0)).payload().stepType());
     assertEquals(MovementCosts.WALK + MovementCosts.OPEN_DOOR, moves.get(new Cell(2, 1, 0)).cost(), 1e-9);
   }
 

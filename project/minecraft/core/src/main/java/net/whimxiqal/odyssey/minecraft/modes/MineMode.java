@@ -14,11 +14,7 @@ import java.util.Set;
 import net.whimxiqal.odyssey.api.Cell;
 import net.whimxiqal.odyssey.api.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftAgent;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftBlock;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftKeys;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
+import net.whimxiqal.odyssey.minecraft.api.*;
 
 /**
  * Tunnelling through breakable blocks — mining a cardinal neighbor or the block directly below.
@@ -34,10 +30,6 @@ final class MineMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
 
   private static final int[][] HORIZONTAL = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 
-  MineMode() {
-    super(MinecraftStepType.MINE);
-  }
-
   @Override
   protected boolean applies(A agent, TraversalState state) {
     return state.get(MinecraftKeys.VEHICLE) == null;
@@ -49,9 +41,9 @@ final class MineMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
   }
 
   @Override
-  protected Collection<Movement<MinecraftStepType, MinecraftInstruction>> computeMovements(
+  protected Collection<Movement<MinecraftStepPayload>> computeMovements(
       A agent, Cell from, TraversalState state, BlockView view) {
-    List<Movement<MinecraftStepType, MinecraftInstruction>> moves = new ArrayList<>();
+    List<Movement<MinecraftStepPayload>> moves = new ArrayList<>();
     for (int[] dir : HORIZONTAL) {
       Cell dest = from.plus(dir[0], 0, dir[1]);
       double breakCost = clearCost(view, agent, dest, dest.plus(0, 1, 0));

@@ -14,6 +14,8 @@ import net.whimxiqal.odyssey.api.Cell;
 import net.whimxiqal.odyssey.api.Position;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
 import net.whimxiqal.odyssey.minecraft.api.OdysseyPlayer;
+import org.bukkit.entity.Boat;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
@@ -55,6 +57,12 @@ final class PaperPlayer implements OdysseyPlayer {
       }
     }
     return false;
+  }
+
+  @Override
+  public boolean isInBoat() {
+    Entity vehicle = player.getVehicle();
+    return vehicle instanceof Boat;
   }
 
   @Override

@@ -29,14 +29,7 @@ import net.whimxiqal.odyssey.api.Transition;
 import net.whimxiqal.odyssey.core.Heuristics;
 import net.whimxiqal.odyssey.minecraft.ChunkProvider;
 import net.whimxiqal.odyssey.minecraft.ChunkProviderSettings;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftMode;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
-import net.whimxiqal.odyssey.minecraft.api.OdysseyPlayer;
-import net.whimxiqal.odyssey.minecraft.api.PlatformSingleCellTransition;
-import net.whimxiqal.odyssey.minecraft.api.PlatformSingleCellTransitionProvider;
-import net.whimxiqal.odyssey.minecraft.api.TransitionRegistry;
+import net.whimxiqal.odyssey.minecraft.api.*;
 import net.whimxiqal.odyssey.minecraft.modes.MinecraftModes;
 import net.whimxiqal.odyssey.paper.api.PaperOdysseyApi;
 import org.bukkit.Location;
@@ -86,7 +79,7 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi {
   }
 
   @Override
-  public SearchHandle<Step<Location, MinecraftStepType, MinecraftInstruction>> navigatePlayer(
+  public SearchHandle<Step<Location, MinecraftStepPayload>> navigatePlayer(
       Player player, Location destination, SearchSettings settings) {
     DomainRegion<MinecraftWorld> region = new CellRegion<>(
         PaperConversions.cell(destination), wrap(destination.getWorld()));
@@ -94,7 +87,7 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi {
   }
 
   @Override
-  public SearchHandle<Step<Location, MinecraftStepType, MinecraftInstruction>> navigatePlayerToRegion(
+  public SearchHandle<Step<Location, MinecraftStepPayload>> navigatePlayerToRegion(
       Player player, Location location1, Location location2, SearchSettings settings) {
     DomainRegion<MinecraftWorld> region = new BoxRegion<>(
         wrap(location1.getWorld()), PaperConversions.cell(location1), PaperConversions.cell(location2));
@@ -108,7 +101,7 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi {
     scheduler.shutdown();
   }
 
-  private SearchHandle<Step<Location, MinecraftStepType, MinecraftInstruction>> search(
+  private SearchHandle<Step<Location, MinecraftStepPayload>> search(
       Player player, Destination<MinecraftWorld> destination, SearchSettings settings) {
     OdysseyPlayer agent = new PaperPlayer(player);
     Location origin = player.getLocation();
@@ -116,14 +109,14 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi {
         PaperConversions.cell(origin), wrap(origin.getWorld()));
     List<MinecraftMode<OdysseyPlayer>> modes = MinecraftModes.forPlayer(agent, Set.of());
 
-    CompletableFuture<SearchHandle<Step<Position<MinecraftWorld>, MinecraftStepType, MinecraftInstruction>>>
+    CompletableFuture<SearchHandle<Step<Position<MinecraftWorld>, MinecraftStepPayload>>>
         handleFuture = gatherTransitions(player).thenApply(gathered ->
         core.navigate(
             scheduler, agent, originPosition, destination, modes, gathered, heuristic, settings));
     return new PaperSearchHandle(handleFuture);
   }
 
-  private CompletableFuture<List<Transition<MinecraftStepType, MinecraftInstruction, MinecraftWorld>>>
+  private CompletableFuture<List<Transition<MinecraftStepPayload, MinecraftWorld>>>
   gatherTransitions(Player player) {
     List<PlatformSingleCellTransitionProvider<Player, Location>> providers = transitions.providers();
     if (providers.isEmpty()) {
@@ -134,10 +127,10 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi {
       futures.add(provider.compute(player));
     }
     return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).thenApply(ignored -> {
-      List<Transition<MinecraftStepType, MinecraftInstruction, MinecraftWorld>> all = new ArrayList<>();
+      List<Transition<MinecraftStepPayload, MinecraftWorld>> all = new ArrayList<>();
       for (CompletableFuture<List<? extends PlatformSingleCellTransition<Location>>> future : futures) {
         for (PlatformSingleCellTransition<Location> transition : future.join()) {
-          all.add(new PaperTransition(transition, this::wrap));
+          all.add(new PaperSingleCellTransition(transition, this::wrap));
         }
       }
       return all;

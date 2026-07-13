@@ -16,8 +16,5 @@ import net.whimxiqal.odyssey.api.Mode;
  * @param <A> the agent type
  */
 public interface MinecraftMode<A extends MinecraftAgent>
-    extends Mode<A, MinecraftStepType, MinecraftInstruction, MinecraftWorld> {
-
-  @Override
-  MinecraftStepType stepType();
+    extends Mode<A, MinecraftStepPayload, MinecraftWorld> {
 }

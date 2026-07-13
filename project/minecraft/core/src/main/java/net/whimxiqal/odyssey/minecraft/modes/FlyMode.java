@@ -14,10 +14,7 @@ import java.util.Set;
 import net.whimxiqal.odyssey.api.Cell;
 import net.whimxiqal.odyssey.api.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftAgent;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftKeys;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
+import net.whimxiqal.odyssey.minecraft.api.*;
 
 /**
  * Free 3D flight (creative / allow-flight). Moves to any of the 26 neighbors where a body fits, with
@@ -27,10 +24,6 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
  * @param <A> the agent type
  */
 final class FlyMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> {
-
-  FlyMode() {
-    super(MinecraftStepType.FLY);
-  }
 
   @Override
   protected boolean applies(A agent, TraversalState state) {
@@ -43,9 +36,9 @@ final class FlyMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> {
   }
 
   @Override
-  protected Collection<Movement<MinecraftStepType, MinecraftInstruction>> computeMovements(
+  protected Collection<Movement<MinecraftStepPayload>> computeMovements(
       A agent, Cell from, TraversalState state, BlockView view) {
-    List<Movement<MinecraftStepType, MinecraftInstruction>> moves = new ArrayList<>();
+    List<Movement<MinecraftStepPayload>> moves = new ArrayList<>();
     for (int dx = -1; dx <= 1; dx++) {
       for (int dy = -1; dy <= 1; dy++) {
         for (int dz = -1; dz <= 1; dz++) {
