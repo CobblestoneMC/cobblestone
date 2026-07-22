@@ -13,7 +13,7 @@ import java.util.ResourceBundle;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
-import net.whimxiqal.odyssey.api.OdysseyLogger;
+import net.whimxiqal.odyssey.OdysseyLogger;
 
 /**
  * Renders and sends {@link Message}s as Adventure {@link Component}s, localized per recipient.

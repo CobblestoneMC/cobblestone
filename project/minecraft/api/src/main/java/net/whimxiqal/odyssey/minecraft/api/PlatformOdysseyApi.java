@@ -73,11 +73,4 @@ public interface PlatformOdysseyApi<P, L> {
     return navigatePlayerToRegion(player, location1, location2, SearchSettings.defaults());
   }
 
-  /**
-   * Registers a transition provider so its wormholes are considered by future searches. The
-   * implementation delegates to the plugin-owned {@link TransitionRegistry}.
-   *
-   * @param provider the provider to register
-   */
-  void registerTransitionProvider(PlatformSingleCellTransitionProvider<P, L> provider);
 }

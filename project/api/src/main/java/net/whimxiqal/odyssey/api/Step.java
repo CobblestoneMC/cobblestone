@@ -7,20 +7,6 @@
 
 package net.whimxiqal.odyssey.api;
 
-/**
- * One entry in a solved {@link Path}: where the agent is, how it got there, and the running cost.
- *
- * <p>Each step carries its own concrete {@link Domain} instance, so a caller reads the world
- * directly with no lookup. A step whose {@code stepType} is a transition type (and/or that carries
- * an {@code instruction}) marks a transition point; a domain change between consecutive steps marks
- * a crossing. The internal traversal state is deliberately not exposed here.
- *
- * @param <P> the position
- * @param <T> the payload
- * @param position the cell occupied at this step and its domain
- * @param cumulativeCost the total cost in seconds to reach this step from the origin
- * @param payload the payload associated with each step, whether by movements or by transitions
- */
 public record Step<P, T>(
     P position,
     double cumulativeCost,

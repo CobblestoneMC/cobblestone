@@ -7,8 +7,6 @@
 
 package net.whimxiqal.odyssey.minecraft;
 
-import net.whimxiqal.odyssey.minecraft.api.MinecraftBlock;
-
 /** Factory helpers producing {@link MinecraftBlock}s for mode tests. */
 public final class TestBlocks {
 

@@ -9,11 +9,11 @@ package net.whimxiqal.odyssey.paper;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import net.whimxiqal.odyssey.minecraft.api.ChunkLoadPolicy;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftChunk;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftScheduler;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
-import net.whimxiqal.odyssey.minecraft.api.PlatformApi;
+import net.whimxiqal.odyssey.minecraft.ChunkLoadPolicy;
+import net.whimxiqal.odyssey.minecraft.MinecraftChunk;
+import net.whimxiqal.odyssey.minecraft.MinecraftScheduler;
+import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
+import net.whimxiqal.odyssey.minecraft.PlatformApi;
 import org.bukkit.Bukkit;
 import org.bukkit.ChunkSnapshot;
 import org.bukkit.NamespacedKey;

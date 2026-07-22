@@ -7,8 +7,6 @@
 
 package net.whimxiqal.odyssey.minecraft;
 
-import net.whimxiqal.odyssey.minecraft.api.ChunkLoadPolicy;
-
 /**
  * Tunables for the {@link ChunkProvider}: cache capacity, snapshot staleness, the read-ahead margin,
  * and the load policy.

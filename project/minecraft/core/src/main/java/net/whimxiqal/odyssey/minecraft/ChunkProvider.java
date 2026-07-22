@@ -13,12 +13,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.LongSupplier;
-import net.whimxiqal.odyssey.api.Cell;
-import net.whimxiqal.odyssey.api.FutureOr;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftBlock;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftChunk;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
-import net.whimxiqal.odyssey.minecraft.api.PlatformApi;
+import net.whimxiqal.odyssey.Cell;
+import net.whimxiqal.odyssey.FutureOr;
 
 /**
  * A thread-safe, size-bounded (LRU) cache of chunk snapshots, sitting between modes and the platform.

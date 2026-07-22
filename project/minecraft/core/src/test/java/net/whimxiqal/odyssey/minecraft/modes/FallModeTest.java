@@ -11,8 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.util.Map;
-import net.whimxiqal.odyssey.api.Cell;
-import net.whimxiqal.odyssey.api.Movement;
+import net.whimxiqal.odyssey.Cell;
+import net.whimxiqal.odyssey.Movement;
 import net.whimxiqal.odyssey.minecraft.TestBlocks;
 import net.whimxiqal.odyssey.minecraft.TestModes;
 import net.whimxiqal.odyssey.minecraft.TestPlayer;
@@ -20,7 +20,7 @@ import net.whimxiqal.odyssey.minecraft.TestWorld;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
-import net.whimxiqal.odyssey.minecraft.api.OdysseyPlayer;
+import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
 import org.junit.jupiter.api.Test;
 
 class FallModeTest {

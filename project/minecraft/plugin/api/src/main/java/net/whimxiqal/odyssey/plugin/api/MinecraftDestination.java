@@ -10,7 +10,7 @@ package net.whimxiqal.odyssey.plugin.api;
 import java.util.List;
 import net.kyori.adventure.text.Component;
 import net.whimxiqal.odyssey.api.Destination;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
+import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
 
 /**
  * A named, permission-gated navigation target surfaced by a {@link DestinationProvider} — e.g. a
@@ -20,14 +20,14 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
  * {@code DomainRegion}s); everything else here is presentation and access control the plugin layer
  * cares about.
  */
-public interface MinecraftDestination {
+public interface MinecraftDestination<W, V> {
 
   /**
    * Returns the core navigation goal for this destination.
    *
    * @return the destination
    */
-  Destination<MinecraftWorld> destination();
+  Destination<WorldRegion<W, V>> destination();
 
   /**
    * Returns the human-facing name, as Adventure rich text (may carry color/formatting).

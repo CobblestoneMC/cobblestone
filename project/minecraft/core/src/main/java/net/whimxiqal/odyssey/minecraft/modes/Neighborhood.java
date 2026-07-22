@@ -9,7 +9,7 @@ package net.whimxiqal.odyssey.minecraft.modes;
 
 import java.util.HashSet;
 import java.util.Set;
-import net.whimxiqal.odyssey.api.Cell;
+import net.whimxiqal.odyssey.Cell;
 
 /** Helpers for enumerating the block cells a mode needs to inspect. */
 final class Neighborhood {

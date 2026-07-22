@@ -11,11 +11,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
 import java.util.Map;
-import net.whimxiqal.odyssey.api.Cell;
-import net.whimxiqal.odyssey.api.FutureOr;
-import net.whimxiqal.odyssey.api.Movement;
+import net.whimxiqal.odyssey.Cell;
+import net.whimxiqal.odyssey.FutureOr;
+import net.whimxiqal.odyssey.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
-import net.whimxiqal.odyssey.minecraft.api.*;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 
 /** Test helper: runs a mode's immediate step and indexes the resulting movements by destination cell. */
 public final class TestModes {

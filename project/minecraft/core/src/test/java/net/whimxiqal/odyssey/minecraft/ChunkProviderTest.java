@@ -12,10 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.atomic.AtomicLong;
-import net.whimxiqal.odyssey.api.Cell;
-import net.whimxiqal.odyssey.api.FutureOr;
-import net.whimxiqal.odyssey.minecraft.api.ChunkLoadPolicy;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftBlock;
+import net.whimxiqal.odyssey.Cell;
+import net.whimxiqal.odyssey.FutureOr;
 import org.junit.jupiter.api.Test;
 
 class ChunkProviderTest {

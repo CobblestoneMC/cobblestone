@@ -11,11 +11,11 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import net.whimxiqal.odyssey.api.Cell;
-import net.whimxiqal.odyssey.api.FutureOr;
+import net.whimxiqal.odyssey.Cell;
+import net.whimxiqal.odyssey.FutureOr;
 import net.whimxiqal.odyssey.minecraft.UnknownBlock;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftBlock;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
+import net.whimxiqal.odyssey.minecraft.MinecraftBlock;
+import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 
 /**
  * Fetches the set of blocks a mode needs for one expansion and packages them as a {@link BlockView}.

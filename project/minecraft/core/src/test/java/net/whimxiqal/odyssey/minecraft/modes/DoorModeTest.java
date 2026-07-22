@@ -11,13 +11,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import net.whimxiqal.odyssey.api.Cell;
+import net.whimxiqal.odyssey.Cell;
 import net.whimxiqal.odyssey.minecraft.TestBlocks;
 import net.whimxiqal.odyssey.minecraft.TestModes;
 import net.whimxiqal.odyssey.minecraft.TestPlayer;
 import net.whimxiqal.odyssey.minecraft.TestWorld;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
-import net.whimxiqal.odyssey.minecraft.api.OdysseyPlayer;
+import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
 import org.junit.jupiter.api.Test;
 
 class DoorModeTest {

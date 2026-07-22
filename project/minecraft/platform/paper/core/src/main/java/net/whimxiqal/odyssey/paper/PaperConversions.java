@@ -7,13 +7,16 @@
 
 package net.whimxiqal.odyssey.paper;
 
-import net.whimxiqal.odyssey.api.Cell;
-import net.whimxiqal.odyssey.api.Position;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
+import net.whimxiqal.odyssey.Cell;
+import net.whimxiqal.odyssey.DomainRegion;
+import net.whimxiqal.odyssey.Position;
+import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
+import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
+import org.joml.Vector3i;
 
 /**
  * Static conversions between Bukkit's {@link Location} and Odyssey's internal {@link Cell}/
@@ -25,6 +28,12 @@ final class PaperConversions {
   private PaperConversions() {
   }
 
+  static DomainRegion<MinecraftWorld> region(WorldRegion<World, Vector3i> region, WorldWrapper wrapper) {
+    return new DomainRegion.Impl<>(wrapper.wrap(region.world()),
+            cell -> region.contains(vector(cell)),
+            cell -> cell(region.nearestBoundaryLocation(vector(cell))));
+  }
+
   /**
    * Returns the block-coordinate {@link Cell} of a location (its domain is carried separately).
    *
@@ -33,6 +42,10 @@ final class PaperConversions {
    */
   static Cell cell(Location location) {
     return new Cell(location.getBlockX(), location.getBlockY(), location.getBlockZ());
+  }
+
+  static Cell cell(Vector3i vector) {
+    return new Cell(vector.x, vector.y, vector.z);
   }
 
   /**
@@ -47,5 +60,9 @@ final class PaperConversions {
     World world = key == null ? null : Bukkit.getWorld(key);
     Cell cell = position.cell();
     return new Location(world, cell.x(), cell.y(), cell.z());
+  }
+
+  static Vector3i vector(Cell cell) {
+    return new Vector3i(cell.x(), cell.y(), cell.z());
   }
 }
