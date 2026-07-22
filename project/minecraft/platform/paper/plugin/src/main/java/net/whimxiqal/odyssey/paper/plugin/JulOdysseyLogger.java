@@ -9,7 +9,7 @@ package net.whimxiqal.odyssey.paper.plugin;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import net.whimxiqal.odyssey.api.OdysseyLogger;
+import net.whimxiqal.odyssey.OdysseyLogger;
 
 /**
  * Adapts the plugin's {@link java.util.logging.Logger} to Odyssey's {@link OdysseyLogger} seam,

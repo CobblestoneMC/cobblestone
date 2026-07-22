@@ -11,8 +11,7 @@ import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
-import net.whimxiqal.odyssey.api.OdysseyLogger;
-import net.whimxiqal.odyssey.minecraft.api.TransitionRegistry;
+import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.paper.PaperOdysseyApiImpl;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperOdysseyPluginApi;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
@@ -49,8 +48,7 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
 
     // The transition registry is owned by the plugin; the platform API only reads from / registers
     // into it (design/05). Both are reachable to other plugins via the registered plugin API.
-    TransitionRegistry<Player, Location> transitions = new TransitionRegistry<>();
-    this.platformApi = new PaperOdysseyApiImpl(this, transitions);
+    this.platformApi = new PaperOdysseyApiImpl(this);
     PaperOdysseyPluginApi pluginApi = new PaperOdysseyPluginApiImpl(platformApi);
     getServer().getServicesManager()
         .register(PaperOdysseyPluginApi.class, pluginApi, this, ServicePriority.Normal);

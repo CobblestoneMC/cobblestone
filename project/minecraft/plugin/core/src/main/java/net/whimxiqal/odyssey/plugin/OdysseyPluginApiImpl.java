@@ -63,11 +63,6 @@ public class OdysseyPluginApiImpl<P, L> implements PlatformOdysseyPluginApi<P, L
   }
 
   @Override
-  public void registerTransitionProvider(PlatformSingleCellTransitionProvider<P, L> provider) {
-    platform.registerTransitionProvider(provider);
-  }
-
-  @Override
   public void registerDestinationProvider(DestinationProvider<P> provider) {
     destinationProviders.add(Objects.requireNonNull(provider, "provider"));
   }

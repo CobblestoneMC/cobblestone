@@ -7,11 +7,11 @@
 
 package net.whimxiqal.odyssey.paper;
 
-import net.whimxiqal.odyssey.api.Cell;
-import net.whimxiqal.odyssey.api.FutureOr;
+import net.whimxiqal.odyssey.Cell;
+import net.whimxiqal.odyssey.FutureOr;
 import net.whimxiqal.odyssey.minecraft.ChunkProvider;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftBlock;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
+import net.whimxiqal.odyssey.minecraft.MinecraftBlock;
+import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 import org.bukkit.World;
 
 /**

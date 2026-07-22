@@ -7,7 +7,7 @@
 
 package net.whimxiqal.odyssey.minecraft.modes;
 
-import net.whimxiqal.odyssey.api.Cell;
+import net.whimxiqal.odyssey.Cell;
 
 /**
  * Shared coarse-body geometry helpers for the 1×1×1 movement model: a body needs two blocks of

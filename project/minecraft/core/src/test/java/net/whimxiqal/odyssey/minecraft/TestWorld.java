@@ -10,10 +10,8 @@ package net.whimxiqal.odyssey.minecraft;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import net.whimxiqal.odyssey.api.Cell;
-import net.whimxiqal.odyssey.api.FutureOr;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftBlock;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
+import net.whimxiqal.odyssey.Cell;
+import net.whimxiqal.odyssey.FutureOr;
 
 /**
  * An in-memory {@link MinecraftWorld} for mode tests. Cells default to air; set blocks with the

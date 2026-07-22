@@ -10,11 +10,16 @@ package net.whimxiqal.odyssey.minecraft.modes;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
-import net.whimxiqal.odyssey.api.Cell;
-import net.whimxiqal.odyssey.api.FutureOr;
-import net.whimxiqal.odyssey.api.Movement;
+import net.whimxiqal.odyssey.Cell;
+import net.whimxiqal.odyssey.FutureOr;
+import net.whimxiqal.odyssey.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
-import net.whimxiqal.odyssey.minecraft.api.*;
+import net.whimxiqal.odyssey.minecraft.MinecraftAgent;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
+import net.whimxiqal.odyssey.minecraft.MinecraftMode;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
+import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 
 /**
  * Base class for the Minecraft modes. It handles the common plumbing — gating by state, fetching the

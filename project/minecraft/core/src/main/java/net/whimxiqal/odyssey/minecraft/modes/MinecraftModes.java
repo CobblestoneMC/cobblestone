@@ -10,9 +10,9 @@ package net.whimxiqal.odyssey.minecraft.modes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftMode;
+import net.whimxiqal.odyssey.minecraft.MinecraftMode;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
-import net.whimxiqal.odyssey.minecraft.api.OdysseyPlayer;
+import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
 
 /**
  * Assembles the mode list for a search. Ability gating happens here (not inside the modes): flying

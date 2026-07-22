@@ -8,9 +8,9 @@
 package net.whimxiqal.odyssey.minecraft.modes;
 
 import java.util.Map;
-import net.whimxiqal.odyssey.api.Cell;
+import net.whimxiqal.odyssey.Cell;
 import net.whimxiqal.odyssey.minecraft.UnknownBlock;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftBlock;
+import net.whimxiqal.odyssey.minecraft.MinecraftBlock;
 
 /**
  * A read-only snapshot of the blocks a mode fetched for one expansion. Cells not present (i.e. not

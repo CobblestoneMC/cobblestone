@@ -8,7 +8,7 @@
 package net.whimxiqal.odyssey.paper;
 
 import java.util.Set;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftBlock;
+import net.whimxiqal.odyssey.minecraft.MinecraftBlock;
 import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.block.data.BlockData;

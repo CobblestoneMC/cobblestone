@@ -10,10 +10,8 @@ package net.whimxiqal.odyssey.minecraft;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
-import net.whimxiqal.odyssey.api.Cell;
-import net.whimxiqal.odyssey.api.Position;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
-import net.whimxiqal.odyssey.minecraft.api.OdysseyPlayer;
+import net.whimxiqal.odyssey.Cell;
+import net.whimxiqal.odyssey.Position;
 
 /** A configurable {@link OdysseyPlayer} for mode/assembly tests. */
 public final class TestPlayer implements OdysseyPlayer {

@@ -7,8 +7,8 @@
 
 package net.whimxiqal.odyssey.paper;
 
-import net.whimxiqal.odyssey.minecraft.api.MinecraftBlock;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftChunk;
+import net.whimxiqal.odyssey.minecraft.MinecraftBlock;
+import net.whimxiqal.odyssey.minecraft.MinecraftChunk;
 import org.bukkit.ChunkSnapshot;
 
 /** A {@link MinecraftChunk} backed by a Bukkit {@link ChunkSnapshot} (immutable, thread-safe to read). */

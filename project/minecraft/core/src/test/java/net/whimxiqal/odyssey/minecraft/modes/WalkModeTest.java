@@ -12,16 +12,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
-import net.whimxiqal.odyssey.api.Cell;
-import net.whimxiqal.odyssey.api.Movement;
-import net.whimxiqal.odyssey.minecraft.TestBlocks;
-import net.whimxiqal.odyssey.minecraft.TestModes;
-import net.whimxiqal.odyssey.minecraft.TestPlayer;
-import net.whimxiqal.odyssey.minecraft.TestWorld;
+import net.whimxiqal.odyssey.Cell;
+import net.whimxiqal.odyssey.Movement;
+import net.whimxiqal.odyssey.api.TraversalState;
+import net.whimxiqal.odyssey.minecraft.*;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
-import net.whimxiqal.odyssey.minecraft.api.OdysseyPlayer;
+import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
 import org.junit.jupiter.api.Test;
 
 class WalkModeTest {
@@ -89,9 +87,9 @@ class WalkModeTest {
   @Test
   void doesNotApplyWhileMounted() {
     TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
-    var mounted = net.whimxiqal.odyssey.api.TraversalState.DEFAULT
-        .with(net.whimxiqal.odyssey.minecraft.api.MinecraftKeys.VEHICLE,
-            net.whimxiqal.odyssey.minecraft.api.MinecraftKeys.Vehicle.HORSE);
+    var mounted = TraversalState.DEFAULT
+        .with(MinecraftKeys.VEHICLE,
+            MinecraftKeys.Vehicle.HORSE);
     assertTrue(TestModes.from(walk, player, world, new Cell(0, 1, 0), mounted).isEmpty());
   }
 }

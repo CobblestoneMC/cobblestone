@@ -11,10 +11,14 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
-import net.whimxiqal.odyssey.api.Cell;
-import net.whimxiqal.odyssey.api.Movement;
+import net.whimxiqal.odyssey.Cell;
+import net.whimxiqal.odyssey.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
-import net.whimxiqal.odyssey.minecraft.api.*;
+import net.whimxiqal.odyssey.minecraft.MinecraftAgent;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
+import net.whimxiqal.odyssey.minecraft.MinecraftKeys;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 
 /**
  * Boat travel — the vehicle mode that demonstrates {@code TraversalState} transitions.

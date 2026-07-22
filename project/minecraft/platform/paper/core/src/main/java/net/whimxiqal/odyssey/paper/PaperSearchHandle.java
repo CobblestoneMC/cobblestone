@@ -13,13 +13,13 @@ import java.util.concurrent.CompletableFuture;
 import net.whimxiqal.odyssey.api.FailureReason;
 import net.whimxiqal.odyssey.api.NavigationResult;
 import net.whimxiqal.odyssey.api.Path;
-import net.whimxiqal.odyssey.api.Position;
+import net.whimxiqal.odyssey.Position;
 import net.whimxiqal.odyssey.api.SearchHandle;
 import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
+import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 import org.bukkit.Location;
 
 /**

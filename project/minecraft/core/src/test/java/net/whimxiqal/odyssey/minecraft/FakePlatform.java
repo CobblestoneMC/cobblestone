@@ -13,11 +13,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import net.whimxiqal.odyssey.minecraft.api.ChunkLoadPolicy;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftChunk;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftScheduler;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftWorld;
-import net.whimxiqal.odyssey.minecraft.api.PlatformApi;
 
 /** A {@link PlatformApi} test double: records fetches and either completes them at once or defers them. */
 final class FakePlatform implements PlatformApi {
@@ -83,7 +78,7 @@ final class FakePlatform implements PlatformApi {
     }
 
     @Override
-    public net.whimxiqal.odyssey.minecraft.api.MinecraftBlock block(int localX, int y, int localZ) {
+    public MinecraftBlock block(int localX, int y, int localZ) {
       return TestBlocks.solid();
     }
   }

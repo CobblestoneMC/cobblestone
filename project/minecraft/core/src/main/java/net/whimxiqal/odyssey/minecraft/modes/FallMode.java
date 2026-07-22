@@ -12,10 +12,15 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import net.whimxiqal.odyssey.api.Cell;
-import net.whimxiqal.odyssey.api.Movement;
+import net.whimxiqal.odyssey.Cell;
+import net.whimxiqal.odyssey.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
-import net.whimxiqal.odyssey.minecraft.api.*;
+import net.whimxiqal.odyssey.minecraft.MinecraftAgent;
+import net.whimxiqal.odyssey.minecraft.MinecraftBlock;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
+import net.whimxiqal.odyssey.minecraft.MinecraftKeys;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 
 /**
  * Falling: stepping off a cardinal edge (or straight down) and dropping to the first supported cell

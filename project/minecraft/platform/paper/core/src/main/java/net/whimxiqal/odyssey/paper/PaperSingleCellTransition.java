@@ -7,37 +7,30 @@
 
 package net.whimxiqal.odyssey.paper;
 
-import java.util.function.Function;
-import net.whimxiqal.odyssey.core.CellRegion;
-import net.whimxiqal.odyssey.api.DomainRegion;
-import net.whimxiqal.odyssey.api.Position;
+import net.whimxiqal.odyssey.DomainRegion;
+import net.whimxiqal.odyssey.Position;
 import net.whimxiqal.odyssey.api.TraversalState;
-import net.whimxiqal.odyssey.api.Transition;
+import net.whimxiqal.odyssey.Transition;
 import net.whimxiqal.odyssey.minecraft.api.*;
+import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.joml.Vector3i;
 
-/**
- * Adapts a developer-supplied {@link PlatformSingleCellTransition} (in native {@link Location}
- * terms) into a core {@link Transition}: the single origin location becomes a one-cell region and
- * the destination location becomes a {@link Position}. Endpoints are resolved eagerly at
- * construction so the core never re-does the lookup.
- */
-final class PaperSingleCellTransition implements Transition<MinecraftStepPayload, MinecraftWorld> {
+final class PaperTransition implements Transition<MinecraftStepPayload, MinecraftWorld> {
 
-  private final PlatformSingleCellTransition<Location> delegate;
+  private final PlatformTransition<WorldRegion<World, Vector3i>, Location> delegate;
   private final DomainRegion<MinecraftWorld> origin;
   private final Position<MinecraftWorld> destination;
 
-  PaperSingleCellTransition(
-      PlatformSingleCellTransition<Location> delegate, Function<World, MinecraftWorld> worldWrapper) {
+  PaperTransition(
+          PlatformTransition<WorldRegion<World, Vector3i>, Location> delegate, WorldWrapper worldWrapper) {
     this.delegate = delegate;
-    Location originLocation = delegate.origin();
+    WorldRegion<World, Vector3i> originLocation = delegate.origin();
     Location destinationLocation = delegate.destination();
-    this.origin = new CellRegion<>(
-        PaperConversions.cell(originLocation), worldWrapper.apply(originLocation.getWorld()));
+    this.origin = PaperConversions.region(originLocation, worldWrapper);
     this.destination = new Position<>(
-        PaperConversions.cell(destinationLocation), worldWrapper.apply(destinationLocation.getWorld()));
+        PaperConversions.cell(destinationLocation), worldWrapper.wrap(destinationLocation.getWorld()));
   }
 
   @Override
