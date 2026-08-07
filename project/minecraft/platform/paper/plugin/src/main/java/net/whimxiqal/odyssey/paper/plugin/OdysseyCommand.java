@@ -16,6 +16,7 @@ import io.papermc.paper.command.brigadier.Commands;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.UUID;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
 import net.whimxiqal.odyssey.plugin.config.ConfigManager;
 import net.whimxiqal.odyssey.plugin.data.DataStoreException;
@@ -23,6 +24,8 @@ import net.whimxiqal.odyssey.plugin.data.Waypoint;
 import net.whimxiqal.odyssey.plugin.data.WaypointDao;
 import net.whimxiqal.odyssey.plugin.message.Messages;
 import net.whimxiqal.odyssey.plugin.message.OdysseyMessages;
+import net.whimxiqal.odyssey.plugin.trip.Trip;
+import net.whimxiqal.odyssey.plugin.trip.TripManager;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -46,10 +49,13 @@ final class OdysseyCommand {
    * @param keys the registered config keys (to re-read after reload)
    * @param messages the message renderer
    * @param waypoints the waypoint DAO (for {@code waypoint set/unset})
+   * @param trips the trip manager (for {@code cancel}/{@code trips})
+   * @param searches the search registry (for {@code cancel})
    * @return the command node
    */
   static LiteralCommandNode<CommandSourceStack> build(
-      ConfigManager config, ConfigKeys keys, Messages messages, WaypointDao waypoints) {
+      ConfigManager config, ConfigKeys keys, Messages messages, WaypointDao waypoints,
+      TripManager<Location> trips, SearchRegistry searches) {
     return Commands.literal("odyssey")
         .executes(ctx -> {
           CommandSender sender = ctx.getSource().getSender();
@@ -59,6 +65,10 @@ final class OdysseyCommand {
         })
         .then(Commands.literal("reload")
             .executes(ctx -> reload(ctx.getSource().getSender(), config, keys, messages)))
+        .then(Commands.literal("cancel")
+            .executes(ctx -> cancel(ctx.getSource().getSender(), messages, trips, searches)))
+        .then(Commands.literal("trips")
+            .executes(ctx -> trips(ctx.getSource().getSender(), messages, trips)))
         .then(Commands.literal("waypoint")
             .then(Commands.literal("set")
                 .then(Commands.argument("name", StringArgumentType.word())
@@ -86,6 +96,43 @@ final class OdysseyCommand {
     if (!restartRequired.isEmpty()) {
       messages.send(sender, locale, OdysseyMessages.RELOAD_RESTART_REQUIRED,
           String.join(", ", restartRequired));
+    }
+    return Command.SINGLE_SUCCESS;
+  }
+
+  private static int cancel(
+      CommandSender sender, Messages messages, TripManager<Location> trips, SearchRegistry searches) {
+    Locale locale = localeOf(sender, messages);
+    if (!(sender instanceof Player player)) {
+      messages.send(sender, locale, OdysseyMessages.PLAYERS_ONLY);
+      return Command.SINGLE_SUCCESS;
+    }
+    UUID uuid = player.getUniqueId();
+    int cancelled = trips.trips(uuid).size();
+    trips.stopAll(uuid);
+    cancelled += searches.cancelAll(uuid);
+    if (cancelled == 0) {
+      messages.send(player, locale, OdysseyMessages.CANCEL_NOTHING);
+    } else {
+      messages.send(player, locale, OdysseyMessages.CANCEL_DONE, cancelled);
+    }
+    return Command.SINGLE_SUCCESS;
+  }
+
+  private static int trips(CommandSender sender, Messages messages, TripManager<Location> trips) {
+    Locale locale = localeOf(sender, messages);
+    if (!(sender instanceof Player player)) {
+      messages.send(sender, locale, OdysseyMessages.PLAYERS_ONLY);
+      return Command.SINGLE_SUCCESS;
+    }
+    List<Trip<Location>> active = trips.trips(player.getUniqueId());
+    if (active.isEmpty()) {
+      messages.send(player, locale, OdysseyMessages.TRIPS_NONE);
+      return Command.SINGLE_SUCCESS;
+    }
+    messages.send(player, locale, OdysseyMessages.TRIPS_HEADER, active.size());
+    for (Trip<Location> trip : active) {
+      messages.send(player, locale, OdysseyMessages.TRIPS_ENTRY, trip.navigatorId());
     }
     return Command.SINGLE_SUCCESS;
   }

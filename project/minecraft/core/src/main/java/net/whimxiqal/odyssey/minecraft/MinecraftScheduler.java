@@ -30,4 +30,16 @@ public interface MinecraftScheduler extends Scheduler {
    * @param task the task
    */
   void runGlobal(Runnable task);
+
+  /**
+   * Runs a task repeatedly on the thread that owns the given location, until cancelled. Used to tick
+   * a trip's navigator (rendering the trail). The period is in server ticks (20 ticks per second).
+   *
+   * @param position the location whose owning thread runs the task
+   * @param task the task to run each period
+   * @param periodTicks the number of ticks between runs (clamped to at least 1)
+   * @return a handle to cancel the repeating task
+   */
+  ScheduledTaskHandle runAtPositionRepeating(
+      Position<? extends MinecraftWorld> position, Runnable task, long periodTicks);
 }

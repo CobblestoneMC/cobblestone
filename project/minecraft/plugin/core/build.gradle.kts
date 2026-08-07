@@ -16,4 +16,7 @@ dependencies {
     // the DataStore contract test, which runs against both embedded engines.
     testImplementation(libs.sqlite.jdbc)
     testImplementation(libs.h2)
+    // Adventure is compileOnly above (server-provided at runtime); destination fixtures in tests build
+    // MinecraftDestinations, which expose Adventure Components, so tests need it on their classpath.
+    testImplementation(libs.adventure.api)
 }

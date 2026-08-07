@@ -34,6 +34,21 @@ public final class ConfigKeys {
    */
   public final ConfigKey<String> dataFile;
 
+  /** How many trips (guided paths) one player may run at once. Mutable. */
+  public final ConfigKey<Integer> tripsMaxActivePerPlayer;
+
+  /** How often, in server ticks, each trip re-renders its trail. Requires a restart. */
+  public final ConfigKey<Integer> tripsTickPeriodTicks;
+
+  /** How often, in server ticks, a live trip re-runs its search and hot-swaps the path. Mutable. */
+  public final ConfigKey<Integer> tripsLiveIntervalTicks;
+
+  /** The most concurrent searches (manual + live) one player may run. Requires a restart. */
+  public final ConfigKey<Integer> searchMaxConcurrentPerPlayer;
+
+  /** How many cells of the trail ahead the {@code trail} navigator renders. Mutable. */
+  public final ConfigKey<Integer> trailBufferCells;
+
   /**
    * Registers every foundational key on the given manager.
    *
@@ -48,5 +63,15 @@ public final class ConfigKeys {
         "data.backend", DataBackend.SQLITE, Codec.ofEnum(DataBackend.class), false);
     this.dataFile = manager.register(
         "data.file", "odyssey", Codec.ofString(), false);
+    this.tripsMaxActivePerPlayer = manager.register(
+        "trips.max_active_per_player", 3, Codec.ofInt(), true);
+    this.tripsTickPeriodTicks = manager.register(
+        "trips.tick_period_ticks", 5, Codec.ofInt(), false);
+    this.tripsLiveIntervalTicks = manager.register(
+        "trips.live_interval_ticks", 100, Codec.ofInt(), true);
+    this.searchMaxConcurrentPerPlayer = manager.register(
+        "search.max_concurrent_per_player", 1, Codec.ofInt(), false);
+    this.trailBufferCells = manager.register(
+        "navigators.trail.buffer_cells", 100, Codec.ofInt(), true);
   }
 }

@@ -12,9 +12,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import net.whimxiqal.odyssey.Position;
 import net.whimxiqal.odyssey.minecraft.MinecraftScheduler;
 import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
+import net.whimxiqal.odyssey.minecraft.ScheduledTaskHandle;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
@@ -77,6 +79,22 @@ public final class PaperScheduler implements MinecraftScheduler {
   @Override
   public void runGlobal(Runnable task) {
     Bukkit.getGlobalRegionScheduler().execute(plugin, task);
+  }
+
+  @Override
+  public ScheduledTaskHandle runAtPositionRepeating(
+      Position<? extends MinecraftWorld> position, Runnable task, long periodTicks) {
+    NamespacedKey key = NamespacedKey.fromString(position.domain().key());
+    World world = key == null ? null : Bukkit.getWorld(key);
+    if (world == null) {
+      return () -> { };
+    }
+    // TODO(folia): pinned to the anchor's region; a trail that crosses regions on Folia would want the
+    // player's entity scheduler so ticking follows the player. Fine on regular Paper (one main thread).
+    ScheduledTask scheduled = Bukkit.getRegionScheduler().runAtFixedRate(
+        plugin, world, position.cell().x() >> 4, position.cell().z() >> 4,
+        ignored -> task.run(), 1L, Math.max(1L, periodTicks));
+    return scheduled::cancel;
   }
 
   /** Stops the worker pool; call on plugin disable. */

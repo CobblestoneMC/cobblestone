@@ -12,6 +12,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 import net.whimxiqal.odyssey.minecraft.api.PlatformTransition;
 import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
 import net.whimxiqal.odyssey.paper.api.BoxWorldRegion;
@@ -72,14 +73,60 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
       Player player, Location destination, SearchSettings settings) {
     DomainRegion<MinecraftWorld> region = new CellRegion<>(
         PaperConversions.cell(destination), wrap(destination.getWorld()));
-    return search(player, new SingleDestination<>(region), settings);
+    return search(player, new SingleDestination<>(region), Set.of(), Set.of(), Set.of(), settings);
   }
 
   @Override
   public SearchHandle<Step<Location, MinecraftStepPayload>> navigatePlayerToRegion(
       Player player, Location location1, Location location2, SearchSettings settings) {
     BoxWorldRegion region = BoxWorldRegion.of(location1, location2);
-    return search(player, new SingleDestination<>(PaperConversions.region(region, this)), settings);
+    return search(player, new SingleDestination<>(PaperConversions.region(region, this)),
+        Set.of(), Set.of(), Set.of(), settings);
+  }
+
+  /**
+   * Begins a search toward a plugin-provided {@link Destination} (e.g. a resolved waypoint), which
+   * may span several regions/endpoints. Used by the {@code /navigate} command; not on the public
+   * native façade because it speaks Paper's {@link WorldRegion} type.
+   *
+   * @param player the navigating player
+   * @param destination the goal, as one or more world regions
+   * @param excludedModes step types to leave out of the search (from {@code -no-mode} flags)
+   * @param settings the search limits and knobs
+   * @return a handle to the in-flight search, yielding native-located steps
+   */
+  public SearchHandle<Step<Location, MinecraftStepPayload>> navigatePlayerToDestination(
+      Player player,
+      Destination<WorldRegion<World, Vector3i>> destination,
+      Set<MinecraftStepType> excludedModes,
+      Set<String> excludedWorlds,
+      Set<String> excludedDimensions,
+      SearchSettings settings) {
+    List<DomainRegion<MinecraftWorld>> regions = new ArrayList<>();
+    for (WorldRegion<World, Vector3i> region : destination.regions()) {
+      regions.add(PaperConversions.region(region, this));
+    }
+    return search(player, () -> regions, excludedModes, excludedWorlds, excludedDimensions, settings);
+  }
+
+  /**
+   * Converts a native {@link Location} to a core {@link Position}, for scheduling a trip on the
+   * location's owning thread.
+   *
+   * @param location the location
+   * @return the position
+   */
+  public Position<MinecraftWorld> position(Location location) {
+    return new Position<>(PaperConversions.cell(location), wrap(location.getWorld()));
+  }
+
+  /**
+   * Returns the platform scheduler, so the plugin can tick trips on it (Folia-safe region tasks).
+   *
+   * @return the scheduler
+   */
+  public net.whimxiqal.odyssey.minecraft.MinecraftScheduler scheduler() {
+    return scheduler;
   }
 
   /**
@@ -90,22 +137,24 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
   }
 
   private SearchHandle<Step<Location, MinecraftStepPayload>> search(
-      Player player, Destination<DomainRegion<MinecraftWorld>> destination, SearchSettings settings) {
+      Player player, Destination<DomainRegion<MinecraftWorld>> destination,
+      Set<MinecraftStepType> excludedModes, Set<String> excludedWorlds,
+      Set<String> excludedDimensions, SearchSettings settings) {
     OdysseyPlayer agent = new PaperPlayer(player);
     Location origin = player.getLocation();
     Position<MinecraftWorld> originPosition = new Position<>(
         PaperConversions.cell(origin), wrap(origin.getWorld()));
-    List<MinecraftMode<OdysseyPlayer>> modes = MinecraftModes.forPlayer(agent, Set.of());
+    List<MinecraftMode<OdysseyPlayer>> modes = MinecraftModes.forPlayer(agent, excludedModes);
 
     CompletableFuture<SearchHandle<Step<Position<MinecraftWorld>, MinecraftStepPayload>>>
-        handleFuture = gatherTransitions(player).thenApply(gathered ->
+        handleFuture = gatherTransitions(player, excludedWorlds, excludedDimensions).thenApply(gathered ->
         core.navigate(
             scheduler, agent, originPosition, destination, modes, gathered, heuristic, settings));
     return new PaperSearchHandle(handleFuture);
   }
 
   private CompletableFuture<List<Transition<MinecraftStepPayload, MinecraftWorld>>>
-  gatherTransitions(Player player) {
+  gatherTransitions(Player player, Set<String> excludedWorlds, Set<String> excludedDimensions) {
     List<PaperTransitionProvider> providers = Bukkit.getServicesManager().getRegistrations(PaperTransitionProvider.class).stream().map(RegisteredServiceProvider::getProvider).toList();
     if (providers.isEmpty()) {
       return CompletableFuture.completedFuture(List.of());
@@ -118,11 +167,23 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
       List<Transition<MinecraftStepPayload, MinecraftWorld>> all = new ArrayList<>();
       for (CompletableFuture<List<? extends PlatformTransition<WorldRegion<World, Vector3i>, Location>>> future : futures) {
         for (PlatformTransition<WorldRegion<World, Vector3i>, Location> transition : future.join()) {
-          all.add(new PaperTransition(transition, this));
+          PaperTransition wrapped = new PaperTransition(transition, this);
+          // A world is reachable only through a transition, so excluding a world/dimension means
+          // dropping any transition that crosses into (or out of) it.
+          if (worldAllowed(wrapped.origin().domain(), excludedWorlds, excludedDimensions)
+              && worldAllowed(wrapped.destination().domain(), excludedWorlds, excludedDimensions)) {
+            all.add(wrapped);
+          }
         }
       }
       return all;
     });
+  }
+
+  private static boolean worldAllowed(
+      MinecraftWorld world, Set<String> excludedWorlds, Set<String> excludedDimensions) {
+    return !excludedWorlds.contains(world.key())
+        && !excludedDimensions.contains(world.environment().name().toLowerCase(Locale.ROOT));
   }
 
   @Override

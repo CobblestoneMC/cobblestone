@@ -15,12 +15,15 @@ import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.paper.PaperOdysseyApiImpl;
 import net.whimxiqal.odyssey.paper.api.PaperOdysseyApi;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
+import net.whimxiqal.odyssey.paper.plugin.api.PaperNavigatorFactory;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
 import net.whimxiqal.odyssey.plugin.config.ConfigManager;
 import net.whimxiqal.odyssey.plugin.data.DataStore;
 import net.whimxiqal.odyssey.plugin.data.DataStoreException;
 import net.whimxiqal.odyssey.plugin.data.DataStores;
 import net.whimxiqal.odyssey.plugin.message.Messages;
+import net.whimxiqal.odyssey.plugin.trip.TripManager;
+import org.bukkit.Location;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -36,6 +39,8 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
 
   private PaperOdysseyApiImpl platformApi;
   private DataStore dataStore;
+  private TripManager<Location> tripManager;
+  private final SearchRegistry searchRegistry = new SearchRegistry();
 
   @Override
   public void onEnable() {
@@ -69,20 +74,41 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
 
     Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
     Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), log);
-    getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
-        event.registrar().register(
-            OdysseyCommand.build(config, keys, messages, dataStore.waypoints()),
-            "Odyssey admin and utility commands",
-            List.of("ody")));
+
+    // Trips tick on the platform scheduler (Folia-safe region tasks); the default trail navigator is
+    // registered as a service so it is discovered like any third-party navigator.
+    this.tripManager = new TripManager<>(platformApi.scheduler(),
+        config.get(keys.tripsMaxActivePerPlayer), config.get(keys.tripsTickPeriodTicks));
+    getServer().getServicesManager().register(PaperNavigatorFactory.class,
+        new PaperTrailNavigatorFactory(config.get(keys.trailBufferCells), messages),
+        this, ServicePriority.Normal);
+
+    getServer().getPluginManager().registerEvents(
+        new OdysseyListener(tripManager, searchRegistry), this);
+
+    SearchGate searchGate = new SearchGate(config.get(keys.searchMaxConcurrentPerPlayer));
+    long liveIntervalMillis = config.get(keys.tripsLiveIntervalTicks) * 50L; // 50 ms per tick
+    getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
+      event.registrar().register(
+          OdysseyCommand.build(config, keys, messages, dataStore.waypoints(), tripManager, searchRegistry),
+          "Odyssey admin and utility commands",
+          List.of("ody"));
+      event.registrar().register(
+          NavigateCommand.build(platformApi, tripManager, searchRegistry, searchGate, liveIntervalMillis, messages),
+          "Navigate to a destination",
+          List.of("nav"));
+    });
 
     getLogger().info("Odyssey enabled.");
   }
 
   @Override
   public void onDisable() {
+    if (tripManager != null) {
+      tripManager.stopEverything();
+    }
     if (platformApi != null) {
-      // Cancels in-flight searches and stops the search worker pool. Trips shutdown joins this in
-      // Phase 6c.
+      // Cancels in-flight searches and stops the search worker pool.
       platformApi.shutdown();
     }
     getServer().getServicesManager().unregisterAll(this);

@@ -32,3 +32,26 @@ data:
   # The database file name inside this plugin folder, without an extension (the engine adds its
   # own). Only used by the embedded backends. (requires restart)
   file: odyssey
+
+# Guided journeys ("trips") that follow a computed path.
+trips:
+  # How many trips one player may run at once, so "path home + path to the caves" both render.
+  # Set to 1 to allow only a single trip per player.
+  max_active_per_player: 3
+  # How often, in server ticks (20 = 1 second), each trip re-renders its trail. (requires restart)
+  tick_period_ticks: 5
+  # How often, in server ticks, a "-live" trip re-runs its search and updates the path.
+  live_interval_ticks: 100
+
+# Search behavior.
+search:
+  # The most searches (manual and live re-searches together) one player may run at once. Live
+  # re-searches yield to this budget; a manual /navigate always runs. (requires restart)
+  max_concurrent_per_player: 1
+
+# Display strategies ("navigators") that render a trip.
+navigators:
+  # The default "trail" navigator: a line of redstone-dust particles along the path.
+  trail:
+    # How many cells of the path ahead of the player to render at a time.
+    buffer_cells: 100
