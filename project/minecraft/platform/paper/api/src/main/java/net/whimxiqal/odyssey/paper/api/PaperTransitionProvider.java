@@ -24,8 +24,4 @@ public interface PaperTransitionProvider {
 
     CompletableFuture<List<? extends PlatformTransition<WorldRegion<World, Vector3i>, Location>>> compute(Player player);
 
-    default void register(Plugin plugin) {
-        Bukkit.getServicesManager().register(PaperTransitionProvider.class, this, plugin, ServicePriority.Normal);
-    }
-
 }

@@ -11,13 +11,6 @@ import net.whimxiqal.odyssey.api.Path;
 import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 
-/**
- * A display strategy bound to a player and a {@link net.whimxiqal.odyssey.api.Path}, ticked by the Trip manager. The
- * default implementation renders a particle trail; developers can register their own (e.g. Citizens'
- * guide NPC) via {@link PlatformOdysseyPluginApi#registerNavigatorFactory(String, NavigatorFactory)}.
- *
- * @param <L> the native location type the path is expressed in
- */
 public interface Navigator<L> {
 
   /**

@@ -13,12 +13,10 @@ import java.util.List;
 import java.util.Locale;
 import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.paper.PaperOdysseyApiImpl;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperOdysseyPluginApi;
+import net.whimxiqal.odyssey.paper.api.PaperOdysseyApi;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
 import net.whimxiqal.odyssey.plugin.config.ConfigManager;
 import net.whimxiqal.odyssey.plugin.message.Messages;
-import org.bukkit.Location;
-import org.bukkit.entity.Player;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -26,7 +24,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  * The Odyssey Paper/Folia plugin entry point.
  *
  * <p>Phase 6a bootstrap: load config, build the message pipeline, construct the plugin-owned
- * transition registry and the native platform API, register the single {@link PaperOdysseyPluginApi}
+ * transition registry and the native platform API, register the single {@link PaperOdysseyApi}
  * service, and wire the {@code /odyssey} command. Data store, listeners, waypoints, trips, portal
  * discovery, and the {@code /navigate} tree arrive in Phases 6b/6c.
  */
@@ -49,9 +47,9 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
     // The transition registry is owned by the plugin; the platform API only reads from / registers
     // into it (design/05). Both are reachable to other plugins via the registered plugin API.
     this.platformApi = new PaperOdysseyApiImpl(this);
-    PaperOdysseyPluginApi pluginApi = new PaperOdysseyPluginApiImpl(platformApi);
+    PaperOdysseyApi pluginApi = new PaperOdysseyApiImpl(this);
     getServer().getServicesManager()
-        .register(PaperOdysseyPluginApi.class, pluginApi, this, ServicePriority.Normal);
+        .register(PaperOdysseyApi.class, pluginApi, this, ServicePriority.Normal);
 
     getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
         event.registrar().register(

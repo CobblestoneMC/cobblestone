@@ -11,17 +11,9 @@ import net.whimxiqal.odyssey.api.Path;
 import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 
-/**
- * Creates a {@link Navigator} for a player + path, entirely in native terms. Registered by
- * (lower-cased) id via
- * {@link PlatformOdysseyPluginApi#registerNavigatorFactory(String, NavigatorFactory)}; Odyssey ships
- * the default {@code trail} factory.
- *
- * @param <P> the native player type (e.g. {@code org.bukkit.entity.Player})
- * @param <L> the native location type (e.g. {@code org.bukkit.Location})
- */
-@FunctionalInterface
 public interface NavigatorFactory<P, L> {
+
+  String key();
 
   /**
    * Creates a navigator.

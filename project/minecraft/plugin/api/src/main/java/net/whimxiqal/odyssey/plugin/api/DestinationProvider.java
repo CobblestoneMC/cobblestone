@@ -7,18 +7,8 @@
 
 package net.whimxiqal.odyssey.plugin.api;
 
-/**
- * The root of a destination tree, evaluated per player (in native terms) so results can depend on
- * who is asking — their permissions, homes, town membership, and so on.
- *
- * <p>Integration plugins (Essentials, Towny, quest plugins) register providers via
- * {@link PlatformOdysseyPluginApi#registerDestinationProvider(DestinationProvider)}; Odyssey itself
- * registers one for waypoints.
- *
- * @param <P> the native player type (e.g. {@code org.bukkit.entity.Player})
- */
 @FunctionalInterface
-public interface DestinationProvider<P> {
+public interface DestinationProvider<W, V, P> {
 
   /**
    * Builds the destination tree visible to the given player.
@@ -26,5 +16,5 @@ public interface DestinationProvider<P> {
    * @param player the player requesting navigation
    * @return the (lazily-evaluated) tree
    */
-  DestinationTree provide(P player);
+  DestinationTree<W, V> provide(P player);
 }

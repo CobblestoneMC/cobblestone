@@ -17,7 +17,7 @@ import java.util.function.Supplier;
  * <p>Children are exposed as {@link Supplier}s so that huge sets — every town, every player home —
  * are not materialized until the node is actually visited during command traversal or tab-completion.
  */
-public interface DestinationTree {
+public interface DestinationTree<W, V> {
 
   /**
    * Returns this node's key (unique among its siblings).
@@ -39,12 +39,12 @@ public interface DestinationTree {
    *
    * @return the sub-trees
    */
-  Map<String, Supplier<DestinationTree>> subTrees();
+  Map<String, Supplier<? extends DestinationTree<W, V>>> subTrees();
 
   /**
    * Returns the leaf destinations at this node, keyed by their key, each behind a supplier.
    *
    * @return the destinations
    */
-  Map<String, Supplier<MinecraftDestination>> destinations();
+  Map<String, Supplier<MinecraftDestination<W, V>>> destinations();
 }
