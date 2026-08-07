@@ -19,6 +19,9 @@ public final class OdysseyMessages {
   /** Shown when a sender lacks permission for a command. */
   public static final Message0 NO_PERMISSION = Message0.error("command.no_permission");
 
+  /** Shown when a player-only command is run from the console. */
+  public static final Message0 PLAYERS_ONLY = Message0.error("command.players_only");
+
   /** Shown when a command is used with an unrecognized subcommand ({@code {1}} = the input). */
   public static final Message1 UNKNOWN_SUBCOMMAND = Message1.error("command.unknown_subcommand");
 
@@ -33,6 +36,22 @@ public final class OdysseyMessages {
    */
   public static final Message1 RELOAD_RESTART_REQUIRED =
       Message1.info("command.odyssey.reload.restart_required");
+
+  /** Confirms a waypoint was set ({@code {0}} = its name). */
+  public static final Message1 WAYPOINT_SET =
+      Message1.success("command.odyssey.waypoint.set");
+
+  /** Confirms a waypoint was removed ({@code {0}} = its name). */
+  public static final Message1 WAYPOINT_UNSET =
+      Message1.success("command.odyssey.waypoint.unset");
+
+  /** Shown when unsetting a waypoint that does not exist ({@code {0}} = the name). */
+  public static final Message1 WAYPOINT_NOT_FOUND =
+      Message1.error("command.odyssey.waypoint.not_found");
+
+  /** Shown when a waypoint could not be persisted (details are in the server log). */
+  public static final Message0 WAYPOINT_STORE_ERROR =
+      Message0.error("command.odyssey.waypoint.store_error");
 
   private OdysseyMessages() {
   }

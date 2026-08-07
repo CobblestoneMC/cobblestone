@@ -19,9 +19,10 @@ import org.eclipse.aether.repository.RemoteRepository;
  * plugin classpath, so they do not have to be shaded into the jar. Paper downloads them via its Maven
  * resolver on startup.
  *
- * <p>For the Phase 6a foundation the only such library is SnakeYAML (used by the platform-neutral
- * config manager). Data-store JDBC drivers, bStats, and Prometheus are added here as their subsystems
- * land.
+ * <p>Currently: SnakeYAML (used by the platform-neutral config manager) and the embedded DataStore
+ * JDBC drivers (SQLite, H2). Both drivers are added for now regardless of the configured backend; a
+ * later pass can read the backend from config here and add only the one in use (design/06 notes only
+ * the configured backend's driver need be present). bStats and Prometheus land with their subsystems.
  */
 @SuppressWarnings("UnstableApiUsage")
 public class PaperOdysseyLoader implements PluginLoader {
@@ -30,6 +31,8 @@ public class PaperOdysseyLoader implements PluginLoader {
   public void classloader(PluginClasspathBuilder classpathBuilder) {
     MavenLibraryResolver resolver = new MavenLibraryResolver();
     resolver.addDependency(new Dependency(new DefaultArtifact("org.yaml:snakeyaml:2.3"), null));
+    resolver.addDependency(new Dependency(new DefaultArtifact("org.xerial:sqlite-jdbc:3.46.1.3"), null));
+    resolver.addDependency(new Dependency(new DefaultArtifact("com.h2database:h2:2.2.224"), null));
     // Use Paper's Maven Central mirror to avoid rate limits (see the Paper plugin loader docs).
     resolver.addRepository(new RemoteRepository.Builder(
         "central", "default", MavenLibraryResolver.MAVEN_CENTRAL_DEFAULT_MIRROR).build());

@@ -7,6 +7,8 @@
 
 package net.whimxiqal.odyssey.plugin.config;
 
+import net.whimxiqal.odyssey.plugin.data.DataBackend;
+
 /**
  * Odyssey's registered configuration parameters, grouped to mirror {@code config.yml}. More sections
  * (search, chunks, navigators, trips, data, metrics, …) are added as their subsystems land in later
@@ -23,6 +25,15 @@ public final class ConfigKeys {
   /** Whether the {@code [✦]} prefix badge precedes every player message. Mutable. */
   public final ConfigKey<Boolean> messagesShowPrefix;
 
+  /** The persistence backend. Changing it requires a restart. */
+  public final ConfigKey<DataBackend> dataBackend;
+
+  /**
+   * The database file name within the plugin's data folder (embedded backends only). Requires a
+   * restart.
+   */
+  public final ConfigKey<String> dataFile;
+
   /**
    * Registers every foundational key on the given manager.
    *
@@ -33,5 +44,9 @@ public final class ConfigKeys {
         "locale.default", "en", Codec.ofString(), false);
     this.messagesShowPrefix = manager.register(
         "messages.show_prefix", true, Codec.ofBoolean(), true);
+    this.dataBackend = manager.register(
+        "data.backend", DataBackend.SQLITE, Codec.ofEnum(DataBackend.class), false);
+    this.dataFile = manager.register(
+        "data.file", "odyssey", Codec.ofString(), false);
   }
 }

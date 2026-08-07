@@ -16,7 +16,7 @@ public class SingleCellWorldRegion implements WorldRegion<World, Vector3i> {
 
     private final Location location;
 
-    static SingleCellWorldRegion of(Location location) {
+    public static SingleCellWorldRegion of(Location location) {
         return new SingleCellWorldRegion(location);
     }
 

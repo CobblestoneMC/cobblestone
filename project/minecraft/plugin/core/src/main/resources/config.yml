@@ -23,3 +23,12 @@ messages:
   # Whether to prepend the "[✦]" badge to every message Odyssey sends to a player. Set to false
   # for a cleaner, prefix-free look.
   show_prefix: true
+
+# Where Odyssey stores its data (waypoints now; portals, segments, and preferences later).
+data:
+  # The storage backend. Embedded, zero-setup options: "sqlite" (default) or "h2". Networked
+  # backends (MySQL, PostgreSQL, MongoDB) arrive in a later release. (requires restart)
+  backend: sqlite
+  # The database file name inside this plugin folder, without an extension (the engine adds its
+  # own). Only used by the embedded backends. (requires restart)
+  file: odyssey

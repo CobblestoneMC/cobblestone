@@ -12,4 +12,8 @@ dependencies {
     // Adventure by the server, SnakeYAML by the paper-plugin loader (MavenLibraryResolver).
     compileOnly(libs.adventure.api)
     compileOnly(libs.snakeyaml)
+    // JDBC drivers are runtime-downloaded by the platform plugin in production; here they only back
+    // the DataStore contract test, which runs against both embedded engines.
+    testImplementation(libs.sqlite.jdbc)
+    testImplementation(libs.h2)
 }

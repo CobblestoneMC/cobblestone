@@ -14,8 +14,12 @@ import java.util.Locale;
 import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.paper.PaperOdysseyApiImpl;
 import net.whimxiqal.odyssey.paper.api.PaperOdysseyApi;
+import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
 import net.whimxiqal.odyssey.plugin.config.ConfigManager;
+import net.whimxiqal.odyssey.plugin.data.DataStore;
+import net.whimxiqal.odyssey.plugin.data.DataStoreException;
+import net.whimxiqal.odyssey.plugin.data.DataStores;
 import net.whimxiqal.odyssey.plugin.message.Messages;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -31,6 +35,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class OdysseyPaperPlugin extends JavaPlugin {
 
   private PaperOdysseyApiImpl platformApi;
+  private DataStore dataStore;
 
   @Override
   public void onEnable() {
@@ -41,19 +46,32 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
     ConfigKeys keys = new ConfigKeys(config);
     config.load();
 
-    Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
-    Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), log);
+    Path databaseFile = getDataFolder().toPath().resolve(config.get(keys.dataFile));
+    this.dataStore = DataStores.create(config.get(keys.dataBackend), databaseFile, log);
+    try {
+      this.dataStore.init();
+    } catch (DataStoreException e) {
+      getLogger().severe("Failed to open Odyssey's data store; disabling. " + e.getMessage());
+      getServer().getPluginManager().disablePlugin(this);
+      return;
+    }
 
     // The transition registry is owned by the plugin; the platform API only reads from / registers
     // into it (design/05). Both are reachable to other plugins via the registered plugin API.
     this.platformApi = new PaperOdysseyApiImpl(this);
-    PaperOdysseyApi pluginApi = new PaperOdysseyApiImpl(this);
     getServer().getServicesManager()
-        .register(PaperOdysseyApi.class, pluginApi, this, ServicePriority.Normal);
+        .register(PaperOdysseyApi.class, this.platformApi, this, ServicePriority.Normal);
 
+    // Waypoints are surfaced to searches like any third-party provider: a Bukkit service Odyssey
+    // discovers via the ServicesManager.
+    getServer().getServicesManager().register(PaperDestinationProvider.class,
+        new WaypointDestinationProvider(dataStore.waypoints()), this, ServicePriority.Normal);
+
+    Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
+    Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), log);
     getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
         event.registrar().register(
-            OdysseyCommand.build(config, keys, messages),
+            OdysseyCommand.build(config, keys, messages, dataStore.waypoints()),
             "Odyssey admin and utility commands",
             List.of("ody")));
 
@@ -63,11 +81,14 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
   @Override
   public void onDisable() {
     if (platformApi != null) {
-      // Cancels in-flight searches and stops the search worker pool. Trips/data-store shutdown join
-      // this in Phases 6b/6c.
+      // Cancels in-flight searches and stops the search worker pool. Trips shutdown joins this in
+      // Phase 6c.
       platformApi.shutdown();
     }
     getServer().getServicesManager().unregisterAll(this);
+    if (dataStore != null) {
+      dataStore.close();
+    }
     getLogger().info("Odyssey disabled.");
   }
 }

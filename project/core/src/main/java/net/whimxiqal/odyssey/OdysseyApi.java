@@ -24,7 +24,12 @@ import java.util.ServiceLoader;
 public interface OdysseyApi {
 
   static OdysseyApi load() {
-    return ServiceLoader.load(OdysseyApi.class).findFirst().orElseThrow();
+    // Use the interface's own classloader (the plugin classloader when core is shaded into the
+    // plugin jar) rather than the thread-context classloader, which is not reliably the plugin's
+    // classloader inside a Paper plugin's onEnable.
+    return ServiceLoader.load(OdysseyApi.class, OdysseyApi.class.getClassLoader())
+        .findFirst()
+        .orElseThrow();
   }
 
   /**
