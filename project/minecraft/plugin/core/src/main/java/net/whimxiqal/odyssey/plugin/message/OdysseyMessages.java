@@ -115,6 +115,9 @@ public final class OdysseyMessages {
   /** Shown when the player has no active trips. */
   public static final Message0 TRIPS_NONE = Message0.info("command.odyssey.trips.none");
 
+  /** Confirms the discovered-portal cache was cleared ({@code {0}} = how many were removed). */
+  public static final Message1 PORTALS_CLEARED = Message1.success("command.odyssey.portals.cleared");
+
   private OdysseyMessages() {
   }
 }

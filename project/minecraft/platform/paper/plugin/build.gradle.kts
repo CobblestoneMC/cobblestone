@@ -26,6 +26,8 @@ dependencies {
     implementation(project(":minecraft:platform:paper:paper-core"))
     implementation(project(":minecraft:platform:paper:paper-plugin-api"))
     implementation(project(":minecraft:plugin:plugin-core"))
+    // bStats is bundled into the plugin jar (and relocated below), not server-provided.
+    implementation(libs.bstats.bukkit)
     // Provided by the server at runtime (Adventure is bundled with Paper); the loader also references
     // Paper's Maven-resolver types, which live in paper-api.
     compileOnly(libs.paper.api)
@@ -41,6 +43,8 @@ tasks.named<ShadowJar>("shadowJar") {
     // Concatenate META-INF/services/* across all shaded modules so no ServiceLoader provider
     // (e.g. our OdysseyApi) is dropped when they merge into the single uberjar.
     mergeServiceFiles()
+    // Relocate bStats so it never clashes with another plugin's bundled copy (design/10).
+    relocate("org.bstats", "net.whimxiqal.odyssey.libs.bstats")
 }
 
 // Make the shaded plugin jar part of the normal build, so a single `./gradlew build` at the repo root

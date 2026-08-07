@@ -14,6 +14,7 @@ import java.util.Locale;
 import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.paper.PaperOdysseyApiImpl;
 import net.whimxiqal.odyssey.paper.api.PaperOdysseyApi;
+import net.whimxiqal.odyssey.paper.api.PaperTransitionProvider;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperNavigatorFactory;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
@@ -40,6 +41,7 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
   private PaperOdysseyApiImpl platformApi;
   private DataStore dataStore;
   private TripManager<Location> tripManager;
+  private OdysseyMetrics metrics;
   private final SearchRegistry searchRegistry = new SearchRegistry();
 
   @Override
@@ -83,6 +85,14 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
         new PaperTrailNavigatorFactory(config.get(keys.trailBufferCells), messages),
         this, ServicePriority.Normal);
 
+    // Discovered vanilla portals are surfaced to searches as an internal transition provider, and
+    // learned from player teleports by the portal listener.
+    getServer().getServicesManager().register(PaperTransitionProvider.class,
+        new PortalTransitionProvider(dataStore.portalTransitions()), this, ServicePriority.Normal);
+    getServer().getPluginManager().registerEvents(
+        new PortalListener(dataStore.portalTransitions(), platformApi.scheduler(),
+            () -> config.get(keys.portalsCostSeconds), () -> config.get(keys.portalsDiscovery)), this);
+
     getServer().getPluginManager().registerEvents(
         new OdysseyListener(tripManager, searchRegistry), this);
 
@@ -90,7 +100,8 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
     long liveIntervalMillis = config.get(keys.tripsLiveIntervalTicks) * 50L; // 50 ms per tick
     getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
       event.registrar().register(
-          OdysseyCommand.build(config, keys, messages, dataStore.waypoints(), tripManager, searchRegistry),
+          OdysseyCommand.build(config, keys, messages, dataStore.waypoints(),
+              dataStore.portalTransitions(), tripManager, searchRegistry),
           "Odyssey admin and utility commands",
           List.of("ody"));
       event.registrar().register(
@@ -99,11 +110,20 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
           List.of("nav"));
     });
 
+    if (config.get(keys.metricsEnabled)) {
+      this.metrics = new OdysseyMetrics(this,
+          config.get(keys.dataBackend).name().toLowerCase(Locale.ROOT),
+          config.get(keys.portalsDiscovery), tripManager, searchRegistry);
+    }
+
     getLogger().info("Odyssey enabled.");
   }
 
   @Override
   public void onDisable() {
+    if (metrics != null) {
+      metrics.shutdown();
+    }
     if (tripManager != null) {
       tripManager.stopEverything();
     }

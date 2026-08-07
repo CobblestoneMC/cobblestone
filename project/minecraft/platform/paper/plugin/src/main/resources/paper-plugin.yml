@@ -9,3 +9,4 @@ website: https://github.com/whimxiqal/Odyssey
 main: net.whimxiqal.odyssey.paper.plugin.OdysseyPaperPlugin
 loader: net.whimxiqal.odyssey.paper.plugin.PaperOdysseyLoader
 api-version: '1.21'
+folia-supported: true

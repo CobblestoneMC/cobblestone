@@ -49,6 +49,15 @@ public final class ConfigKeys {
   /** How many cells of the trail ahead the {@code trail} navigator renders. Mutable. */
   public final ConfigKey<Integer> trailBufferCells;
 
+  /** Whether Odyssey discovers vanilla portal links by watching players teleport. Mutable. */
+  public final ConfigKey<Boolean> portalsDiscovery;
+
+  /** The traversal cost, in seconds, assigned to a discovered portal transition. Mutable. */
+  public final ConfigKey<Double> portalsCostSeconds;
+
+  /** Whether anonymous bStats metrics are reported. Requires a restart. */
+  public final ConfigKey<Boolean> metricsEnabled;
+
   /**
    * Registers every foundational key on the given manager.
    *
@@ -73,5 +82,11 @@ public final class ConfigKeys {
         "search.max_concurrent_per_player", 1, Codec.ofInt(), false);
     this.trailBufferCells = manager.register(
         "navigators.trail.buffer_cells", 100, Codec.ofInt(), true);
+    this.portalsDiscovery = manager.register(
+        "portals.discovery", true, Codec.ofBoolean(), true);
+    this.portalsCostSeconds = manager.register(
+        "portals.cost_seconds", 5.0, Codec.ofDouble(), true);
+    this.metricsEnabled = manager.register(
+        "metrics.enabled", true, Codec.ofBoolean(), false);
   }
 }

@@ -20,6 +20,7 @@ import java.util.UUID;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
 import net.whimxiqal.odyssey.plugin.config.ConfigManager;
 import net.whimxiqal.odyssey.plugin.data.DataStoreException;
+import net.whimxiqal.odyssey.plugin.data.PortalTransitionDao;
 import net.whimxiqal.odyssey.plugin.data.Waypoint;
 import net.whimxiqal.odyssey.plugin.data.WaypointDao;
 import net.whimxiqal.odyssey.plugin.message.Messages;
@@ -38,6 +39,7 @@ final class OdysseyCommand {
 
   private static final String PERMISSION_RELOAD = "odyssey.admin.reload";
   private static final String PERMISSION_WAYPOINT_GLOBAL = "odyssey.admin.waypoint.global";
+  private static final String PERMISSION_PORTALS = "odyssey.admin.portals";
 
   private OdysseyCommand() {
   }
@@ -49,13 +51,14 @@ final class OdysseyCommand {
    * @param keys the registered config keys (to re-read after reload)
    * @param messages the message renderer
    * @param waypoints the waypoint DAO (for {@code waypoint set/unset})
+   * @param portals the portal-transition DAO (for {@code portals clear})
    * @param trips the trip manager (for {@code cancel}/{@code trips})
    * @param searches the search registry (for {@code cancel})
    * @return the command node
    */
   static LiteralCommandNode<CommandSourceStack> build(
       ConfigManager config, ConfigKeys keys, Messages messages, WaypointDao waypoints,
-      TripManager<Location> trips, SearchRegistry searches) {
+      PortalTransitionDao portals, TripManager<Location> trips, SearchRegistry searches) {
     return Commands.literal("odyssey")
         .executes(ctx -> {
           CommandSender sender = ctx.getSource().getSender();
@@ -69,6 +72,9 @@ final class OdysseyCommand {
             .executes(ctx -> cancel(ctx.getSource().getSender(), messages, trips, searches)))
         .then(Commands.literal("trips")
             .executes(ctx -> trips(ctx.getSource().getSender(), messages, trips)))
+        .then(Commands.literal("portals")
+            .then(Commands.literal("clear")
+                .executes(ctx -> clearPortals(ctx.getSource().getSender(), messages, portals))))
         .then(Commands.literal("waypoint")
             .then(Commands.literal("set")
                 .then(Commands.argument("name", StringArgumentType.word())
@@ -134,6 +140,18 @@ final class OdysseyCommand {
     for (Trip<Location> trip : active) {
       messages.send(player, locale, OdysseyMessages.TRIPS_ENTRY, trip.navigatorId());
     }
+    return Command.SINGLE_SUCCESS;
+  }
+
+  private static int clearPortals(
+      CommandSender sender, Messages messages, PortalTransitionDao portals) {
+    Locale locale = localeOf(sender, messages);
+    if (!sender.hasPermission(PERMISSION_PORTALS)) {
+      messages.send(sender, locale, OdysseyMessages.NO_PERMISSION);
+      return Command.SINGLE_SUCCESS;
+    }
+    int removed = portals.clear();
+    messages.send(sender, locale, OdysseyMessages.PORTALS_CLEARED, removed);
     return Command.SINGLE_SUCCESS;
   }
 

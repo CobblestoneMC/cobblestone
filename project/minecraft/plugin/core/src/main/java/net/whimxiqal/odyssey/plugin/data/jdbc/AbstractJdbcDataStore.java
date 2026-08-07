@@ -17,6 +17,7 @@ import java.util.List;
 import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.plugin.data.DataStore;
 import net.whimxiqal.odyssey.plugin.data.DataStoreException;
+import net.whimxiqal.odyssey.plugin.data.PortalTransitionDao;
 import net.whimxiqal.odyssey.plugin.data.WaypointDao;
 
 /**
@@ -38,6 +39,7 @@ public abstract class AbstractJdbcDataStore implements DataStore {
 
   private Connection connection;
   private WaypointDao waypointDao;
+  private PortalTransitionDao portalTransitionDao;
 
   /**
    * Creates a store.
@@ -75,7 +77,14 @@ public abstract class AbstractJdbcDataStore implements DataStore {
             + "x INTEGER NOT NULL, "
             + "y INTEGER NOT NULL, "
             + "z INTEGER NOT NULL, "
-            + "PRIMARY KEY (owner, name))");
+            + "PRIMARY KEY (owner, name))",
+        "CREATE TABLE odyssey_portal_transition ("
+            + "from_world VARCHAR(255) NOT NULL, "
+            + "min_x INTEGER NOT NULL, min_y INTEGER NOT NULL, min_z INTEGER NOT NULL, "
+            + "max_x INTEGER NOT NULL, max_y INTEGER NOT NULL, max_z INTEGER NOT NULL, "
+            + "to_world VARCHAR(255) NOT NULL, "
+            + "to_x INTEGER NOT NULL, to_y INTEGER NOT NULL, to_z INTEGER NOT NULL, "
+            + "cost DOUBLE NOT NULL)");
   }
 
   @Override
@@ -85,6 +94,7 @@ public abstract class AbstractJdbcDataStore implements DataStore {
       this.connection = DriverManager.getConnection(url);
       migrate();
       this.waypointDao = new JdbcWaypointDao(this);
+      this.portalTransitionDao = new JdbcPortalTransitionDao(this);
     } catch (ClassNotFoundException | SQLException e) {
       throw new DataStoreException("failed to open data store (" + url + ")", e);
     }
@@ -96,6 +106,14 @@ public abstract class AbstractJdbcDataStore implements DataStore {
       throw new IllegalStateException("DataStore.init() has not been called");
     }
     return waypointDao;
+  }
+
+  @Override
+  public PortalTransitionDao portalTransitions() {
+    if (portalTransitionDao == null) {
+      throw new IllegalStateException("DataStore.init() has not been called");
+    }
+    return portalTransitionDao;
   }
 
   @Override

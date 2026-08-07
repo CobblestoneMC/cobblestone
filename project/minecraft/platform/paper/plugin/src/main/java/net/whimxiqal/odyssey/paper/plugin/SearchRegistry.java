@@ -42,6 +42,15 @@ final class SearchRegistry {
   }
 
   /**
+   * Returns the total number of in-flight searches across all players (for metrics).
+   *
+   * @return the active search count
+   */
+  int active() {
+    return byPlayer.values().stream().mapToInt(Set::size).sum();
+  }
+
+  /**
    * Cancels and forgets all of a player's searches.
    *
    * @param player the player id

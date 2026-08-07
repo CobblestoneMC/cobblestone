@@ -124,6 +124,15 @@ public final class TripManager<L> {
     }
   }
 
+  /**
+   * Returns the total number of active trips across all players (for metrics).
+   *
+   * @return the active trip count
+   */
+  public synchronized int activeCount() {
+    return byPlayer.values().stream().mapToInt(List::size).sum();
+  }
+
   /** Stops every trip for every player (call on plugin disable). */
   public synchronized void stopEverything() {
     byPlayer.values().forEach(active -> active.forEach(Trip::stop));

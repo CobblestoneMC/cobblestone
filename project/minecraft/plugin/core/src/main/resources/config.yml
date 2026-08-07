@@ -49,6 +49,19 @@ search:
   # re-searches yield to this budget; a manual /navigate always runs. (requires restart)
   max_concurrent_per_player: 1
 
+# Vanilla portal links. No API reveals where a portal leads, so Odyssey learns them by watching
+# players travel; use "/odyssey portals clear" to wipe what it has learned.
+portals:
+  # Whether to discover portal links from player teleports.
+  discovery: true
+  # The time cost, in seconds, of traversing a discovered portal.
+  cost_seconds: 5.0
+
+# Anonymous usage metrics via bStats (https://bstats.org). Aggregate, non-identifying counts only.
+# You can also opt out globally in plugins/bStats/config.yml. (requires restart)
+metrics:
+  enabled: true
+
 # Display strategies ("navigators") that render a trip.
 navigators:
   # The default "trail" navigator: a line of redstone-dust particles along the path.
