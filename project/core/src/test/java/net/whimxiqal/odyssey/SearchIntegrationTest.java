@@ -46,6 +46,7 @@ class SearchIntegrationTest {
     List<Transition<TestStep, TestDomain>> transitions = List.of();
 
     NavigationResult<Step<Position<TestDomain>, TestStep>> result = api.navigate(
+            new TestOdysseyLogger(),
         scheduler,
         new TestAgent(),
         new Position<>(new Cell(0, 0, 0), domain),
@@ -74,6 +75,7 @@ class SearchIntegrationTest {
     List<CorridorMode> modes = List.of(new CorridorMode(false));
 
     NavigationResult<Step<Position<TestDomain>, TestStep>> result = api.navigate(
+            new TestOdysseyLogger(),
         scheduler,
         new TestAgent(),
         new Position<>(new Cell(0, 0, 0), overworld),
@@ -100,6 +102,7 @@ class SearchIntegrationTest {
     List<Transition<TestStep, TestDomain>> noTransitions = List.of();
 
     NavigationResult<Step<Position<TestDomain>, TestStep>> result = api.navigate(
+            new TestOdysseyLogger(),
         scheduler,
         new TestAgent(),
         new Position<>(new Cell(0, 0, 0), overworld),

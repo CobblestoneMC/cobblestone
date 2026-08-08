@@ -14,6 +14,7 @@ import net.whimxiqal.odyssey.Cell;
 import net.whimxiqal.odyssey.Position;
 import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Boat;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -22,10 +23,16 @@ import org.bukkit.inventory.ItemStack;
 /** An {@link OdysseyPlayer} wrapping a Bukkit {@link Player}. */
 final class PaperPlayer implements OdysseyPlayer {
 
-  private final Player player;
+  private final UUID uuid;
+  private final String name;
 
   PaperPlayer(Player player) {
-    this.player = player;
+    this.uuid = player.getUniqueId();
+    this.name = player.getName();
+  }
+
+  private Optional<Player> player() {
+    return Optional.ofNullable(Bukkit.getPlayer(uuid));
   }
 
   @Override
@@ -36,22 +43,26 @@ final class PaperPlayer implements OdysseyPlayer {
 
   @Override
   public UUID uuid() {
-    return player.getUniqueId();
+    return uuid;
   }
 
   @Override
   public boolean hasPermission(String node) {
-    return player.hasPermission(node);
+    return player().map(player -> player.hasPermission(node)).orElse(false);
   }
 
   @Override
   public boolean canFly() {
-    return player.getAllowFlight();
+    return player().map(Player::getAllowFlight).orElse(false);
   }
 
   @Override
   public boolean hasBoatInInventory() {
-    for (ItemStack item : player.getInventory().getContents()) {
+    final Optional<Player> player = player();
+    if (player.isEmpty()) {
+      return false;
+    }
+    for (ItemStack item : player.get().getInventory().getContents()) {
       if (item != null && item.getType().name().endsWith("_BOAT")) {
         return true;
       }
@@ -61,8 +72,7 @@ final class PaperPlayer implements OdysseyPlayer {
 
   @Override
   public boolean isInBoat() {
-    Entity vehicle = player.getVehicle();
-    return vehicle instanceof Boat;
+    return player().map(player -> player.getVehicle() instanceof Boat).orElse(false);
   }
 
   @Override
@@ -73,6 +83,11 @@ final class PaperPlayer implements OdysseyPlayer {
 
   @Override
   public Locale locale() {
-    return player.locale();
+    return player().map(Player::locale).orElse(null);
+  }
+
+  @Override
+  public String toString() {
+    return String.format("Player(%s, %s)", name, uuid);
   }
 }

@@ -17,6 +17,16 @@ public interface PlatformTransition<R, P> {
 
     double cost();
 
+    /**
+     * The real traversal time in seconds (player-facing). Defaults to {@link #cost()} so existing
+     * providers need no change until they distinguish danger/penalty weighting from actual duration.
+     *
+     * @return the traversal time
+     */
+    default double time() {
+        return cost();
+    }
+
     MinecraftStepPayload payload();
 
     default TraversalState apply(TraversalState in) {

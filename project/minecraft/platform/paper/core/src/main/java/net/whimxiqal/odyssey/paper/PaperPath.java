@@ -19,10 +19,12 @@ import org.bukkit.Location;
  * The native-located {@link Path} handed to Paper developers: each {@link Step} carries a Bukkit
  * {@link Location}. Built by mapping a solved core path's positions through {@link PaperConversions}.
  *
+ * <p>{@link Path#cost()}/{@link Path#duration()} are derived from the steps by the interface
+ * defaults, so this record stores only the step list.
+ *
  * @param steps the ordered steps, origin first
- * @param cost the total cost in seconds
  */
-record PaperPath(List<Step<Location, MinecraftStepPayload>> steps, double cost)
+record PaperPath(List<Step<Location, MinecraftStepPayload>> steps)
     implements Path<Step<Location, MinecraftStepPayload>> {
 
   PaperPath {

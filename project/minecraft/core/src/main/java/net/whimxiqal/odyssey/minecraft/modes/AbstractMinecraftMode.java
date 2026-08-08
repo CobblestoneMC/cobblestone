@@ -55,15 +55,15 @@ abstract class AbstractMinecraftMode<A extends MinecraftAgent> implements Minecr
   protected abstract Collection<Movement<MinecraftStepPayload>> computeMovements(
       A agent, Cell from, TraversalState state, BlockView view);
 
-  /** Builds a movement with no instruction. */
+  /** Builds a movement with no instruction. Time equals cost until danger weighting diverges them. */
   protected static Movement<MinecraftStepPayload> move(
       Cell cell, double cost, MinecraftStepType type, TraversalState state) {
-    return new Movement<>(cell, cost, new MinecraftStepPayload(type, new MinecraftInstruction.None()), state);
+    return new Movement<>(cell, cost, cost, new MinecraftStepPayload(type, new MinecraftInstruction.None()), state);
   }
 
-  /** Builds a movement carrying an instruction. */
+  /** Builds a movement carrying an instruction. Time equals cost until danger weighting diverges them. */
   protected static Movement<MinecraftStepPayload> move(
       Cell cell, double cost, MinecraftStepType type, TraversalState state, MinecraftInstruction instruction) {
-    return new Movement<>(cell, cost, new MinecraftStepPayload(type, instruction), state);
+    return new Movement<>(cell, cost, cost, new MinecraftStepPayload(type, instruction), state);
   }
 }

@@ -23,6 +23,7 @@ public final class OdysseyApiImpl implements OdysseyApi {
 
   @Override
   public <A extends Agent, T, D extends Domain> SearchHandle<Step<Position<D>, T>> navigate(
+          OdysseyLogger logger,
           Scheduler scheduler,
       A agent,
       Position<D> origin,
@@ -32,7 +33,7 @@ public final class OdysseyApiImpl implements OdysseyApi {
       HeuristicStrategy heuristic,
       SearchSettings settings) {
     SearchImpl<A, T, D> search = new SearchImpl<>(
-        scheduler, heuristic, agent, origin, destination, modes, transitions, settings);
+        logger, scheduler, heuristic, agent, origin, destination, modes, transitions, settings);
     search.start();
     return search;
   }

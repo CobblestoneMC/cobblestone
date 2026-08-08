@@ -28,6 +28,8 @@ import net.whimxiqal.odyssey.plugin.api.Navigator;
 public final class Trip<L> {
 
   private final UUID player;
+  private final int id;
+  private final String destination;
   private final String navigatorId;
   private final Navigator<L> navigator;
   private final MinecraftScheduler scheduler;
@@ -42,6 +44,8 @@ public final class Trip<L> {
 
   Trip(
       UUID player,
+      int id,
+      String destination,
       String navigatorId,
       Navigator<L> navigator,
       MinecraftScheduler scheduler,
@@ -51,6 +55,8 @@ public final class Trip<L> {
       LiveSearch<L> liveSearch,
       long liveIntervalMillis) {
     this.player = player;
+    this.id = id;
+    this.destination = destination;
     this.navigatorId = navigatorId;
     this.navigator = navigator;
     this.scheduler = scheduler;
@@ -128,6 +134,34 @@ public final class Trip<L> {
    */
   public UUID player() {
     return player;
+  }
+
+  /**
+   * Returns this trip's short per-player id (for {@code /odyssey cancel &lt;id&gt;}).
+   *
+   * @return the trip id
+   */
+  public int id() {
+    return id;
+  }
+
+  /**
+   * Returns the human label of this trip's destination (e.g. {@code "waypoint home"}), used for the
+   * trips listing and same-destination replacement.
+   *
+   * @return the destination label
+   */
+  public String destination() {
+    return destination;
+  }
+
+  /**
+   * Returns the estimated remaining traversal time in seconds (delegated to the navigator).
+   *
+   * @return the remaining seconds
+   */
+  public double remainingSeconds() {
+    return navigator.remainingSeconds();
   }
 
   /**

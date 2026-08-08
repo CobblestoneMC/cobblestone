@@ -31,7 +31,8 @@ final class PaperConversions {
   static DomainRegion<MinecraftWorld> region(WorldRegion<World, Vector3i> region, WorldWrapper wrapper) {
     return new DomainRegion.Impl<>(wrapper.wrap(region.world()),
             cell -> region.contains(vector(cell)),
-            cell -> cell(region.nearestBoundaryLocation(vector(cell))));
+            cell -> cell(region.nearestBoundaryLocation(vector(cell))),
+            region::toString);
   }
 
   /**

@@ -14,7 +14,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @param <S> the step type
  */
-public interface SearchHandle<S> {
+public interface SearchHandle<S extends Step<?, ?>> {
 
   /**
    * Returns the future that completes with the search result.

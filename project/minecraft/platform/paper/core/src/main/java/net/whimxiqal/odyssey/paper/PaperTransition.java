@@ -49,6 +49,11 @@ final class PaperTransition implements Transition<MinecraftStepPayload, Minecraf
   }
 
   @Override
+  public double time() {
+    return delegate.time();
+  }
+
+  @Override
   public MinecraftStepPayload payload() {
     return delegate.payload();
   }

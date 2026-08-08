@@ -8,6 +8,7 @@
 package net.whimxiqal.odyssey;
 
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * A region of cells confined to a single {@link Domain} — the unifying "target/entry area"
@@ -45,7 +46,7 @@ public interface DomainRegion<D extends Domain> {
    */
   Cell nearestBoundaryCell(Cell from);
 
-  record Impl<D extends Domain>(D domain, Function<Cell, Boolean> containsFunc, Function<Cell, Cell> nearestBoundaryFunc) implements DomainRegion<D> {
+  record Impl<D extends Domain>(D domain, Function<Cell, Boolean> containsFunc, Function<Cell, Cell> nearestBoundaryFunc, Supplier<String> toStringFunc) implements DomainRegion<D> {
 
     @Override
     public boolean contains(Cell cell) {
@@ -55,6 +56,11 @@ public interface DomainRegion<D extends Domain> {
     @Override
     public Cell nearestBoundaryCell(Cell from) {
       return nearestBoundaryFunc.apply(from);
+    }
+
+    @Override
+    public String toString() {
+      return toStringFunc.get();
     }
   }
 }

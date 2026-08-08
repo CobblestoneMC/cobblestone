@@ -18,6 +18,11 @@ locale:
   # and fall back to this. (requires restart)
   default: en
 
+# Logging verbosity. One of TRACE, DEBUG, INFO, WARN, ERROR. TRACE/DEBUG surface Odyssey's own
+# diagnostics (including a per-search summary at DEBUG) on the console. Applied on /odyssey reload.
+logging:
+  level: INFO
+
 # How Odyssey's chat messages look.
 messages:
   # Whether to prepend the "[✦]" badge to every message Odyssey sends to a player. Set to false
@@ -38,16 +43,27 @@ trips:
   # How many trips one player may run at once, so "path home + path to the caves" both render.
   # Set to 1 to allow only a single trip per player.
   max_active_per_player: 3
-  # How often, in server ticks (20 = 1 second), each trip re-renders its trail. (requires restart)
-  tick_period_ticks: 5
   # How often, in server ticks, a "-live" trip re-runs its search and updates the path.
   live_interval_ticks: 100
+  # How far (blocks) a player may stray from the trail before the trip is auto-abandoned.
+  abandon_distance: 32
 
 # Search behavior.
 search:
   # The most searches (manual and live re-searches together) one player may run at once. Live
   # re-searches yield to this budget; a manual /navigate always runs. (requires restart)
   max_concurrent_per_player: 1
+  # A* tuning. Raise the limits if searches to distant destinations give up ("limit exceeded" /
+  # "took too long"), at the cost of more CPU/memory per search. Lower them for weak hardware.
+  algorithm:
+    # Most cells a single A* solve may visit before giving up.
+    max_cells_visited: 10000
+    # Wall-clock budget for the whole search, in seconds.
+    max_wall_clock_seconds: 60
+    # Re-plan the coarse route when a leg runs this factor over its estimate (1.30 = 30% over).
+    tier1_recalc_threshold: 1.30
+    # Window width for the running-average heuristic.
+    running_average_width: 5
 
 # Vanilla portal links. No API reveals where a portal leads, so Odyssey learns them by watching
 # players travel; use "/odyssey portals clear" to wipe what it has learned.
@@ -64,7 +80,15 @@ metrics:
 
 # Display strategies ("navigators") that render a trip.
 navigators:
-  # The default "trail" navigator: a line of redstone-dust particles along the path.
+  # The default "trail" navigator: a flowing ribbon of dust particles along the path.
   trail:
     # How many cells of the path ahead of the player to render at a time.
     buffer_cells: 100
+    # Particle colors as hex RRGGBB. Each particle picks one at random (no blending). Aqua, gold, and
+    # white by default. Add or remove entries to taste.
+    colors:
+      - "55FFFF"
+      - "BF00FF"
+      - "FFFFFF"
+    # Particles drawn per cell each tick (scattered with a Gaussian falloff for column width).
+    density: 1

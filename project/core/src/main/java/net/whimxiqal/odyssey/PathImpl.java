@@ -15,12 +15,14 @@ import java.util.List;
 /**
  * The immutable {@link Path} implementation returned by a successful search.
  *
+ * <p>{@link Path#cost()} and {@link Path#duration()} are derived from the steps by the interface
+ * defaults, so this record stores only the step list.
+ *
  * @param <T> the payload type
  * @param <D> the domain type
  * @param steps the ordered steps
- * @param cost the total cost in seconds
  */
-record PathImpl<T, D extends Domain>(List<Step<Position<D>, T>> steps, double cost)
+record PathImpl<T, D extends Domain>(List<Step<Position<D>, T>> steps)
     implements Path<Step<Position<D>, T>> {
 
   PathImpl {

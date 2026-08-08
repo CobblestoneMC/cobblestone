@@ -36,24 +36,24 @@ class TripManagerTest {
   @Test
   void enforcesMaxActivePerPlayer() {
     RecordingScheduler scheduler = new RecordingScheduler();
-    TripManager<Object> manager = new TripManager<>(scheduler, 2, 5);
+    TripManager<Object> manager = new TripManager<>(scheduler, 2);
     UUID player = UUID.randomUUID();
 
-    assertTrue(manager.start(player, anchor(), "trail", new FakeNavigator()).isPresent());
-    assertTrue(manager.start(player, anchor(), "trail", new FakeNavigator()).isPresent());
-    assertTrue(manager.start(player, anchor(), "trail", new FakeNavigator()).isEmpty(), "over limit");
+    assertTrue(manager.start(player, anchor(), "trail", new FakeNavigator(), "dest").isPresent());
+    assertTrue(manager.start(player, anchor(), "trail", new FakeNavigator(), "dest").isPresent());
+    assertTrue(manager.start(player, anchor(), "trail", new FakeNavigator(), "dest").isEmpty(), "over limit");
     assertEquals(2, manager.trips(player).size());
   }
 
   @Test
   void completedTripStopsTicksAndIsUntracked() {
     RecordingScheduler scheduler = new RecordingScheduler();
-    TripManager<Object> manager = new TripManager<>(scheduler, 3, 5);
+    TripManager<Object> manager = new TripManager<>(scheduler, 3);
     UUID player = UUID.randomUUID();
     FakeNavigator navigator = new FakeNavigator();
     navigator.completeAfter = 2;
 
-    manager.start(player, anchor(), "trail", navigator);
+    manager.start(player, anchor(), "trail", navigator, "dest");
     assertTrue(navigator.started);
 
     scheduler.tickAll(); // 1st tick: not complete → tick()
@@ -73,12 +73,12 @@ class TripManagerTest {
   @Test
   void liveTripReSearchesAndHotSwapsUntilStopped() {
     RecordingScheduler scheduler = new RecordingScheduler();
-    TripManager<Object> manager = new TripManager<>(scheduler, 3, 5);
+    TripManager<Object> manager = new TripManager<>(scheduler, 3);
     UUID player = UUID.randomUUID();
     FakeNavigator navigator = new FakeNavigator();
     FakeLiveSearch live = new FakeLiveSearch();
 
-    manager.startLive(player, anchor(), "trail", navigator, live, 100L);
+    manager.startLive(player, anchor(), "trail", navigator, "dest", live, 100L);
     assertEquals(1, scheduler.delayedCount(), "first re-search scheduled");
 
     scheduler.runDelayedOnce(); // re-search → search completes → hot-swap → reschedule
@@ -94,14 +94,37 @@ class TripManagerTest {
   }
 
   @Test
+  void assignsRecyclableIdsAndCancelsByIdOrDestination() {
+    RecordingScheduler scheduler = new RecordingScheduler();
+    TripManager<Object> manager = new TripManager<>(scheduler, 3);
+    UUID player = UUID.randomUUID();
+    Trip<Object> first = manager.start(player, anchor(), "trail", new FakeNavigator(), "home").orElseThrow();
+    Trip<Object> second = manager.start(player, anchor(), "trail", new FakeNavigator(), "caves").orElseThrow();
+    assertEquals(1, first.id());
+    assertEquals(2, second.id());
+
+    assertTrue(manager.cancel(player, 1));
+    assertFalse(manager.cancel(player, 1)); // already gone
+    assertEquals(1, manager.trips(player).size());
+
+    // id 1 is free again and is reused for the next trip
+    Trip<Object> third = manager.start(player, anchor(), "trail", new FakeNavigator(), "home").orElseThrow();
+    assertEquals(1, third.id());
+
+    assertEquals(1, manager.cancelByDestination(player, "HOME")); // case-insensitive; cancels "third"
+    assertEquals(1, manager.trips(player).size());
+    assertEquals(2, manager.trips(player).get(0).id());
+  }
+
+  @Test
   void stopAllStopsEveryTripForPlayer() {
     RecordingScheduler scheduler = new RecordingScheduler();
-    TripManager<Object> manager = new TripManager<>(scheduler, 3, 5);
+    TripManager<Object> manager = new TripManager<>(scheduler, 3);
     UUID player = UUID.randomUUID();
     FakeNavigator first = new FakeNavigator();
     FakeNavigator second = new FakeNavigator();
-    manager.start(player, anchor(), "trail", first);
-    manager.start(player, anchor(), "trail", second);
+    manager.start(player, anchor(), "trail", first, "dest");
+    manager.start(player, anchor(), "trail", second, "dest");
 
     manager.stopAll(player);
 
@@ -146,6 +169,11 @@ class TripManagerTest {
     public boolean isComplete() {
       return ticks >= completeAfter;
     }
+
+    @Override
+    public double remainingSeconds() {
+      return 0.0;
+    }
   }
 
   /** A live search that always returns an (empty) path immediately, counting invocations. */
@@ -155,17 +183,7 @@ class TripManagerTest {
     @Override
     public CompletableFuture<Optional<Path<Step<Object, MinecraftStepPayload>>>> search() {
       calls++;
-      Path<Step<Object, MinecraftStepPayload>> path = new Path<>() {
-        @Override
-        public List<Step<Object, MinecraftStepPayload>> steps() {
-          return List.of();
-        }
-
-        @Override
-        public double cost() {
-          return 0.0;
-        }
-      };
+      Path<Step<Object, MinecraftStepPayload>> path = List::of; // steps(): empty; cost/duration default 0
       return CompletableFuture.completedFuture(Optional.of(path));
     }
   }

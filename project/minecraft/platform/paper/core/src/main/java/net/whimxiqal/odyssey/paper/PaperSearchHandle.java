@@ -70,10 +70,11 @@ final class PaperSearchHandle
       for (Step<Position<MinecraftWorld>, MinecraftStepPayload> step : path.steps()) {
         steps.add(new Step<>(
             PaperConversions.location(step.position()),
-            step.cumulativeCost(),
+            step.cost(),
+            step.time(),
             step.payload()));
       }
-      return new NavigationResult.Success<>(new PaperPath(steps, path.cost()));
+      return new NavigationResult.Success<>(new PaperPath(steps));
     }
     NavigationResult.Failure<Step<Position<MinecraftWorld>, MinecraftStepPayload>> failure =
         (NavigationResult.Failure<Step<Position<MinecraftWorld>, MinecraftStepPayload>>) result;

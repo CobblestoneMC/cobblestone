@@ -23,6 +23,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.api.FailureReason;
 import net.whimxiqal.odyssey.api.NavigationResult;
 import net.whimxiqal.odyssey.api.Path;
@@ -70,13 +74,30 @@ final class NavigateCommand {
 
   static LiteralCommandNode<CommandSourceStack> build(
       PaperOdysseyApiImpl platformApi, TripManager<Location> trips, SearchRegistry searches,
-      SearchGate gate, long liveIntervalMillis, Messages messages) {
+      SearchGate gate, long liveIntervalMillis, Supplier<SearchSettings> searchSettings,
+      OdysseyLogger log, Messages messages) {
     return Commands.literal("navigate")
         .requires(source -> source.getSender().hasPermission(PERMISSION_NAVIGATE))
+        .executes(ctx -> navHelp(ctx.getSource().getSender(), messages))
+        .then(Commands.literal("help").executes(ctx -> navHelp(ctx.getSource().getSender(), messages)))
+        .then(Commands.literal("?").executes(ctx -> navHelp(ctx.getSource().getSender(), messages)))
         .then(Commands.argument("args", StringArgumentType.greedyString())
             .suggests((ctx, builder) -> suggest(ctx, builder))
-            .executes(ctx -> run(ctx, platformApi, trips, searches, gate, liveIntervalMillis, messages)))
+            .executes(ctx -> run(ctx, platformApi, trips, searches, gate, liveIntervalMillis,
+                searchSettings, log, messages)))
         .build();
+  }
+
+  private static int navHelp(CommandSender sender, Messages messages) {
+    Locale locale = localeOf(sender, messages);
+    messages.send(sender, locale, OdysseyMessages.NAVIGATE_HELP_HEADER);
+    CommandHelp.line(sender, messages, locale, "/navigate <destination...>", "command.navigate.help.destination");
+    CommandHelp.line(sender, messages, locale, "-navigator <id>", "command.navigate.help.navigator");
+    CommandHelp.line(sender, messages, locale, "-no-mode <mode>", "command.navigate.help.no_mode");
+    CommandHelp.line(sender, messages, locale,
+        "-no-world <world> / -no-dimension <dim>", "command.navigate.help.no_world");
+    CommandHelp.line(sender, messages, locale, "-live", "command.navigate.help.live");
+    return Command.SINGLE_SUCCESS;
   }
 
   private static int run(
@@ -86,6 +107,8 @@ final class NavigateCommand {
       SearchRegistry searches,
       SearchGate gate,
       long liveIntervalMillis,
+      Supplier<SearchSettings> searchSettings,
+      OdysseyLogger log,
       Messages messages) {
     CommandSender sender = ctx.getSource().getSender();
     Locale locale = localeOf(sender, messages);
@@ -124,14 +147,18 @@ final class NavigateCommand {
       return Command.SINGLE_SUCCESS;
     }
 
-    startSearch(player, locale, resolved.destination(), flags, factory, platformApi, trips, searches,
-        gate, liveIntervalMillis, messages);
+    String destinationLabel = String.join(" ", resolved.address());
+    // Re-navigating to a place you already have a trip for replaces it rather than piling on.
+    trips.cancelByDestination(player.getUniqueId(), destinationLabel);
+    startSearch(player, locale, destinationLabel, resolved.destination(), flags, factory, platformApi,
+        trips, searches, gate, liveIntervalMillis, searchSettings, log, messages);
     return Command.SINGLE_SUCCESS;
   }
 
   private static void startSearch(
       Player player,
       Locale locale,
+      String destinationLabel,
       MinecraftDestination<World, Vector3i> destination,
       NavigationFlags flags,
       PaperNavigatorFactory factory,
@@ -140,32 +167,37 @@ final class NavigateCommand {
       SearchRegistry searches,
       SearchGate gate,
       long liveIntervalMillis,
+      Supplier<SearchSettings> searchSettings,
+      OdysseyLogger log,
       Messages messages) {
     UUID uuid = player.getUniqueId();
+    final long startNanos = System.nanoTime();
     gate.beginForced(uuid); // a manual search always runs and counts toward the budget
     SearchHandle<Step<Location, MinecraftStepPayload>> handle = platformApi.navigatePlayerToDestination(
         player, destination.destination(), flags.excludedModes(),
-        flags.excludedWorlds(), flags.excludedDimensions(), SearchSettings.defaults());
+        flags.excludedWorlds(), flags.excludedDimensions(), searchSettings.get());
     searches.track(uuid, handle);
     messages.send(player, locale, OdysseyMessages.NAVIGATE_SEARCHING);
 
     handle.future().whenComplete((result, error) -> {
       searches.untrack(uuid, handle);
       gate.end(uuid);
+      long elapsedMillis = (System.nanoTime() - startNanos) / 1_000_000L;
       if (error != null) {
+        log.debug("navigate {} -> {}: errored in {}ms", player.getName(), destinationLabel, elapsedMillis);
         messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
         return;
       }
       if (result instanceof NavigationResult.Failure<Step<Location, MinecraftStepPayload>> failure) {
-        if (failure.reason() != FailureReason.CANCELLED) {
-          messages.send(player, locale,
-              failure.reason() == FailureReason.ERROR
-                  ? OdysseyMessages.NAVIGATE_ERROR : OdysseyMessages.NAVIGATE_NO_ROUTE);
-        }
+        log.debug("navigate {} -> {}: {} in {}ms",
+            player.getName(), destinationLabel, failure.reason(), elapsedMillis);
+        sendFailure(player, locale, messages, failure.reason());
         return;
       }
       Path<Step<Location, MinecraftStepPayload>> path =
           ((NavigationResult.Success<Step<Location, MinecraftStepPayload>>) result).path();
+      log.debug("navigate {} -> {}: {} steps, {}s duration, found in {}ms",
+          player.getName(), destinationLabel, path.steps().size(), path.duration(), elapsedMillis);
       Location origin = path.steps().isEmpty() ? null : path.steps().get(0).position();
       if (origin == null || origin.getWorld() == null) {
         messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
@@ -179,10 +211,19 @@ final class NavigateCommand {
         Navigator<Location> navigator = factory.create(player, path, new PaperNavigatorContext(player));
         Optional<Trip<Location>> trip = flags.live()
             ? trips.startLive(uuid, platformApi.position(origin), flags.navigator(), navigator,
-                liveSearch(player, destination, flags, platformApi, searches, gate), liveIntervalMillis)
-            : trips.start(uuid, platformApi.position(origin), flags.navigator(), navigator);
-        messages.send(player, locale,
-            trip.isEmpty() ? OdysseyMessages.NAVIGATE_TRIP_LIMIT : OdysseyMessages.NAVIGATE_STARTED);
+                destinationLabel,
+                liveSearch(player, destination, flags, platformApi, searches, gate, searchSettings),
+                liveIntervalMillis)
+            : trips.start(uuid, platformApi.position(origin), flags.navigator(), navigator, destinationLabel);
+        if (trip.isEmpty()) {
+          messages.send(player, locale, OdysseyMessages.NAVIGATE_TRIP_LIMIT);
+        } else {
+          // "Route found" carries a hover with how long the search took and how long the trip is.
+          Component started = messages.render(locale, OdysseyMessages.NAVIGATE_STARTED);
+          Component stats = messages.render(locale, OdysseyMessages.NAVIGATE_STATS,
+              elapsedMillis, messages.formatDuration(locale, path.duration()));
+          player.sendMessage(started.hoverEvent(HoverEvent.showText(stats)));
+        }
       });
     });
   }
@@ -194,7 +235,8 @@ final class NavigateCommand {
       NavigationFlags flags,
       PaperOdysseyApiImpl platformApi,
       SearchRegistry searches,
-      SearchGate gate) {
+      SearchGate gate,
+      Supplier<SearchSettings> searchSettings) {
     UUID uuid = player.getUniqueId();
     return () -> {
       if (!player.isOnline() || !gate.tryBegin(uuid)) {
@@ -202,7 +244,7 @@ final class NavigateCommand {
       }
       SearchHandle<Step<Location, MinecraftStepPayload>> handle = platformApi.navigatePlayerToDestination(
           player, destination.destination(), flags.excludedModes(),
-          flags.excludedWorlds(), flags.excludedDimensions(), SearchSettings.defaults());
+          flags.excludedWorlds(), flags.excludedDimensions(), searchSettings.get());
       searches.track(uuid, handle);
       return handle.future().handle((result, error) -> {
         searches.untrack(uuid, handle);
@@ -293,6 +335,17 @@ final class NavigateCommand {
       }
     }
     return out;
+  }
+
+  private static void sendFailure(Player player, Locale locale, Messages messages, FailureReason reason) {
+    switch (reason) {
+      case NO_ROUTE, DESTINATION_UNREACHABLE -> messages.send(player, locale, OdysseyMessages.NAVIGATE_NO_ROUTE);
+      case LIMIT_EXCEEDED -> messages.send(player, locale, OdysseyMessages.NAVIGATE_LIMIT_EXCEEDED);
+      case TIMED_OUT -> messages.send(player, locale, OdysseyMessages.NAVIGATE_TIMED_OUT);
+      case ERROR -> messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
+      case CANCELLED -> { /* silent: the player asked for it */ }
+      default -> messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
+    }
   }
 
   private static void sendFlagError(

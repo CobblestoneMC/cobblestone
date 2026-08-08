@@ -11,7 +11,8 @@ import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
-import net.whimxiqal.odyssey.OdysseyLogger;
+import java.util.function.Supplier;
+import net.whimxiqal.odyssey.api.SearchSettings;
 import net.whimxiqal.odyssey.paper.PaperOdysseyApiImpl;
 import net.whimxiqal.odyssey.paper.api.PaperOdysseyApi;
 import net.whimxiqal.odyssey.paper.api.PaperTransitionProvider;
@@ -46,15 +47,16 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
 
   @Override
   public void onEnable() {
-    OdysseyLogger log = new JulOdysseyLogger(getLogger());
+    JulOdysseyLogger logger = new JulOdysseyLogger(getLogger());
 
     Path configFile = getDataFolder().toPath().resolve("config.yml");
-    ConfigManager config = new ConfigManager(configFile, "config.yml", log);
+    ConfigManager config = new ConfigManager(configFile, "config.yml", logger);
     ConfigKeys keys = new ConfigKeys(config);
     config.load();
+    logger.setLevel(config.get(keys.loggingLevel));
 
     Path databaseFile = getDataFolder().toPath().resolve(config.get(keys.dataFile));
-    this.dataStore = DataStores.create(config.get(keys.dataBackend), databaseFile, log);
+    this.dataStore = DataStores.create(config.get(keys.dataBackend), databaseFile, logger);
     try {
       this.dataStore.init();
     } catch (DataStoreException e) {
@@ -65,7 +67,7 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
 
     // The transition registry is owned by the plugin; the platform API only reads from / registers
     // into it (design/05). Both are reachable to other plugins via the registered plugin API.
-    this.platformApi = new PaperOdysseyApiImpl(this);
+    this.platformApi = new PaperOdysseyApiImpl(this, logger);
     getServer().getServicesManager()
         .register(PaperOdysseyApi.class, this.platformApi, this, ServicePriority.Normal);
 
@@ -75,14 +77,14 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
         new WaypointDestinationProvider(dataStore.waypoints()), this, ServicePriority.Normal);
 
     Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
-    Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), log);
+    Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), logger);
 
     // Trips tick on the platform scheduler (Folia-safe region tasks); the default trail navigator is
     // registered as a service so it is discovered like any third-party navigator.
     this.tripManager = new TripManager<>(platformApi.scheduler(),
-        config.get(keys.tripsMaxActivePerPlayer), config.get(keys.tripsTickPeriodTicks));
+        config.get(keys.tripsMaxActivePerPlayer));
     getServer().getServicesManager().register(PaperNavigatorFactory.class,
-        new PaperTrailNavigatorFactory(config.get(keys.trailBufferCells), messages),
+        new PaperTrailNavigatorFactory(config, keys, messages),
         this, ServicePriority.Normal);
 
     // Discovered vanilla portals are surfaced to searches as an internal transition provider, and
@@ -98,14 +100,21 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
 
     SearchGate searchGate = new SearchGate(config.get(keys.searchMaxConcurrentPerPlayer));
     long liveIntervalMillis = config.get(keys.tripsLiveIntervalTicks) * 50L; // 50 ms per tick
+    Supplier<SearchSettings> searchSettings = () -> SearchSettings.builder()
+        .maxCellsVisited(config.get(keys.algorithmMaxCellsVisited))
+        .maxWallClockMillis(config.get(keys.algorithmMaxWallClockSeconds) * 1000L)
+        .tier1RecalcThreshold(config.get(keys.algorithmTier1RecalcThreshold))
+        .runningAverageWidth(config.get(keys.algorithmRunningAverageWidth))
+        .build();
     getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
       event.registrar().register(
-          OdysseyCommand.build(config, keys, messages, dataStore.waypoints(),
+          OdysseyCommand.build(config, keys, messages, logger, dataStore.waypoints(),
               dataStore.portalTransitions(), tripManager, searchRegistry),
           "Odyssey admin and utility commands",
           List.of("ody"));
       event.registrar().register(
-          NavigateCommand.build(platformApi, tripManager, searchRegistry, searchGate, liveIntervalMillis, messages),
+          NavigateCommand.build(platformApi, tripManager, searchRegistry, searchGate,
+              liveIntervalMillis, searchSettings, logger, messages),
           "Navigate to a destination",
           List.of("nav"));
     });

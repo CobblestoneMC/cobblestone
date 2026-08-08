@@ -7,13 +7,12 @@
 
 package net.whimxiqal.odyssey;
 
+import net.whimxiqal.odyssey.api.TraversalState;
+
 /**
- * Factory for the built-in {@link HeuristicStrategy} implementations.
- *
- * <p>
- * The {@code RunningAverageHeuristic} described in the design (which needs
- * per-search context)
- * is deferred; the two provided here are stateless and consistent.
+ * Factory for the built-in {@link HeuristicStrategy} implementations: the admissible {@link #zero}
+ * and {@link #euclidean} (used for exact-optimal results and unit tests), and the adaptive
+ * {@link #runningAverage} used in production for speed.
  */
 public final class Heuristics {
 
@@ -54,5 +53,71 @@ public final class Heuristics {
       throw new IllegalArgumentException("cheapestCostPerBlock must be >= 0: " + cheapestCostPerBlock);
     }
     return (from, target, state) -> from.distance(target.nearestBoundaryCell(from)) * cheapestCostPerBlock;
+  }
+
+  /**
+   * A production heuristic that scales the remaining distance by a sliding-window average of the real
+   * per-block cost seen so far in the current solve (falling back to {@code cheapestCostPerBlock}
+   * before any samples). This makes {@code h} track the terrain/mode actually being traversed, so A*
+   * explores far fewer cells — at the price of admissibility, so paths may be slightly sub-optimal
+   * (weighted-A*-style). Tier-1 still uses the admissible {@link #estimate} (distance ×
+   * {@code cheapestCostPerBlock}).
+   *
+   * @param cheapestCostPerBlock a lower bound on per-block cost, used before samples and by Tier-1
+   * @return the running-average heuristic
+   */
+  public static HeuristicStrategy runningAverage(double cheapestCostPerBlock) {
+    if (cheapestCostPerBlock < 0) {
+      throw new IllegalArgumentException("cheapestCostPerBlock must be >= 0: " + cheapestCostPerBlock);
+    }
+    return new HeuristicStrategy() {
+      @Override
+      public double estimate(Cell from, DomainRegion<?> target, TraversalState state) {
+        return from.distance(target.nearestBoundaryCell(from)) * cheapestCostPerBlock;
+      }
+
+      @Override
+      public SolveHeuristic newSolve(int windowWidth) {
+        return new RunningAverageSolve(cheapestCostPerBlock, windowWidth);
+      }
+    };
+  }
+
+  /** A per-solve heuristic scaling distance by a rolling average of recent real per-block costs. */
+  private static final class RunningAverageSolve implements SolveHeuristic {
+
+    private final double cheapestCostPerBlock;
+    private final double[] window;
+    private int count;
+    private int next;
+    private double sum;
+
+    RunningAverageSolve(double cheapestCostPerBlock, int windowWidth) {
+      this.cheapestCostPerBlock = cheapestCostPerBlock;
+      this.window = new double[Math.max(1, windowWidth)];
+    }
+
+    @Override
+    public double estimate(Cell from, DomainRegion<?> target, TraversalState state) {
+      double perBlock = count == 0 ? cheapestCostPerBlock : sum / count;
+      return from.distance(target.nearestBoundaryCell(from)) * perBlock;
+    }
+
+    @Override
+    public void observe(double stepCost, double blocks) {
+      if (blocks <= 0.0) {
+        return;
+      }
+      double perBlock = stepCost / blocks;
+      if (count < window.length) {
+        window[next] = perBlock;
+        sum += perBlock;
+        count++;
+      } else {
+        sum += perBlock - window[next];
+        window[next] = perBlock;
+      }
+      next = (next + 1) % window.length;
+    }
   }
 }

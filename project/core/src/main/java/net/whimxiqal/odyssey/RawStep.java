@@ -17,9 +17,10 @@ import net.whimxiqal.odyssey.api.Step;
  * @param <T>         the payload type
  * @param <D>         the domain type
  * @param position    the cell arrived at and its domain
- * @param stepCost    the incremental cost of this one step, in seconds
+ * @param stepCost    the incremental algorithm cost of this one step, in seconds
+ * @param stepTime    the incremental real traversal time of this one step, in seconds
  * @param payload     the payload
  */
 record RawStep<T, D extends Domain>(
-        Position<D> position, double stepCost, T payload) {
+        Position<D> position, double stepCost, double stepTime, T payload) {
 }

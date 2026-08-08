@@ -45,12 +45,13 @@ import java.util.function.BooleanSupplier;
  */
 final class Tier2Search<A extends Agent, T, D extends Domain> {
 
+  private final OdysseyLogger logger;
   private final A agent;
   private final D domain;
 
   private final DomainRegion<D> target;
   private final List<? extends Mode<A, T, D>> modes;
-  private final HeuristicStrategy heuristic;
+  private final SolveHeuristic heuristic;
   private final int maxCellsVisited;
   private final BooleanSupplier cancelled;
   private final Executor executor;
@@ -61,29 +62,31 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       (a, b) -> Double.compare(a.estimatedTotalCost(), b.estimatedTotalCost()));
   private final CompletableFuture<Tier2Result<T, D>> result = new CompletableFuture<>();
 
-  private int cellsVisited;
   private PendingExpansion<T> pendingExpansion;
 
   Tier2Search(
-      A agent,
+          OdysseyLogger logger,
+          A agent,
       VirtualPath<T, D> virtualPath,
       List<? extends Mode<A, T, D>> modes,
       HeuristicStrategy heuristic,
       int maxCellsVisited,
+      int runningAverageWidth,
       BooleanSupplier cancelled,
       Executor executor) {
+    this.logger = logger;
     this.agent = agent;
     this.domain = virtualPath.domain();
     this.target = virtualPath.targetRegion();
     this.modes = modes;
-    this.heuristic = heuristic;
+    this.heuristic = heuristic.newSolve(runningAverageWidth);
     this.maxCellsVisited = maxCellsVisited;
     this.cancelled = cancelled;
     this.executor = executor;
 
     CellState start = new CellState(virtualPath.fromCell(), virtualPath.state());
     bestCosts.put(start, 0.0);
-    open.add(new OpenEntry(start, 0.0, heuristic.estimate(start.cell(), target, start.state())));
+    open.add(new OpenEntry(start, 0.0, this.heuristic.estimate(start.cell(), target, start.state())));
   }
 
   CompletableFuture<Tier2Result<T, D>> solve() {
@@ -104,6 +107,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
           continue;
         }
         if (open.isEmpty()) {
+          logger.debug("Tier2Search(agent:{},target:{}) failed: open set is empty", agent, target);
           result.complete(Tier2Result.unreachable());
           return;
         }
@@ -113,12 +117,19 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
           continue; // stale duplicate
         }
         closed.add(node);
+        Came<T> reachedBy = cameFrom.get(node);
+        if (reachedBy != null) {
+          // Feed the real cost of the committed step to the (possibly adaptive) heuristic.
+          heuristic.observe(reachedBy.movement().cost(), reachedBy.parent().cell().distance(node.cell()));
+        }
         if (target.contains(node.cell())) {
+          logger.debug("Tier2Search(agent:{},target:{}) solved. visited:{}", agent, target, closed.size());
           result.complete(Tier2Result.solved(reconstruct(node), entry.currentCost()));
           return;
         }
-        if (++cellsVisited > maxCellsVisited) {
-          result.complete(Tier2Result.unreachable());
+        if (closed.size() > maxCellsVisited) {
+          logger.debug("Tier2Search(agent:{},target:{}) visited cells ({}) > max ({})", agent, target, closed.size(), maxCellsVisited);
+          result.complete(Tier2Result.limitExceeded());
           return;
         }
 
@@ -130,6 +141,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
           anyPending |= !movements.isImmediate();
         }
         if (anyPending) {
+          logger.trace("Tier2Search(agent:{},target:{}) parked search due to pending modes", agent, target);
           park(node, entry.currentCost(), results);
           return;
         }
@@ -188,8 +200,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     while (cameFrom.containsKey(cursor)) {
       Came<T> came = cameFrom.get(cursor);
       Movement<T> movement = came.movement();
-      steps
-          .addFirst(new RawStep<>(new Position<>(cursor.cell(), domain), movement.cost(), movement.payload()));
+      steps.addFirst(new RawStep<>(
+          new Position<>(cursor.cell(), domain), movement.cost(), movement.time(), movement.payload()));
       cursor = came.parent();
     }
     return new ArrayList<>(steps);

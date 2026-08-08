@@ -7,12 +7,16 @@
 
 package net.whimxiqal.odyssey.plugin.data.jdbc;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.List;
 import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.plugin.data.DataStore;
@@ -62,29 +66,40 @@ public abstract class AbstractJdbcDataStore implements DataStore {
   protected abstract void loadDriver() throws ClassNotFoundException;
 
   /**
-   * Returns the ordered schema migrations. Migration {@code n} is {@code migrations().get(n - 1)};
-   * on init, every migration past the recorded version is applied in order. The default schema is
-   * dialect-neutral; a subclass may override to tweak DDL for its backend.
+   * Loads the ordered schema migrations from classpath resources next to this class
+   * ({@code migrations/1.sql}, {@code migrations/2.sql}, …), probing sequentially until the next
+   * number is absent. Each file's version is its filename number; a file may hold several
+   * {@code ;}-separated statements and {@code --} comments describing it. Dialect-neutral for now;
+   * a subclass could point at a backend-specific folder if a statement ever needs to differ.
    *
-   * @return the ordered list of migration statements
+   * @return the statements of each migration, in version order (index 0 = version 1)
    */
-  protected List<String> migrations() {
-    return List.of(
-        "CREATE TABLE odyssey_waypoint ("
-            + "owner CHAR(36) NOT NULL, "
-            + "name VARCHAR(64) NOT NULL, "
-            + "world VARCHAR(255) NOT NULL, "
-            + "x INTEGER NOT NULL, "
-            + "y INTEGER NOT NULL, "
-            + "z INTEGER NOT NULL, "
-            + "PRIMARY KEY (owner, name))",
-        "CREATE TABLE odyssey_portal_transition ("
-            + "from_world VARCHAR(255) NOT NULL, "
-            + "min_x INTEGER NOT NULL, min_y INTEGER NOT NULL, min_z INTEGER NOT NULL, "
-            + "max_x INTEGER NOT NULL, max_y INTEGER NOT NULL, max_z INTEGER NOT NULL, "
-            + "to_world VARCHAR(255) NOT NULL, "
-            + "to_x INTEGER NOT NULL, to_y INTEGER NOT NULL, to_z INTEGER NOT NULL, "
-            + "cost DOUBLE NOT NULL)");
+  protected List<List<String>> migrations() {
+    List<List<String>> migrations = new ArrayList<>();
+    for (int version = 1; ; version++) {
+      String resource = "migrations/" + version + ".sql";
+      try (InputStream in = AbstractJdbcDataStore.class.getResourceAsStream(resource)) {
+        if (in == null) {
+          break;
+        }
+        migrations.add(parseStatements(new String(in.readAllBytes(), StandardCharsets.UTF_8)));
+      } catch (IOException e) {
+        throw new DataStoreException("failed to read migration " + resource, e);
+      }
+    }
+    return migrations;
+  }
+
+  /** Splits a migration file into its individual (non-empty) statements. */
+  private static List<String> parseStatements(String sql) {
+    List<String> statements = new ArrayList<>();
+    for (String part : sql.split(";")) {
+      String trimmed = part.strip();
+      if (!trimmed.isEmpty()) {
+        statements.add(trimmed);
+      }
+    }
+    return statements;
   }
 
   @Override
@@ -140,20 +155,24 @@ public abstract class AbstractJdbcDataStore implements DataStore {
       }
       int current = readVersion();
       boolean fresh = current < 0;
-      List<String> migrations = migrations();
+      int start = Math.max(current, 0);
+      List<List<String>> migrations = migrations();
       connection.setAutoCommit(false);
       try {
-        int applied = Math.max(current, 0);
-        for (int version = applied + 1; version <= migrations.size(); version++) {
-          try (Statement statement = connection.createStatement()) {
-            statement.executeUpdate(migrations.get(version - 1));
+        int applied = start;
+        for (int version = start + 1; version <= migrations.size(); version++) {
+          for (String sql : migrations.get(version - 1)) {
+            try (Statement statement = connection.createStatement()) {
+              statement.executeUpdate(sql);
+            }
           }
           applied = version;
         }
         writeVersion(applied, fresh);
         connection.commit();
-        if (applied != Math.max(current, 0)) {
-          logger.info("Data store schema migrated to version {}.", applied);
+        // Announce a genuine upgrade of an existing store, but stay quiet on first-time setup.
+        if (!fresh && applied > start) {
+          logger.info("Migrated Odyssey data store schema from v{} to v{}.", start, applied);
         }
       } catch (SQLException e) {
         connection.rollback();

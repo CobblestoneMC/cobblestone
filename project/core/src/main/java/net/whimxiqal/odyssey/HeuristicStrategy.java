@@ -17,6 +17,11 @@ import net.whimxiqal.odyssey.api.TraversalState;
  * euclidean estimate is), Tier-2 A* returns least-cost paths for the terrain it explored. It is
  * intentionally domain-type-agnostic (takes a {@code DomainRegion<?>}), since it only needs the
  * region's geometry via {@link DomainRegion#nearestBoundaryCell(Cell)}.
+ *
+ * <p>Tier-1 uses {@link #estimate} directly as an admissible edge cost. Tier-2 A* instead obtains a
+ * per-solve {@link SolveHeuristic} via {@link #newSolve(int)}, which may adapt to observed costs; a
+ * plain (stateless) strategy hands back a wrapper that just delegates {@link #estimate} and ignores
+ * feedback.
  */
 @FunctionalInterface
 public interface HeuristicStrategy {
@@ -31,4 +36,25 @@ public interface HeuristicStrategy {
    * @return an optimistic (lower-bound) cost estimate in seconds
    */
   double estimate(Cell from, DomainRegion<?> target, TraversalState state);
+
+  /**
+   * Creates a per-solve heuristic for one Tier-2 A* solve. The default returns a stateless wrapper
+   * over {@link #estimate}; adaptive strategies (e.g. running-average) override this.
+   *
+   * @param windowWidth the sample-window width for adaptive strategies (ignored by stateless ones)
+   * @return a fresh solve heuristic
+   */
+  default SolveHeuristic newSolve(int windowWidth) {
+    return new SolveHeuristic() {
+      @Override
+      public double estimate(Cell from, DomainRegion<?> target, TraversalState state) {
+        return HeuristicStrategy.this.estimate(from, target, state);
+      }
+
+      @Override
+      public void observe(double stepCost, double blocks) {
+        // Stateless: nothing to learn.
+      }
+    };
+  }
 }

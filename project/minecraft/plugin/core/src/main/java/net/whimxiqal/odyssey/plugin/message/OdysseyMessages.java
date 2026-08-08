@@ -28,6 +28,12 @@ public final class OdysseyMessages {
   /** The {@code /odyssey} usage hint. */
   public static final Message1 ODYSSEY_USAGE = Message1.info("command.odyssey.usage");
 
+  /** Header line for the {@code /odyssey} help menu. */
+  public static final Message0 HELP_HEADER = Message0.info("command.odyssey.help.header");
+
+  /** Header line for the {@code /navigate} help menu. */
+  public static final Message0 NAVIGATE_HELP_HEADER = Message0.info("command.navigate.help.header");
+
   /** Confirms a successful {@code /odyssey reload}. */
   public static final Message0 RELOAD_SUCCESS = Message0.success("command.odyssey.reload.success");
 
@@ -49,6 +55,22 @@ public final class OdysseyMessages {
   public static final Message1 WAYPOINT_NOT_FOUND =
       Message1.error("command.odyssey.waypoint.not_found");
 
+  /** Header for the waypoint listing ({@code {0}} = the count). */
+  public static final Message1 WAYPOINT_LIST_HEADER =
+      Message1.info("command.odyssey.waypoint.list.header");
+
+  /** A personal waypoint in the listing ({@code {0}} = name, {@code {1}} = location). */
+  public static final Message2 WAYPOINT_LIST_ENTRY =
+      Message2.info("command.odyssey.waypoint.list.entry");
+
+  /** A global waypoint in the listing ({@code {0}} = name, {@code {1}} = location). */
+  public static final Message2 WAYPOINT_LIST_GLOBAL =
+      Message2.info("command.odyssey.waypoint.list.global");
+
+  /** Shown when the player has no waypoints. */
+  public static final Message0 WAYPOINT_LIST_NONE =
+      Message0.info("command.odyssey.waypoint.list.none");
+
   /** Shown when a waypoint could not be persisted (details are in the server log). */
   public static final Message0 WAYPOINT_STORE_ERROR =
       Message0.error("command.odyssey.waypoint.store_error");
@@ -61,14 +83,27 @@ public final class OdysseyMessages {
   public static final Message0 NAV_TRAIL_PROMPT_ACTION =
       Message0.info("navigator.trail.prompt.action");
 
+  /** Shown when a trip is auto-abandoned because the player strayed too far from the trail. */
+  public static final Message0 NAV_TRAIL_ABANDONED = Message0.info("navigator.trail.abandoned");
+
   /** Acknowledges a {@code /navigate} request while the search runs. */
   public static final Message0 NAVIGATE_SEARCHING = Message0.info("command.navigate.searching");
 
   /** Confirms a route was found and a trip started. */
   public static final Message0 NAVIGATE_STARTED = Message0.success("command.navigate.started");
 
+  /** Hover stats on the "route found" line ({@code {0}} = calc millis, {@code {1}} = est. duration). */
+  public static final Message2 NAVIGATE_STATS = Message2.info("command.navigate.stats");
+
   /** Shown when no route to the destination exists. */
   public static final Message0 NAVIGATE_NO_ROUTE = Message0.error("command.navigate.no_route");
+
+  /** Shown when the search hit its cell-visit limit before finding a path. */
+  public static final Message0 NAVIGATE_LIMIT_EXCEEDED =
+      Message0.error("command.navigate.limit_exceeded");
+
+  /** Shown when the search exceeded its wall-clock budget. */
+  public static final Message0 NAVIGATE_TIMED_OUT = Message0.error("command.navigate.timed_out");
 
   /** Shown when the search failed unexpectedly (details in the server log). */
   public static final Message0 NAVIGATE_ERROR = Message0.error("command.navigate.error");
@@ -103,14 +138,23 @@ public final class OdysseyMessages {
   /** Confirms how many trips/searches were cancelled ({@code {0}} = the count). */
   public static final Message1 CANCEL_DONE = Message1.success("command.odyssey.cancel.done");
 
+  /** Confirms a single trip was cancelled by id ({@code {0}} = the id). */
+  public static final Message1 CANCEL_TRIP = Message1.success("command.odyssey.cancel.trip");
+
+  /** Shown when no active trip has the given id ({@code {0}} = the id). */
+  public static final Message1 CANCEL_NOT_FOUND = Message1.error("command.odyssey.cancel.not_found");
+
   /** Shown when there is nothing to cancel. */
   public static final Message0 CANCEL_NOTHING = Message0.info("command.odyssey.cancel.nothing");
 
   /** Header for the active-trips list ({@code {0}} = the count). */
   public static final Message1 TRIPS_HEADER = Message1.info("command.odyssey.trips.header");
 
-  /** One entry in the active-trips list ({@code {0}} = the navigator id). */
-  public static final Message1 TRIPS_ENTRY = Message1.info("command.odyssey.trips.entry");
+  /**
+   * One entry in the active-trips list ({@code {0}} = id, {@code {1}} = destination, {@code {2}} =
+   * remaining duration).
+   */
+  public static final Message3 TRIPS_ENTRY = Message3.info("command.odyssey.trips.entry");
 
   /** Shown when the player has no active trips. */
   public static final Message0 TRIPS_NONE = Message0.info("command.odyssey.trips.none");

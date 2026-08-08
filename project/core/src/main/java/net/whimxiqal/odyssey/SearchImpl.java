@@ -41,6 +41,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class SearchImpl<A extends Agent, T, D extends Domain>
     implements SearchHandle<Step<Position<D>, T>> {
 
+  private final OdysseyLogger logger;
   private final Scheduler scheduler;
   private final Executor executor;
   private final HeuristicStrategy heuristic;
@@ -54,8 +55,10 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
   private final CompletableFuture<NavigationResult<Step<Position<D>, T>>> future = new CompletableFuture<>();
 
   private GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>> graphPath;
+  private boolean limitHit; // a Tier-2 solve gave up on the cell limit (memory guard), not a real dead end
 
   SearchImpl(
+          OdysseyLogger logger,
       Scheduler scheduler,
       HeuristicStrategy heuristic,
       A agent,
@@ -64,6 +67,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
       List<? extends Mode<A, T, D>> modes,
       List<? extends Transition<T, D>> transitions,
       SearchSettings settings) {
+    this.logger = logger;
     this.scheduler = scheduler;
     this.executor = scheduler.asyncExecutor();
     this.heuristic = heuristic;
@@ -103,7 +107,9 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
         Optional<GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>>> found = tier1.shortestPath(tier1.originNode(),
             tier1::isGoal);
         if (found.isEmpty()) {
-          finish(new NavigationResult.Failure<>(FailureReason.NO_ROUTE));
+          // If a leg gave up on the cell limit, that — not a genuine disconnect — is why we failed.
+          finish(new NavigationResult.Failure<>(
+              limitHit ? FailureReason.LIMIT_EXCEEDED : FailureReason.NO_ROUTE));
           return;
         }
         graphPath = found.get();
@@ -114,7 +120,8 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
         return;
       }
       Tier2Search<A, T, D> tier2 = new Tier2Search<>(
-          agent, edge.virtualPath(), modes, heuristic, settings.maxCellsVisited(), cancelled::get, executor);
+         logger, agent, edge.virtualPath(), modes, heuristic, settings.maxCellsVisited(),
+         settings.runningAverageWidth(), cancelled::get, executor);
       VirtualPath<T, D> virtualPath = edge.virtualPath();
       tier2.solve().whenCompleteAsync((result, error) -> {
         if (cancelled.get()) {
@@ -127,6 +134,9 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
         if (result.solved()) {
           virtualPath.solve(result.steps(), result.cost());
         } else {
+          if (result.outcome() == Tier2Result.Outcome.LIMIT_EXCEEDED) {
+            limitHit = true;
+          }
           virtualPath.markInfeasible();
         }
         graphPath = null; // re-plan with the now-known edge cost
@@ -149,21 +159,18 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
 
   private Path<Step<Position<D>, T>> buildPath(GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>> path) {
     List<Step<Position<D>, T>> steps = new ArrayList<>();
-    double global = 0.0;
     for (Tier1Edge<T, D> edge : path.edges()) {
       for (RawStep<T, D> raw : edge.virtualPath().solvedSteps()) {
-        global += raw.stepCost();
-        steps.add(new Step<>(raw.position(), global, raw.payload()));
+        steps.add(new Step<>(raw.position(), raw.stepCost(), raw.stepTime(), raw.payload()));
       }
       Tier1Node<T, D> target = edge.target();
-      global += target.cost();
       if (target instanceof Tier1Node.AtTransition<T, D> atTransition) {
+        Transition<T, D> transition = atTransition.transition();
         steps.add(new Step<>(
-            atTransition.transition().destination(), global,
-            atTransition.transition().payload()));
+            transition.destination(), transition.cost(), transition.time(), transition.payload()));
       }
     }
-    return new PathImpl<>(steps, global);
+    return new PathImpl<>(steps);
   }
 
   private void finish(NavigationResult<Step<Position<D>, T>> result) {

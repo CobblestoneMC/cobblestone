@@ -8,15 +8,20 @@
 package net.whimxiqal.odyssey.paper.plugin;
 
 import com.mojang.brigadier.Command;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
 import net.whimxiqal.odyssey.plugin.config.ConfigManager;
 import net.whimxiqal.odyssey.plugin.data.DataStoreException;
@@ -57,25 +62,32 @@ final class OdysseyCommand {
    * @return the command node
    */
   static LiteralCommandNode<CommandSourceStack> build(
-      ConfigManager config, ConfigKeys keys, Messages messages, WaypointDao waypoints,
-      PortalTransitionDao portals, TripManager<Location> trips, SearchRegistry searches) {
+      ConfigManager config, ConfigKeys keys, Messages messages, JulOdysseyLogger log,
+      WaypointDao waypoints, PortalTransitionDao portals, TripManager<Location> trips,
+      SearchRegistry searches) {
     return Commands.literal("odyssey")
-        .executes(ctx -> {
-          CommandSender sender = ctx.getSource().getSender();
-          // TODO write a splash message for user, containing version number
-          messages.send(sender, localeOf(sender, messages), OdysseyMessages.ODYSSEY_USAGE, "/odyssey <subcommand>");
-          return Command.SINGLE_SUCCESS;
-        })
+        .executes(ctx -> showHelp(ctx.getSource().getSender(), messages))
+        .then(Commands.literal("help")
+            .executes(ctx -> showHelp(ctx.getSource().getSender(), messages)))
+        .then(Commands.literal("?")
+            .executes(ctx -> showHelp(ctx.getSource().getSender(), messages)))
         .then(Commands.literal("reload")
-            .executes(ctx -> reload(ctx.getSource().getSender(), config, keys, messages)))
+            .executes(ctx -> reload(ctx.getSource().getSender(), config, keys, messages, log)))
         .then(Commands.literal("cancel")
-            .executes(ctx -> cancel(ctx.getSource().getSender(), messages, trips, searches)))
+            .executes(ctx -> cancelAll(ctx.getSource().getSender(), messages, trips, searches))
+            .then(Commands.literal("all")
+                .executes(ctx -> cancelAll(ctx.getSource().getSender(), messages, trips, searches)))
+            .then(Commands.argument("id", IntegerArgumentType.integer(1))
+                .executes(ctx -> cancelTrip(ctx.getSource().getSender(), messages, trips,
+                    IntegerArgumentType.getInteger(ctx, "id")))))
         .then(Commands.literal("trips")
             .executes(ctx -> trips(ctx.getSource().getSender(), messages, trips)))
         .then(Commands.literal("portals")
+            .executes(ctx -> showHelp(ctx.getSource().getSender(), messages))
             .then(Commands.literal("clear")
                 .executes(ctx -> clearPortals(ctx.getSource().getSender(), messages, portals))))
         .then(Commands.literal("waypoint")
+            .executes(ctx -> showHelp(ctx.getSource().getSender(), messages))
             .then(Commands.literal("set")
                 .then(Commands.argument("name", StringArgumentType.word())
                     .executes(ctx -> setWaypoint(ctx, waypoints, messages, false))
@@ -83,21 +95,26 @@ final class OdysseyCommand {
                         .executes(ctx -> setWaypoint(ctx, waypoints, messages, true)))))
             .then(Commands.literal("unset")
                 .then(Commands.argument("name", StringArgumentType.word())
+                    .suggests((ctx, builder) -> suggestWaypoints(ctx.getSource().getSender(), builder, waypoints))
                     .executes(ctx -> unsetWaypoint(ctx, waypoints, messages, false))
                     .then(Commands.literal("-global")
-                        .executes(ctx -> unsetWaypoint(ctx, waypoints, messages, true))))))
+                        .executes(ctx -> unsetWaypoint(ctx, waypoints, messages, true)))))
+            .then(Commands.literal("list")
+                .executes(ctx -> listWaypoints(ctx.getSource().getSender(), messages, waypoints))))
         .build();
   }
 
   private static int reload(
-      CommandSender sender, ConfigManager config, ConfigKeys keys, Messages messages) {
+      CommandSender sender, ConfigManager config, ConfigKeys keys, Messages messages,
+      JulOdysseyLogger log) {
     Locale locale = localeOf(sender, messages);
     if (!sender.hasPermission(PERMISSION_RELOAD)) {
       messages.send(sender, locale, OdysseyMessages.NO_PERMISSION);
       return Command.SINGLE_SUCCESS;
     }
-    List<String> restartRequired = config.reload();
+    final List<String> restartRequired = config.reload();
     messages.setShowPrefix(config.get(keys.messagesShowPrefix));
+    log.setLevel(config.get(keys.loggingLevel));
     messages.send(sender, locale, OdysseyMessages.RELOAD_SUCCESS);
     if (!restartRequired.isEmpty()) {
       messages.send(sender, locale, OdysseyMessages.RELOAD_RESTART_REQUIRED,
@@ -106,7 +123,60 @@ final class OdysseyCommand {
     return Command.SINGLE_SUCCESS;
   }
 
-  private static int cancel(
+  private static int showHelp(CommandSender sender, Messages messages) {
+    Locale locale = localeOf(sender, messages);
+    messages.send(sender, locale, OdysseyMessages.HELP_HEADER);
+    CommandHelp.line(sender, messages, locale, "/odyssey reload", "command.odyssey.help.reload");
+    CommandHelp.line(sender, messages, locale, "/odyssey cancel [id|all]", "command.odyssey.help.cancel");
+    CommandHelp.line(sender, messages, locale, "/odyssey trips", "command.odyssey.help.trips");
+    CommandHelp.line(sender, messages, locale,
+        "/odyssey waypoint set|unset|list <name> [-global]", "command.odyssey.help.waypoint");
+    CommandHelp.line(sender, messages, locale, "/odyssey portals clear", "command.odyssey.help.portals");
+    return Command.SINGLE_SUCCESS;
+  }
+
+  private static int listWaypoints(CommandSender sender, Messages messages, WaypointDao waypoints) {
+    Locale locale = localeOf(sender, messages);
+    if (!(sender instanceof Player player)) {
+      messages.send(sender, locale, OdysseyMessages.PLAYERS_ONLY);
+      return Command.SINGLE_SUCCESS;
+    }
+    List<Waypoint> personal = waypoints.ownedBy(player.getUniqueId());
+    List<Waypoint> global = waypoints.global();
+    if (personal.isEmpty() && global.isEmpty()) {
+      messages.send(player, locale, OdysseyMessages.WAYPOINT_LIST_NONE);
+      return Command.SINGLE_SUCCESS;
+    }
+    messages.send(player, locale, OdysseyMessages.WAYPOINT_LIST_HEADER, personal.size() + global.size());
+    for (Waypoint waypoint : personal) {
+      messages.send(player, locale, OdysseyMessages.WAYPOINT_LIST_ENTRY, waypoint.name(), location(waypoint));
+    }
+    for (Waypoint waypoint : global) {
+      messages.send(player, locale, OdysseyMessages.WAYPOINT_LIST_GLOBAL, waypoint.name(), location(waypoint));
+    }
+    return Command.SINGLE_SUCCESS;
+  }
+
+  private static String location(Waypoint waypoint) {
+    return waypoint.world() + " " + waypoint.x() + ", " + waypoint.y() + ", " + waypoint.z();
+  }
+
+  private static CompletableFuture<Suggestions> suggestWaypoints(
+      CommandSender sender, SuggestionsBuilder builder, WaypointDao waypoints) {
+    if (sender instanceof Player player) {
+      String prefix = builder.getRemaining().toLowerCase(Locale.ROOT);
+      List<Waypoint> candidates = new ArrayList<>(waypoints.ownedBy(player.getUniqueId()));
+      candidates.addAll(waypoints.global());
+      for (Waypoint waypoint : candidates) {
+        if (waypoint.name().toLowerCase(Locale.ROOT).startsWith(prefix)) {
+          builder.suggest(waypoint.name());
+        }
+      }
+    }
+    return builder.buildFuture();
+  }
+
+  private static int cancelAll(
       CommandSender sender, Messages messages, TripManager<Location> trips, SearchRegistry searches) {
     Locale locale = localeOf(sender, messages);
     if (!(sender instanceof Player player)) {
@@ -125,6 +195,21 @@ final class OdysseyCommand {
     return Command.SINGLE_SUCCESS;
   }
 
+  private static int cancelTrip(
+      CommandSender sender, Messages messages, TripManager<Location> trips, int id) {
+    Locale locale = localeOf(sender, messages);
+    if (!(sender instanceof Player player)) {
+      messages.send(sender, locale, OdysseyMessages.PLAYERS_ONLY);
+      return Command.SINGLE_SUCCESS;
+    }
+    if (trips.cancel(player.getUniqueId(), id)) {
+      messages.send(player, locale, OdysseyMessages.CANCEL_TRIP, id);
+    } else {
+      messages.send(player, locale, OdysseyMessages.CANCEL_NOT_FOUND, id);
+    }
+    return Command.SINGLE_SUCCESS;
+  }
+
   private static int trips(CommandSender sender, Messages messages, TripManager<Location> trips) {
     Locale locale = localeOf(sender, messages);
     if (!(sender instanceof Player player)) {
@@ -138,7 +223,8 @@ final class OdysseyCommand {
     }
     messages.send(player, locale, OdysseyMessages.TRIPS_HEADER, active.size());
     for (Trip<Location> trip : active) {
-      messages.send(player, locale, OdysseyMessages.TRIPS_ENTRY, trip.navigatorId());
+      messages.send(player, locale, OdysseyMessages.TRIPS_ENTRY,
+          trip.id(), trip.destination(), messages.formatDuration(locale, trip.remainingSeconds()));
     }
     return Command.SINGLE_SUCCESS;
   }

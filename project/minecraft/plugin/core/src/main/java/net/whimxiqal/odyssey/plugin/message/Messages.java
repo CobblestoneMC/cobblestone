@@ -181,6 +181,43 @@ public final class Messages {
     audience.sendMessage(render(locale, message, arg1, arg2, arg3));
   }
 
+  /**
+   * Returns the raw (uncolored, unprefixed) localized template for a key — for callers that compose
+   * their own rich text, e.g. help lines that pair a fixed command syntax with a localized
+   * description.
+   *
+   * @param locale the recipient's locale
+   * @param key the message key
+   * @return the template string (or the key itself if missing)
+   */
+  public String raw(Locale locale, String key) {
+    return template(key, locale);
+  }
+
+  /**
+   * Formats a duration in seconds as localized, human-readable text (e.g. "4 minutes and 3 seconds").
+   * The unit words come from the message bundle so translations can localize them.
+   *
+   * @param locale the locale whose unit words to use
+   * @param seconds the duration in seconds
+   * @return the formatted duration
+   */
+  public String formatDuration(Locale locale, double seconds) {
+    long total = Math.max(0L, Math.round(seconds));
+    long minutes = total / 60L;
+    long secs = total % 60L;
+    String minuteWord = template("format.duration.minutes", locale);
+    String secondWord = template("format.duration.seconds", locale);
+    if (minutes > 0L && secs > 0L) {
+      return minutes + " " + minuteWord + " " + template("format.duration.and", locale)
+          + " " + secs + " " + secondWord;
+    }
+    if (minutes > 0L) {
+      return minutes + " " + minuteWord;
+    }
+    return secs + " " + secondWord;
+  }
+
   private Component format(Message message, Locale locale, Object[] args) {
     String template = template(message.key(), locale);
     TextComponent.Builder builder = Component.text();

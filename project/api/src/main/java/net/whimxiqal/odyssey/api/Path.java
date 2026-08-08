@@ -16,9 +16,12 @@ import java.util.List;
  * <p>Steps may cross domain instances (all of the same domain <i>type</i> {@code D}); a domain
  * change or an instruction-bearing step marks a transition point.
  *
+ * <p>{@link #cost()} and {@link #duration()} are derived from the steps rather than stored, so they
+ * can never drift from the step list. A caller that reads them in a hot loop should cache the result.
+ *
  * @param <S> the step type
  */
-public interface Path<S> {
+public interface Path<S extends Step<?, ?>> {
 
   /**
    * Returns the ordered steps of this path, origin first.
@@ -28,10 +31,28 @@ public interface Path<S> {
   List<S> steps();
 
   /**
-   * Returns the total cost of the path in seconds.
+   * Returns the total algorithm cost of the path in seconds, summed from its steps.
    *
    * @return the total cost
    */
-  double cost();
+  default double cost() {
+    double total = 0.0;
+    for (S step : steps()) {
+      total += step.cost();
+    }
+    return total;
+  }
 
+  /**
+   * Returns the total real traversal time of the path in seconds, summed from its steps.
+   *
+   * @return the total duration
+   */
+  default double duration() {
+    double total = 0.0;
+    for (S step : steps()) {
+      total += step.time();
+    }
+    return total;
+  }
 }

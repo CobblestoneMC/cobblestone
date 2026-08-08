@@ -47,6 +47,7 @@ public interface OdysseyApi {
    * @return a handle to the in-flight search
    */
   <A extends Agent, T, D extends Domain> SearchHandle<Step<Position<D>, T>> navigate(
+          OdysseyLogger logger,
           Scheduler scheduler,
       A agent,
       Position<D> origin,

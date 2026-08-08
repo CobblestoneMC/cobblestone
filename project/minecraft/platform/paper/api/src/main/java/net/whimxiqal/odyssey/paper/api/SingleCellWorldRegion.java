@@ -38,4 +38,9 @@ public class SingleCellWorldRegion implements WorldRegion<World, Vector3i> {
     public Vector3i nearestBoundaryLocation(Vector3i vector) {
         return location.toVector().toVector3i();
     }
+
+    @Override
+    public String toString() {
+        return String.format("Region[%s - %s]", location.toVector().toVector3i(), location.getWorld().getKey());
+    }
 }

@@ -12,7 +12,7 @@ package net.whimxiqal.odyssey.api;
  *
  * @param <S> the step type
  */
-public sealed interface NavigationResult<S>
+public sealed interface NavigationResult<S extends Step<?, ?>>
     permits NavigationResult.Success, NavigationResult.Failure {
 
   /**
@@ -28,7 +28,7 @@ public sealed interface NavigationResult<S>
    * @param <S> the step type
    * @param path the solved path
    */
-  record Success<S>(Path<S> path)
+  record Success<S extends Step<?, ?>>(Path<S> path)
       implements NavigationResult<S> {
 
     @Override
@@ -43,7 +43,7 @@ public sealed interface NavigationResult<S>
    * @param <S> the step type
    * @param reason why the search failed
    */
-  record Failure<S>(FailureReason reason)
+  record Failure<S extends Step<?, ?>>(FailureReason reason)
       implements NavigationResult<S> {
 
     @Override

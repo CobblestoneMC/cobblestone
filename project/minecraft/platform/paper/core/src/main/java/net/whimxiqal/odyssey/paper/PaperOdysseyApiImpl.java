@@ -11,23 +11,16 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
+import net.whimxiqal.odyssey.*;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 import net.whimxiqal.odyssey.minecraft.api.PlatformTransition;
 import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
 import net.whimxiqal.odyssey.paper.api.BoxWorldRegion;
-import net.whimxiqal.odyssey.CellRegion;
 import net.whimxiqal.odyssey.api.Destination;
-import net.whimxiqal.odyssey.DomainRegion;
-import net.whimxiqal.odyssey.HeuristicStrategy;
-import net.whimxiqal.odyssey.OdysseyApi;
-import net.whimxiqal.odyssey.Position;
 import net.whimxiqal.odyssey.api.SearchHandle;
 import net.whimxiqal.odyssey.api.SearchSettings;
-import net.whimxiqal.odyssey.SingleDestination;
 import net.whimxiqal.odyssey.api.Step;
-import net.whimxiqal.odyssey.Transition;
-import net.whimxiqal.odyssey.Heuristics;
 import net.whimxiqal.odyssey.minecraft.ChunkProvider;
 import net.whimxiqal.odyssey.minecraft.ChunkProviderSettings;
 import net.whimxiqal.odyssey.minecraft.MinecraftMode;
@@ -46,8 +39,11 @@ import org.joml.Vector3i;
 
 public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper {
 
-  private static final double CHEAPEST_COST_PER_BLOCK = 0.08;
+  // The true global-minimum per-block cost (flying, MovementCosts.FLY = 0.10). Used as the admissible
+  // Tier-1 bound and the running-average's cold-start estimate.
+  private static final double CHEAPEST_COST_PER_BLOCK = 0.10;
 
+  private final OdysseyLogger logger;
   private final PaperScheduler scheduler;
   private final ChunkProvider chunkProvider;
   private final OdysseyApi core;
@@ -59,13 +55,14 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
    *
    * @param plugin      the owning plugin
    */
-  public PaperOdysseyApiImpl(Plugin plugin) {
+  public PaperOdysseyApiImpl(Plugin plugin, OdysseyLogger logger) {
+    this.logger = logger;
     int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
     this.scheduler = new PaperScheduler(plugin, workerThreads);
     PaperPlatformApi platform = new PaperPlatformApi(plugin, scheduler);
     this.chunkProvider = new ChunkProvider(platform, ChunkProviderSettings.defaults());
     this.core = OdysseyApi.load();
-    this.heuristic = Heuristics.euclidean(CHEAPEST_COST_PER_BLOCK);
+    this.heuristic = Heuristics.runningAverage(CHEAPEST_COST_PER_BLOCK);
   }
 
   @Override
@@ -149,7 +146,7 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
     CompletableFuture<SearchHandle<Step<Position<MinecraftWorld>, MinecraftStepPayload>>>
         handleFuture = gatherTransitions(player, excludedWorlds, excludedDimensions).thenApply(gathered ->
         core.navigate(
-            scheduler, agent, originPosition, destination, modes, gathered, heuristic, settings));
+            logger, scheduler, agent, originPosition, destination, modes, gathered, heuristic, settings));
     return new PaperSearchHandle(handleFuture);
   }
 

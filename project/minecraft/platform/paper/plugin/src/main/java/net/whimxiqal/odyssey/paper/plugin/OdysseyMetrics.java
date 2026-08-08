@@ -19,13 +19,12 @@ import org.bukkit.plugin.java.JavaPlugin;
  * portal-discovery setting (categorical) plus live gauges for active trips and searches. bStats is
  * opt-out via {@code plugins/bStats/config.yml} and Odyssey's own {@code metrics.enabled}.
  *
- * <p>The {@link #BSTATS_PLUGIN_ID} must be set to the id assigned when the plugin is registered at
- * bstats.org; until then metrics stay off so no data is sent under someone else's id.
+ * <p>{@link #BSTATS_PLUGIN_ID} is Odyssey's registered bStats service id; a non-positive value keeps
+ * metrics off (a guard for local forks that have not registered their own).
  */
 final class OdysseyMetrics {
 
-  // TODO: replace with the real service id from bstats.org once the plugin is registered there.
-  private static final int BSTATS_PLUGIN_ID = 0;
+  private static final int BSTATS_PLUGIN_ID = 33218;
 
   private final Metrics metrics;
 

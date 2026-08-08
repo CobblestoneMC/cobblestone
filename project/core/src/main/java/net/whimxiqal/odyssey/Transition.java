@@ -39,11 +39,21 @@ public interface Transition<T, D extends Domain> {
   Position<D> destination();
 
   /**
-   * Returns the traversal cost in seconds.
+   * Returns the algorithm traversal cost in seconds (what the search minimizes).
    *
    * @return the cost
    */
   double cost();
+
+  /**
+   * Returns the real traversal time in seconds (player-facing). Defaults to {@link #cost()} until a
+   * transition distinguishes its danger/penalty weighting from its actual duration.
+   *
+   * @return the traversal time
+   */
+  default double time() {
+    return cost();
+  }
 
   /**
    * Returns the payload to send through to the final Steps in the search result.

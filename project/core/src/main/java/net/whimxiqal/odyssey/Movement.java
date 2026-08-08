@@ -19,13 +19,16 @@ import net.whimxiqal.odyssey.api.TraversalState;
  *
  * @param <T> the payload type
  * @param cell the reachable destination cell
- * @param cost the cost in seconds to perform this step
+ * @param cost the algorithm cost in seconds to perform this step (what the search minimizes)
+ * @param time the real traversal time in seconds (player-facing); equals {@code cost} until danger
+ *     weighting diverges them
  * @param payload the payload to send through to the search response
  * @param state the resulting traversal state after the step
  */
 public record Movement<T>(
     Cell cell,
     double cost,
+    double time,
     T payload,
     TraversalState state) {
 }

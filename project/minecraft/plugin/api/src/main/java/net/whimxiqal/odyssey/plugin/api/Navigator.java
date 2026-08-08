@@ -41,4 +41,12 @@ public interface Navigator<L> {
    * @return {@code true} if complete
    */
   boolean isComplete();
+
+  /**
+   * Returns the estimated remaining traversal time, in seconds, from the player's current progress
+   * along the path. Used for the live duration readout in {@code /odyssey trips}.
+   *
+   * @return the remaining time in seconds
+   */
+  double remainingSeconds();
 }

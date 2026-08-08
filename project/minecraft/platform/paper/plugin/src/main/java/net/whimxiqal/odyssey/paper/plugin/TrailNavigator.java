@@ -10,6 +10,7 @@ package net.whimxiqal.odyssey.paper.plugin;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ThreadLocalRandom;
 import net.whimxiqal.odyssey.api.Path;
 import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
@@ -27,23 +28,35 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 /**
- * The default {@code trail} navigator: a line of redstone-dust particles along the path ahead of the
- * player, shown only to that player. It advances via {@link TrailProgress} (projecting the player
- * onto the foremost segment), renders up to {@code bufferCells} steps ahead plus a "return to trail"
- * line back to the trail head, and — when the next step is a discrete action (a portal or a command
- * transition) — prompts the player instead of silently expecting them to walk it.
+ * The default {@code trail} navigator: a column of dust particles along the path ahead of the player
+ * (shown only to them). Particles are scattered around each cell with a Gaussian falloff (dense on
+ * the path, sparse at the edges) and each takes a random color from the configured palette (aqua,
+ * gold, white by default — discrete, not blended, so they sparkle). It advances via
+ * {@link TrailProgress} (parallel projection, so walking <i>alongside</i> counts), draws a same-width
+ * guide column back to the nearest point on the path ahead when the player drifts off, prompts on
+ * discrete-action steps, and auto-abandons the trip if the player strays past {@code abandonDistance}.
  *
- * <p>Rendering is Paper-specific and verified on a live server (per the implementation plan); the
- * follow geometry it relies on is unit-tested in plugin-core.
+ * <p>A 1-block "personal bubble" around the player is left clear so particles don't render in the
+ * player's face.
+ *
+ * <p>Rendering is Paper-specific and verified on a live server; the follow geometry is unit-tested in
+ * plugin-core.
  */
 final class TrailNavigator implements Navigator<Location> {
 
-  private static final Particle.DustOptions DUST = new Particle.DustOptions(Color.RED, 1.0f);
   private static final double COMPLETION_RADIUS_SQUARED = 4.0; // within 2 blocks of the goal
-  private static final double RETURN_LINE_SPACING = 1.0;
+  private static final double GUIDE_LINE_SPACING = 1.0;        // ~1 block between guide-line samples
+  private static final double SPREAD_HORIZONTAL = 0.30;        // Gaussian sigma across the column
+  private static final double SPREAD_VERTICAL = 0.20;
+  private static final double NEAR_BUFFER = 1.0;               // clear bubble around the player, in blocks
+  private static final double NEAR_BUFFER_SQUARED = NEAR_BUFFER * NEAR_BUFFER;
+  private static final float DUST_SIZE = 1.0f;
 
   private final Player player;
   private final int bufferCells;
+  private final List<Particle.DustOptions> dusts;
+  private final int density;
+  private final int abandonDistance;
   private final Messages messages;
   private final Locale locale;
 
@@ -57,9 +70,19 @@ final class TrailNavigator implements Navigator<Location> {
       Player player,
       Path<Step<Location, MinecraftStepPayload>> path,
       int bufferCells,
+      List<Color> palette,
+      int density,
+      int abandonDistance,
       Messages messages) {
     this.player = player;
     this.bufferCells = bufferCells;
+    List<Color> colors = palette.isEmpty() ? List.of(Color.AQUA) : palette;
+    this.dusts = new ArrayList<>(colors.size());
+    for (Color color : colors) {
+      dusts.add(new Particle.DustOptions(color, DUST_SIZE));
+    }
+    this.density = Math.max(1, density);
+    this.abandonDistance = abandonDistance;
     this.messages = messages;
     this.locale = player.locale();
     setPath(path);
@@ -70,7 +93,8 @@ final class TrailNavigator implements Navigator<Location> {
     this.points = new ArrayList<>(steps.size());
     for (Step<Location, MinecraftStepPayload> step : steps) {
       Location location = step.position();
-      points.add(new Vec3(location.getX(), location.getY(), location.getZ()));
+      // Block centres, so projection and rendering share the same reference points.
+      points.add(new Vec3(location.getBlockX() + 0.5, location.getBlockY() + 0.5, location.getBlockZ() + 0.5));
     }
     this.foremost = 0;
     this.lastPromptedIndex = -1;
@@ -90,10 +114,10 @@ final class TrailNavigator implements Navigator<Location> {
     Location playerLocation = player.getLocation();
     World playerWorld = playerLocation.getWorld();
     Vec3 playerVec = new Vec3(playerLocation.getX(), playerLocation.getY(), playerLocation.getZ());
+    boolean onTrailWorld = sameWorld(playerWorld, steps.get(foremost).position());
 
-    // Advance only while the player is in the same world as the trail head; a cross-domain hop
-    // (portal/command) is handled by the action prompt below, not by geometry.
-    if (sameWorld(playerWorld, steps.get(foremost).position())) {
+    // Advance only in the trail head's world; a cross-domain hop is handled by the action prompt.
+    if (onTrailWorld) {
       foremost = TrailProgress.advance(points, foremost, playerVec);
     }
 
@@ -102,9 +126,17 @@ final class TrailNavigator implements Navigator<Location> {
       return;
     }
 
+    if (onTrailWorld && abandonDistance > 0
+        && playerVec.minus(projectedTarget(playerVec)).lengthSquared() > (double) abandonDistance * abandonDistance) {
+      messages.send(player, locale, OdysseyMessages.NAV_TRAIL_ABANDONED);
+      complete = true; // the trip manager untracks a completed trip
+      return;
+    }
+
     promptForActionIfNeeded();
-    renderTrail(playerWorld);
-    renderReturnLine(playerLocation, playerWorld);
+    ThreadLocalRandom random = ThreadLocalRandom.current();
+    renderTrail(playerVec, playerWorld, random);
+    renderGuideLine(playerVec, playerWorld, random);
   }
 
   @Override
@@ -120,6 +152,25 @@ final class TrailNavigator implements Navigator<Location> {
   @Override
   public boolean isComplete() {
     return complete;
+  }
+
+  @Override
+  public double remainingSeconds() {
+    double total = 0.0;
+    for (int i = foremost; i < steps.size(); i++) {
+      total += steps.get(i).time();
+    }
+    // Add an estimate for walking the guide-line back to the path: its length times the current
+    // step's per-block time (we can't know the real terrain in between).
+    if (!steps.isEmpty() && player.isOnline()) {
+      Location location = player.getLocation();
+      if (sameWorld(location.getWorld(), steps.get(foremost).position())) {
+        Vec3 playerVec = new Vec3(location.getX(), location.getY(), location.getZ());
+        double distance = Math.sqrt(playerVec.minus(projectedTarget(playerVec)).lengthSquared());
+        total += distance * steps.get(foremost).time();
+      }
+    }
+    return total;
   }
 
   private boolean reachedGoal(Vec3 playerVec, World playerWorld) {
@@ -148,36 +199,65 @@ final class TrailNavigator implements Navigator<Location> {
     }
   }
 
-  private void renderTrail(World playerWorld) {
+  private void renderTrail(Vec3 playerVec, World playerWorld, ThreadLocalRandom random) {
     int end = Math.min(steps.size(), foremost + bufferCells);
     for (int i = foremost; i < end; i++) {
-      Location location = steps.get(i).position();
-      if (sameWorld(playerWorld, location)) {
-        player.spawnParticle(Particle.DUST, center(location), 1, DUST);
+      if (!sameWorld(playerWorld, steps.get(i).position())) {
+        continue;
       }
+      Vec3 centre = points.get(i);
+      if (playerVec.minus(centre).lengthSquared() < NEAR_BUFFER_SQUARED) {
+        continue; // keep the player's immediate view clear
+      }
+      scatter(playerWorld, centre, random);
     }
   }
 
-  private void renderReturnLine(Location playerLocation, World playerWorld) {
-    Location head = steps.get(foremost).position();
-    if (!sameWorld(playerWorld, head)) {
+  private void renderGuideLine(Vec3 playerVec, World playerWorld, ThreadLocalRandom random) {
+    if (!sameWorld(playerWorld, steps.get(foremost).position())) {
       return;
     }
-    Vec3 from = new Vec3(playerLocation.getX(), playerLocation.getY(), playerLocation.getZ());
-    Vec3 to = new Vec3(head.getX() + 0.5, head.getY() + 0.5, head.getZ() + 0.5);
-    Vec3 delta = to.minus(from);
+    Vec3 target = projectedTarget(playerVec);
+    Vec3 delta = target.minus(playerVec);
     double distance = Math.sqrt(delta.lengthSquared());
-    int dots = (int) (distance / RETURN_LINE_SPACING);
-    for (int i = 1; i < dots; i++) {
+    if (distance <= NEAR_BUFFER) {
+      return; // on or beside the path: no guide-line needed
+    }
+    int dots = (int) (distance / GUIDE_LINE_SPACING);
+    for (int i = 1; i <= dots; i++) {
       double t = i / (double) dots;
-      Location dot = new Location(playerWorld,
-          from.x() + delta.x() * t, from.y() + delta.y() * t, from.z() + delta.z() * t);
-      player.spawnParticle(Particle.DUST, dot, 1, DUST);
+      Vec3 point = new Vec3(
+          playerVec.x() + delta.x() * t, playerVec.y() + delta.y() * t, playerVec.z() + delta.z() * t);
+      if (playerVec.minus(point).lengthSquared() < NEAR_BUFFER_SQUARED) {
+        continue;
+      }
+      scatter(playerWorld, point, random); // same scatter as the column, so it matches thickness
     }
   }
 
-  private static Location center(Location blockLocation) {
-    return blockLocation.clone().add(0.5, 0.5, 0.5);
+  /** Spawns {@code density} Gaussian-scattered particles of random palette colors around a centre. */
+  private void scatter(World world, Vec3 centre, ThreadLocalRandom random) {
+    for (int p = 0; p < density; p++) {
+      Particle.DustOptions dust = dusts.get(random.nextInt(dusts.size()));
+      Location dot = new Location(world,
+          centre.x() + random.nextGaussian() * SPREAD_HORIZONTAL,
+          centre.y() + random.nextGaussian() * SPREAD_VERTICAL,
+          centre.z() + random.nextGaussian() * SPREAD_HORIZONTAL);
+      player.spawnParticle(Particle.DUST, dot, 1, dust);
+    }
+  }
+
+  /** The nearest point on the current segment ahead — so a slight deviation nudges back, not rewinds. */
+  private Vec3 projectedTarget(Vec3 playerVec) {
+    Vec3 start = points.get(foremost);
+    if (foremost + 1 >= points.size()) {
+      return start;
+    }
+    Vec3 segment = points.get(foremost + 1).minus(start);
+    double lengthSquared = segment.lengthSquared();
+    double t = lengthSquared == 0.0
+        ? 0.0 : Math.clamp(playerVec.minus(start).dot(segment) / lengthSquared, 0.0, 1.0);
+    return new Vec3(start.x() + segment.x() * t, start.y() + segment.y() * t, start.z() + segment.z() * t);
   }
 
   private static boolean sameWorld(World playerWorld, Location stepLocation) {
