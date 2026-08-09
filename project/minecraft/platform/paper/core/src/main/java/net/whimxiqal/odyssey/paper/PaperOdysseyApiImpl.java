@@ -12,10 +12,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import net.whimxiqal.odyssey.*;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
-import net.whimxiqal.odyssey.minecraft.api.PlatformTransition;
-import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
+import net.whimxiqal.odyssey.minecraft.api.*;
 import net.whimxiqal.odyssey.paper.api.BoxWorldRegion;
 import net.whimxiqal.odyssey.api.Destination;
 import net.whimxiqal.odyssey.api.SearchHandle;
@@ -67,18 +64,22 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
 
   @Override
   public SearchHandle<Step<Location, MinecraftStepPayload>> navigatePlayer(
-      Player player, Location destination, SearchSettings settings) {
+      Player player,
+      Location destination,
+      MinecraftSearchSettings settings) {
     DomainRegion<MinecraftWorld> region = new CellRegion<>(
         PaperConversions.cell(destination), wrap(destination.getWorld()));
-    return search(player, new SingleDestination<>(region), Set.of(), Set.of(), Set.of(), settings);
+    return search(player, new SingleDestination<>(region), settings);
   }
 
   @Override
   public SearchHandle<Step<Location, MinecraftStepPayload>> navigatePlayerToRegion(
-      Player player, Location location1, Location location2, SearchSettings settings) {
+      Player player,
+      Location location1,
+      Location location2,
+      MinecraftSearchSettings settings) {
     BoxWorldRegion region = BoxWorldRegion.of(location1, location2);
-    return search(player, new SingleDestination<>(PaperConversions.region(region, this)),
-        Set.of(), Set.of(), Set.of(), settings);
+    return search(player, new SingleDestination<>(PaperConversions.region(region, this)), settings);
   }
 
   /**
@@ -88,17 +89,13 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
    *
    * @param player the navigating player
    * @param destination the goal, as one or more world regions
-   * @param excludedModes step types to leave out of the search (from {@code -no-mode} flags)
    * @param settings the search limits and knobs
    * @return a handle to the in-flight search, yielding native-located steps
    */
   public SearchHandle<Step<Location, MinecraftStepPayload>> navigatePlayerToDestination(
       Player player,
       Destination<WorldRegion<World, Vector3i>> destination,
-      Set<MinecraftStepType> excludedModes,
-      Set<String> excludedWorlds,
-      Set<String> excludedDimensions,
-      SearchSettings settings) {
+      MinecraftSearchSettings settings) {
     List<DomainRegion<MinecraftWorld>> regions = new ArrayList<>();
     for (WorldRegion<World, Vector3i> region : destination.regions()) {
       if (region.world() == null) {
@@ -106,7 +103,7 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
       }
       regions.add(PaperConversions.region(region, this));
     }
-    return search(player, () -> regions, excludedModes, excludedWorlds, excludedDimensions, settings);
+    return search(player, () -> regions, settings);
   }
 
   /**
@@ -138,18 +135,17 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
 
   private SearchHandle<Step<Location, MinecraftStepPayload>> search(
       Player player, Destination<DomainRegion<MinecraftWorld>> destination,
-      Set<MinecraftStepType> excludedModes, Set<String> excludedWorlds,
-      Set<String> excludedDimensions, SearchSettings settings) {
+      MinecraftSearchSettings settings) {
     OdysseyPlayer agent = new PaperPlayer(player);
     Location origin = player.getLocation();
     Position<MinecraftWorld> originPosition = new Position<>(
         PaperConversions.cell(origin), wrap(origin.getWorld()));
-    List<MinecraftMode<OdysseyPlayer>> modes = MinecraftModes.forPlayer(agent, excludedModes);
+    List<MinecraftMode<OdysseyPlayer>> modes = MinecraftModes.forPlayer(agent, settings.excludedModes());
 
     CompletableFuture<SearchHandle<Step<Position<MinecraftWorld>, MinecraftStepPayload>>>
-        handleFuture = gatherTransitions(player, excludedWorlds, excludedDimensions).thenApply(gathered ->
+        handleFuture = gatherTransitions(player, settings.excludedWorlds(), settings.excludedDimensions()).thenApply(gathered ->
         core.navigate(
-            logger, scheduler, agent, originPosition, destination, modes, gathered, heuristic, settings));
+            logger, scheduler, agent, originPosition, destination, modes, gathered, heuristic, settings.settings()));
     return new PaperSearchHandle(handleFuture);
   }
 

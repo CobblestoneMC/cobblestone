@@ -94,7 +94,7 @@ public final class Trip<L> {
       if (stopped) {
         return;
       }
-      if (error == null && result != null) {
+      if (error == null) {
         result.ifPresent(this::applyNewPath);
       }
       if (reschedule && !stopped) {
@@ -132,7 +132,7 @@ public final class Trip<L> {
 
   private void runGuideSearch(L target) {
     guideSearch.search(target).whenComplete((result, error) -> {
-      if (stopped || error != null || result == null) {
+      if (stopped || error != null || result.isEmpty()) {
         return;
       }
       result.ifPresent(path -> scheduler.runAtPosition(anchor, () -> {

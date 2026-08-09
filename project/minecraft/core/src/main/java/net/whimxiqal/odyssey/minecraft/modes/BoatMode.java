@@ -55,7 +55,7 @@ final class BoatMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
       Cell dest = from.plus(dir[0], 0, dir[1]);
       boolean diagonal = dir[0] != 0 && dir[1] != 0;
       if (boating) {
-        if (view.at(dest).supportsBoat() && view.at(dest, 0, 1, 0).isPassable()) {
+        if (view.at(dest).supportsBoat() && view.at(dest, 0, 1, 0).isPassable() && !view.at(dest, 0, 1, 0).isWater()) {
           double cost = MovementCosts.BOAT * (diagonal ? MovementCosts.DIAGONAL : 1.0);
           moves.add(move(dest, cost, MinecraftStepType.BOAT, state));
         } else if (!diagonal && Geometry.standable(view, dest)) {

@@ -34,7 +34,9 @@ import net.whimxiqal.odyssey.api.Path;
 import net.whimxiqal.odyssey.api.SearchHandle;
 import net.whimxiqal.odyssey.api.SearchSettings;
 import net.whimxiqal.odyssey.api.Step;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftSearchSettings;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
+import net.whimxiqal.odyssey.paper.PaperConversions;
 import net.whimxiqal.odyssey.paper.PaperOdysseyApiImpl;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperNavigatorFactory;
@@ -149,25 +151,27 @@ final class NavigateCommand {
 
     DestinationResolver.Resolution<World, Vector3i> resolution =
         DestinationResolver.resolve(destinationRoots(player), parsed.destination(), player::hasPermission);
-    if (resolution instanceof DestinationResolver.Ambiguous<World, Vector3i> ambiguous) {
-      messages.send(player, locale, OdysseyMessages.NAVIGATE_DESTINATION_AMBIGUOUS, formatAddresses(ambiguous.addresses()));
+    if (resolution instanceof DestinationResolver.Ambiguous<World, Vector3i>(List<List<String>> addresses)) {
+      messages.send(player, locale, OdysseyMessages.NAVIGATE_DESTINATION_AMBIGUOUS, formatAddresses(addresses));
       return Command.SINGLE_SUCCESS;
     }
-    if (!(resolution instanceof DestinationResolver.Resolved<World, Vector3i> resolved)) {
+    if (!(resolution instanceof DestinationResolver.Resolved<World, Vector3i>(
+        MinecraftDestination<World, Vector3i> destination, List<String> address
+    ))) {
       messages.send(player, locale, OdysseyMessages.NAVIGATE_DESTINATION_NOT_FOUND, String.join(" ", parsed.destination()));
       return Command.SINGLE_SUCCESS;
     }
 
-    String destinationLabel = String.join(" ", resolved.address());
+    String destinationLabel = String.join(" ", address);
     // Re-navigating to a place you already have a trip for replaces it rather than piling on.
     trips.cancelByDestination(player.getUniqueId(), destinationLabel);
     boolean live = switch (flags.liveness()) {
       case LIVE -> true;
       case NO_LIVE -> false;
-      case DEFAULT -> resolved.destination().isMobile()
+      case DEFAULT -> destination.isMobile()
           ? liveMobileDefault.getAsBoolean() : liveStationaryDefault.getAsBoolean();
     };
-    startSearch(player, locale, destinationLabel, resolved.destination(), flags, live, factory, platformApi,
+    startSearch(player, locale, destinationLabel, destination, flags, live, factory, platformApi,
         trips, searches, gate, liveIntervalMillis, searchSettings, log, messages);
     return Command.SINGLE_SUCCESS;
   }
@@ -192,8 +196,8 @@ final class NavigateCommand {
     final long startNanos = System.nanoTime();
     gate.beginForced(uuid); // a manual search always runs and counts toward the budget
     SearchHandle<Step<Location, MinecraftStepPayload>> handle = platformApi.navigatePlayerToDestination(
-        player, destination.destination(), flags.excludedModes(),
-        flags.excludedWorlds(), flags.excludedDimensions(), searchSettings.get());
+        player, destination.destination(), new MinecraftSearchSettings(searchSettings.get(), flags.excludedModes(),
+        flags.excludedWorlds(), flags.excludedDimensions()));
     searches.track(uuid, handle);
     messages.send(player, locale, OdysseyMessages.NAVIGATE_SEARCHING);
 
@@ -206,10 +210,10 @@ final class NavigateCommand {
         messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
         return;
       }
-      if (result instanceof NavigationResult.Failure<Step<Location, MinecraftStepPayload>> failure) {
+      if (result instanceof NavigationResult.Failure<Step<Location, MinecraftStepPayload>>(FailureReason reason)) {
         log.debug("navigate {} -> {}: {} in {}ms",
-            player.getName(), destinationLabel, failure.reason(), elapsedMillis);
-        sendFailure(player, locale, messages, failure.reason());
+            player.getName(), destinationLabel, reason, elapsedMillis);
+        sendFailure(player, locale, messages, reason);
         return;
       }
       Path<Step<Location, MinecraftStepPayload>> path =
@@ -232,7 +236,7 @@ final class NavigateCommand {
         Optional<Trip<Location>> trip = trips.start(uuid, platformApi.position(origin), flags.navigator(),
             navigator, destinationLabel,
             liveSearch(player, destination, flags, platformApi, searches, gate, searchSettings),
-            guideSearch(player, platformApi), live, liveIntervalMillis);
+            guideSearch(player, flags, platformApi), live, liveIntervalMillis);
         if (trip.isEmpty()) {
           messages.send(player, locale, OdysseyMessages.NAVIGATE_TRIP_LIMIT);
         } else {
@@ -247,16 +251,22 @@ final class NavigateCommand {
   }
 
   /** Builds the short-range guide search (player -> current step) for off-trail drift. */
-  private static GuideSearch<Location> guideSearch(Player player, PaperOdysseyApiImpl platformApi) {
+  private static GuideSearch<Location> guideSearch(
+      Player player,
+      NavigationFlags flags,
+      PaperOdysseyApiImpl platformApi) {
     return target -> {
       if (!player.isOnline()) {
         return CompletableFuture.completedFuture(Optional.empty());
       }
-      return platformApi.navigatePlayer(player, target, GUIDE_SETTINGS).future().handle((result, error) -> {
+      return platformApi.navigatePlayer(player, target, new MinecraftSearchSettings(GUIDE_SETTINGS,flags.excludedModes(),
+          flags.excludedWorlds(), flags.excludedDimensions())).future().handle((result, error) -> {
         if (error == null
-            && result instanceof NavigationResult.Success<Step<Location, MinecraftStepPayload>> success
-            && !success.path().steps().isEmpty()) {
-          return Optional.of(success.path());
+            && result instanceof NavigationResult.Success<Step<Location, MinecraftStepPayload>>(
+            Path<Step<Location, MinecraftStepPayload>> path
+        )
+            && !path.steps().isEmpty()) {
+          return Optional.of(path);
         }
         return Optional.<Path<Step<Location, MinecraftStepPayload>>>empty();
       });
@@ -278,16 +288,18 @@ final class NavigateCommand {
         return CompletableFuture.completedFuture(Optional.empty());
       }
       SearchHandle<Step<Location, MinecraftStepPayload>> handle = platformApi.navigatePlayerToDestination(
-          player, destination.destination(), flags.excludedModes(),
-          flags.excludedWorlds(), flags.excludedDimensions(), searchSettings.get());
+          player, destination.destination(), new MinecraftSearchSettings(searchSettings.get(), flags.excludedModes(),
+          flags.excludedWorlds(), flags.excludedDimensions()));
       searches.track(uuid, handle);
       return handle.future().handle((result, error) -> {
         searches.untrack(uuid, handle);
         gate.end(uuid);
         if (error == null
-            && result instanceof NavigationResult.Success<Step<Location, MinecraftStepPayload>> success
-            && !success.path().steps().isEmpty()) {
-          return Optional.of(success.path());
+            && result instanceof NavigationResult.Success<Step<Location, MinecraftStepPayload>>(
+            Path<Step<Location, MinecraftStepPayload>> path
+        )
+            && !path.steps().isEmpty()) {
+          return Optional.of(path);
         }
         return Optional.<Path<Step<Location, MinecraftStepPayload>>>empty();
       });

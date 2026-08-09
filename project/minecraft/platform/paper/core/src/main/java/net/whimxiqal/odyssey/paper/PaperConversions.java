@@ -23,7 +23,7 @@ import org.joml.Vector3i;
  * {@link Position}, so the Paper façade can speak native types on its surface while the core speaks
  * its own.
  */
-final class PaperConversions {
+public final class PaperConversions {
 
   private PaperConversions() {
   }

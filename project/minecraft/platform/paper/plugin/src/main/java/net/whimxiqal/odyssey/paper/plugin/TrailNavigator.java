@@ -25,11 +25,10 @@ import net.whimxiqal.odyssey.plugin.message.Messages;
 import net.whimxiqal.odyssey.plugin.message.OdysseyMessages;
 import net.whimxiqal.odyssey.plugin.navigator.TrailProgress;
 import net.whimxiqal.odyssey.plugin.navigator.Vec3;
-import org.bukkit.Color;
-import org.bukkit.Location;
-import org.bukkit.Particle;
-import org.bukkit.World;
+import org.bukkit.*;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+import org.bukkit.util.Vector;
 
 /**
  * The default {@code trail} navigator: a column of dust particles along the path ahead of the player
@@ -59,8 +58,6 @@ final class TrailNavigator implements Navigator<Location> {
   private static final float DUST_SIZE = 1.0f;
   private static final Particle.DustOptions MINE_DUST = new Particle.DustOptions(Color.RED, 1.0f);
   private static final double MINE_MARGIN = 0.05;             // cage hugs the block to mine
-  private static final double MINE_SPACING = 0.25;            // particle spacing along the marker lines
-  private static final int MINE_FLASH_PERIOD = 16;           // ~0.8s: flash the cage rather than spam it
 
   /**
    * Identifies a path step by its exact block, for the "player stood on a later step" shortcut.
@@ -88,6 +85,7 @@ final class TrailNavigator implements Navigator<Location> {
   private int tickCounter;
   private boolean guideRequested;
   private int guideCooldown;
+  private List<Step<Location, MinecraftStepPayload>> guideSteps;
   private List<Vec3> guidePoints;   // a real short path back to the trail; null when on-trail
   private String guideWorld;        // world key of the current guide path
 
@@ -121,8 +119,8 @@ final class TrailNavigator implements Navigator<Location> {
     this.stepByBlock = new HashMap<>();
     for (int i = 0; i < steps.size(); i++) {
       Location location = steps.get(i).position();
-      // Block centres, so projection and rendering share the same reference points.
-      points.add(new Vec3(location.getBlockX() + 0.5, location.getBlockY() + 0.5, location.getBlockZ() + 0.5));
+      // Block centers, so projection and rendering share the same reference points.
+      points.add(pathLocationToRenderPoint(location));
       // Highest index wins, so standing on a repeated block jumps to the furthest occurrence.
       stepByBlock.put(new BlockKey(location.getBlockX(), location.getBlockY(), location.getBlockZ()), i);
     }
@@ -130,6 +128,10 @@ final class TrailNavigator implements Navigator<Location> {
     this.lastPromptedIndex = -1;
     this.recalcCooldown = 0;
     this.complete = steps.isEmpty();
+
+    // reset guide steps for new main path
+    guideSteps = null;
+    guidePoints = null;
   }
 
   @Override
@@ -186,6 +188,7 @@ final class TrailNavigator implements Navigator<Location> {
         guideCooldown = GUIDE_COOLDOWN_TICKS;
       }
     } else {
+      guideSteps = null;
       guidePoints = null; // back on the trail: drop any guide
     }
 
@@ -226,19 +229,25 @@ final class TrailNavigator implements Navigator<Location> {
     return Optional.of(steps.get(foremost).position()); // guide the player toward the current step
   }
 
+  private Vec3 pathLocationToRenderPoint(Location location) {
+    // Y is raised by 0.9 instead of 0.5 so it's in the center of the player's body-ish
+    return new Vec3(location.getBlockX() + 0.5, location.getBlockY() + 0.9, location.getBlockZ() + 0.5);
+  }
+
   @Override
   public void setGuidePath(Path<Step<Location, MinecraftStepPayload>> guide) {
-    List<Step<Location, MinecraftStepPayload>> guideSteps = guide.steps();
-    if (guideSteps.isEmpty()) {
+    if (guide.steps().isEmpty()) {
+      guideSteps = null;
       guidePoints = null;
       return;
     }
+    guideSteps = List.copyOf(guide.steps());
     List<Vec3> pts = new ArrayList<>(guideSteps.size());
     for (Step<Location, MinecraftStepPayload> step : guideSteps) {
       Location location = step.position();
-      pts.add(new Vec3(location.getBlockX() + 0.5, location.getBlockY() + 0.5, location.getBlockZ() + 0.5));
+      pts.add(pathLocationToRenderPoint(location));
     }
-    World world = guideSteps.get(0).position().getWorld();
+    World world = guideSteps.getFirst().position().getWorld();
     guideWorld = world == null ? null : world.getKey().asString();
     guidePoints = pts;
   }
@@ -266,8 +275,8 @@ final class TrailNavigator implements Navigator<Location> {
     if (foremost < points.size() - 1) {
       return false;
     }
-    Vec3 goal = points.get(points.size() - 1);
-    return sameWorld(playerWorld, steps.get(steps.size() - 1).position())
+    Vec3 goal = points.getLast();
+    return sameWorld(playerWorld, steps.getLast().position())
         && playerVec.minus(goal).lengthSquared() <= COMPLETION_RADIUS_SQUARED;
   }
 
@@ -277,14 +286,21 @@ final class TrailNavigator implements Navigator<Location> {
       return;
     }
     MinecraftStepPayload payload = steps.get(next).payload();
-    if (payload == null || !isAction(payload.stepType())) {
+    if (payload == null) {
+      return;
+    }
+    MinecraftInstruction instruction = payload.instruction();
+    if (instruction == null) {
       return;
     }
     lastPromptedIndex = foremost;
-    if (payload.instruction() instanceof MinecraftInstruction.CommandInstruction(String command)) {
-      messages.send(player, locale, OdysseyMessages.NAV_TRAIL_PROMPT_COMMAND, command);
-    } else {
-      messages.send(player, locale, OdysseyMessages.NAV_TRAIL_PROMPT_ACTION);
+    switch (instruction) {
+      case MinecraftInstruction.CommandInstruction commandInstruction -> {
+        messages.send(player, locale, OdysseyMessages.NAV_TRAIL_PROMPT_COMMAND, commandInstruction.command());
+      }
+      case MinecraftInstruction.None _ -> {
+        // do nothing
+      }
     }
   }
 
@@ -295,67 +311,57 @@ final class TrailNavigator implements Navigator<Location> {
       if (!sameWorld(playerWorld, location)) {
         continue;
       }
-      Vec3 centre = points.get(i);
-      if (playerVec.minus(centre).lengthSquared() < NEAR_BUFFER_SQUARED) {
-        continue; // keep the player's immediate view clear
-      }
+      Vec3 center = points.get(i);
       MinecraftStepPayload payload = steps.get(i).payload();
-      if (payload != null && payload.stepType() == MinecraftStepType.MINE
-          && playerWorld.getBlockAt(location.getBlockX(), location.getBlockY(), location.getBlockZ())
-          .getType().isSolid()) {
-        // Still a solid block to dig: flash a distinct red cage (rather than spam particles).
-        if (tickCounter % MINE_FLASH_PERIOD == 0) {
-          renderMineMarker(playerWorld, centre);
-        }
-      } else {
-        // Not a mine step, or the block has been broken — render as normal trail.
-        scatter(playerWorld, centre, random);
+      renderBlock(playerWorld, location.toVector(), center, playerVec, payload, random);
+    }
+  }
+  
+  private void renderBlock(World world, Vector locationVector, Vec3 center, Vec3 playerVec, MinecraftStepPayload payload, ThreadLocalRandom random) {
+    if (playerVec.minus(center).lengthSquared() < NEAR_BUFFER_SQUARED) {
+      return; // keep the player's immediate view clear
+    }
+    scatter(world, center, random);
+
+    if (payload != null && payload.stepType() == MinecraftStepType.MINE) {
+      Block block = world.getBlockAt(locationVector.getBlockX(), locationVector.getBlockY(), locationVector.getBlockZ());
+      if (block.getType().isSolid()) {
+        renderMineMarker(world, locationVector, random);
+      }
+      Vector upOne = locationVector.add(new Vector(0, 1, 0));
+      Block aboveBlock = world.getBlockAt(upOne.getBlockX(), upOne.getBlockY(), upOne.getBlockZ());
+      if (aboveBlock.getType().isSolid()) {
+        renderMineMarker(world, upOne, random);
       }
     }
   }
 
   /**
-   * A red wireframe cage just outside the block plus an X on each face — "mine this block".
+   * A cage just outside the block plus an X on each face — "mine this block".
    */
-  private void renderMineMarker(World world, Vec3 centre) {
+  private void renderMineMarker(World world, Vector locationVector, ThreadLocalRandom random) {
     double h = 0.5 + MINE_MARGIN;
-    double cx = centre.x();
-    double cy = centre.y();
-    double cz = centre.z();
-    // 12 edges of the cube.
+    double cx = locationVector.getBlockX() + 0.5;
+    double cy = locationVector.getBlockY() + 0.5;
+    double cz = locationVector.getBlockZ() + 0.5;
+    // 6 faces of the cube.
+    for (double sx : new double[]{-h, h}) {
+      renderMineFace(random, world, cx + sx, cy - h, cz - h, cx + sx, cy + h, cz + h);
+    }
     for (double sy : new double[]{-h, h}) {
-      for (double sz : new double[]{-h, h}) {
-        redLine(world, cx - h, cy + sy, cz + sz, cx + h, cy + sy, cz + sz);
-      }
+      renderMineFace(random, world, cx - h, cy + sy, cz - h, cx + h, cy + sy, cz + h);
     }
-    for (double sx : new double[]{-h, h}) {
-      for (double sz : new double[]{-h, h}) {
-        redLine(world, cx + sx, cy - h, cz + sz, cx + sx, cy + h, cz + sz);
-      }
-    }
-    for (double sx : new double[]{-h, h}) {
-      for (double sy : new double[]{-h, h}) {
-        redLine(world, cx + sx, cy + sy, cz - h, cx + sx, cy + sy, cz + h);
-      }
+    for (double sz : new double[]{-h, h}) {
+      renderMineFace(random, world, cx - h, cy - h, cz + sz, cx + h, cy + h, cz + sz);
     }
   }
 
-  private void redLine(World world, double x1, double y1, double z1, double x2, double y2, double z2) {
-    double dx = x2 - x1;
-    double dy = y2 - y1;
-    double dz = z2 - z1;
-    double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    int dots = Math.max(1, (int) (length / MINE_SPACING));
-    for (int i = 0; i <= dots; i++) {
-      double t = i / (double) dots;
-      Particle.DUST.builder()
-          .location(new Location(world, x1 + dx * t, y1 + dy * t, z1 + dz * t))
-          .receivers(player)
-          .color(255, 0, 0)
-          .count(0)
-          .extra(0)
-          .spawn();
-    }
+  private void renderMineFace(ThreadLocalRandom random, World world, double x1, double y1, double z1, double x2, double y2, double z2) {
+    Location dot = new Location(world,
+        x1 == x2 ? x1 : random.nextDouble(x1, x2),
+        y1 == y2 ? y1 : random.nextDouble(y1, y2),
+        z1 == z2 ? z1 : random.nextDouble(z1, z2));
+    renderTrailParticle(random, dot);
   }
 
   private void renderGuide(Vec3 playerVec, World playerWorld, ThreadLocalRandom random) {
@@ -364,11 +370,10 @@ final class TrailNavigator implements Navigator<Location> {
     }
     // Prefer the real short guide path (computed by the trip) if we have one for this world.
     if (guidePoints != null && guideWorld != null && guideWorld.equals(playerWorld.getKey().asString())) {
-      for (Vec3 point : guidePoints) {
-        if (playerVec.minus(point).lengthSquared() < NEAR_BUFFER_SQUARED) {
-          continue;
-        }
-        scatter(playerWorld, point, random);
+      for (int i = 0; i < guidePoints.size(); i++) {
+        Vec3 point = guidePoints.get(i);
+        MinecraftStepPayload payload = guideSteps.get(i).payload();
+        renderBlock(playerWorld, new Vector(point.x(), point.y(), point.z()), point, playerVec, payload, random);
       }
       return;
     }
@@ -392,32 +397,36 @@ final class TrailNavigator implements Navigator<Location> {
   }
 
   /**
-   * Spawns ~{@code density} Gaussian-scattered particles around a centre, each a random configured
+   * Spawns ~{@code density} Gaussian-scattered particles around a center, each a random configured
    * type (DUST takes a random palette color). A fractional density is probabilistic (0.7 → 70%).
    */
-  private void scatter(World world, Vec3 centre, ThreadLocalRandom random) {
+  private void scatter(World world, Vec3 center, ThreadLocalRandom random) {
     int count = (int) density;
     if (random.nextDouble() < density - count) {
       count++;
     }
     for (int p = 0; p < count; p++) {
       Location dot = new Location(world,
-          centre.x() + random.nextGaussian() * SPREAD_HORIZONTAL,
-          centre.y() + random.nextGaussian() * SPREAD_VERTICAL,
-          centre.z() + random.nextGaussian() * SPREAD_HORIZONTAL);
-      Particle particle = particles.get(random.nextInt(particles.size()));
-      if (particle == Particle.DUST) {
-        Particle.DUST.builder()
-            .location(dot)
-            .receivers(player)
-            .data(dusts.get(random.nextInt(dusts.size())))
-            .spawn();
-      } else {
-        particle.builder()
-            .location(dot)
-            .receivers(player)
-            .spawn();
-      }
+          center.x() + random.nextGaussian() * SPREAD_HORIZONTAL,
+          center.y() + random.nextGaussian() * SPREAD_VERTICAL,
+          center.z() + random.nextGaussian() * SPREAD_HORIZONTAL);
+      renderTrailParticle(random, dot);
+    }
+  }
+
+  private void renderTrailParticle(ThreadLocalRandom random, Location location) {
+    Particle particle = particles.get(random.nextInt(particles.size()));
+    if (particle == Particle.DUST) {
+      Particle.DUST.builder()
+          .location(location)
+          .receivers(player)
+          .data(dusts.get(random.nextInt(dusts.size())))
+          .spawn();
+    } else {
+      particle.builder()
+          .location(location)
+          .receivers(player)
+          .spawn();
     }
   }
 
@@ -440,10 +449,4 @@ final class TrailNavigator implements Navigator<Location> {
     return playerWorld != null && playerWorld.equals(stepLocation.getWorld());
   }
 
-  private static boolean isAction(MinecraftStepType type) {
-    return switch (type) {
-      case OPEN_DOOR, PLACE_BOAT, MOUNT_HORSE, PORTAL, COMMAND -> true;
-      default -> false;
-    };
-  }
 }
