@@ -83,9 +83,6 @@ public final class OdysseyMessages {
   public static final Message0 NAV_TRAIL_PROMPT_ACTION =
       Message0.info("navigator.trail.prompt.action");
 
-  /** Shown when a trip is auto-abandoned because the player strayed too far from the trail. */
-  public static final Message0 NAV_TRAIL_ABANDONED = Message0.info("navigator.trail.abandoned");
-
   /** Acknowledges a {@code /navigate} request while the search runs. */
   public static final Message0 NAVIGATE_SEARCHING = Message0.info("command.navigate.searching");
 

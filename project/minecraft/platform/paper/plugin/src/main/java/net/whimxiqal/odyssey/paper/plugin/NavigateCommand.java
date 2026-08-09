@@ -23,6 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -45,6 +46,7 @@ import net.whimxiqal.odyssey.plugin.command.NavigationFlags;
 import net.whimxiqal.odyssey.plugin.destination.DestinationResolver;
 import net.whimxiqal.odyssey.plugin.message.Messages;
 import net.whimxiqal.odyssey.plugin.message.OdysseyMessages;
+import net.whimxiqal.odyssey.plugin.trip.GuideSearch;
 import net.whimxiqal.odyssey.plugin.trip.LiveSearch;
 import net.whimxiqal.odyssey.plugin.trip.Trip;
 import net.whimxiqal.odyssey.plugin.trip.TripManager;
@@ -68,13 +70,20 @@ final class NavigateCommand {
   private static final String PERMISSION_NAVIGATOR_PREFIX = "odyssey.navigator.";
   private static final Set<String> VALUE_FLAGS =
       Set.of("-navigator", "-no-world", "-no-dimension", "-no-mode");
+  // A tiny, greedy search for the off-trail "guide" path: bounded and heavily weighted so it's cheap.
+  private static final SearchSettings GUIDE_SETTINGS = SearchSettings.builder()
+      .maxCellsVisited(4000)
+      .maxWallClockMillis(1500L)
+      .heuristicWeight(2.0)
+      .build();
 
   private NavigateCommand() {
   }
 
   static LiteralCommandNode<CommandSourceStack> build(
       PaperOdysseyApiImpl platformApi, TripManager<Location> trips, SearchRegistry searches,
-      SearchGate gate, long liveIntervalMillis, Supplier<SearchSettings> searchSettings,
+      SearchGate gate, long liveIntervalMillis, BooleanSupplier liveMobileDefault,
+      BooleanSupplier liveStationaryDefault, Supplier<SearchSettings> searchSettings,
       OdysseyLogger log, Messages messages) {
     return Commands.literal("navigate")
         .requires(source -> source.getSender().hasPermission(PERMISSION_NAVIGATE))
@@ -84,7 +93,7 @@ final class NavigateCommand {
         .then(Commands.argument("args", StringArgumentType.greedyString())
             .suggests((ctx, builder) -> suggest(ctx, builder))
             .executes(ctx -> run(ctx, platformApi, trips, searches, gate, liveIntervalMillis,
-                searchSettings, log, messages)))
+                liveMobileDefault, liveStationaryDefault, searchSettings, log, messages)))
         .build();
   }
 
@@ -107,6 +116,8 @@ final class NavigateCommand {
       SearchRegistry searches,
       SearchGate gate,
       long liveIntervalMillis,
+      BooleanSupplier liveMobileDefault,
+      BooleanSupplier liveStationaryDefault,
       Supplier<SearchSettings> searchSettings,
       OdysseyLogger log,
       Messages messages) {
@@ -150,7 +161,13 @@ final class NavigateCommand {
     String destinationLabel = String.join(" ", resolved.address());
     // Re-navigating to a place you already have a trip for replaces it rather than piling on.
     trips.cancelByDestination(player.getUniqueId(), destinationLabel);
-    startSearch(player, locale, destinationLabel, resolved.destination(), flags, factory, platformApi,
+    boolean live = switch (flags.liveness()) {
+      case LIVE -> true;
+      case NO_LIVE -> false;
+      case DEFAULT -> resolved.destination().isMobile()
+          ? liveMobileDefault.getAsBoolean() : liveStationaryDefault.getAsBoolean();
+    };
+    startSearch(player, locale, destinationLabel, resolved.destination(), flags, live, factory, platformApi,
         trips, searches, gate, liveIntervalMillis, searchSettings, log, messages);
     return Command.SINGLE_SUCCESS;
   }
@@ -161,6 +178,7 @@ final class NavigateCommand {
       String destinationLabel,
       MinecraftDestination<World, Vector3i> destination,
       NavigationFlags flags,
+      boolean live,
       PaperNavigatorFactory factory,
       PaperOdysseyApiImpl platformApi,
       TripManager<Location> trips,
@@ -209,12 +227,12 @@ final class NavigateCommand {
           return;
         }
         Navigator<Location> navigator = factory.create(player, path, new PaperNavigatorContext(player));
-        Optional<Trip<Location>> trip = flags.live()
-            ? trips.startLive(uuid, platformApi.position(origin), flags.navigator(), navigator,
-                destinationLabel,
-                liveSearch(player, destination, flags, platformApi, searches, gate, searchSettings),
-                liveIntervalMillis)
-            : trips.start(uuid, platformApi.position(origin), flags.navigator(), navigator, destinationLabel);
+        // Every trip carries the re-search function (for stray recalculation); `live` also runs it
+        // periodically.
+        Optional<Trip<Location>> trip = trips.start(uuid, platformApi.position(origin), flags.navigator(),
+            navigator, destinationLabel,
+            liveSearch(player, destination, flags, platformApi, searches, gate, searchSettings),
+            guideSearch(player, platformApi), live, liveIntervalMillis);
         if (trip.isEmpty()) {
           messages.send(player, locale, OdysseyMessages.NAVIGATE_TRIP_LIMIT);
         } else {
@@ -226,6 +244,23 @@ final class NavigateCommand {
         }
       });
     });
+  }
+
+  /** Builds the short-range guide search (player -> current step) for off-trail drift. */
+  private static GuideSearch<Location> guideSearch(Player player, PaperOdysseyApiImpl platformApi) {
+    return target -> {
+      if (!player.isOnline()) {
+        return CompletableFuture.completedFuture(Optional.empty());
+      }
+      return platformApi.navigatePlayer(player, target, GUIDE_SETTINGS).future().handle((result, error) -> {
+        if (error == null
+            && result instanceof NavigationResult.Success<Step<Location, MinecraftStepPayload>> success
+            && !success.path().steps().isEmpty()) {
+          return Optional.of(success.path());
+        }
+        return Optional.<Path<Step<Location, MinecraftStepPayload>>>empty();
+      });
+    };
   }
 
   /** Builds the re-search behavior for a {@code -live} trip; yields to the per-player search budget. */
@@ -287,7 +322,7 @@ final class NavigateCommand {
     List<DestinationTree<World, Vector3i>> roots = new ArrayList<>();
     for (RegisteredServiceProvider<PaperDestinationProvider> registration
         : Bukkit.getServicesManager().getRegistrations(PaperDestinationProvider.class)) {
-      roots.add(registration.getProvider().provide(player));
+      roots.addAll(registration.getProvider().provide(player));
     }
     return roots;
   }

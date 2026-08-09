@@ -98,7 +98,7 @@ public final class FlagParser {
     Set<String> excludedWorlds = new LinkedHashSet<>();
     Set<String> excludedDimensions = new LinkedHashSet<>();
     String navigator = DEFAULT_NAVIGATOR;
-    boolean live = false;
+    NavigationFlags.Liveness liveness = NavigationFlags.Liveness.DEFAULT;
 
     int i = 0;
     while (i < tokens.size()) {
@@ -110,7 +110,10 @@ public final class FlagParser {
       }
       String flag = token.toLowerCase(Locale.ROOT);
       if (flag.equals("-live")) {
-        live = true;
+        liveness = NavigationFlags.Liveness.LIVE;
+        i++;
+      } else if (flag.equals("-no-live")) {
+        liveness = NavigationFlags.Liveness.NO_LIVE;
         i++;
       } else if (flag.equals("-navigator")) {
         if (i + 1 >= tokens.size()) {
@@ -149,6 +152,6 @@ public final class FlagParser {
     }
 
     return new Parsed(List.copyOf(destination),
-        new NavigationFlags(excludedModes, excludedWorlds, excludedDimensions, navigator, live));
+        new NavigationFlags(excludedModes, excludedWorlds, excludedDimensions, navigator, liveness));
   }
 }

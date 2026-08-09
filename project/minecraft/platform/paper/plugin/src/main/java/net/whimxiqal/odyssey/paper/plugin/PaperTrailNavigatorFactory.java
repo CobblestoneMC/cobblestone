@@ -9,6 +9,7 @@ package net.whimxiqal.odyssey.paper.plugin;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import net.whimxiqal.odyssey.api.Path;
 import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
@@ -20,6 +21,7 @@ import net.whimxiqal.odyssey.plugin.config.ConfigManager;
 import net.whimxiqal.odyssey.plugin.message.Messages;
 import org.bukkit.Color;
 import org.bukkit.Location;
+import org.bukkit.Particle;
 import org.bukkit.entity.Player;
 
 /**
@@ -62,10 +64,24 @@ public final class PaperTrailNavigatorFactory implements PaperNavigatorFactory {
       NavigatorContext<Player> context) {
     return new TrailNavigator(player, path,
         config.get(keys.trailBufferCells),
+        parseParticles(config.get(keys.trailParticles)),
         parseColors(config.get(keys.trailColors)),
         config.get(keys.trailDensity),
-        config.get(keys.tripsAbandonDistance),
+        config.get(keys.tripsRecalculateDistance),
         messages);
+  }
+
+  /** Parses Bukkit {@code Particle} names, skipping unknown ones. */
+  private static List<Particle> parseParticles(List<String> names) {
+    List<Particle> particles = new ArrayList<>();
+    for (String name : names) {
+      try {
+        particles.add(Particle.valueOf(name.trim().toUpperCase(Locale.ROOT)));
+      } catch (IllegalArgumentException ignored) {
+        // Skip an unknown particle name; TrailNavigator falls back to DUST if none are valid.
+      }
+    }
+    return particles;
   }
 
   /** Parses hex {@code RRGGBB} strings to colors, skipping malformed entries. */

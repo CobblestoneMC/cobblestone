@@ -30,7 +30,7 @@ class Tier2SearchTest {
     CorridorMode mode = new CorridorMode(false);
     Tier2Search<TestAgent, TestStep, TestDomain> search = new Tier2Search<>(
         new TestOdysseyLogger(), new TestAgent(), virtualPath(new Cell(0, 0, 0), new Cell(3, 0, 0)),
-        List.of(mode), Heuristics.zero(), 1000, 5, () -> false, Runnable::run);
+        List.of(mode), Heuristics.zero(), 1000, 5, 1.0, () -> false, Runnable::run);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
 
@@ -46,7 +46,7 @@ class Tier2SearchTest {
     CorridorMode mode = new CorridorMode(true);
     Tier2Search<TestAgent, TestStep, TestDomain> search = new Tier2Search<>(
             new TestOdysseyLogger(), new TestAgent(), virtualPath(new Cell(0, 0, 0), new Cell(2, 0, 0)),
-        List.of(mode), Heuristics.zero(), 1000, 5, () -> false, Runnable::run);
+        List.of(mode), Heuristics.zero(), 1000, 5, 1.0, () -> false, Runnable::run);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
 
@@ -72,7 +72,7 @@ class Tier2SearchTest {
   void reportsUnreachableWhenNoMovesAndNotAtTarget() {
     Tier2Search<TestAgent, TestStep, TestDomain> search = new Tier2Search<>(
             new TestOdysseyLogger(), new TestAgent(), virtualPath(new Cell(0, 0, 0), new Cell(5, 0, 0)),
-        List.of(), Heuristics.zero(), 1000, 5, () -> false, Runnable::run);
+        List.of(), Heuristics.zero(), 1000, 5, 1.0, () -> false, Runnable::run);
 
     Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
 
@@ -83,7 +83,7 @@ class Tier2SearchTest {
   void startAlreadyInTargetSolvesWithZeroSteps() {
     Tier2Search<TestAgent, TestStep, TestDomain> search = new Tier2Search<>(
             new TestOdysseyLogger(), new TestAgent(), virtualPath(new Cell(7, 0, 0), new Cell(7, 0, 0)),
-        List.of(new CorridorMode(false)), Heuristics.zero(), 1000, 5, () -> false, Runnable::run);
+        List.of(new CorridorMode(false)), Heuristics.zero(), 1000, 5, 1.0, () -> false, Runnable::run);
 
     Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
 

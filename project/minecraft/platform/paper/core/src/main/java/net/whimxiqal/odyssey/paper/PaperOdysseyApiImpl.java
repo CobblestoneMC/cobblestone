@@ -101,6 +101,9 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
       SearchSettings settings) {
     List<DomainRegion<MinecraftWorld>> regions = new ArrayList<>();
     for (WorldRegion<World, Vector3i> region : destination.regions()) {
+      if (region.world() == null) {
+        continue; // world unloaded or target gone; skip rather than NPE
+      }
       regions.add(PaperConversions.region(region, this));
     }
     return search(player, () -> regions, excludedModes, excludedWorlds, excludedDimensions, settings);

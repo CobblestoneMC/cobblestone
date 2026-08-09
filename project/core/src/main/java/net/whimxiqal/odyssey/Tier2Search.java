@@ -52,6 +52,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private final DomainRegion<D> target;
   private final List<? extends Mode<A, T, D>> modes;
   private final SolveHeuristic heuristic;
+  private final double heuristicWeight;
   private final int maxCellsVisited;
   private final BooleanSupplier cancelled;
   private final Executor executor;
@@ -72,6 +73,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       HeuristicStrategy heuristic,
       int maxCellsVisited,
       int runningAverageWidth,
+      double heuristicWeight,
       BooleanSupplier cancelled,
       Executor executor) {
     this.logger = logger;
@@ -80,13 +82,15 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     this.target = virtualPath.targetRegion();
     this.modes = modes;
     this.heuristic = heuristic.newSolve(runningAverageWidth);
+    this.heuristicWeight = heuristicWeight;
     this.maxCellsVisited = maxCellsVisited;
     this.cancelled = cancelled;
     this.executor = executor;
 
     CellState start = new CellState(virtualPath.fromCell(), virtualPath.state());
     bestCosts.put(start, 0.0);
-    open.add(new OpenEntry(start, 0.0, this.heuristic.estimate(start.cell(), target, start.state())));
+    open.add(new OpenEntry(start, 0.0,
+        heuristicWeight * this.heuristic.estimate(start.cell(), target, start.state())));
   }
 
   CompletableFuture<Tier2Result<T, D>> solve() {
@@ -189,7 +193,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         bestCosts.put(neighbor, tentative);
         cameFrom.put(neighbor, new Came<>(node, movement));
         open.add(new OpenEntry(neighbor, tentative,
-            tentative + heuristic.estimate(movement.cell(), target, movement.state())));
+            tentative + heuristicWeight * heuristic.estimate(movement.cell(), target, movement.state())));
       }
     }
   }

@@ -43,4 +43,14 @@ public interface MinecraftDestination<W, V> {
    * @return the required permissions
    */
   List<String> permissions();
+
+  /**
+   * Returns whether this destination can move (e.g. another player), so a trip to it should default
+   * to live (auto-recalculating). Stationary destinations (waypoints, worlds) return {@code false}.
+   *
+   * @return {@code true} if the destination is mobile
+   */
+  default boolean isMobile() {
+    return false;
+  }
 }

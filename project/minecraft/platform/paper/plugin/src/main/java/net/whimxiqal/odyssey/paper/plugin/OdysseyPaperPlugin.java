@@ -74,7 +74,7 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
     // Waypoints are surfaced to searches like any third-party provider: a Bukkit service Odyssey
     // discovers via the ServicesManager.
     getServer().getServicesManager().register(PaperDestinationProvider.class,
-        new WaypointDestinationProvider(dataStore.waypoints()), this, ServicePriority.Normal);
+        new OdysseyDestinationProvider(dataStore.waypoints()), this, ServicePriority.Normal);
 
     Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
     Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), logger);
@@ -92,7 +92,7 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
     getServer().getServicesManager().register(PaperTransitionProvider.class,
         new PortalTransitionProvider(dataStore.portalTransitions()), this, ServicePriority.Normal);
     getServer().getPluginManager().registerEvents(
-        new PortalListener(dataStore.portalTransitions(), platformApi.scheduler(),
+        new PortalListener(dataStore.portalTransitions(), platformApi.scheduler(), logger,
             () -> config.get(keys.portalsCostSeconds), () -> config.get(keys.portalsDiscovery)), this);
 
     getServer().getPluginManager().registerEvents(
@@ -105,6 +105,7 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
         .maxWallClockMillis(config.get(keys.algorithmMaxWallClockSeconds) * 1000L)
         .tier1RecalcThreshold(config.get(keys.algorithmTier1RecalcThreshold))
         .runningAverageWidth(config.get(keys.algorithmRunningAverageWidth))
+        .heuristicWeight(config.get(keys.algorithmHeuristicWeight))
         .build();
     getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
       event.registrar().register(
@@ -114,7 +115,8 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
           List.of("ody"));
       event.registrar().register(
           NavigateCommand.build(platformApi, tripManager, searchRegistry, searchGate,
-              liveIntervalMillis, searchSettings, logger, messages),
+              liveIntervalMillis, () -> config.get(keys.tripsLiveMobileDefault),
+              () -> config.get(keys.tripsLiveStationaryDefault), searchSettings, logger, messages),
           "Navigate to a destination",
           List.of("nav"));
     });

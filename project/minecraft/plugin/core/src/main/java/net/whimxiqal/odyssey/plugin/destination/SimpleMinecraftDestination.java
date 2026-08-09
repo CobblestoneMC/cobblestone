@@ -21,16 +21,35 @@ import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
  * @param destination the core navigation goal
  * @param displayName the human-facing name
  * @param permissions the permission nodes required to use it (all of them); empty for unrestricted
+ * @param mobile whether the destination can move (see {@link MinecraftDestination#isMobile()})
  * @param <W> the platform world type
  * @param <V> the platform vector type
  */
 public record SimpleMinecraftDestination<W, V>(
     Destination<WorldRegion<W, V>> destination,
     Component displayName,
-    List<String> permissions) implements MinecraftDestination<W, V> {
+    List<String> permissions,
+    boolean mobile) implements MinecraftDestination<W, V> {
 
   /** Canonical constructor; defensively copies the permission list. */
   public SimpleMinecraftDestination {
     permissions = List.copyOf(permissions);
+  }
+
+  /**
+   * Creates a stationary destination.
+   *
+   * @param destination the goal
+   * @param displayName the name
+   * @param permissions the required permissions
+   */
+  public SimpleMinecraftDestination(
+      Destination<WorldRegion<W, V>> destination, Component displayName, List<String> permissions) {
+    this(destination, displayName, permissions, false);
+  }
+
+  @Override
+  public boolean isMobile() {
+    return mobile;
   }
 }

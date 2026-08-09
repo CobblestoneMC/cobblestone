@@ -19,14 +19,25 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
  * @param excludedWorlds world keys to exclude from routing (from {@code -no-world})
  * @param excludedDimensions dimension names to exclude from routing (from {@code -no-dimension})
  * @param navigator the display strategy id (default {@link FlagParser#DEFAULT_NAVIGATOR})
- * @param live whether the resulting trip should auto-recalculate
+ * @param liveness whether the trip auto-recalculates: forced on/off by a flag, or left to the
+ *     per-destination default
  */
 public record NavigationFlags(
     Set<MinecraftStepType> excludedModes,
     Set<String> excludedWorlds,
     Set<String> excludedDimensions,
     String navigator,
-    boolean live) {
+    Liveness liveness) {
+
+  /** Whether the caller forced liveness on ({@code -live}), off ({@code -no-live}), or left default. */
+  public enum Liveness {
+    /** Force a live (auto-recalculating) trip. */
+    LIVE,
+    /** Force a non-live trip. */
+    NO_LIVE,
+    /** Use the per-destination default from config. */
+    DEFAULT
+  }
 
   /** Canonical constructor; defensively copies the exclusion sets. */
   public NavigationFlags {

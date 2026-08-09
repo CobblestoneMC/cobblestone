@@ -121,7 +121,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
       }
       Tier2Search<A, T, D> tier2 = new Tier2Search<>(
          logger, agent, edge.virtualPath(), modes, heuristic, settings.maxCellsVisited(),
-         settings.runningAverageWidth(), cancelled::get, executor);
+         settings.runningAverageWidth(), settings.heuristicWeight(), cancelled::get, executor);
       VirtualPath<T, D> virtualPath = edge.virtualPath();
       tier2.solve().whenCompleteAsync((result, error) -> {
         if (cancelled.get()) {

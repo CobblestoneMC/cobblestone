@@ -7,6 +7,8 @@
 
 package net.whimxiqal.odyssey.plugin.api;
 
+import java.util.Collection;
+
 @FunctionalInterface
 public interface DestinationProvider<W, V, P> {
 
@@ -16,5 +18,5 @@ public interface DestinationProvider<W, V, P> {
    * @param player the player requesting navigation
    * @return the (lazily-evaluated) tree
    */
-  DestinationTree<W, V> provide(P player);
+  Collection<DestinationTree<W, V>> provide(P player);
 }

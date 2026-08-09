@@ -37,6 +37,8 @@ public final class Trip<L> {
   private final long periodTicks;
   private final Consumer<Trip<L>> onEnd;
   private final LiveSearch<L> liveSearch;
+  private final GuideSearch<L> guideSearch;
+  private final boolean live;
   private final long liveIntervalMillis;
 
   private ScheduledTaskHandle handle;
@@ -53,6 +55,8 @@ public final class Trip<L> {
       long periodTicks,
       Consumer<Trip<L>> onEnd,
       LiveSearch<L> liveSearch,
+      GuideSearch<L> guideSearch,
+      boolean live,
       long liveIntervalMillis) {
     this.player = player;
     this.id = id;
@@ -64,23 +68,26 @@ public final class Trip<L> {
     this.periodTicks = periodTicks;
     this.onEnd = onEnd;
     this.liveSearch = liveSearch;
+    this.guideSearch = guideSearch;
+    this.live = live;
     this.liveIntervalMillis = liveIntervalMillis;
   }
 
   void start() {
     navigator.start();
     handle = scheduler.runAtPositionRepeating(anchor, this::tick, periodTicks);
-    if (liveSearch != null) {
+    if (live && liveSearch != null) {
       scheduleReSearch();
     }
   }
 
   private void scheduleReSearch() {
-    scheduler.runAsyncLater(this::reSearch, liveIntervalMillis);
+    scheduler.runAsyncLater(() -> reSearch(true), liveIntervalMillis);
   }
 
-  private void reSearch() {
-    if (stopped) {
+  /** Runs one re-search; {@code reschedule} continues the periodic live loop, off for a one-shot. */
+  private void reSearch(boolean reschedule) {
+    if (stopped || liveSearch == null) {
       return;
     }
     liveSearch.search().whenComplete((result, error) -> {
@@ -90,7 +97,9 @@ public final class Trip<L> {
       if (error == null && result != null) {
         result.ifPresent(this::applyNewPath);
       }
-      scheduleReSearch(); // keep recalculating until the trip stops
+      if (reschedule && !stopped) {
+        scheduleReSearch();
+      }
     });
   }
 
@@ -113,6 +122,25 @@ public final class Trip<L> {
       return;
     }
     navigator.tick();
+    if (navigator.consumeRecalcRequest()) {
+      reSearch(false); // player strayed: one-shot recalculation from their current position
+    }
+    if (guideSearch != null) {
+      navigator.consumeGuideRequest().ifPresent(this::runGuideSearch);
+    }
+  }
+
+  private void runGuideSearch(L target) {
+    guideSearch.search(target).whenComplete((result, error) -> {
+      if (stopped || error != null || result == null) {
+        return;
+      }
+      result.ifPresent(path -> scheduler.runAtPosition(anchor, () -> {
+        if (!stopped) {
+          navigator.setGuidePath(path); // hand the short path to the navigator on the render thread
+        }
+      }));
+    });
   }
 
   /** Stops rendering and releases the navigator's display state. Idempotent. */

@@ -39,6 +39,9 @@ public final class ConfigKeys {
   /** Window width for the running-average heuristic. Mutable. */
   public final ConfigKey<Integer> algorithmRunningAverageWidth;
 
+  /** A* heuristic weight (1.0 = optimal; &gt;1 = faster weighted A*, slightly sub-optimal). Mutable. */
+  public final ConfigKey<Double> algorithmHeuristicWeight;
+
   /** Whether the {@code [✦]} prefix badge precedes every player message. Mutable. */
   public final ConfigKey<Boolean> messagesShowPrefix;
 
@@ -57,8 +60,14 @@ public final class ConfigKeys {
   /** How often, in server ticks, a live trip re-runs its search and hot-swaps the path. Mutable. */
   public final ConfigKey<Integer> tripsLiveIntervalTicks;
 
-  /** Blocks a player may stray from the trail before the trip is auto-abandoned. Mutable. */
-  public final ConfigKey<Integer> tripsAbandonDistance;
+  /** Blocks a player may stray from the trail before the trip quietly recalculates. Mutable. */
+  public final ConfigKey<Integer> tripsRecalculateDistance;
+
+  /** Default liveness for trips to a moving destination (e.g. a player). Mutable. */
+  public final ConfigKey<Boolean> tripsLiveMobileDefault;
+
+  /** Default liveness for trips to a stationary destination (e.g. a waypoint). Mutable. */
+  public final ConfigKey<Boolean> tripsLiveStationaryDefault;
 
   /** The most concurrent searches (manual + live) one player may run. Requires a restart. */
   public final ConfigKey<Integer> searchMaxConcurrentPerPlayer;
@@ -66,11 +75,14 @@ public final class ConfigKeys {
   /** How many cells of the trail ahead the {@code trail} navigator renders. Mutable. */
   public final ConfigKey<Integer> trailBufferCells;
 
-  /** Trail particle colors as hex {@code RRGGBB}, blended into a flowing gradient. Mutable. */
+  /** Trail particle types (Bukkit {@code Particle} names); one is chosen at random per particle. */
+  public final ConfigKey<List<String>> trailParticles;
+
+  /** Trail dust colors as hex {@code RRGGBB}; one is chosen at random for each dust particle. */
   public final ConfigKey<List<String>> trailColors;
 
-  /** Particles rendered per trail cell each tick. Mutable. */
-  public final ConfigKey<Integer> trailDensity;
+  /** Average particles per trail cell each tick; may be fractional (probabilistic). Mutable. */
+  public final ConfigKey<Double> trailDensity;
 
   /** Whether Odyssey discovers vanilla portal links by watching players teleport. Mutable. */
   public final ConfigKey<Boolean> portalsDiscovery;
@@ -92,13 +104,15 @@ public final class ConfigKeys {
     this.loggingLevel = manager.register(
         "logging.level", LogLevel.INFO, Codec.ofEnum(LogLevel.class), true);
     this.algorithmMaxCellsVisited = manager.register(
-        "search.algorithm.max_cells_visited", 10_000, Codec.ofInt(), true);
+        "search.algorithm.max_cells_visited", 100_000, Codec.ofInt(), true);
     this.algorithmMaxWallClockSeconds = manager.register(
         "search.algorithm.max_wall_clock_seconds", 60, Codec.ofInt(), true);
     this.algorithmTier1RecalcThreshold = manager.register(
         "search.algorithm.tier1_recalc_threshold", 1.30, Codec.ofDouble(), true);
     this.algorithmRunningAverageWidth = manager.register(
         "search.algorithm.running_average_width", 5, Codec.ofInt(), true);
+    this.algorithmHeuristicWeight = manager.register(
+        "search.algorithm.heuristic_weight", 1.2, Codec.ofDouble(), true);
     this.messagesShowPrefix = manager.register(
         "messages.show_prefix", true, Codec.ofBoolean(), true);
     this.dataBackend = manager.register(
@@ -109,16 +123,22 @@ public final class ConfigKeys {
         "trips.max_active_per_player", 3, Codec.ofInt(), true);
     this.tripsLiveIntervalTicks = manager.register(
         "trips.live_interval_ticks", 100, Codec.ofInt(), true);
-    this.tripsAbandonDistance = manager.register(
-        "trips.abandon_distance", 32, Codec.ofInt(), true);
+    this.tripsRecalculateDistance = manager.register(
+        "trips.recalculate_distance", 32, Codec.ofInt(), true);
+    this.tripsLiveMobileDefault = manager.register(
+        "trips.live_mobile_destination_trips", true, Codec.ofBoolean(), true);
+    this.tripsLiveStationaryDefault = manager.register(
+        "trips.live_stationary_destination_trips", false, Codec.ofBoolean(), true);
     this.searchMaxConcurrentPerPlayer = manager.register(
         "search.max_concurrent_per_player", 1, Codec.ofInt(), false);
     this.trailBufferCells = manager.register(
         "navigators.trail.buffer_cells", 100, Codec.ofInt(), true);
+    this.trailParticles = manager.register(
+        "navigators.trail.particles", List.of("GLOW", "DUST"), Codec.ofStringList(), true);
     this.trailColors = manager.register(
         "navigators.trail.colors", List.of("55FFFF", "FFAA00", "FFFFFF"), Codec.ofStringList(), true);
     this.trailDensity = manager.register(
-        "navigators.trail.density", 1, Codec.ofInt(), true);
+        "navigators.trail.density", 0.7, Codec.ofDouble(), true);
     this.portalsDiscovery = manager.register(
         "portals.discovery", true, Codec.ofBoolean(), true);
     this.portalsCostSeconds = manager.register(

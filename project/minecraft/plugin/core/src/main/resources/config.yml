@@ -45,8 +45,13 @@ trips:
   max_active_per_player: 3
   # How often, in server ticks, a "-live" trip re-runs its search and updates the path.
   live_interval_ticks: 100
-  # How far (blocks) a player may stray from the trail before the trip is auto-abandoned.
-  abandon_distance: 32
+  # How far (blocks) a player may stray from the trail before the trip quietly recalculates.
+  recalculate_distance: 32
+  # Default liveness (auto-recalculating) by destination kind. Moving destinations (players) default
+  # to live so the route follows them; stationary ones (waypoints) do not. Override per command with
+  # -live / -no-live.
+  live_mobile_destination_trips: true
+  live_stationary_destination_trips: false
 
 # Search behavior.
 search:
@@ -56,14 +61,17 @@ search:
   # A* tuning. Raise the limits if searches to distant destinations give up ("limit exceeded" /
   # "took too long"), at the cost of more CPU/memory per search. Lower them for weak hardware.
   algorithm:
-    # Most cells a single A* solve may visit before giving up.
-    max_cells_visited: 10000
+    # Most cells a single A* solve may visit before giving up (a memory guard).
+    max_cells_visited: 100000
     # Wall-clock budget for the whole search, in seconds.
     max_wall_clock_seconds: 60
     # Re-plan the coarse route when a leg runs this factor over its estimate (1.30 = 30% over).
     tier1_recalc_threshold: 1.30
     # Window width for the running-average heuristic.
     running_average_width: 5
+    # A* heuristic weight. 1.0 finds optimal paths but explores a lot; higher is much faster and
+    # slightly sub-optimal (bounded by this factor). 1.2 is a good balance.
+    heuristic_weight: 1.2
 
 # Vanilla portal links. No API reveals where a portal leads, so Odyssey learns them by watching
 # players travel; use "/odyssey portals clear" to wipe what it has learned.
@@ -84,11 +92,18 @@ navigators:
   trail:
     # How many cells of the path ahead of the player to render at a time.
     buffer_cells: 100
-    # Particle colors as hex RRGGBB. Each particle picks one at random (no blending). Aqua, gold, and
-    # white by default. Add or remove entries to taste.
+    # Particle types (Bukkit Particle names) used for the trail; one is picked at random per
+    # particle. "DUST" is colored by the palette below; other types (e.g. GLOW, END_ROD) are drawn
+    # as-is. Particles that need extra data beyond a color are not supported.
+    particles:
+      - "GLOW"
+      - "DUST"
+    # Dust colors as hex RRGGBB; one is picked at random for each DUST particle (no blending).
     colors:
       - "55FFFF"
       - "BF00FF"
       - "FFFFFF"
-    # Particles drawn per cell each tick (scattered with a Gaussian falloff for column width).
-    density: 1
+    # Average particles per cell each tick, scattered with a Gaussian falloff for column width. May
+    # be fractional: 0.7 means each block has a 70% chance of one particle per tick — a way to thin
+    # the trail without lowering the tick rate.
+    density: 0.7

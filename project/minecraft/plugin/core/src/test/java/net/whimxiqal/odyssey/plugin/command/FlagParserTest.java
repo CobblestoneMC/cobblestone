@@ -8,7 +8,6 @@
 package net.whimxiqal.odyssey.plugin.command;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -19,6 +18,7 @@ import net.whimxiqal.odyssey.plugin.command.FlagParser.Error;
 import net.whimxiqal.odyssey.plugin.command.FlagParser.Invalid;
 import net.whimxiqal.odyssey.plugin.command.FlagParser.Parsed;
 import net.whimxiqal.odyssey.plugin.command.FlagParser.Result;
+import net.whimxiqal.odyssey.plugin.command.NavigationFlags.Liveness;
 import org.junit.jupiter.api.Test;
 
 /** Flag splitting, defaults, mode aliases, and structured errors for {@link FlagParser}. */
@@ -34,7 +34,7 @@ class FlagParserTest {
     Parsed parsed = parsed("waypoint", "home");
     assertEquals(List.of("waypoint", "home"), parsed.destination());
     assertEquals(FlagParser.DEFAULT_NAVIGATOR, parsed.flags().navigator());
-    assertFalse(parsed.flags().live());
+    assertEquals(Liveness.DEFAULT, parsed.flags().liveness());
     assertTrue(parsed.flags().excludedModes().isEmpty());
   }
 
@@ -42,8 +42,9 @@ class FlagParserTest {
   void liveAndNavigatorFlags() {
     Parsed parsed = parsed("home", "-live", "-navigator", "compass");
     assertEquals(List.of("home"), parsed.destination());
-    assertTrue(parsed.flags().live());
+    assertEquals(Liveness.LIVE, parsed.flags().liveness());
     assertEquals("compass", parsed.flags().navigator());
+    assertEquals(Liveness.NO_LIVE, parsed("home", "-no-live").flags().liveness());
   }
 
   @Test

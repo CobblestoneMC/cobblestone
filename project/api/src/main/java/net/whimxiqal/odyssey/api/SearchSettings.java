@@ -28,16 +28,21 @@ public final class SearchSettings {
   /** Default window width for the running-average heuristic. */
   public static final int DEFAULT_RUNNING_AVERAGE_WIDTH = 5;
 
+  /** Default A* heuristic weight (1.0 = admissible/optimal; &gt;1 = faster, weighted A*). */
+  public static final double DEFAULT_HEURISTIC_WEIGHT = 1.0;
+
   private final int maxCellsVisited;
   private final long maxWallClockMillis;
   private final double tier1RecalcThreshold;
   private final int runningAverageWidth;
+  private final double heuristicWeight;
 
   private SearchSettings(Builder builder) {
     this.maxCellsVisited = builder.maxCellsVisited;
     this.maxWallClockMillis = builder.maxWallClockMillis;
     this.tier1RecalcThreshold = builder.tier1RecalcThreshold;
     this.runningAverageWidth = builder.runningAverageWidth;
+    this.heuristicWeight = builder.heuristicWeight;
   }
 
   /**
@@ -95,6 +100,16 @@ public final class SearchSettings {
   }
 
   /**
+   * Returns the A* heuristic weight applied in Tier-2 (1.0 = admissible; &gt;1 trades optimality for
+   * a smaller explored frontier — weighted A*).
+   *
+   * @return the heuristic weight
+   */
+  public double heuristicWeight() {
+    return heuristicWeight;
+  }
+
+  /**
    * A fluent builder for {@link SearchSettings}.
    */
   public static final class Builder {
@@ -103,8 +118,23 @@ public final class SearchSettings {
     private long maxWallClockMillis = DEFAULT_MAX_WALL_CLOCK_MILLIS;
     private double tier1RecalcThreshold = DEFAULT_TIER1_RECALC_THRESHOLD;
     private int runningAverageWidth = DEFAULT_RUNNING_AVERAGE_WIDTH;
+    private double heuristicWeight = DEFAULT_HEURISTIC_WEIGHT;
 
     private Builder() {
+    }
+
+    /**
+     * Sets the A* heuristic weight (must be &gt;= 1.0).
+     *
+     * @param value the weight
+     * @return this builder
+     */
+    public Builder heuristicWeight(double value) {
+      if (value < 1.0) {
+        throw new IllegalArgumentException("heuristicWeight must be >= 1.0: " + value);
+      }
+      this.heuristicWeight = value;
+      return this;
     }
 
     /**

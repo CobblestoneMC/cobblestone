@@ -31,12 +31,21 @@ public class SingleCellWorldRegion implements WorldRegion<World, Vector3i> {
 
     @Override
     public boolean contains(Vector3i vector) {
-        return location.toVector().toVector3i().equals(vector);
+        // Match within one block (the 3x3x3 around the target) so navigation completes even when the
+        // exact destination block is not itself standable.
+        Vector3i cell = location.toVector().toVector3i();
+        return Math.abs(vector.x - cell.x) <= 1
+            && Math.abs(vector.y - cell.y) <= 1
+            && Math.abs(vector.z - cell.z) <= 1;
     }
 
     @Override
     public Vector3i nearestBoundaryLocation(Vector3i vector) {
-        return location.toVector().toVector3i();
+        Vector3i cell = location.toVector().toVector3i();
+        return new Vector3i(
+            Math.clamp(vector.x, cell.x - 1, cell.x + 1),
+            Math.clamp(vector.y, cell.y - 1, cell.y + 1),
+            Math.clamp(vector.z, cell.z - 1, cell.z + 1));
     }
 
     @Override

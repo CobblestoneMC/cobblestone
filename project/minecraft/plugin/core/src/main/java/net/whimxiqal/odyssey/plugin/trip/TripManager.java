@@ -53,23 +53,24 @@ public final class TripManager<L> {
    * @param anchor the location whose owning thread the trip ticks on
    * @param navigatorId the navigator (display strategy) id
    * @param navigator the navigator to drive
+   * @param destination the destination label (for the listing and same-destination replacement)
+   * @param liveSearch the re-search behavior (used for both live loops and stray recalculation); may
+   *     be {@code null} to disable re-searching entirely
+   * @param guideSearch the short-range guide search for off-trail drift; may be {@code null}
+   * @param live whether to also re-search periodically (a "live" trip)
+   * @param liveIntervalMillis the delay between periodic re-searches, in milliseconds
    * @return the started trip, or empty if the player is at their limit
    */
   public synchronized Optional<Trip<L>> start(
       UUID player, Position<? extends MinecraftWorld> anchor, String navigatorId,
-      Navigator<L> navigator, String destination) {
-    return start(player, anchor, navigatorId, navigator, destination, null, 0L);
-  }
-
-  private synchronized Optional<Trip<L>> start(
-      UUID player, Position<? extends MinecraftWorld> anchor, String navigatorId,
-      Navigator<L> navigator, String destination, LiveSearch<L> liveSearch, long liveIntervalMillis) {
+      Navigator<L> navigator, String destination, LiveSearch<L> liveSearch,
+      GuideSearch<L> guideSearch, boolean live, long liveIntervalMillis) {
     List<Trip<L>> active = byPlayer.computeIfAbsent(player, key -> new ArrayList<>());
     if (active.size() >= maxActivePerPlayer) {
       return Optional.empty();
     }
     Trip<L> trip = new Trip<>(player, nextId(active), destination, navigatorId, navigator, scheduler,
-        anchor, TICK_PERIOD, this::untrack, liveSearch, liveIntervalMillis);
+        anchor, TICK_PERIOD, this::untrack, liveSearch, guideSearch, live, liveIntervalMillis);
     active.add(trip);
     trip.start();
     return Optional.of(trip);
@@ -90,24 +91,6 @@ public final class TripManager<L> {
       }
     }
     return id;
-  }
-
-  /**
-   * Starts a live trip that re-searches on an interval and hot-swaps the navigator's path, unless the
-   * player is already at their trip limit.
-   *
-   * @param player the guided player's id
-   * @param anchor the location whose owning thread the trip ticks on
-   * @param navigatorId the navigator (display strategy) id
-   * @param navigator the navigator to drive
-   * @param liveSearch the re-search behavior
-   * @param liveIntervalMillis the delay between re-searches, in milliseconds
-   * @return the started trip, or empty if the player is at their limit
-   */
-  public synchronized Optional<Trip<L>> startLive(
-      UUID player, Position<? extends MinecraftWorld> anchor, String navigatorId,
-      Navigator<L> navigator, String destination, LiveSearch<L> liveSearch, long liveIntervalMillis) {
-    return start(player, anchor, navigatorId, navigator, destination, liveSearch, liveIntervalMillis);
   }
 
   /**

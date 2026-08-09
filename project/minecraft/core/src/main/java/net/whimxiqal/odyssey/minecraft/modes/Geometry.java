@@ -35,4 +35,18 @@ final class Geometry {
   static boolean cornerBlocked(BlockView view, Cell from, int dx, int dz) {
     return !bodyFits(view, from.plus(dx, 0, 0)) || !bodyFits(view, from.plus(0, 0, dz));
   }
+
+  /**
+   * Whether a 3D diagonal move (as in free flight) is blocked by a solid corner. The two orthogonal
+   * side columns the body squeezes past are checked at the start height and, when the move also
+   * changes height, at the target height — so you cannot slip diagonally "up and through" a pair of
+   * walls.
+   */
+  static boolean diagonalBlocked(BlockView view, Cell from, int dx, int dy, int dz) {
+    if (!bodyFits(view, from.plus(dx, 0, 0)) || !bodyFits(view, from.plus(0, 0, dz))) {
+      return true;
+    }
+    return dy != 0
+        && (!bodyFits(view, from.plus(dx, dy, 0)) || !bodyFits(view, from.plus(0, dy, dz)));
+  }
 }

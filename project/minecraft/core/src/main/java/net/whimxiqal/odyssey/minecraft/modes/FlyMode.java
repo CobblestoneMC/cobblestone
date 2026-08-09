@@ -53,7 +53,7 @@ final class FlyMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> {
           if (!Geometry.bodyFits(view, target)) {
             continue;
           }
-          if (dy == 0 && dx != 0 && dz != 0 && Geometry.cornerBlocked(view, from, dx, dz)) {
+          if (dx != 0 && dz != 0 && Geometry.diagonalBlocked(view, from, dx, dy, dz)) {
             continue;
           }
           double distance = Math.sqrt((double) dx * dx + (double) dy * dy + (double) dz * dz);
