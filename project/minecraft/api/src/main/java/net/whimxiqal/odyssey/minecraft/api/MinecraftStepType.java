@@ -28,8 +28,7 @@ public enum MinecraftStepType {
   OPEN_DOOR,
   PLACE_BOAT,
   MOUNT_HORSE,
-  PORTAL,
-  COMMAND,
+  TELEPORT,
 
   // reserved (unimplemented in v1)
   ELYTRA,

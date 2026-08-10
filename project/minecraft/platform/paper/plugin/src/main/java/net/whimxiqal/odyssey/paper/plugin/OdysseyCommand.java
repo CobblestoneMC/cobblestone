@@ -34,6 +34,7 @@ import net.whimxiqal.odyssey.plugin.trip.Trip;
 import net.whimxiqal.odyssey.plugin.trip.TripManager;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
 /**
@@ -63,7 +64,7 @@ final class OdysseyCommand {
    */
   static LiteralCommandNode<CommandSourceStack> build(
       ConfigManager config, ConfigKeys keys, Messages messages, JulOdysseyLogger log,
-      WaypointDao waypoints, PortalTransitionDao portals, TripManager<Location> trips,
+      WaypointDao waypoints, PortalTransitionDao portals, TripManager<Entity, PaperTripAgent, Location> trips,
       SearchRegistry searches) {
     return Commands.literal("odyssey")
         .executes(ctx -> showHelp(ctx.getSource().getSender(), messages))
@@ -177,7 +178,7 @@ final class OdysseyCommand {
   }
 
   private static int cancelAll(
-      CommandSender sender, Messages messages, TripManager<Location> trips, SearchRegistry searches) {
+      CommandSender sender, Messages messages, TripManager<Entity, PaperTripAgent, Location> trips, SearchRegistry searches) {
     Locale locale = localeOf(sender, messages);
     if (!(sender instanceof Player player)) {
       messages.send(sender, locale, OdysseyMessages.PLAYERS_ONLY);
@@ -196,7 +197,7 @@ final class OdysseyCommand {
   }
 
   private static int cancelTrip(
-      CommandSender sender, Messages messages, TripManager<Location> trips, int id) {
+      CommandSender sender, Messages messages, TripManager<Entity, PaperTripAgent, Location> trips, int id) {
     Locale locale = localeOf(sender, messages);
     if (!(sender instanceof Player player)) {
       messages.send(sender, locale, OdysseyMessages.PLAYERS_ONLY);
@@ -210,19 +211,19 @@ final class OdysseyCommand {
     return Command.SINGLE_SUCCESS;
   }
 
-  private static int trips(CommandSender sender, Messages messages, TripManager<Location> trips) {
+  private static int trips(CommandSender sender, Messages messages, TripManager<Entity, PaperTripAgent, Location> trips) {
     Locale locale = localeOf(sender, messages);
     if (!(sender instanceof Player player)) {
       messages.send(sender, locale, OdysseyMessages.PLAYERS_ONLY);
       return Command.SINGLE_SUCCESS;
     }
-    List<Trip<Location>> active = trips.trips(player.getUniqueId());
+    List<Trip<Entity, PaperTripAgent, Location>> active = trips.trips(player.getUniqueId());
     if (active.isEmpty()) {
       messages.send(player, locale, OdysseyMessages.TRIPS_NONE);
       return Command.SINGLE_SUCCESS;
     }
     messages.send(player, locale, OdysseyMessages.TRIPS_HEADER, active.size());
-    for (Trip<Location> trip : active) {
+    for (Trip<Entity, PaperTripAgent, Location> trip : active) {
       messages.send(player, locale, OdysseyMessages.TRIPS_ENTRY,
           trip.id(), trip.destination(), messages.formatDuration(locale, trip.remainingSeconds()));
     }

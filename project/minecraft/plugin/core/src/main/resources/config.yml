@@ -62,7 +62,7 @@ search:
   # "took too long"), at the cost of more CPU/memory per search. Lower them for weak hardware.
   algorithm:
     # Most cells a single A* solve may visit before giving up (a memory guard).
-    max_cells_visited: 100000
+    max_cells_visited: 1000000
     # Wall-clock budget for the whole search, in seconds.
     max_wall_clock_seconds: 60
     # Re-plan the coarse route when a leg runs this factor over its estimate (1.30 = 30% over).

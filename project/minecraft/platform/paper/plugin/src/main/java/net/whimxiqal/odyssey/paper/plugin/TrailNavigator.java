@@ -53,6 +53,8 @@ final class TrailNavigator implements Navigator<Location> {
   private static final double SPREAD_VERTICAL = 0.20;
   private static final double NEAR_BUFFER = 1.0;               // clear bubble around the player, in blocks
   private static final double NEAR_BUFFER_SQUARED = NEAR_BUFFER * NEAR_BUFFER;
+  private static final double CALC_GUIDE_THRESHOLD = NEAR_BUFFER + 1.0;
+  private static final double CALC_GUIDE_THRESHOLD_SQUARED = CALC_GUIDE_THRESHOLD * CALC_GUIDE_THRESHOLD;
   private static final int RECALC_COOLDOWN_TICKS = 20;         // at most one stray-recalc per second
   private static final int GUIDE_COOLDOWN_TICKS = 20;          // re-request the guide path ~1x/second
   private static final float DUST_SIZE = 1.0f;
@@ -176,26 +178,30 @@ final class TrailNavigator implements Navigator<Location> {
     double deviationSquared = onTrailWorld
         ? playerVec.minus(projectedTarget(playerVec)).lengthSquared() : 0.0;
     // Strayed too far: quietly ask the trip to recalculate from the player's new position.
-    if (onTrailWorld && recalcDistance > 0 && recalcCooldown <= 0
+    boolean nextStepIsVanilla = steps.get(foremost).payload().stepType() != MinecraftStepType.TELEPORT;
+    if (onTrailWorld && nextStepIsVanilla && recalcDistance > 0 && recalcCooldown <= 0
         && deviationSquared > (double) recalcDistance * recalcDistance) {
       recalcRequested = true;
       recalcCooldown = RECALC_COOLDOWN_TICKS;
     }
     // Drifted off the path: periodically request a short guide path back to the current step.
-    if (onTrailWorld && deviationSquared > NEAR_BUFFER_SQUARED) {
+    if (onTrailWorld && nextStepIsVanilla && deviationSquared > CALC_GUIDE_THRESHOLD_SQUARED) {
       if (guideCooldown <= 0) {
         guideRequested = true;
         guideCooldown = GUIDE_COOLDOWN_TICKS;
       }
     } else {
+      // back on the trail: drop any guide
       guideSteps = null;
-      guidePoints = null; // back on the trail: drop any guide
+      guidePoints = null;
     }
 
     promptForActionIfNeeded();
     ThreadLocalRandom random = ThreadLocalRandom.current();
     renderTrail(playerVec, playerWorld, random);
-    renderGuide(playerVec, playerWorld, random);
+    if (nextStepIsVanilla) {
+      renderGuide(playerVec, playerWorld, random);
+    }
   }
 
   @Override
@@ -281,11 +287,10 @@ final class TrailNavigator implements Navigator<Location> {
   }
 
   private void promptForActionIfNeeded() {
-    int next = foremost + 1;
-    if (next >= steps.size() || lastPromptedIndex == foremost) {
+    if (lastPromptedIndex == foremost) {
       return;
     }
-    MinecraftStepPayload payload = steps.get(next).payload();
+    MinecraftStepPayload payload = steps.get(foremost).payload();
     if (payload == null) {
       return;
     }
@@ -325,12 +330,12 @@ final class TrailNavigator implements Navigator<Location> {
 
     if (payload != null && payload.stepType() == MinecraftStepType.MINE) {
       Block block = world.getBlockAt(locationVector.getBlockX(), locationVector.getBlockY(), locationVector.getBlockZ());
-      if (block.getType().isSolid()) {
+      if (Bukkit.isOwnedByCurrentRegion(block) && block.getType().isSolid()) {
         renderMineMarker(world, locationVector, random);
       }
       Vector upOne = locationVector.add(new Vector(0, 1, 0));
       Block aboveBlock = world.getBlockAt(upOne.getBlockX(), upOne.getBlockY(), upOne.getBlockZ());
-      if (aboveBlock.getType().isSolid()) {
+      if (Bukkit.isOwnedByCurrentRegion(aboveBlock) && aboveBlock.getType().isSolid()) {
         renderMineMarker(world, upOne, random);
       }
     }
@@ -415,6 +420,9 @@ final class TrailNavigator implements Navigator<Location> {
   }
 
   private void renderTrailParticle(ThreadLocalRandom random, Location location) {
+    if (!Bukkit.isOwnedByCurrentRegion(location)) {
+      return;
+    }
     Particle particle = particles.get(random.nextInt(particles.size()));
     if (particle == Particle.DUST) {
       Particle.DUST.builder()

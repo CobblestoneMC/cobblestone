@@ -25,17 +25,16 @@ import net.whimxiqal.odyssey.plugin.api.Navigator;
  *
  * @param <L> the native location type the navigator renders in
  */
-public final class Trip<L> {
+public final class Trip<E, P extends TripAgent<E>, L> {
 
-  private final UUID player;
+  private final P player;
   private final int id;
   private final String destination;
   private final String navigatorId;
   private final Navigator<L> navigator;
-  private final MinecraftScheduler scheduler;
-  private final Position<? extends MinecraftWorld> anchor;
+  private final MinecraftScheduler<E> scheduler;
   private final long periodTicks;
-  private final Consumer<Trip<L>> onEnd;
+  private final Consumer<Trip<E, P, L>> onEnd;
   private final LiveSearch<L> liveSearch;
   private final GuideSearch<L> guideSearch;
   private final boolean live;
@@ -45,15 +44,14 @@ public final class Trip<L> {
   private volatile boolean stopped;
 
   Trip(
-      UUID player,
+      P player,
       int id,
       String destination,
       String navigatorId,
       Navigator<L> navigator,
-      MinecraftScheduler scheduler,
-      Position<? extends MinecraftWorld> anchor,
+      MinecraftScheduler<E> scheduler,
       long periodTicks,
-      Consumer<Trip<L>> onEnd,
+      Consumer<Trip<E, P, L>> onEnd,
       LiveSearch<L> liveSearch,
       GuideSearch<L> guideSearch,
       boolean live,
@@ -64,7 +62,6 @@ public final class Trip<L> {
     this.navigatorId = navigatorId;
     this.navigator = navigator;
     this.scheduler = scheduler;
-    this.anchor = anchor;
     this.periodTicks = periodTicks;
     this.onEnd = onEnd;
     this.liveSearch = liveSearch;
@@ -75,7 +72,7 @@ public final class Trip<L> {
 
   void start() {
     navigator.start();
-    handle = scheduler.runAtPositionRepeating(anchor, this::tick, periodTicks);
+    handle = scheduler.runAtEntityRepeating(player.entity(), this::tick, periodTicks);
     if (live && liveSearch != null) {
       scheduleReSearch();
     }
@@ -105,7 +102,7 @@ public final class Trip<L> {
 
   private void applyNewPath(Path<Step<L, MinecraftStepPayload>> path) {
     // Hot-swap on the render thread so it never races the navigator's tick.
-    scheduler.runAtPosition(anchor, () -> {
+    scheduler.runAtEntity(player.entity(), () -> {
       if (!stopped) {
         navigator.update(path);
       }
@@ -135,7 +132,7 @@ public final class Trip<L> {
       if (stopped || error != null || result.isEmpty()) {
         return;
       }
-      result.ifPresent(path -> scheduler.runAtPosition(anchor, () -> {
+      result.ifPresent(path -> scheduler.runAtEntity(player.entity(), () -> {
         if (!stopped) {
           navigator.setGuidePath(path); // hand the short path to the navigator on the render thread
         }
@@ -160,7 +157,7 @@ public final class Trip<L> {
    *
    * @return the player id
    */
-  public UUID player() {
+  public P player() {
     return player;
   }
 

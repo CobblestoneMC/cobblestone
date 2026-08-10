@@ -26,6 +26,7 @@ import net.whimxiqal.odyssey.plugin.data.DataStores;
 import net.whimxiqal.odyssey.plugin.message.Messages;
 import net.whimxiqal.odyssey.plugin.trip.TripManager;
 import org.bukkit.Location;
+import org.bukkit.entity.Entity;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -41,7 +42,7 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
 
   private PaperOdysseyApiImpl platformApi;
   private DataStore dataStore;
-  private TripManager<Location> tripManager;
+  private TripManager<Entity, PaperTripAgent, Location> tripManager;
   private OdysseyMetrics metrics;
   private final SearchRegistry searchRegistry = new SearchRegistry();
 

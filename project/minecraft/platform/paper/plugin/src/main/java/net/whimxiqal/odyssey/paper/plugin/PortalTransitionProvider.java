@@ -10,12 +10,9 @@ package net.whimxiqal.odyssey.paper.plugin;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
-import net.whimxiqal.odyssey.minecraft.api.PlatformTransition;
-import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
 import net.whimxiqal.odyssey.paper.api.BoxWorldRegion;
+import net.whimxiqal.odyssey.paper.api.PaperTransition;
 import net.whimxiqal.odyssey.paper.api.PaperTransitionProvider;
 import net.whimxiqal.odyssey.plugin.data.PortalTransition;
 import net.whimxiqal.odyssey.plugin.data.PortalTransitionDao;
@@ -24,7 +21,6 @@ import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
-import org.joml.Vector3i;
 
 /**
  * The internal {@link PaperTransitionProvider} that surfaces Odyssey's discovered portal links to
@@ -33,8 +29,7 @@ import org.joml.Vector3i;
  */
 public final class PortalTransitionProvider implements PaperTransitionProvider {
 
-  private static final MinecraftStepPayload PORTAL_PAYLOAD =
-      new MinecraftStepPayload(MinecraftStepType.PORTAL, new MinecraftInstruction.None());
+  private static final MinecraftStepPayload PORTAL_PAYLOAD = MinecraftStepPayload.portal();
 
   private final PortalTransitionDao portals;
 
@@ -48,20 +43,19 @@ public final class PortalTransitionProvider implements PaperTransitionProvider {
   }
 
   @Override
-  public CompletableFuture<List<? extends PlatformTransition<WorldRegion<World, Vector3i>, Location>>>
-      compute(Player player) {
-    List<PlatformTransition<WorldRegion<World, Vector3i>, Location>> result = new ArrayList<>();
+  public CompletableFuture<List<? extends PaperTransition>> compute(Player player) {
+    List<PaperTransition> result = new ArrayList<>();
     for (PortalTransition portal : portals.all()) {
       World fromWorld = worldOf(portal.fromWorld());
       World toWorld = worldOf(portal.toWorld());
       if (fromWorld == null || toWorld == null) {
         continue; // a world unloaded since discovery; skip until it is back
       }
-      WorldRegion<World, Vector3i> origin = BoxWorldRegion.of(
+      BoxWorldRegion origin = BoxWorldRegion.of(
           new Location(fromWorld, portal.minX(), portal.minY(), portal.minZ()),
           new Location(fromWorld, portal.maxX(), portal.maxY(), portal.maxZ()));
       Location destination = new Location(toWorld, portal.toX(), portal.toY(), portal.toZ());
-      result.add(new PortalPlatformTransition(origin, destination, portal.cost(), PORTAL_PAYLOAD));
+      result.add(PaperTransition.of(origin, destination, portal.cost(), PORTAL_PAYLOAD));
     }
     return CompletableFuture.completedFuture(result);
   }

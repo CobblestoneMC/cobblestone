@@ -46,13 +46,13 @@ final class PortalListener implements Listener {
   private static final int MAX_EXPAND = 64;   // cap the outward scan (nether portals top out at ~23)
 
   private final PortalTransitionDao portals;
-  private final MinecraftScheduler scheduler;
+  private final MinecraftScheduler<?> scheduler;
   private final OdysseyLogger logger;
   private final DoubleSupplier cost;
   private final BooleanSupplier enabled;
 
   PortalListener(
-      PortalTransitionDao portals, MinecraftScheduler scheduler, OdysseyLogger logger,
+      PortalTransitionDao portals, MinecraftScheduler<?> scheduler, OdysseyLogger logger,
       DoubleSupplier cost, BooleanSupplier enabled) {
     this.portals = portals;
     this.scheduler = scheduler;

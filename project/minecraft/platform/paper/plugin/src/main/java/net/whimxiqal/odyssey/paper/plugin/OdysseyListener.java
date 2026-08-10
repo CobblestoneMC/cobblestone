@@ -10,6 +10,7 @@ package net.whimxiqal.odyssey.paper.plugin;
 import java.util.UUID;
 import net.whimxiqal.odyssey.plugin.trip.TripManager;
 import org.bukkit.Location;
+import org.bukkit.entity.Entity;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -20,10 +21,10 @@ import org.bukkit.event.player.PlayerQuitEvent;
  */
 final class OdysseyListener implements Listener {
 
-  private final TripManager<Location> trips;
+  private final TripManager<Entity, PaperTripAgent, Location> trips;
   private final SearchRegistry searches;
 
-  OdysseyListener(TripManager<Location> trips, SearchRegistry searches) {
+  OdysseyListener(TripManager<Entity, PaperTripAgent, Location> trips, SearchRegistry searches) {
     this.trips = trips;
     this.searches = searches;
   }

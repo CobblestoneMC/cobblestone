@@ -12,6 +12,7 @@ import org.bstats.bukkit.Metrics;
 import org.bstats.charts.SimplePie;
 import org.bstats.charts.SingleLineChart;
 import org.bukkit.Location;
+import org.bukkit.entity.Entity;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -32,7 +33,7 @@ final class OdysseyMetrics {
       JavaPlugin plugin,
       String backend,
       boolean portalDiscovery,
-      TripManager<Location> trips,
+      TripManager<Entity, PaperTripAgent, Location> trips,
       SearchRegistry searches) {
     if (BSTATS_PLUGIN_ID <= 0) {
       plugin.getLogger().info("bStats metrics not started: no bStats plugin id is configured yet.");

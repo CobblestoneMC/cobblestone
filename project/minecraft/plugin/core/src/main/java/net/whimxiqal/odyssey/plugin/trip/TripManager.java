@@ -13,9 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import net.whimxiqal.odyssey.Position;
 import net.whimxiqal.odyssey.minecraft.MinecraftScheduler;
-import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 import net.whimxiqal.odyssey.plugin.api.Navigator;
 
 /**
@@ -26,14 +24,14 @@ import net.whimxiqal.odyssey.plugin.api.Navigator;
  *
  * @param <L> the native location type the navigators render in
  */
-public final class TripManager<L> {
+public final class TripManager<E, P extends TripAgent<E>, L> {
 
   /** Trips render every server tick; a coarser period is not worth a config knob. */
   private static final long TICK_PERIOD = 1L;
 
-  private final MinecraftScheduler scheduler;
+  private final MinecraftScheduler<E> scheduler;
   private final int maxActivePerPlayer;
-  private final Map<UUID, List<Trip<L>>> byPlayer = new ConcurrentHashMap<>();
+  private final Map<UUID, List<Trip<E, P, L>>> byPlayer = new ConcurrentHashMap<>();
 
   /**
    * Creates a trip manager.
@@ -41,7 +39,7 @@ public final class TripManager<L> {
    * @param scheduler the scheduler trips tick on
    * @param maxActivePerPlayer the most simultaneous trips one player may run
    */
-  public TripManager(MinecraftScheduler scheduler, int maxActivePerPlayer) {
+  public TripManager(MinecraftScheduler<E> scheduler, int maxActivePerPlayer) {
     this.scheduler = scheduler;
     this.maxActivePerPlayer = maxActivePerPlayer;
   }
@@ -50,7 +48,6 @@ public final class TripManager<L> {
    * Starts a trip, unless the player is already at their trip limit.
    *
    * @param player the guided player's id
-   * @param anchor the location whose owning thread the trip ticks on
    * @param navigatorId the navigator (display strategy) id
    * @param navigator the navigator to drive
    * @param destination the destination label (for the listing and same-destination replacement)
@@ -61,28 +58,28 @@ public final class TripManager<L> {
    * @param liveIntervalMillis the delay between periodic re-searches, in milliseconds
    * @return the started trip, or empty if the player is at their limit
    */
-  public synchronized Optional<Trip<L>> start(
-      UUID player, Position<? extends MinecraftWorld> anchor, String navigatorId,
+  public synchronized Optional<Trip<E, P, L>> start(
+      P player, String navigatorId,
       Navigator<L> navigator, String destination, LiveSearch<L> liveSearch,
       GuideSearch<L> guideSearch, boolean live, long liveIntervalMillis) {
-    List<Trip<L>> active = byPlayer.computeIfAbsent(player, key -> new ArrayList<>());
+    List<Trip<E, P, L>> active = byPlayer.computeIfAbsent(player.uuid(), key -> new ArrayList<>());
     if (active.size() >= maxActivePerPlayer) {
       return Optional.empty();
     }
-    Trip<L> trip = new Trip<>(player, nextId(active), destination, navigatorId, navigator, scheduler,
-        anchor, TICK_PERIOD, this::untrack, liveSearch, guideSearch, live, liveIntervalMillis);
+    Trip<E, P, L> trip = new Trip<>(player, nextId(active), destination, navigatorId, navigator, scheduler,
+        TICK_PERIOD, this::untrack, liveSearch, guideSearch, live, liveIntervalMillis);
     active.add(trip);
     trip.start();
     return Optional.of(trip);
   }
 
   /** The smallest positive id not currently used by one of the player's active trips. */
-  private int nextId(List<Trip<L>> active) {
+  private int nextId(List<Trip<E, P, L>> active) {
     int id = 1;
     boolean taken = true;
     while (taken) {
       taken = false;
-      for (Trip<L> trip : active) {
+      for (Trip<E, P, L> trip : active) {
         if (trip.id() == id) {
           taken = true;
           id++;
@@ -102,17 +99,17 @@ public final class TripManager<L> {
    * @return how many trips were replaced
    */
   public synchronized int cancelByDestination(UUID player, String destination) {
-    List<Trip<L>> active = byPlayer.get(player);
+    List<Trip<E, P, L>> active = byPlayer.get(player);
     if (active == null) {
       return 0;
     }
-    List<Trip<L>> matches = new ArrayList<>();
-    for (Trip<L> trip : active) {
+    List<Trip<E, P, L>> matches = new ArrayList<>();
+    for (Trip<E, P, L> trip : active) {
       if (trip.destination().equalsIgnoreCase(destination)) {
         matches.add(trip);
       }
     }
-    for (Trip<L> trip : matches) {
+    for (Trip<E, P, L> trip : matches) {
       trip.stop();
       untrack(trip);
     }
@@ -127,11 +124,11 @@ public final class TripManager<L> {
    * @return {@code true} if a trip with that id existed
    */
   public synchronized boolean cancel(UUID player, int id) {
-    List<Trip<L>> active = byPlayer.get(player);
+    List<Trip<E, P, L>> active = byPlayer.get(player);
     if (active == null) {
       return false;
     }
-    for (Trip<L> trip : active) {
+    for (Trip<E, P, L> trip : active) {
       if (trip.id() == id) {
         trip.stop();
         untrack(trip);
@@ -147,7 +144,7 @@ public final class TripManager<L> {
    * @param player the player id
    * @return the active trips (a copy; never {@code null})
    */
-  public synchronized List<Trip<L>> trips(UUID player) {
+  public synchronized List<Trip<E, P, L>> trips(UUID player) {
     return List.copyOf(byPlayer.getOrDefault(player, List.of()));
   }
 
@@ -156,7 +153,7 @@ public final class TripManager<L> {
    *
    * @param trip the trip to stop
    */
-  public synchronized void stop(Trip<L> trip) {
+  public synchronized void stop(Trip<E, P, L> trip) {
     trip.stop();
     untrack(trip);
   }
@@ -167,7 +164,7 @@ public final class TripManager<L> {
    * @param player the player id
    */
   public synchronized void stopAll(UUID player) {
-    List<Trip<L>> active = byPlayer.remove(player);
+    List<Trip<E, P, L>> active = byPlayer.remove(player);
     if (active != null) {
       active.forEach(Trip::stop);
     }
@@ -188,12 +185,12 @@ public final class TripManager<L> {
     byPlayer.clear();
   }
 
-  private synchronized void untrack(Trip<L> trip) {
-    List<Trip<L>> active = byPlayer.get(trip.player());
+  private synchronized void untrack(Trip<E, P, L> trip) {
+    List<Trip<E, P, L>> active = byPlayer.get(trip.player().uuid());
     if (active != null) {
       active.remove(trip);
       if (active.isEmpty()) {
-        byPlayer.remove(trip.player());
+        byPlayer.remove(trip.player().uuid());
       }
     }
   }

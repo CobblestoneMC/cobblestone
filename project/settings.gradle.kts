@@ -29,3 +29,8 @@ include(":minecraft:platform:sponge-16:core")
 project(":minecraft:platform:sponge-16:core").name = "sponge-16-core"
 include(":minecraft:platform:sponge-16:plugin")
 project(":minecraft:platform:sponge-16:plugin").name = "sponge-16-plugin"
+
+// Example integration plugins live under examples/ — self-contained, third-party-style plugins that
+// depend only on Odyssey's published API to demonstrate extending navigation (design/08).
+include(":examples:paper-warps")
+project(":examples:paper-warps").name = "example-warps"

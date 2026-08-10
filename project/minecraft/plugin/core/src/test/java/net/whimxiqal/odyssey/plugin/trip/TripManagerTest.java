@@ -17,12 +17,9 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import net.whimxiqal.odyssey.Cell;
-import net.whimxiqal.odyssey.FutureOr;
 import net.whimxiqal.odyssey.Position;
 import net.whimxiqal.odyssey.api.Path;
 import net.whimxiqal.odyssey.api.Step;
-import net.whimxiqal.odyssey.minecraft.MinecraftBlock;
 import net.whimxiqal.odyssey.minecraft.MinecraftScheduler;
 import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 import net.whimxiqal.odyssey.minecraft.ScheduledTaskHandle;
@@ -36,29 +33,29 @@ class TripManagerTest {
   @Test
   void enforcesMaxActivePerPlayer() {
     RecordingScheduler scheduler = new RecordingScheduler();
-    TripManager<Object> manager = new TripManager<>(scheduler, 2);
-    UUID player = UUID.randomUUID();
+    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 2);
+    TestTripAgent player = new TestTripAgent(UUID.randomUUID());
 
-    assertTrue(manager.start(player, anchor(), "trail", new FakeNavigator(), "dest", null, null, false, 0L).isPresent());
-    assertTrue(manager.start(player, anchor(), "trail", new FakeNavigator(), "dest", null, null, false, 0L).isPresent());
-    assertTrue(manager.start(player, anchor(), "trail", new FakeNavigator(), "dest", null, null, false, 0L).isEmpty(), "over limit");
-    assertEquals(2, manager.trips(player).size());
+    assertTrue(manager.start(player, "trail", new FakeNavigator(), "dest", null, null, false, 0L).isPresent());
+    assertTrue(manager.start(player,"trail", new FakeNavigator(), "dest", null, null, false, 0L).isPresent());
+    assertTrue(manager.start(player,  "trail", new FakeNavigator(), "dest", null, null, false, 0L).isEmpty(), "over limit");
+    assertEquals(2, manager.trips(player.uuid()).size());
   }
 
   @Test
   void completedTripStopsTicksAndIsUntracked() {
     RecordingScheduler scheduler = new RecordingScheduler();
-    TripManager<Object> manager = new TripManager<>(scheduler, 3);
-    UUID player = UUID.randomUUID();
+    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 3);
+    TestTripAgent player = new TestTripAgent(UUID.randomUUID());
     FakeNavigator navigator = new FakeNavigator();
     navigator.completeAfter = 2;
 
-    manager.start(player, anchor(), "trail", navigator, "dest", null, null, false, 0L);
+    manager.start(player, "trail", navigator, "dest", null, null, false, 0L);
     assertTrue(navigator.started);
 
     scheduler.tickAll(); // 1st tick: not complete → tick()
     assertEquals(1, navigator.ticks);
-    assertEquals(1, manager.trips(player).size());
+    assertEquals(1, manager.trips(player.uuid()).size());
 
     scheduler.tickAll(); // 2nd tick: not complete → tick()
     assertEquals(2, navigator.ticks);
@@ -66,19 +63,19 @@ class TripManagerTest {
     scheduler.tickAll(); // 3rd tick: now complete → stop + untrack, no further tick()
     assertEquals(2, navigator.ticks);
     assertTrue(navigator.stopped);
-    assertTrue(manager.trips(player).isEmpty());
+    assertTrue(manager.trips(player.uuid()).isEmpty());
     assertTrue(scheduler.handle.cancelled);
   }
 
   @Test
   void liveTripReSearchesAndHotSwapsUntilStopped() {
     RecordingScheduler scheduler = new RecordingScheduler();
-    TripManager<Object> manager = new TripManager<>(scheduler, 3);
-    UUID player = UUID.randomUUID();
+    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 3);
+    TestTripAgent player = new TestTripAgent(UUID.randomUUID());
     FakeNavigator navigator = new FakeNavigator();
     FakeLiveSearch live = new FakeLiveSearch();
 
-    manager.start(player, anchor(), "trail", navigator, "dest", live, null, true, 100L);
+    manager.start(player, "trail", navigator, "dest", live, null, true, 100L);
     assertEquals(1, scheduler.delayedCount(), "first re-search scheduled");
 
     scheduler.runDelayedOnce(); // re-search → search completes → hot-swap → reschedule
@@ -86,7 +83,7 @@ class TripManagerTest {
     assertEquals(1, navigator.updates);
     assertEquals(1, scheduler.delayedCount(), "next re-search scheduled");
 
-    manager.stopAll(player);
+    manager.stopAll(player.uuid());
     scheduler.runDelayedOnce(); // stopped: the loop must not search or reschedule again
     assertEquals(1, live.calls);
     assertEquals(1, navigator.updates);
@@ -96,45 +93,41 @@ class TripManagerTest {
   @Test
   void assignsRecyclableIdsAndCancelsByIdOrDestination() {
     RecordingScheduler scheduler = new RecordingScheduler();
-    TripManager<Object> manager = new TripManager<>(scheduler, 3);
-    UUID player = UUID.randomUUID();
-    Trip<Object> first = manager.start(player, anchor(), "trail", new FakeNavigator(), "home", null, null, false, 0L).orElseThrow();
-    Trip<Object> second = manager.start(player, anchor(), "trail", new FakeNavigator(), "caves", null, null, false, 0L).orElseThrow();
+    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 3);
+    TestTripAgent player = new TestTripAgent(UUID.randomUUID());
+    Trip<Object, TestTripAgent, Object> first = manager.start(player, "trail", new FakeNavigator(), "home", null, null, false, 0L).orElseThrow();
+    Trip<Object, TestTripAgent, Object> second = manager.start(player, "trail", new FakeNavigator(), "caves", null, null, false, 0L).orElseThrow();
     assertEquals(1, first.id());
     assertEquals(2, second.id());
 
-    assertTrue(manager.cancel(player, 1));
-    assertFalse(manager.cancel(player, 1)); // already gone
-    assertEquals(1, manager.trips(player).size());
+    assertTrue(manager.cancel(player.uuid(), 1));
+    assertFalse(manager.cancel(player.uuid(), 1)); // already gone
+    assertEquals(1, manager.trips(player.uuid()).size());
 
     // id 1 is free again and is reused for the next trip
-    Trip<Object> third = manager.start(player, anchor(), "trail", new FakeNavigator(), "home", null, null, false, 0L).orElseThrow();
+    Trip<Object, TestTripAgent, Object> third = manager.start(player, "trail", new FakeNavigator(), "home", null, null, false, 0L).orElseThrow();
     assertEquals(1, third.id());
 
-    assertEquals(1, manager.cancelByDestination(player, "HOME")); // case-insensitive; cancels "third"
-    assertEquals(1, manager.trips(player).size());
-    assertEquals(2, manager.trips(player).get(0).id());
+    assertEquals(1, manager.cancelByDestination(player.uuid(), "HOME")); // case-insensitive; cancels "third"
+    assertEquals(1, manager.trips(player.uuid()).size());
+    assertEquals(2, manager.trips(player.uuid()).getFirst().id());
   }
 
   @Test
   void stopAllStopsEveryTripForPlayer() {
     RecordingScheduler scheduler = new RecordingScheduler();
-    TripManager<Object> manager = new TripManager<>(scheduler, 3);
-    UUID player = UUID.randomUUID();
+    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 3);
+    TestTripAgent player = new TestTripAgent(UUID.randomUUID());
     FakeNavigator first = new FakeNavigator();
     FakeNavigator second = new FakeNavigator();
-    manager.start(player, anchor(), "trail", first, "dest", null, null, false, 0L);
-    manager.start(player, anchor(), "trail", second, "dest", null, null, false, 0L);
+    manager.start(player, "trail", first, "dest", null, null, false, 0L);
+    manager.start(player, "trail", second, "dest", null, null, false, 0L);
 
-    manager.stopAll(player);
+    manager.stopAll(player.uuid());
 
     assertTrue(first.stopped);
     assertTrue(second.stopped);
-    assertTrue(manager.trips(player).isEmpty());
-  }
-
-  private static Position<MinecraftWorld> anchor() {
-    return new Position<>(new Cell(0, 0, 0), new FakeWorld());
+    assertTrue(manager.trips(player.uuid()).isEmpty());
   }
 
   /** A navigator that reports complete after a set number of ticks. */
@@ -189,7 +182,7 @@ class TripManagerTest {
   }
 
   /** A scheduler that captures repeating tasks so the test can drive ticks deterministically. */
-  private static final class RecordingScheduler implements MinecraftScheduler {
+  private static final class RecordingScheduler implements MinecraftScheduler<Object> {
     private final List<Runnable> repeating = new ArrayList<>();
     private final List<Runnable> delayed = new ArrayList<>();
     FakeHandle handle;
@@ -211,6 +204,18 @@ class TripManagerTest {
     @Override
     public ScheduledTaskHandle runAtPositionRepeating(
         Position<? extends MinecraftWorld> position, Runnable task, long periodTicks) {
+      repeating.add(task);
+      handle = new FakeHandle();
+      return handle;
+    }
+
+    @Override
+    public void runAtEntity(Object entity, Runnable task) {
+      task.run();
+    }
+
+    @Override
+    public ScheduledTaskHandle runAtEntityRepeating(Object entity, Runnable task, long periodTicks) {
       repeating.add(task);
       handle = new FakeHandle();
       return handle;
@@ -251,41 +256,4 @@ class TripManagerTest {
     }
   }
 
-  /** A minimal world so an anchor {@link Position} can be built without a server. */
-  private static final class FakeWorld implements MinecraftWorld {
-    @Override
-    public int minY() {
-      return 0;
-    }
-
-    @Override
-    public int maxY() {
-      return 255;
-    }
-
-    @Override
-    public String key() {
-      return "test:world";
-    }
-
-    @Override
-    public Environment environment() {
-      return Environment.OVERWORLD;
-    }
-
-    @Override
-    public FutureOr<MinecraftBlock> blockAt(Cell cell) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public boolean equals(Object other) {
-      return other instanceof FakeWorld;
-    }
-
-    @Override
-    public int hashCode() {
-      return 1;
-    }
-  }
 }

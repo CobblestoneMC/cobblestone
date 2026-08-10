@@ -20,6 +20,8 @@ import net.whimxiqal.odyssey.minecraft.ScheduledTaskHandle;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
 /**
@@ -29,7 +31,7 @@ import org.bukkit.plugin.Plugin;
  * location-aware work is dispatched through Paper's region/global schedulers, which behave correctly
  * on both regular Paper (one main thread) and Folia (per-region threads).
  */
-public final class PaperScheduler implements MinecraftScheduler {
+public final class PaperScheduler implements MinecraftScheduler<Entity> {
 
   private final Plugin plugin;
   private final ScheduledExecutorService workers;
@@ -89,12 +91,25 @@ public final class PaperScheduler implements MinecraftScheduler {
     if (world == null) {
       return () -> { };
     }
-    // TODO(folia): pinned to the anchor's region; a trail that crosses regions on Folia would want the
-    // player's entity scheduler so ticking follows the player. Fine on regular Paper (one main thread).
     ScheduledTask scheduled = Bukkit.getRegionScheduler().runAtFixedRate(
         plugin, world, position.cell().x() >> 4, position.cell().z() >> 4,
         ignored -> task.run(), 1L, Math.max(1L, periodTicks));
     return scheduled::cancel;
+  }
+
+  @Override
+  public void runAtEntity(Entity entity, Runnable task) {
+    entity.getScheduler().run(plugin, _ -> task.run(), null);
+  }
+
+  @Override
+  public ScheduledTaskHandle runAtEntityRepeating(Entity entity, Runnable task, long periodTicks) {
+    ScheduledTask scheduled =  entity.getScheduler().runAtFixedRate(plugin, _ -> task.run(), null, 1L, Math.max(1L, periodTicks));
+    return () -> {
+      if (scheduled != null) {
+        scheduled.cancel();
+      }
+    };
   }
 
   /** Stops the worker pool; call on plugin disable. */

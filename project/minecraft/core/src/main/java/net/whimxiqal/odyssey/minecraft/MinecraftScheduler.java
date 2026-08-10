@@ -14,7 +14,7 @@ import net.whimxiqal.odyssey.Scheduler;
  * The Minecraft {@link Scheduler}, adding location-aware scheduling so world state can be read on the
  * thread that owns a location (Paper: main thread; Folia: the owning region; Sponge: server thread).
  */
-public interface MinecraftScheduler extends Scheduler {
+public interface MinecraftScheduler<E> extends Scheduler {
 
   /**
    * Runs a task on the thread that owns the given location.
@@ -42,4 +42,12 @@ public interface MinecraftScheduler extends Scheduler {
    */
   ScheduledTaskHandle runAtPositionRepeating(
       Position<? extends MinecraftWorld> position, Runnable task, long periodTicks);
+
+  void runAtEntity(
+      E entity, Runnable task
+  );
+
+  ScheduledTaskHandle runAtEntityRepeating(
+      E entity, Runnable task, long periodTicks
+  );
 }

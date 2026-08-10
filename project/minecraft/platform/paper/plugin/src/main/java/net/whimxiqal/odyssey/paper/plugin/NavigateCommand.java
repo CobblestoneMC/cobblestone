@@ -36,7 +36,6 @@ import net.whimxiqal.odyssey.api.SearchSettings;
 import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftSearchSettings;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
-import net.whimxiqal.odyssey.paper.PaperConversions;
 import net.whimxiqal.odyssey.paper.PaperOdysseyApiImpl;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperNavigatorFactory;
@@ -56,6 +55,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.joml.Vector3i;
@@ -83,7 +83,7 @@ final class NavigateCommand {
   }
 
   static LiteralCommandNode<CommandSourceStack> build(
-      PaperOdysseyApiImpl platformApi, TripManager<Location> trips, SearchRegistry searches,
+      PaperOdysseyApiImpl platformApi, TripManager<Entity, PaperTripAgent, Location> trips, SearchRegistry searches,
       SearchGate gate, long liveIntervalMillis, BooleanSupplier liveMobileDefault,
       BooleanSupplier liveStationaryDefault, Supplier<SearchSettings> searchSettings,
       OdysseyLogger log, Messages messages) {
@@ -93,7 +93,7 @@ final class NavigateCommand {
         .then(Commands.literal("help").executes(ctx -> navHelp(ctx.getSource().getSender(), messages)))
         .then(Commands.literal("?").executes(ctx -> navHelp(ctx.getSource().getSender(), messages)))
         .then(Commands.argument("args", StringArgumentType.greedyString())
-            .suggests((ctx, builder) -> suggest(ctx, builder))
+            .suggests(NavigateCommand::suggest)
             .executes(ctx -> run(ctx, platformApi, trips, searches, gate, liveIntervalMillis,
                 liveMobileDefault, liveStationaryDefault, searchSettings, log, messages)))
         .build();
@@ -114,7 +114,7 @@ final class NavigateCommand {
   private static int run(
       CommandContext<CommandSourceStack> ctx,
       PaperOdysseyApiImpl platformApi,
-      TripManager<Location> trips,
+      TripManager<Entity, PaperTripAgent, Location> trips,
       SearchRegistry searches,
       SearchGate gate,
       long liveIntervalMillis,
@@ -185,7 +185,7 @@ final class NavigateCommand {
       boolean live,
       PaperNavigatorFactory factory,
       PaperOdysseyApiImpl platformApi,
-      TripManager<Location> trips,
+      TripManager<Entity, PaperTripAgent, Location> trips,
       SearchRegistry searches,
       SearchGate gate,
       long liveIntervalMillis,
@@ -233,7 +233,7 @@ final class NavigateCommand {
         Navigator<Location> navigator = factory.create(player, path, new PaperNavigatorContext(player));
         // Every trip carries the re-search function (for stray recalculation); `live` also runs it
         // periodically.
-        Optional<Trip<Location>> trip = trips.start(uuid, platformApi.position(origin), flags.navigator(),
+        Optional<Trip<Entity, PaperTripAgent, Location>> trip = trips.start(new PaperTripAgent(player), flags.navigator(),
             navigator, destinationLabel,
             liveSearch(player, destination, flags, platformApi, searches, gate, searchSettings),
             guideSearch(player, flags, platformApi), live, liveIntervalMillis);

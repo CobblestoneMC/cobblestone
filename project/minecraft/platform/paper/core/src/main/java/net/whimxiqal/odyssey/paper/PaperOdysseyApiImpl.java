@@ -16,7 +16,6 @@ import net.whimxiqal.odyssey.minecraft.api.*;
 import net.whimxiqal.odyssey.paper.api.BoxWorldRegion;
 import net.whimxiqal.odyssey.api.Destination;
 import net.whimxiqal.odyssey.api.SearchHandle;
-import net.whimxiqal.odyssey.api.SearchSettings;
 import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.ChunkProvider;
 import net.whimxiqal.odyssey.minecraft.ChunkProviderSettings;
@@ -25,10 +24,12 @@ import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
 import net.whimxiqal.odyssey.minecraft.modes.MinecraftModes;
 import net.whimxiqal.odyssey.paper.api.PaperOdysseyApi;
+import net.whimxiqal.odyssey.paper.api.PaperTransition;
 import net.whimxiqal.odyssey.paper.api.PaperTransitionProvider;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.RegisteredServiceProvider;
@@ -122,7 +123,7 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
    *
    * @return the scheduler
    */
-  public net.whimxiqal.odyssey.minecraft.MinecraftScheduler scheduler() {
+  public net.whimxiqal.odyssey.minecraft.MinecraftScheduler<Entity> scheduler() {
     return scheduler;
   }
 
@@ -155,15 +156,15 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
     if (providers.isEmpty()) {
       return CompletableFuture.completedFuture(List.of());
     }
-    List<CompletableFuture<List<? extends PlatformTransition<WorldRegion<World, Vector3i>, Location>>>> futures = new ArrayList<>();
+    List<CompletableFuture<List<? extends PaperTransition>>> futures = new ArrayList<>();
     for (PaperTransitionProvider provider : providers) {
       futures.add(provider.compute(player));
     }
     return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).thenApply(ignored -> {
       List<Transition<MinecraftStepPayload, MinecraftWorld>> all = new ArrayList<>();
-      for (CompletableFuture<List<? extends PlatformTransition<WorldRegion<World, Vector3i>, Location>>> future : futures) {
-        for (PlatformTransition<WorldRegion<World, Vector3i>, Location> transition : future.join()) {
-          PaperTransition wrapped = new PaperTransition(transition, this);
+      for (CompletableFuture<List<? extends PaperTransition>> future : futures) {
+        for (PaperTransition transition : future.join()) {
+          PaperTransitionAdapter wrapped = new PaperTransitionAdapter(transition, this);
           // A world is reachable only through a transition, so excluding a world/dimension means
           // dropping any transition that crosses into (or out of) it.
           if (worldAllowed(wrapped.origin().domain(), excludedWorlds, excludedDimensions)

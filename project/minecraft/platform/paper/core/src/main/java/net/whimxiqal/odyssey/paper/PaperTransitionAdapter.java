@@ -17,13 +17,18 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.joml.Vector3i;
 
-final class PaperTransition implements Transition<MinecraftStepPayload, MinecraftWorld> {
+/**
+ * Adapts a platform {@link PlatformTransition} (Bukkit region/location) into a core
+ * {@link Transition} (domain region/position) for the search. One is created per provider-supplied
+ * transition at the start of each search.
+ */
+final class PaperTransitionAdapter implements Transition<MinecraftStepPayload, MinecraftWorld> {
 
   private final PlatformTransition<WorldRegion<World, Vector3i>, Location> delegate;
   private final DomainRegion<MinecraftWorld> origin;
   private final Position<MinecraftWorld> destination;
 
-  PaperTransition(
+  PaperTransitionAdapter(
           PlatformTransition<WorldRegion<World, Vector3i>, Location> delegate, WorldWrapper worldWrapper) {
     this.delegate = delegate;
     WorldRegion<World, Vector3i> originLocation = delegate.origin();
