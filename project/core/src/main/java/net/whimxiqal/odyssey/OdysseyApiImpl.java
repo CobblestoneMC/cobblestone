@@ -30,10 +30,12 @@ public final class OdysseyApiImpl implements OdysseyApi {
       Destination<DomainRegion<D>> destination,
       List<? extends Mode<A, T, D>> modes,
       List<? extends Transition<T, D>> transitions,
+      List<? extends Restriction<A, D>> restrictions,
       HeuristicStrategy heuristic,
       SearchSettings settings) {
     SearchImpl<A, T, D> search = new SearchImpl<>(
-        logger, scheduler, heuristic, agent, origin, destination, modes, transitions, settings);
+        logger, scheduler, heuristic, agent, origin, destination, modes, transitions, restrictions,
+        settings);
     search.start();
     return search;
   }

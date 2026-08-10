@@ -47,6 +47,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
   private final HeuristicStrategy heuristic;
   private final A agent;
   private final List<? extends Mode<A, T, D>> modes;
+  private final List<? extends Restriction<A, D>> restrictions;
   private final SearchSettings settings;
   private final Tier1Graph<T, D> tier1;
   private final long deadlineMillis;
@@ -66,6 +67,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
       Destination<DomainRegion<D>> destination,
       List<? extends Mode<A, T, D>> modes,
       List<? extends Transition<T, D>> transitions,
+      List<? extends Restriction<A, D>> restrictions,
       SearchSettings settings) {
     this.logger = logger;
     this.scheduler = scheduler;
@@ -73,6 +75,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
     this.heuristic = heuristic;
     this.agent = agent;
     this.modes = List.copyOf(modes);
+    this.restrictions = List.copyOf(restrictions);
     this.settings = settings;
     this.tier1 = new Tier1Graph<>(origin, transitions, destination.regions(), heuristic);
     this.deadlineMillis = System.currentTimeMillis() + settings.maxWallClockMillis();
@@ -120,7 +123,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
         return;
       }
       Tier2Search<A, T, D> tier2 = new Tier2Search<>(
-         logger, agent, edge.virtualPath(), modes, heuristic, settings.maxCellsVisited(),
+         logger, agent, edge.virtualPath(), modes, restrictions, heuristic, settings.maxCellsVisited(),
          settings.runningAverageWidth(), settings.heuristicWeight(), cancelled::get, executor);
       VirtualPath<T, D> virtualPath = edge.virtualPath();
       tier2.solve().whenCompleteAsync((result, error) -> {

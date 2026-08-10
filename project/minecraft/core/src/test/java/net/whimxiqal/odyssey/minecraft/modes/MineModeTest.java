@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.util.Map;
 import net.whimxiqal.odyssey.Cell;
+import net.whimxiqal.odyssey.FutureOr;
 import net.whimxiqal.odyssey.Movement;
 import net.whimxiqal.odyssey.minecraft.*;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
@@ -58,6 +59,17 @@ class MineModeTest {
     TestWorld world = wallTo(1, TestBlocks.solid(2.0), TestBlocks.solid(2.0));
     OdysseyPlayer cannotBreak = TestPlayer.create(false, false, false, false);
     assertFalse(TestModes.from(mine, cannotBreak, world, new Cell(0, 1, 0))
+        .containsKey(new Cell(1, 1, 0)));
+  }
+
+  @Test
+  void injectedBreakCheckerCanForbidBreaking() {
+    TestWorld world = wallTo(1, TestBlocks.solid(2.0), TestBlocks.solid(2.0));
+    // An integration forbids breaking the block at the wall's feet; the tunnel move must vanish.
+    BreakChecker<OdysseyPlayer> forbidWall =
+        (agent, cell, breakWorld, block) -> FutureOr.of(!cell.equals(new Cell(1, 1, 0)));
+    MineMode<OdysseyPlayer> restricted = new MineMode<>(forbidWall);
+    assertFalse(TestModes.from(restricted, TestPlayer.walker(), world, new Cell(0, 1, 0))
         .containsKey(new Cell(1, 1, 0)));
   }
 }

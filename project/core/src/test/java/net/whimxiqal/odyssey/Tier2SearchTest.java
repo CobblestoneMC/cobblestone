@@ -30,7 +30,7 @@ class Tier2SearchTest {
     CorridorMode mode = new CorridorMode(false);
     Tier2Search<TestAgent, TestStep, TestDomain> search = new Tier2Search<>(
         new TestOdysseyLogger(), new TestAgent(), virtualPath(new Cell(0, 0, 0), new Cell(3, 0, 0)),
-        List.of(mode), Heuristics.zero(), 1000, 5, 1.0, () -> false, Runnable::run);
+        List.of(mode), List.of(), Heuristics.zero(), 1000, 5, 1.0, () -> false, Runnable::run);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
 
@@ -46,7 +46,7 @@ class Tier2SearchTest {
     CorridorMode mode = new CorridorMode(true);
     Tier2Search<TestAgent, TestStep, TestDomain> search = new Tier2Search<>(
             new TestOdysseyLogger(), new TestAgent(), virtualPath(new Cell(0, 0, 0), new Cell(2, 0, 0)),
-        List.of(mode), Heuristics.zero(), 1000, 5, 1.0, () -> false, Runnable::run);
+        List.of(mode), List.of(), Heuristics.zero(), 1000, 5, 1.0, () -> false, Runnable::run);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
 
@@ -72,7 +72,7 @@ class Tier2SearchTest {
   void reportsUnreachableWhenNoMovesAndNotAtTarget() {
     Tier2Search<TestAgent, TestStep, TestDomain> search = new Tier2Search<>(
             new TestOdysseyLogger(), new TestAgent(), virtualPath(new Cell(0, 0, 0), new Cell(5, 0, 0)),
-        List.of(), Heuristics.zero(), 1000, 5, 1.0, () -> false, Runnable::run);
+        List.of(), List.of(), Heuristics.zero(), 1000, 5, 1.0, () -> false, Runnable::run);
 
     Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
 
@@ -83,12 +83,46 @@ class Tier2SearchTest {
   void startAlreadyInTargetSolvesWithZeroSteps() {
     Tier2Search<TestAgent, TestStep, TestDomain> search = new Tier2Search<>(
             new TestOdysseyLogger(), new TestAgent(), virtualPath(new Cell(7, 0, 0), new Cell(7, 0, 0)),
-        List.of(new CorridorMode(false)), Heuristics.zero(), 1000, 5, 1.0, () -> false, Runnable::run);
+        List.of(new CorridorMode(false)), List.of(), Heuristics.zero(), 1000, 5, 1.0, () -> false, Runnable::run);
 
     Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
 
     assertTrue(result.solved());
     assertEquals(0.0, result.cost(), 1e-9);
     assertTrue(result.steps().isEmpty());
+  }
+
+  @Test
+  void immediateRestrictionSeversPathAndReportsUnreachable() {
+    // The corridor runs 0→1→2→3, but (2,0,0) is barred, so the target can never be reached.
+    Restriction<TestAgent, TestDomain> barTwo =
+        (agent, cell, domain) -> FutureOr.of(cell.equals(new Cell(2, 0, 0)));
+    Tier2Search<TestAgent, TestStep, TestDomain> search = new Tier2Search<>(
+        new TestOdysseyLogger(), new TestAgent(), virtualPath(new Cell(0, 0, 0), new Cell(3, 0, 0)),
+        List.of(new CorridorMode(false)), List.of(barTwo),
+        Heuristics.zero(), 1000, 5, 1.0, () -> false, Runnable::run);
+
+    Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
+
+    assertFalse(result.solved());
+  }
+
+  @Test
+  void pendingRestrictionParksThenResumesToSolution() {
+    // An async verdict (not impassable, once resolved) parks the second phase until it completes.
+    CompletableFuture<Boolean> verdict = new CompletableFuture<>();
+    Restriction<TestAgent, TestDomain> gated =
+        (agent, cell, domain) -> FutureOr.ofFuture(verdict.thenApply(ignored -> false));
+    Tier2Search<TestAgent, TestStep, TestDomain> search = new Tier2Search<>(
+        new TestOdysseyLogger(), new TestAgent(), virtualPath(new Cell(0, 0, 0), new Cell(1, 0, 0)),
+        List.of(new CorridorMode(false)), List.of(gated),
+        Heuristics.zero(), 1000, 5, 1.0, () -> false, Runnable::run);
+
+    CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
+    assertFalse(future.isDone(), "parked on the pending restriction verdict");
+
+    verdict.complete(true); // resolves the mapped verdict to "not impassable"
+    assertTrue(future.isDone());
+    assertTrue(future.getNow(null).solved());
   }
 }

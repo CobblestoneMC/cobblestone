@@ -37,7 +37,7 @@ abstract class AbstractMinecraftMode<A extends MinecraftAgent> implements Minecr
       return FutureOr.of(List.of());
     }
     return BlockLookup.fetch(world, requiredCells(from))
-        .map(view -> computeMovements(agent, from, state, view));
+        .flatMap(view -> movements(agent, from, world, state, view));
   }
 
   /**
@@ -51,9 +51,25 @@ abstract class AbstractMinecraftMode<A extends MinecraftAgent> implements Minecr
   /** The cells this mode needs to inspect around {@code from}. */
   protected abstract Set<Cell> requiredCells(Cell from);
 
-  /** Turns the fetched blocks into the movements this mode offers from {@code from}. */
-  protected abstract Collection<Movement<MinecraftStepPayload>> computeMovements(
-      A agent, Cell from, TraversalState state, BlockView view);
+  /**
+   * Async seam over the fetched blocks. The default wraps the synchronous {@link #computeMovements};
+   * modes that must consult an asynchronous check (mining's breakability lookups) override this and
+   * return a possibly-pending {@link FutureOr}.
+   */
+  protected FutureOr<Collection<Movement<MinecraftStepPayload>>> movements(
+      A agent, Cell from, MinecraftWorld world, TraversalState state, BlockView view) {
+    return FutureOr.of(computeMovements(agent, from, state, view));
+  }
+
+  /**
+   * Turns the fetched blocks into the movements this mode offers from {@code from}. Synchronous
+   * modes override this; asynchronous ones override {@link #movements} instead and leave this at its
+   * (empty) default.
+   */
+  protected Collection<Movement<MinecraftStepPayload>> computeMovements(
+      A agent, Cell from, TraversalState state, BlockView view) {
+    return List.of();
+  }
 
   /** Builds a movement with no instruction. Time equals cost until danger weighting diverges them. */
   protected static Movement<MinecraftStepPayload> move(

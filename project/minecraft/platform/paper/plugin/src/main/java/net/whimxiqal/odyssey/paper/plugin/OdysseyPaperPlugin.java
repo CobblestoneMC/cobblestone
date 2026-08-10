@@ -14,8 +14,8 @@ import java.util.Locale;
 import java.util.function.Supplier;
 import net.whimxiqal.odyssey.api.SearchSettings;
 import net.whimxiqal.odyssey.paper.PaperOdysseyApiImpl;
+import net.whimxiqal.odyssey.paper.api.OdysseySearchModifier;
 import net.whimxiqal.odyssey.paper.api.PaperOdysseyApi;
-import net.whimxiqal.odyssey.paper.api.PaperTransitionProvider;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperNavigatorFactory;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
@@ -90,7 +90,7 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
 
     // Discovered vanilla portals are surfaced to searches as an internal transition provider, and
     // learned from player teleports by the portal listener.
-    getServer().getServicesManager().register(PaperTransitionProvider.class,
+    getServer().getServicesManager().register(OdysseySearchModifier.class,
         new PortalTransitionProvider(dataStore.portalTransitions()), this, ServicePriority.Normal);
     getServer().getPluginManager().registerEvents(
         new PortalListener(dataStore.portalTransitions(), platformApi.scheduler(), logger,

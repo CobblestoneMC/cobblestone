@@ -15,6 +15,7 @@ import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -51,6 +52,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
 
   private final DomainRegion<D> target;
   private final List<? extends Mode<A, T, D>> modes;
+  private final List<? extends Restriction<A, D>> restrictions;
   private final SolveHeuristic heuristic;
   private final double heuristicWeight;
   private final int maxCellsVisited;
@@ -59,17 +61,22 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private final Map<CellState, Double> bestCosts = new HashMap<>();
   private final Map<CellState, Came<T>> cameFrom = new HashMap<>();
   private final Set<CellState> closed = new HashSet<>();
+  // A cell's passability does not change mid-solve, so immediate verdicts are memoized to spare
+  // integrations repeat lookups for a cell reached from several parents.
+  private final Map<Cell, Boolean> impassableCache = new HashMap<>();
   private final PriorityQueue<OpenEntry> open = new PriorityQueue<>(
       (a, b) -> Double.compare(a.estimatedTotalCost(), b.estimatedTotalCost()));
   private final CompletableFuture<Tier2Result<T, D>> result = new CompletableFuture<>();
 
-  private PendingExpansion<T> pendingExpansion;
+  private PendingModes<T> pendingModes;
+  private PendingRelax<T> pendingRelax;
 
   Tier2Search(
           OdysseyLogger logger,
           A agent,
       VirtualPath<T, D> virtualPath,
       List<? extends Mode<A, T, D>> modes,
+      List<? extends Restriction<A, D>> restrictions,
       HeuristicStrategy heuristic,
       int maxCellsVisited,
       int runningAverageWidth,
@@ -81,6 +88,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     this.domain = virtualPath.domain();
     this.target = virtualPath.targetRegion();
     this.modes = modes;
+    this.restrictions = restrictions;
     this.heuristic = heuristic.newSolve(runningAverageWidth);
     this.heuristicWeight = heuristicWeight;
     this.maxCellsVisited = maxCellsVisited;
@@ -104,10 +112,19 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         if (cancelled.getAsBoolean()) {
           return; // abandoned; the outer search has already completed with CANCELLED
         }
-        if (pendingExpansion != null) {
-          PendingExpansion<T> expansion = pendingExpansion;
-          pendingExpansion = null;
-          relax(expansion.node(), expansion.g(), unwrap(expansion.results()));
+        if (pendingModes != null) {
+          PendingModes<T> expansion = pendingModes;
+          pendingModes = null;
+          // Modes resolved; now apply restrictions (which may park again) before relaxing.
+          if (applyRestrictions(expansion.node(), expansion.g(), unwrap(expansion.results()))) {
+            return;
+          }
+          continue;
+        }
+        if (pendingRelax != null) {
+          PendingRelax<T> ready = pendingRelax;
+          pendingRelax = null;
+          relax(ready.node(), ready.g(), ready.allowed().value());
           continue;
         }
         if (open.isEmpty()) {
@@ -146,18 +163,80 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         }
         if (anyPending) {
           logger.trace("Tier2Search(agent:{},target:{}) parked search due to pending modes", agent, target);
-          park(node, entry.currentCost(), results);
+          parkModes(node, entry.currentCost(), results);
           return;
         }
-        relax(node, entry.currentCost(), unwrap(results));
+        if (applyRestrictions(node, entry.currentCost(), unwrap(results))) {
+          return;
+        }
       }
     } catch (Throwable throwable) {
       result.completeExceptionally(throwable);
     }
   }
 
-  private void park(CellState node, double nodeCost, List<FutureOr<Collection<Movement<T>>>> results) {
-    pendingExpansion = new PendingExpansion<>(node, nodeCost, results);
+  /**
+   * Filters the movements by the restrictions, then relaxes. Returns {@code true} if it parked on a
+   * pending restriction (the caller must return); {@code false} if it relaxed inline (loop on).
+   */
+  private boolean applyRestrictions(CellState node, double nodeCost, List<Movement<T>> movements) {
+    FutureOr<List<Movement<T>>> allowed = allowed(movements);
+    if (allowed.isImmediate()) {
+      relax(node, nodeCost, allowed.value());
+      return false;
+    }
+    logger.trace("Tier2Search(agent:{},target:{}) parked search due to pending restrictions", agent, target);
+    pendingRelax = new PendingRelax<>(node, nodeCost, allowed);
+    allowed.future().whenCompleteAsync((ignored, error) -> {
+      if (error != null) {
+        result.completeExceptionally(error);
+      } else {
+        advance();
+      }
+    }, executor);
+    return true;
+  }
+
+  /** The movements whose destination cell no restriction bars, possibly pending on async checks. */
+  private FutureOr<List<Movement<T>>> allowed(List<Movement<T>> movements) {
+    if (restrictions.isEmpty() || movements.isEmpty()) {
+      return FutureOr.of(movements);
+    }
+    Map<Cell, FutureOr<Boolean>> verdicts = new LinkedHashMap<>();
+    for (Movement<T> movement : movements) {
+      verdicts.computeIfAbsent(movement.cell(), this::impassable);
+    }
+    List<FutureOr<Boolean>> pending = new ArrayList<>(verdicts.values());
+    return FutureOr.all(pending).map(ignored -> {
+      List<Movement<T>> kept = new ArrayList<>(movements.size());
+      for (Movement<T> movement : movements) {
+        if (!Boolean.TRUE.equals(verdicts.get(movement.cell()).value())) {
+          kept.add(movement);
+        }
+      }
+      return kept;
+    });
+  }
+
+  /** Whether any restriction bars the cell; {@code true} verdicts (immediate ones) are memoized. */
+  private FutureOr<Boolean> impassable(Cell cell) {
+    Boolean cached = impassableCache.get(cell);
+    if (cached != null) {
+      return FutureOr.of(cached);
+    }
+    List<FutureOr<Boolean>> verdicts = new ArrayList<>(restrictions.size());
+    for (Restriction<A, D> restriction : restrictions) {
+      verdicts.add(restriction.impassable(agent, cell, domain));
+    }
+    FutureOr<Boolean> combined = FutureOr.all(verdicts).map(list -> list.contains(Boolean.TRUE));
+    if (combined.isImmediate()) {
+      impassableCache.put(cell, combined.value());
+    }
+    return combined;
+  }
+
+  private void parkModes(CellState node, double nodeCost, List<FutureOr<Collection<Movement<T>>>> results) {
+    pendingModes = new PendingModes<>(node, nodeCost, results);
     List<CompletableFuture<?>> pending = new ArrayList<>();
     for (FutureOr<Collection<Movement<T>>> movements : results) {
       if (!movements.isImmediate()) {
@@ -220,7 +299,10 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private record Came<T>(CellState parent, Movement<T> movement) {
   }
 
-  private record PendingExpansion<T>(
+  private record PendingModes<T>(
       CellState node, double g, List<FutureOr<Collection<Movement<T>>>> results) {
+  }
+
+  private record PendingRelax<T>(CellState node, double g, FutureOr<List<Movement<T>>> allowed) {
   }
 }

@@ -53,6 +53,7 @@ class SearchIntegrationTest {
         new SingleDestination<>(new CellRegion<>(new Cell(5, 0, 0), domain)),
         modes,
         transitions,
+        List.of(),
         Heuristics.zero(),
         SearchSettings.defaults()).future().join();
 
@@ -82,6 +83,7 @@ class SearchIntegrationTest {
         new SingleDestination<>(new CellRegion<>(new Cell(0, 0, 0), nether)),
         modes,
         List.of(portal),
+        List.of(),
         Heuristics.zero(),
         SearchSettings.defaults()).future().join();
 
@@ -109,6 +111,7 @@ class SearchIntegrationTest {
         new SingleDestination<>(new CellRegion<>(new Cell(0, 0, 0), nether)),
         modes,
         noTransitions,
+        List.of(),
         Heuristics.zero(),
         SearchSettings.defaults()).future().join();
 

@@ -41,6 +41,11 @@ final class PaperBlock implements MinecraftBlock {
     this.material = data.getMaterial();
   }
 
+  /** The backing chunk-snapshot block data, handed to integration break checkers. */
+  BlockData data() {
+    return data;
+  }
+
   @Override
   public String typeKey() {
     return material.getKey().asString();

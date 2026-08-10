@@ -13,8 +13,8 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.paper.api.BoxWorldRegion;
+import net.whimxiqal.odyssey.paper.api.OdysseySearchModifier;
 import net.whimxiqal.odyssey.paper.api.PaperTransition;
-import net.whimxiqal.odyssey.paper.api.PaperTransitionProvider;
 import net.whimxiqal.odyssey.paper.api.WholeWorldRegion;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -31,9 +31,11 @@ import org.bukkit.entity.Player;
  *       live from the referenced {@link Destination}, so editing that destination moves the edge.
  * </ul>
  *
- * <p>Registered as a Bukkit service; Odyssey discovers it and calls {@link #compute(Player)} per search.
+ * <p>Registered as a Bukkit service; Odyssey discovers it and calls
+ * {@link #computeTransitions(Player)} per search. (A modifier can also constrain mining or passage;
+ * this example only adds routes and leaves those at their permissive defaults.)
  */
-final class WarpTransitionProvider implements PaperTransitionProvider {
+final class WarpTransitionProvider implements OdysseySearchModifier {
 
   private final WarpStore store;
 
@@ -42,7 +44,7 @@ final class WarpTransitionProvider implements PaperTransitionProvider {
   }
 
   @Override
-  public CompletableFuture<List<? extends PaperTransition>> compute(Player player) {
+  public CompletableFuture<List<? extends PaperTransition>> computeTransitions(Player player) {
     List<PaperTransition> result = new ArrayList<>();
     addWarps(player, result);
     addPortals(result);

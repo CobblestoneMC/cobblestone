@@ -23,12 +23,17 @@ import net.whimxiqal.odyssey.minecraft.MinecraftMode;
 import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
 import net.whimxiqal.odyssey.minecraft.modes.MinecraftModes;
+import net.whimxiqal.odyssey.minecraft.BreakChecker;
+import net.whimxiqal.odyssey.paper.api.OdysseySearchModifier;
+import net.whimxiqal.odyssey.paper.api.PaperBreakChecker;
 import net.whimxiqal.odyssey.paper.api.PaperOdysseyApi;
+import net.whimxiqal.odyssey.paper.api.PaperPassChecker;
 import net.whimxiqal.odyssey.paper.api.PaperTransition;
-import net.whimxiqal.odyssey.paper.api.PaperTransitionProvider;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
@@ -141,24 +146,32 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
     Location origin = player.getLocation();
     Position<MinecraftWorld> originPosition = new Position<>(
         PaperConversions.cell(origin), wrap(origin.getWorld()));
-    List<MinecraftMode<OdysseyPlayer>> modes = MinecraftModes.forPlayer(agent, settings.excludedModes());
+    // One snapshot of the registered modifiers drives all three influences on this search.
+    List<OdysseySearchModifier> modifiers = Bukkit.getServicesManager()
+        .getRegistrations(OdysseySearchModifier.class).stream()
+        .map(RegisteredServiceProvider::getProvider).toList();
+    BreakChecker<OdysseyPlayer> breakChecker = buildBreakChecker(modifiers, player);
+    List<Restriction<OdysseyPlayer, MinecraftWorld>> restrictions = buildRestrictions(modifiers, player);
+    List<MinecraftMode<OdysseyPlayer>> modes =
+        MinecraftModes.forPlayer(agent, settings.excludedModes(), breakChecker);
 
     CompletableFuture<SearchHandle<Step<Position<MinecraftWorld>, MinecraftStepPayload>>>
-        handleFuture = gatherTransitions(player, settings.excludedWorlds(), settings.excludedDimensions()).thenApply(gathered ->
-        core.navigate(
-            logger, scheduler, agent, originPosition, destination, modes, gathered, heuristic, settings.settings()));
+        handleFuture = gatherTransitions(modifiers, player, settings.excludedWorlds(),
+        settings.excludedDimensions()).thenApply(gathered -> core.navigate(
+            logger, scheduler, agent, originPosition, destination, modes, gathered, restrictions,
+            heuristic, settings.settings()));
     return new PaperSearchHandle(handleFuture);
   }
 
   private CompletableFuture<List<Transition<MinecraftStepPayload, MinecraftWorld>>>
-  gatherTransitions(Player player, Set<String> excludedWorlds, Set<String> excludedDimensions) {
-    List<PaperTransitionProvider> providers = Bukkit.getServicesManager().getRegistrations(PaperTransitionProvider.class).stream().map(RegisteredServiceProvider::getProvider).toList();
-    if (providers.isEmpty()) {
+  gatherTransitions(List<OdysseySearchModifier> modifiers, Player player,
+                    Set<String> excludedWorlds, Set<String> excludedDimensions) {
+    if (modifiers.isEmpty()) {
       return CompletableFuture.completedFuture(List.of());
     }
     List<CompletableFuture<List<? extends PaperTransition>>> futures = new ArrayList<>();
-    for (PaperTransitionProvider provider : providers) {
-      futures.add(provider.compute(player));
+    for (OdysseySearchModifier modifier : modifiers) {
+      futures.add(modifier.computeTransitions(player));
     }
     return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).thenApply(ignored -> {
       List<Transition<MinecraftStepPayload, MinecraftWorld>> all = new ArrayList<>();
@@ -174,6 +187,95 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
         }
       }
       return all;
+    });
+  }
+
+  /** Composes every modifier's break checker into one; a block is breakable only if all permit it. */
+  private BreakChecker<OdysseyPlayer> buildBreakChecker(
+      List<OdysseySearchModifier> modifiers, Player player) {
+    List<PaperBreakChecker> checkers = new ArrayList<>();
+    for (OdysseySearchModifier modifier : modifiers) {
+      PaperBreakChecker checker = modifier.computeBreakChecker(player);
+      if (checker != PaperBreakChecker.ALLOW) {
+        checkers.add(checker);
+      }
+    }
+    if (checkers.isEmpty()) {
+      return BreakChecker.allowAll(); // no constraint: keep the mining mode on its fast path
+    }
+    UUID playerId = player.getUniqueId();
+    return (agent, cell, world, block) -> {
+      Player online = Bukkit.getPlayer(playerId);
+      World bukkitWorld = bukkitWorld(world.key());
+      if (online == null || bukkitWorld == null) {
+        return FutureOr.of(true); // cannot evaluate; do not block mining
+      }
+      Location location = new Location(bukkitWorld, cell.x(), cell.y(), cell.z());
+      BlockData data = block instanceof PaperBlock paperBlock ? paperBlock.data() : null;
+      List<CompletableFuture<Boolean>> results = new ArrayList<>(checkers.size());
+      for (PaperBreakChecker checker : checkers) {
+        results.add(checker.breakable(online, location, data));
+      }
+      return FutureOr.from(allTrue(results));
+    };
+  }
+
+  /** One composite passability restriction; a cell is impassable if any modifier bars entry. */
+  private List<Restriction<OdysseyPlayer, MinecraftWorld>> buildRestrictions(
+      List<OdysseySearchModifier> modifiers, Player player) {
+    List<PaperPassChecker> checkers = new ArrayList<>();
+    for (OdysseySearchModifier modifier : modifiers) {
+      PaperPassChecker checker = modifier.computePassChecker(player);
+      if (checker != PaperPassChecker.ALLOW) {
+        checkers.add(checker);
+      }
+    }
+    if (checkers.isEmpty()) {
+      return List.of(); // no constraint: Tier-2 skips restriction filtering entirely
+    }
+    UUID playerId = player.getUniqueId();
+    Restriction<OdysseyPlayer, MinecraftWorld> restriction = (agent, cell, domain) -> {
+      Player online = Bukkit.getPlayer(playerId);
+      World bukkitWorld = bukkitWorld(domain.key());
+      if (online == null || bukkitWorld == null) {
+        return FutureOr.of(false); // cannot evaluate; do not bar entry
+      }
+      Location location = new Location(bukkitWorld, cell.x(), cell.y(), cell.z());
+      List<CompletableFuture<Boolean>> results = new ArrayList<>(checkers.size());
+      for (PaperPassChecker checker : checkers) {
+        results.add(checker.passable(online, location));
+      }
+      return FutureOr.from(anyFalse(results));
+    };
+    return List.of(restriction);
+  }
+
+  private static World bukkitWorld(String key) {
+    NamespacedKey namespacedKey = NamespacedKey.fromString(key);
+    return namespacedKey == null ? null : Bukkit.getWorld(namespacedKey);
+  }
+
+  /** A future of whether every input is {@code true} (AND). Already-complete inputs stay immediate. */
+  private static CompletableFuture<Boolean> allTrue(List<CompletableFuture<Boolean>> futures) {
+    return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).thenApply(ignored -> {
+      for (CompletableFuture<Boolean> future : futures) {
+        if (!Boolean.TRUE.equals(future.getNow(Boolean.FALSE))) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  /** A future of whether any input is {@code false} — i.e. some checker bars the action. */
+  private static CompletableFuture<Boolean> anyFalse(List<CompletableFuture<Boolean>> futures) {
+    return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).thenApply(ignored -> {
+      for (CompletableFuture<Boolean> future : futures) {
+        if (!Boolean.TRUE.equals(future.getNow(Boolean.TRUE))) {
+          return true;
+        }
+      }
+      return false;
     });
   }
 
