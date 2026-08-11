@@ -35,7 +35,7 @@ import net.whimxiqal.odyssey.api.SearchHandle;
 import net.whimxiqal.odyssey.api.SearchSettings;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftSearchSettings;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
-import net.whimxiqal.odyssey.paper.PaperOdysseyApiImpl;
+import net.whimxiqal.odyssey.paper.PaperNavigationServiceImpl;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperNavigatorFactory;
 import net.whimxiqal.odyssey.plugin.api.DestinationTree;
@@ -84,7 +84,7 @@ final class NavigateCommand {
   private NavigateCommand() {}
 
   static LiteralCommandNode<CommandSourceStack> build(
-      PaperOdysseyApiImpl platformApi,
+      PaperNavigationServiceImpl platformApi,
       TripManager<Entity, PaperTripAgent, Location> trips,
       SearchRegistry searches,
       SearchGate gate,
@@ -141,7 +141,7 @@ final class NavigateCommand {
 
   private static int run(
       CommandContext<CommandSourceStack> ctx,
-      PaperOdysseyApiImpl platformApi,
+      PaperNavigationServiceImpl platformApi,
       TripManager<Entity, PaperTripAgent, Location> trips,
       SearchRegistry searches,
       SearchGate gate,
@@ -240,7 +240,7 @@ final class NavigateCommand {
       NavigationFlags flags,
       boolean live,
       PaperNavigatorFactory factory,
-      PaperOdysseyApiImpl platformApi,
+      PaperNavigationServiceImpl platformApi,
       TripManager<Entity, PaperTripAgent, Location> trips,
       SearchRegistry searches,
       SearchGate gate,
@@ -356,7 +356,7 @@ final class NavigateCommand {
 
   /** Builds the short-range guide search (player -> current step) for off-trail drift. */
   private static GuideSearch<Location> guideSearch(
-      Player player, NavigationFlags flags, PaperOdysseyApiImpl platformApi) {
+      Player player, NavigationFlags flags, PaperNavigationServiceImpl platformApi) {
     return target -> {
       if (!player.isOnline()) {
         return CompletableFuture.completedFuture(Optional.empty());
@@ -393,7 +393,7 @@ final class NavigateCommand {
       Player player,
       MinecraftDestination<World, Vector3i> destination,
       NavigationFlags flags,
-      PaperOdysseyApiImpl platformApi,
+      PaperNavigationServiceImpl platformApi,
       SearchRegistry searches,
       SearchGate gate,
       Supplier<SearchSettings> searchSettings) {

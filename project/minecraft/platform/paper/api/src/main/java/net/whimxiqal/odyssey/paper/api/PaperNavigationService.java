@@ -7,7 +7,7 @@
 
 package net.whimxiqal.odyssey.paper.api;
 
-import net.whimxiqal.odyssey.minecraft.api.PlatformOdysseyApi;
+import net.whimxiqal.odyssey.minecraft.api.NavigationService;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
@@ -19,12 +19,12 @@ import org.bukkit.entity.Player;
  * <p>Use the following pattern to load the API.
  *
  * {@snippet :
- *     RegisteredServiceProvider<PaperOdysseyApi> registration =
- *         Bukkit.getServicesManager().getRegistration(PaperOdysseyApi.class);
+ *     RegisteredServiceProvider<PaperNavigationService> registration =
+ *         Bukkit.getServicesManager().getRegistration(PaperNavigationService.class);
  *     if (registration == null) {
  *       // handle error, which happens if the Odyssey plugin is not enabled
  *     }
- *     PaperOdysseyApi odysseyApi = registration.getProvider();
- * }
+ *     PaperNavigationService odysseyApi = registration.getProvider();
+ *}
  */
-public interface PaperOdysseyApi extends PlatformOdysseyApi<Player, Location> {}
+public interface PaperNavigationService extends NavigationService<Player, Location> {}

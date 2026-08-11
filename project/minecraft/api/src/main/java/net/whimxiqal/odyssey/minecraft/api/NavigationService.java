@@ -22,7 +22,7 @@ import net.whimxiqal.odyssey.api.Step;
  * @param <P> the native player type (e.g. {@code org.bukkit.entity.Player})
  * @param <L> the native location type (e.g. {@code org.bukkit.Location})
  */
-public interface PlatformOdysseyApi<P, L> {
+public interface NavigationService<P, L> {
 
   /**
    * Begins a search from the player's current location toward {@code destination}.

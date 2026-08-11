@@ -13,8 +13,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.Supplier;
 import net.whimxiqal.odyssey.api.SearchSettings;
-import net.whimxiqal.odyssey.paper.PaperOdysseyApiImpl;
-import net.whimxiqal.odyssey.paper.api.PaperOdysseyApi;
+import net.whimxiqal.odyssey.paper.PaperNavigationServiceImpl;
+import net.whimxiqal.odyssey.paper.api.PaperNavigationService;
 import net.whimxiqal.odyssey.paper.plugin.api.Odyssey;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
 import net.whimxiqal.odyssey.plugin.config.ConfigManager;
@@ -32,13 +32,13 @@ import org.bukkit.plugin.java.JavaPlugin;
  * The Odyssey Paper/Folia plugin entry point.
  *
  * <p>Phase 6a bootstrap: load config, build the message pipeline, construct the plugin-owned
- * transition registry and the native platform API, register the single {@link PaperOdysseyApi}
+ * transition registry and the native platform API, register the single {@link PaperNavigationService}
  * service, and wire the {@code /odyssey} command. Data store, listeners, waypoints, trips, portal
  * discovery, and the {@code /navigate} tree arrive in Phases 6b/6c.
  */
 public final class OdysseyPaperPlugin extends JavaPlugin {
 
-  private PaperOdysseyApiImpl platformApi;
+  private PaperNavigationServiceImpl platformApi;
   private DataStore dataStore;
   private TripManager<Entity, PaperTripAgent, Location> tripManager;
   private OdysseyMetrics metrics;
@@ -66,10 +66,10 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
 
     // The transition registry is owned by the plugin; the platform API only reads from / registers
     // into it (design/05). Both are reachable to other plugins via the registered plugin API.
-    this.platformApi = new PaperOdysseyApiImpl(this, logger);
+    this.platformApi = new PaperNavigationServiceImpl(this, logger);
     getServer()
         .getServicesManager()
-        .register(PaperOdysseyApi.class, this.platformApi, this, ServicePriority.Normal);
+        .register(PaperNavigationService.class, this.platformApi, this, ServicePriority.Normal);
 
     // Waypoints are surfaced to searches like any third-party provider — via the same registration
     // helper an integration would use.

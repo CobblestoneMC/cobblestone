@@ -7,10 +7,13 @@
 
 package net.whimxiqal.odyssey.paper.plugin.api;
 
+import net.whimxiqal.odyssey.paper.api.PaperNavigationService;
 import net.whimxiqal.odyssey.paper.api.PaperOdysseySearchModifier;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.ServicePriority;
+
+import java.util.Objects;
 
 /**
  * One-line registration of an integration's hooks into Odyssey. Each {@code register} is exactly
@@ -29,6 +32,10 @@ import org.bukkit.plugin.ServicePriority;
 public final class Odyssey {
 
   private Odyssey() {}
+
+  public static PaperNavigationService navigationService() {
+    return Objects.requireNonNull(Bukkit.getServicesManager().getRegistration(PaperNavigationService.class)).getProvider();
+  }
 
   /**
    * Registers a search modifier (transitions, breakability, passability).

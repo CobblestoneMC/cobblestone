@@ -40,7 +40,7 @@ import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
 import net.whimxiqal.odyssey.minecraft.modes.MinecraftModes;
 import net.whimxiqal.odyssey.paper.api.BoxWorldRegion;
 import net.whimxiqal.odyssey.paper.api.PaperBreakChecker;
-import net.whimxiqal.odyssey.paper.api.PaperOdysseyApi;
+import net.whimxiqal.odyssey.paper.api.PaperNavigationService;
 import net.whimxiqal.odyssey.paper.api.PaperOdysseySearchModifier;
 import net.whimxiqal.odyssey.paper.api.PaperPassChecker;
 import net.whimxiqal.odyssey.paper.api.PaperTransition;
@@ -55,7 +55,7 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.joml.Vector3i;
 
-public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper {
+public final class PaperNavigationServiceImpl implements PaperNavigationService, WorldWrapper {
 
   // The true global-minimum per-block cost (flying, MovementCosts.FLY = 0.10). Used as the
   // admissible Tier-1 bound and the running-average's cold-start estimate.
@@ -73,7 +73,7 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
    *
    * @param plugin the owning plugin
    */
-  public PaperOdysseyApiImpl(Plugin plugin, OdysseyLogger logger) {
+  public PaperNavigationServiceImpl(Plugin plugin, OdysseyLogger logger) {
     this.logger = logger;
     int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
     this.scheduler = new PaperScheduler(plugin, workerThreads);
