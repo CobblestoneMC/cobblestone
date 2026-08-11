@@ -74,7 +74,7 @@ public final class PaperTripServiceImpl implements PaperTripService {
 
   @Override
   public CompletableFuture<TripOutcome> navigate(
-      Player player, Location destination, NavigatorSettings settings) {
+      Player player, Location destination, NavigatorSettings settings, String label) {
     UUID uuid = player.getUniqueId();
     gate.beginForced(uuid);
     SearchHandle<Location, MinecraftStepPayload> handle =
@@ -104,7 +104,7 @@ public final class PaperTripServiceImpl implements PaperTripService {
               start(
                       player,
                       path,
-                      describe(destination),
+                      label != null ? label : describe(destination),
                       settings,
                       liveSearch(player, destination),
                       guideSearch(player),

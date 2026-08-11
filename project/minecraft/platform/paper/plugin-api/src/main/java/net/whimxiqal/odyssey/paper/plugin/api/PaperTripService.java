@@ -37,16 +37,38 @@ public interface PaperTripService {
   /**
    * Searches to {@code destination}, then starts a trip if a route is found. Non-blocking.
    *
+   * <p>{@code label} is the trip's stable identity: it names the trip in {@code /navigate}'s
+   * listing and — crucially for a moving target you re-navigate to repeatedly (a quest objective,
+   * an escort) — a fresh {@code navigate} with the same {@code label} <em>replaces</em> that
+   * player's previous trip rather than stacking a new one. Pass {@code null} to label the trip by
+   * its coordinates (fine for a one-shot fixed destination, but two such trips never replace each
+   * other).
+   *
+   * @param player the player to guide
+   * @param destination where to route to
+   * @param settings which navigator to display with, and its overrides
+   * @param label the stable trip identity, or {@code null} for a coordinate label
+   * @return the outcome, once the search completes and the trip is (or is not) started
+   */
+  CompletableFuture<TripOutcome> navigate(
+      Player player, Location destination, NavigatorSettings settings, String label);
+
+  /**
+   * {@link #navigate(Player, Location, NavigatorSettings, String)} with a coordinate label.
+   *
    * @param player the player to guide
    * @param destination where to route to
    * @param settings which navigator to display with, and its overrides
    * @return the outcome, once the search completes and the trip is (or is not) started
    */
-  CompletableFuture<TripOutcome> navigate(
-      Player player, Location destination, NavigatorSettings settings);
+  default CompletableFuture<TripOutcome> navigate(
+      Player player, Location destination, NavigatorSettings settings) {
+    return navigate(player, destination, settings, (String) null);
+  }
 
   /**
-   * {@link #navigate} with an error callback — the common integration shape.
+   * {@link #navigate(Player, Location, NavigatorSettings)} with an error callback — the common
+   * integration shape.
    *
    * @param player the player to guide
    * @param destination where to route to
@@ -58,13 +80,35 @@ public interface PaperTripService {
       Location destination,
       NavigatorSettings settings,
       Consumer<FailureReason> onError) {
-    navigate(player, destination, settings)
-        .thenAccept(
-            outcome -> {
-              if (outcome instanceof TripOutcome.Failed failed) {
-                onError.accept(failed.reason());
-              }
-            });
+    reportFailure(navigate(player, destination, settings, (String) null), onError);
+  }
+
+  /**
+   * {@link #navigate(Player, Location, NavigatorSettings, String)} with an error callback.
+   *
+   * @param player the player to guide
+   * @param destination where to route to
+   * @param settings which navigator to display with, and its overrides
+   * @param label the stable trip identity, or {@code null} for a coordinate label
+   * @param onError invoked (with the reason) if no route is found or the search fails
+   */
+  default void navigate(
+      Player player,
+      Location destination,
+      NavigatorSettings settings,
+      String label,
+      Consumer<FailureReason> onError) {
+    reportFailure(navigate(player, destination, settings, label), onError);
+  }
+
+  private static void reportFailure(
+      CompletableFuture<TripOutcome> outcome, Consumer<FailureReason> onError) {
+    outcome.thenAccept(
+        o -> {
+          if (o instanceof TripOutcome.Failed failed) {
+            onError.accept(failed.reason());
+          }
+        });
   }
 
   /**

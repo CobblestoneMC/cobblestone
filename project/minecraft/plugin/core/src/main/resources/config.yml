@@ -95,8 +95,8 @@ navigators:
     # particle. "DUST" is colored by the palette below; other types (e.g. GLOW, END_ROD) are drawn
     # as-is. Particles that need extra data beyond a color are not supported.
     particles:
-      - "GLOW"
-      - "DUST"
+      - "SCRAPE"
+      - "WAX_OFF"
     # Dust colors as hex RRGGBB; one is picked at random for each DUST particle (no blending).
     colors:
 #      - "55FFFF"
@@ -104,4 +104,4 @@ navigators:
     # Average particles per cell each tick, scattered with a Gaussian falloff for column width. May
     # be fractional: 0.7 means each block has a 70% chance of one particle per tick — a way to thin
     # the trail without lowering the tick rate.
-    density: 0.7
+    density: 0.2
