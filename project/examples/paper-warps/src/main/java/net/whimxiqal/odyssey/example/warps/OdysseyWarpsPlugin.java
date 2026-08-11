@@ -17,8 +17,9 @@ import org.bukkit.plugin.java.JavaPlugin;
  * warps and auto-teleport portal pads — and registers a search modifier so Odyssey routes players
  * through both, prompting the command for warps and walking them into pads for portals.
  *
- * <p>The whole hook into navigation is one {@link Odyssey#register} call; Odyssey handles discovery,
- * pathfinding, and rendering. The listeners and commands here are ordinary Bukkit plumbing.
+ * <p>The whole hook into navigation is one {@link Odyssey#register} call; Odyssey handles
+ * discovery, pathfinding, and rendering. The listeners and commands here are ordinary Bukkit
+ * plumbing.
  */
 public final class OdysseyWarpsPlugin extends JavaPlugin {
 
@@ -36,11 +37,17 @@ public final class OdysseyWarpsPlugin extends JavaPlugin {
     getServer().getPluginManager().registerEvents(new WarpListeners(this, store, selections), this);
 
     // Commands via Paper's Brigadier lifecycle.
-    getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
-      event.registrar().register(WarpCommands.warp(store), "Teleport to a named warp");
-      event.registrar().register(
-          WarpCommands.admin(store, selections), "Manage Odyssey destinations, warps, and portals");
-    });
+    getLifecycleManager()
+        .registerEventHandler(
+            LifecycleEvents.COMMANDS,
+            event -> {
+              event.registrar().register(WarpCommands.warp(store), "Teleport to a named warp");
+              event
+                  .registrar()
+                  .register(
+                      WarpCommands.admin(store, selections),
+                      "Manage Odyssey destinations, warps, and portals");
+            });
 
     getLogger().info("OdysseyWarps enabled.");
   }

@@ -16,12 +16,12 @@ import org.bukkit.entity.Entity;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
- * Anonymous usage metrics via bStats (shaded + relocated, design/10). Reports the storage backend and
- * portal-discovery setting (categorical) plus live gauges for active trips and searches. bStats is
- * opt-out via {@code plugins/bStats/config.yml} and Odyssey's own {@code metrics.enabled}.
+ * Anonymous usage metrics via bStats (shaded + relocated, design/10). Reports the storage backend
+ * and portal-discovery setting (categorical) plus live gauges for active trips and searches. bStats
+ * is opt-out via {@code plugins/bStats/config.yml} and Odyssey's own {@code metrics.enabled}.
  *
- * <p>{@link #BSTATS_PLUGIN_ID} is Odyssey's registered bStats service id; a non-positive value keeps
- * metrics off (a guard for local forks that have not registered their own).
+ * <p>{@link #BSTATS_PLUGIN_ID} is Odyssey's registered bStats service id; a non-positive value
+ * keeps metrics off (a guard for local forks that have not registered their own).
  */
 final class OdysseyMetrics {
 

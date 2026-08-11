@@ -7,33 +7,26 @@
 
 package net.whimxiqal.odyssey;
 
-import net.whimxiqal.odyssey.api.TraversalState;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import net.whimxiqal.odyssey.api.TraversalState;
 
 /**
- * The Tier-1 graph over {@link Transition}s: nodes are "at a transition's
- * destination in some
- * state", edges are {@link VirtualPath}s (a same-domain hop to another
- * transition's origin region)
+ * The Tier-1 graph over {@link Transition}s: nodes are "at a transition's destination in some
+ * state", edges are {@link VirtualPath}s (a same-domain hop to another transition's origin region)
  * followed by traversing that transition.
  *
- * <p>
- * Edges are produced lazily and their {@link VirtualPath}s are memoized so
- * their solve results
- * persist across Dijkstra re-plans. Bookends
- * connect the player's origin
- * and the goal regions (via a super-sink).
+ * <p>Edges are produced lazily and their {@link VirtualPath}s are memoized so their solve results
+ * persist across Dijkstra re-plans. Bookends connect the player's origin and the goal regions (via
+ * a super-sink).
  *
  * @param <T> the payload type
  * @param <D> the domain type
  */
-final class Tier1Graph<T, D extends Domain>
-    extends Graph<Tier1Node<T, D>, Tier1Edge<T, D>> {
+final class Tier1Graph<T, D extends Domain> extends Graph<Tier1Node<T, D>, Tier1Edge<T, D>> {
 
   private final HeuristicStrategy heuristic;
   private final Map<Tier1Node<T, D>, Iterable<Tier1Edge<T, D>>> edgeMap = new HashMap<>();
@@ -49,7 +42,9 @@ final class Tier1Graph<T, D extends Domain>
     this.heuristic = heuristic;
     this.originNode = new Tier1Node.Source<>(origin, TraversalState.DEFAULT);
     for (Transition<T, D> transition : transitions) {
-      transitionsByOriginDomain.computeIfAbsent(transition.origin().domain(), key -> new ArrayList<>()).add(transition);
+      transitionsByOriginDomain
+          .computeIfAbsent(transition.origin().domain(), key -> new ArrayList<>())
+          .add(transition);
     }
     for (DomainRegion<D> region : destinationRegions) {
       destinationsByDomain.computeIfAbsent(region.domain(), key -> new ArrayList<>()).add(region);
@@ -89,9 +84,12 @@ final class Tier1Graph<T, D extends Domain>
   private Iterable<Tier1Edge<T, D>> computeEdges(Position<D> position, TraversalState state) {
     D destinationDomain = position.domain();
     Cell fromCell = position.cell();
-    List<Transition<T, D>> transitionTargets = transitionsByOriginDomain.getOrDefault(destinationDomain, List.of());
-    List<DomainRegion<D>> destinationTargets = destinationsByDomain.getOrDefault(destinationDomain, List.of());
-    List<Tier1Edge<T, D>> edges = new ArrayList<>(transitionTargets.size() + destinationTargets.size());
+    List<Transition<T, D>> transitionTargets =
+        transitionsByOriginDomain.getOrDefault(destinationDomain, List.of());
+    List<DomainRegion<D>> destinationTargets =
+        destinationsByDomain.getOrDefault(destinationDomain, List.of());
+    List<Tier1Edge<T, D>> edges =
+        new ArrayList<>(transitionTargets.size() + destinationTargets.size());
     for (Transition<T, D> target : transitionTargets) {
       edges.add(
           new Tier1Edge<T, D>(
@@ -118,5 +116,4 @@ final class Tier1Graph<T, D extends Domain>
   protected double cost(Tier1Edge<T, D> edge) {
     return edge.virtualPath().cost(heuristic) + edge.target().cost();
   }
-
 }

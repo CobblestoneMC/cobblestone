@@ -7,6 +7,12 @@
 
 package net.whimxiqal.odyssey.paper.plugin;
 
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import net.whimxiqal.odyssey.api.Destination;
 import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
@@ -26,9 +32,6 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.joml.Vector3i;
 
-import java.util.*;
-import java.util.function.Supplier;
-
 public class OdysseyDestinationProvider implements PaperDestinationProvider {
   public static final String PLAYER_TREE_KEY = "player";
   public static final String WORLD_TREE_KEY = "world";
@@ -42,7 +45,10 @@ public class OdysseyDestinationProvider implements PaperDestinationProvider {
 
   @Override
   public Collection<DestinationTree<World, Vector3i>> provide(Player player) {
-    return List.of(providePlayerDestinationTree(player), provideWorldDestinationTree(player), provideWaypointDestinationTree(player));
+    return List.of(
+        providePlayerDestinationTree(player),
+        provideWorldDestinationTree(player),
+        provideWaypointDestinationTree(player));
   }
 
   private DestinationTree<World, Vector3i> providePlayerDestinationTree(Player player) {
@@ -54,14 +60,21 @@ public class OdysseyDestinationProvider implements PaperDestinationProvider {
       }
       UUID uuid = other.getUniqueId();
       String name = other.getName();
-      leaves.put(name, () -> {
-        // Re-resolves the player (and their current location) on each query, so live trips track them.
-        Destination<WorldRegion<World, Vector3i>> destination = () -> {
-          Player target = Bukkit.getPlayer(uuid);
-          return target == null ? List.of() : List.of(SingleCellWorldRegion.of(target.getLocation()));
-        };
-        return new SimpleMinecraftDestination<>(destination, Component.text(name), List.of(), true);
-      });
+      leaves.put(
+          name,
+          () -> {
+            // Re-resolves the player (and their current location) on each query, so live trips
+            // track them.
+            Destination<WorldRegion<World, Vector3i>> destination =
+                () -> {
+                  Player target = Bukkit.getPlayer(uuid);
+                  return target == null
+                      ? List.of()
+                      : List.of(SingleCellWorldRegion.of(target.getLocation()));
+                };
+            return new SimpleMinecraftDestination<>(
+                destination, Component.text(name), List.of(), true);
+          });
     }
     return new SimpleDestinationTree<>(PLAYER_TREE_KEY, false, Map.of(), leaves);
   }
@@ -75,11 +88,13 @@ public class OdysseyDestinationProvider implements PaperDestinationProvider {
         continue; // no point navigating to the world you're already in
       }
       String name = world.getName();
-      leaves.put(name, () -> {
-        WorldRegion<World, Vector3i> region = new WholeWorldRegion(worldKey);
-        Destination<WorldRegion<World, Vector3i>> destination = () -> List.of(region);
-        return new SimpleMinecraftDestination<>(destination, Component.text(name), List.of());
-      });
+      leaves.put(
+          name,
+          () -> {
+            WorldRegion<World, Vector3i> region = new WholeWorldRegion(worldKey);
+            Destination<WorldRegion<World, Vector3i>> destination = () -> List.of(region);
+            return new SimpleMinecraftDestination<>(destination, Component.text(name), List.of());
+          });
     }
     return new SimpleDestinationTree<>(WORLD_TREE_KEY, false, Map.of(), leaves);
   }
@@ -102,6 +117,7 @@ public class OdysseyDestinationProvider implements PaperDestinationProvider {
     Location location = new Location(world, waypoint.x(), waypoint.y(), waypoint.z());
     WorldRegion<World, Vector3i> region = SingleCellWorldRegion.of(location);
     Destination<WorldRegion<World, Vector3i>> destination = () -> List.of(region);
-    return new SimpleMinecraftDestination<>(destination, Component.text(waypoint.name()), List.of());
+    return new SimpleMinecraftDestination<>(
+        destination, Component.text(waypoint.name()), List.of());
   }
 }

@@ -12,6 +12,5 @@ import org.bukkit.World;
 
 public interface WorldWrapper {
 
-    MinecraftWorld wrap(World world);
-
+  MinecraftWorld wrap(World world);
 }

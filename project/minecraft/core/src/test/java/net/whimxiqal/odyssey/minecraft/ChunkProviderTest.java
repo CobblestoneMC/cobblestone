@@ -38,7 +38,8 @@ class ChunkProviderTest {
     assertFalse(first.isImmediate(), "a miss is served as pending");
     first.future().join();
 
-    assertTrue(cp.block(new Cell(6, 64, 6), world).isImmediate(), "same-chunk block is now a cache hit");
+    assertTrue(
+        cp.block(new Cell(6, 64, 6), world).isImmediate(), "same-chunk block is now a cache hit");
     assertEquals(1, platform.fetchCount(0, 0));
   }
 

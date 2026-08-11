@@ -13,8 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 /**
- * Guards the {@code ServiceLoader} wiring behind {@link OdysseyApi#load()}: the
- * {@code META-INF/services/net.whimxiqal.odyssey.OdysseyApi} file must name a real, instantiable
+ * Guards the {@code ServiceLoader} wiring behind {@link OdysseyApi#load()}: the {@code
+ * META-INF/services/net.whimxiqal.odyssey.OdysseyApi} file must name a real, instantiable
  * implementation. A stale class name here would only surface as a crash at plugin enable, so this
  * catches it at build time instead.
  */

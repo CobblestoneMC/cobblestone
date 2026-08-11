@@ -15,15 +15,15 @@ import net.whimxiqal.odyssey.api.TraversalState;
  * The output unit of {@link Mode#step}: a single reachable neighbor and how the agent got there.
  *
  * <p>A movement carries no domain — it is always within the domain the mode was invoked on, and the
- * search stamps that domain onto the {@link Step} it builds. The {@code instruction} is
- * {@code null} unless this step requires the player to act.
+ * search stamps that domain onto the {@link Step} it builds. The {@code instruction} is {@code
+ * null} unless this step requires the player to act.
  *
  * <p>{@code restricted} is the mode-scoped, optimistic counterpart to the search's global
  * passability restrictions: a mode that produces an edge whose validity it cannot yet confirm (the
  * mining mode, whose blocks a protection plugin may forbid breaking) attaches a future here. The
- * search relaxes the edge optimistically and, if the future later resolves {@code true} (restricted),
- * drops just this edge. {@code null} — the overwhelmingly common case (walking, flying, …) — means
- * "never restricted" and allocates nothing.
+ * search relaxes the edge optimistically and, if the future later resolves {@code true}
+ * (restricted), drops just this edge. {@code null} — the overwhelmingly common case (walking,
+ * flying, …) — means "never restricted" and allocates nothing.
  *
  * @param <T> the payload type
  * @param cell the reachable destination cell

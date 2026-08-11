@@ -17,8 +17,7 @@ import org.junit.jupiter.api.Test;
 
 class GraphTest {
 
-  private record Edge(String to, double cost) {
-  }
+  private record Edge(String to, double cost) {}
 
   /** A concrete {@link Graph} over an explicit adjacency map, for testing Dijkstra in isolation. */
   private static final class MapGraph extends Graph<String, Edge> {
@@ -47,11 +46,13 @@ class GraphTest {
 
   @Test
   void choosesCheapestPathNotFewestHops() {
-    MapGraph graph = new MapGraph(Map.of(
-        "A", List.of(new Edge("B", 1), new Edge("C", 4)),
-        "B", List.of(new Edge("C", 1), new Edge("D", 5)),
-        "C", List.of(new Edge("D", 1)),
-        "D", List.of()));
+    MapGraph graph =
+        new MapGraph(
+            Map.of(
+                "A", List.of(new Edge("B", 1), new Edge("C", 4)),
+                "B", List.of(new Edge("C", 1), new Edge("D", 5)),
+                "C", List.of(new Edge("D", 1)),
+                "D", List.of()));
 
     Optional<GraphPath<String, Edge>> path = graph.shortestPath("A", "D"::equals);
 
@@ -62,11 +63,13 @@ class GraphTest {
 
   @Test
   void skipsInfiniteEdges() {
-    MapGraph graph = new MapGraph(Map.of(
-        "A", List.of(new Edge("B", Double.POSITIVE_INFINITY), new Edge("C", 1)),
-        "C", List.of(new Edge("D", 1)),
-        "B", List.of(new Edge("D", 1)),
-        "D", List.of()));
+    MapGraph graph =
+        new MapGraph(
+            Map.of(
+                "A", List.of(new Edge("B", Double.POSITIVE_INFINITY), new Edge("C", 1)),
+                "C", List.of(new Edge("D", 1)),
+                "B", List.of(new Edge("D", 1)),
+                "D", List.of()));
 
     Optional<GraphPath<String, Edge>> path = graph.shortestPath("A", "D"::equals);
 
@@ -76,9 +79,11 @@ class GraphTest {
 
   @Test
   void returnsEmptyWhenGoalUnreachable() {
-    MapGraph graph = new MapGraph(Map.of(
-        "A", List.of(new Edge("B", 1)),
-        "B", List.of()));
+    MapGraph graph =
+        new MapGraph(
+            Map.of(
+                "A", List.of(new Edge("B", 1)),
+                "B", List.of()));
 
     assertTrue(graph.shortestPath("A", "Z"::equals).isEmpty());
   }

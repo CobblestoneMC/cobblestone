@@ -16,10 +16,10 @@ import net.whimxiqal.odyssey.OdysseyLogger;
  * Adapts the plugin's {@link java.util.logging.Logger} to Odyssey's {@link OdysseyLogger} seam,
  * translating SLF4J-style {@code {}} placeholders into the interpolated message.
  *
- * <p>Verbosity is gated by an admin-configurable {@link LogLevel} threshold here rather than via JUL
- * levels: Paper routes plugin loggers through its own pipeline that drops {@code FINE}/{@code FINER},
- * so {@code trace}/{@code debug} are emitted at {@code INFO} with a prefix (only when the threshold
- * allows) to guarantee they reach the console during debugging.
+ * <p>Verbosity is gated by an admin-configurable {@link LogLevel} threshold here rather than via
+ * JUL levels: Paper routes plugin loggers through its own pipeline that drops {@code FINE}/{@code
+ * FINER}, so {@code trace}/{@code debug} are emitted at {@code INFO} with a prefix (only when the
+ * threshold allows) to guarantee they reach the console during debugging.
  */
 final class JulOdysseyLogger implements OdysseyLogger {
 
@@ -87,8 +87,10 @@ final class JulOdysseyLogger implements OdysseyLogger {
     int arg = 0;
     int i = 0;
     while (i < message.length()) {
-      if (arg < args.length && i + 1 < message.length()
-          && message.charAt(i) == '{' && message.charAt(i + 1) == '}') {
+      if (arg < args.length
+          && i + 1 < message.length()
+          && message.charAt(i) == '{'
+          && message.charAt(i + 1) == '}') {
         out.append(String.valueOf(args[arg++]));
         i += 2;
       } else {

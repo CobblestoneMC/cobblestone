@@ -12,8 +12,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Persistence for player and global {@link Waypoint}s. A waypoint is keyed by {@code (owner, name)};
- * an empty owner is the global scope. Implementations must be safe to call from any thread.
+ * Persistence for player and global {@link Waypoint}s. A waypoint is keyed by {@code (owner,
+ * name)}; an empty owner is the global scope. Implementations must be safe to call from any thread.
  */
 public interface WaypointDao {
 

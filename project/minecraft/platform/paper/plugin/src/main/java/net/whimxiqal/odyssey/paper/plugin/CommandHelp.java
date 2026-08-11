@@ -15,13 +15,13 @@ import org.bukkit.command.CommandSender;
 
 /**
  * Renders a colored help line: the command syntax (fixed, never translated — commands are the same
- * in every language) accented in the brand color, followed by a localized description. This keeps the
- * literal command out of the translation bundle, which only carries the human-readable descriptions.
+ * in every language) accented in the brand color, followed by a localized description. This keeps
+ * the literal command out of the translation bundle, which only carries the human-readable
+ * descriptions.
  */
 final class CommandHelp {
 
-  private CommandHelp() {
-  }
+  private CommandHelp() {}
 
   /**
    * Sends one help line to a sender.
@@ -33,8 +33,14 @@ final class CommandHelp {
    * @param descriptionKey the message key of the localized description
    */
   static void line(
-      CommandSender sender, Messages messages, Locale locale, String syntax, String descriptionKey) {
-    sender.sendMessage(Component.text(syntax, OdysseyColors.PRIMARY)
-        .append(Component.text("  " + messages.raw(locale, descriptionKey), OdysseyColors.INFO)));
+      CommandSender sender,
+      Messages messages,
+      Locale locale,
+      String syntax,
+      String descriptionKey) {
+    sender.sendMessage(
+        Component.text(syntax, OdysseyColors.PRIMARY)
+            .append(
+                Component.text("  " + messages.raw(locale, descriptionKey), OdysseyColors.INFO)));
   }
 }

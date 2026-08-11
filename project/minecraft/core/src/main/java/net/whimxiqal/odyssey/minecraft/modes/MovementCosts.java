@@ -56,6 +56,5 @@ final class MovementCosts {
   /** Multiplier turning heal time into a deterrent cost for taking damage. */
   static final double DAMAGE_COST_MULTIPLIER = 2.0;
 
-  private MovementCosts() {
-  }
+  private MovementCosts() {}
 }

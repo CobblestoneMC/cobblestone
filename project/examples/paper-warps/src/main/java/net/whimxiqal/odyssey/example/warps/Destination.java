@@ -23,7 +23,8 @@ import org.bukkit.World;
  * @param yaw the facing yaw
  * @param pitch the facing pitch
  */
-record Destination(String name, String world, double x, double y, double z, float yaw, float pitch) {
+record Destination(
+    String name, String world, double x, double y, double z, float yaw, float pitch) {
 
   /** Builds a Bukkit location in the given (already-resolved) world. */
   Location toLocation(World resolved) {

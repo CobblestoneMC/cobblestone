@@ -9,10 +9,9 @@ package net.whimxiqal.odyssey.minecraft.api;
 
 public interface WorldRegion<W, V> {
 
-    W world();
+  W world();
 
-    boolean contains(V location);
+  boolean contains(V location);
 
-    V nearestBoundaryLocation(V location);
-
+  V nearestBoundaryLocation(V location);
 }

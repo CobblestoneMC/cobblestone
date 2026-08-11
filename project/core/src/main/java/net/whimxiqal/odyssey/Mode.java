@@ -7,17 +7,16 @@
 
 package net.whimxiqal.odyssey;
 
-import net.whimxiqal.odyssey.api.TraversalState;
-
 import java.util.Collection;
+import net.whimxiqal.odyssey.api.TraversalState;
 
 /**
  * A method of transportation (walk, swim, fly, mine, fall, boat, horse …).
  *
  * <p>Given a starting cell, the domain, the agent context, and the current {@link TraversalState},
- * a mode yields the neighbor cells it can reach in one step as {@link Movement}s. Block lookups
- * (in Minecraft) go through a chunk provider and surface as a {@link FutureOr}, so {@code step}
- * returns a {@code FutureOr} of the movement set; pure modes with no I/O return an immediate value.
+ * a mode yields the neighbor cells it can reach in one step as {@link Movement}s. Block lookups (in
+ * Minecraft) go through a chunk provider and surface as a {@link FutureOr}, so {@code step} returns
+ * a {@code FutureOr} of the movement set; pure modes with no I/O return an immediate value.
  *
  * <p>Ability/permission gating happens when the mode <i>list</i> is assembled for a search (e.g. a
  * fly mode is only included when the agent can fly), never inside {@code step}.

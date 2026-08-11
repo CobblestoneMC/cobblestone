@@ -8,8 +8,9 @@
 package net.whimxiqal.odyssey.plugin.message;
 
 /**
- * The catalog of Odyssey's user-facing messages. Each constant names a bundle key and its tone/arity;
- * render or send it through {@link Messages}. Keys mirror the entries in {@code messages.properties}.
+ * The catalog of Odyssey's user-facing messages. Each constant names a bundle key and its
+ * tone/arity; render or send it through {@link Messages}. Keys mirror the entries in {@code
+ * messages.properties}.
  *
  * <p>Only the messages needed for the Phase 6a foundation are declared here; command/navigation
  * messages are added alongside their features in later sub-phases.
@@ -37,19 +38,15 @@ public final class OdysseyMessages {
   /** Confirms a successful {@code /odyssey reload}. */
   public static final Message0 RELOAD_SUCCESS = Message0.success("command.odyssey.reload.success");
 
-  /**
-   * Notes that some changed settings need a restart ({@code {1}} = the comma-joined key list).
-   */
+  /** Notes that some changed settings need a restart ({@code {1}} = the comma-joined key list). */
   public static final Message1 RELOAD_RESTART_REQUIRED =
       Message1.info("command.odyssey.reload.restart_required");
 
   /** Confirms a waypoint was set ({@code {0}} = its name). */
-  public static final Message1 WAYPOINT_SET =
-      Message1.success("command.odyssey.waypoint.set");
+  public static final Message1 WAYPOINT_SET = Message1.success("command.odyssey.waypoint.set");
 
   /** Confirms a waypoint was removed ({@code {0}} = its name). */
-  public static final Message1 WAYPOINT_UNSET =
-      Message1.success("command.odyssey.waypoint.unset");
+  public static final Message1 WAYPOINT_UNSET = Message1.success("command.odyssey.waypoint.unset");
 
   /** Shown when unsetting a waypoint that does not exist ({@code {0}} = the name). */
   public static final Message1 WAYPOINT_NOT_FOUND =
@@ -89,7 +86,9 @@ public final class OdysseyMessages {
   /** Confirms a route was found and a trip started. */
   public static final Message0 NAVIGATE_STARTED = Message0.success("command.navigate.started");
 
-  /** Hover stats on the "route found" line ({@code {0}} = calc millis, {@code {1}} = est. duration). */
+  /**
+   * Hover stats on the "route found" line ({@code {0}} = calc millis, {@code {1}} = est. duration).
+   */
   public static final Message2 NAVIGATE_STATS = Message2.info("command.navigate.stats");
 
   /** Shown when no route to the destination exists. */
@@ -139,7 +138,8 @@ public final class OdysseyMessages {
   public static final Message1 CANCEL_TRIP = Message1.success("command.odyssey.cancel.trip");
 
   /** Shown when no active trip has the given id ({@code {0}} = the id). */
-  public static final Message1 CANCEL_NOT_FOUND = Message1.error("command.odyssey.cancel.not_found");
+  public static final Message1 CANCEL_NOT_FOUND =
+      Message1.error("command.odyssey.cancel.not_found");
 
   /** Shown when there is nothing to cancel. */
   public static final Message0 CANCEL_NOTHING = Message0.info("command.odyssey.cancel.nothing");
@@ -157,8 +157,8 @@ public final class OdysseyMessages {
   public static final Message0 TRIPS_NONE = Message0.info("command.odyssey.trips.none");
 
   /** Confirms the discovered-portal cache was cleared ({@code {0}} = how many were removed). */
-  public static final Message1 PORTALS_CLEARED = Message1.success("command.odyssey.portals.cleared");
+  public static final Message1 PORTALS_CLEARED =
+      Message1.success("command.odyssey.portals.cleared");
 
-  private OdysseyMessages() {
-  }
+  private OdysseyMessages() {}
 }

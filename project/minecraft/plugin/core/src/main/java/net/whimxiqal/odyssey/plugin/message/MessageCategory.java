@@ -9,9 +9,7 @@ package net.whimxiqal.odyssey.plugin.message;
 
 import net.kyori.adventure.text.format.TextColor;
 
-/**
- * The tone of a message, which sets the base color of its non-parameter text.
- */
+/** The tone of a message, which sets the base color of its non-parameter text. */
 public enum MessageCategory {
 
   /** Neutral information (light gray). */

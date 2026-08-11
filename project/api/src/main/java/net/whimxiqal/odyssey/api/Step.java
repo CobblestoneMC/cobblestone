@@ -9,13 +9,13 @@ package net.whimxiqal.odyssey.api;
 
 /**
  * One step of a solved path: a reached position plus the cost and time attributed to <i>this</i>
- * step (not a running total). Keeping the values per-step lets {@link Path} total them on demand and
- * keeps each step self-describing.
+ * step (not a running total). Keeping the values per-step lets {@link Path} total them on demand
+ * and keeps each step self-describing.
  *
- * <p>{@code cost} is the algorithm-facing metric the search minimizes (it may later fold in danger or
- * other penalties); {@code time} is the player-facing real duration of the step, in seconds. Today
- * the two are equal everywhere, but they are stored separately so danger weighting can diverge cost
- * from time without breaking any duration readout.
+ * <p>{@code cost} is the algorithm-facing metric the search minimizes (it may later fold in danger
+ * or other penalties); {@code time} is the player-facing real duration of the step, in seconds.
+ * Today the two are equal everywhere, but they are stored separately so danger weighting can
+ * diverge cost from time without breaking any duration readout.
  *
  * @param <P> the position type
  * @param <T> the payload type
@@ -24,9 +24,4 @@ package net.whimxiqal.odyssey.api;
  * @param time the real traversal time of this step, in seconds
  * @param payload the payload carried to the search result
  */
-public record Step<P, T>(
-    P position,
-    double cost,
-    double time,
-    T payload) {
-}
+public record Step<P, T>(P position, double cost, double time, T payload) {}

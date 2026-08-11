@@ -8,5 +8,4 @@
 package net.whimxiqal.odyssey;
 
 /** A no-capability {@link Agent} for core tests. */
-record TestAgent() implements Agent {
-}
+record TestAgent() implements Agent {}

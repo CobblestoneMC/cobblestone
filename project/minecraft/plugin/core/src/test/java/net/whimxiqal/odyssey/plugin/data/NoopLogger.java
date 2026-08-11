@@ -13,22 +13,17 @@ import net.whimxiqal.odyssey.OdysseyLogger;
 final class NoopLogger implements OdysseyLogger {
 
   @Override
-  public void trace(String message, Object... args) {
-  }
+  public void trace(String message, Object... args) {}
 
   @Override
-  public void debug(String message, Object... args) {
-  }
+  public void debug(String message, Object... args) {}
 
   @Override
-  public void info(String message, Object... args) {
-  }
+  public void info(String message, Object... args) {}
 
   @Override
-  public void warn(String message, Object... args) {
-  }
+  public void warn(String message, Object... args) {}
 
   @Override
-  public void error(String message, Throwable throwable, Object... args) {
-  }
+  public void error(String message, Throwable throwable, Object... args) {}
 }

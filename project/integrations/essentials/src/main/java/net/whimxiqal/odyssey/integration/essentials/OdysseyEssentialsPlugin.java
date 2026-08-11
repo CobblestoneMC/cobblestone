@@ -14,8 +14,8 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
- * Entry point for the EssentialsX integration. Resolves the Essentials API handles, then registers —
- * as ordinary Bukkit services — a destination provider (navigate to a home/spawn) and a search
+ * Entry point for the EssentialsX integration. Resolves the Essentials API handles, then registers
+ * — as ordinary Bukkit services — a destination provider (navigate to a home/spawn) and a search
  * modifier (route through the /home and /spawn teleports). Odyssey discovers both automatically.
  */
 public final class OdysseyEssentialsPlugin extends JavaPlugin {
@@ -37,7 +37,9 @@ public final class OdysseyEssentialsPlugin extends JavaPlugin {
     Odyssey.register(this, new EssentialsDestinationProvider(essentials));
     Odyssey.register(this, new EssentialsTransitionProvider(essentials));
 
-    getLogger().info("OdysseyEssentials enabled"
-        + (spawnApi == null ? " (EssentialsSpawn absent; /spawn not offered)." : "."));
+    getLogger()
+        .info(
+            "OdysseyEssentials enabled"
+                + (spawnApi == null ? " (EssentialsSpawn absent; /spawn not offered)." : "."));
   }
 }

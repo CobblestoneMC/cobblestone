@@ -30,14 +30,15 @@ import net.whimxiqal.odyssey.plugin.data.WaypointDao;
  *
  * <p>The store holds a single {@link Connection} guarded by a lock. Waypoint and (later) portal
  * writes are infrequent, so serializing DB access is simpler than a pool and keeps SQLite — which
- * serializes writes anyway — honest; a connection pool can arrive with the high-concurrency backends
- * in Phase 7. Schema is versioned by an ordered list of {@link #migrations()} statements applied
- * inside a transaction and recorded in {@code odyssey_schema_version}.
+ * serializes writes anyway — honest; a connection pool can arrive with the high-concurrency
+ * backends in Phase 7. Schema is versioned by an ordered list of {@link #migrations()} statements
+ * applied inside a transaction and recorded in {@code odyssey_schema_version}.
  */
 public abstract class AbstractJdbcDataStore implements DataStore {
 
   private final String url;
   private final OdysseyLogger logger;
+
   /** Guards the single connection; all DAO work synchronizes on it. */
   final Object lock = new Object();
 
@@ -66,11 +67,11 @@ public abstract class AbstractJdbcDataStore implements DataStore {
   protected abstract void loadDriver() throws ClassNotFoundException;
 
   /**
-   * Loads the ordered schema migrations from classpath resources next to this class
-   * ({@code migrations/1.sql}, {@code migrations/2.sql}, …), probing sequentially until the next
-   * number is absent. Each file's version is its filename number; a file may hold several
-   * {@code ;}-separated statements and {@code --} comments describing it. Dialect-neutral for now;
-   * a subclass could point at a backend-specific folder if a statement ever needs to differ.
+   * Loads the ordered schema migrations from classpath resources next to this class ({@code
+   * migrations/1.sql}, {@code migrations/2.sql}, …), probing sequentially until the next number is
+   * absent. Each file's version is its filename number; a file may hold several {@code ;}-separated
+   * statements and {@code --} comments describing it. Dialect-neutral for now; a subclass could
+   * point at a backend-specific folder if a statement ever needs to differ.
    *
    * @return the statements of each migration, in version order (index 0 = version 1)
    */
@@ -191,9 +192,10 @@ public abstract class AbstractJdbcDataStore implements DataStore {
   }
 
   private void writeVersion(int version, boolean insert) throws SQLException {
-    String sql = insert
-        ? "INSERT INTO odyssey_schema_version (version) VALUES (?)"
-        : "UPDATE odyssey_schema_version SET version = ?";
+    String sql =
+        insert
+            ? "INSERT INTO odyssey_schema_version (version) VALUES (?)"
+            : "UPDATE odyssey_schema_version SET version = ?";
     try (PreparedStatement statement = connection.prepareStatement(sql)) {
       statement.setInt(1, version);
       statement.executeUpdate();

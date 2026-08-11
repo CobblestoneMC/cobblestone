@@ -13,17 +13,16 @@ import java.util.List;
  * The platform-neutral follow logic for a trail navigator: given the ordered path points and the
  * player's current position, decide how far along the trail the player has gotten.
  *
- * <p>{@code points} are the step destinations, index-aligned with the path's steps, and
- * {@code foremost} is the index of the step the player still needs to complete (0 = the first step,
- * not yet done). Step {@code foremost} runs from {@code points[foremost - 1]} — or the passed
- * {@code origin} when {@code foremost == 0} — to {@code points[foremost]}; the player completes it by
+ * <p>{@code points} are the step destinations, index-aligned with the path's steps, and {@code
+ * foremost} is the index of the step the player still needs to complete (0 = the first step, not
+ * yet done). Step {@code foremost} runs from {@code points[foremost - 1]} — or the passed {@code
+ * origin} when {@code foremost == 0} — to {@code points[foremost]}; the player completes it by
  * projecting past that destination, and {@code foremost} advances. This tolerates a player cutting
  * corners — they still "complete" steps in order — without any exact-position tracking.
  */
 public final class TrailProgress {
 
-  private TrailProgress() {
-  }
+  private TrailProgress() {}
 
   /**
    * Advances the foremost index past every step the player has already projected beyond.
@@ -42,7 +41,8 @@ public final class TrailProgress {
       Vec3 segment = points.get(index).minus(start);
       double lengthSquared = segment.lengthSquared();
       // A zero-length segment (duplicate point / standing on the origin) is treated as passed.
-      double projection = lengthSquared == 0.0 ? 1.0 : player.minus(start).dot(segment) / lengthSquared;
+      double projection =
+          lengthSquared == 0.0 ? 1.0 : player.minus(start).dot(segment) / lengthSquared;
       if (projection >= 1.0) {
         index++;
       } else {

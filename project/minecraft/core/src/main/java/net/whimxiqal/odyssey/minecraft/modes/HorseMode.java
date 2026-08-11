@@ -15,7 +15,6 @@ import net.whimxiqal.odyssey.Cell;
 import net.whimxiqal.odyssey.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
 import net.whimxiqal.odyssey.minecraft.MinecraftAgent;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
 import net.whimxiqal.odyssey.minecraft.MinecraftKeys;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
@@ -30,7 +29,7 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 final class HorseMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> {
 
   private static final int[][] HORIZONTAL = {
-      {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}
+    {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}
   };
 
   @Override
@@ -61,7 +60,12 @@ final class HorseMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A>
       } else if (!diagonal) {
         Cell up = from.plus(dx, 1, dz);
         if (Geometry.standable(view, up) && view.at(from, 0, 2, 0).isPassable()) {
-          moves.add(move(up, MovementCosts.HORSE + MovementCosts.JUMP_EXTRA, MinecraftStepType.HORSE, state));
+          moves.add(
+              move(
+                  up,
+                  MovementCosts.HORSE + MovementCosts.JUMP_EXTRA,
+                  MinecraftStepType.HORSE,
+                  state));
         }
       }
     }

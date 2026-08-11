@@ -100,8 +100,8 @@ public final class SearchSettings {
   }
 
   /**
-   * Returns the A* heuristic weight applied in Tier-2 (1.0 = admissible; &gt;1 trades optimality for
-   * a smaller explored frontier — weighted A*).
+   * Returns the A* heuristic weight applied in Tier-2 (1.0 = admissible; &gt;1 trades optimality
+   * for a smaller explored frontier — weighted A*).
    *
    * @return the heuristic weight
    */
@@ -109,9 +109,7 @@ public final class SearchSettings {
     return heuristicWeight;
   }
 
-  /**
-   * A fluent builder for {@link SearchSettings}.
-   */
+  /** A fluent builder for {@link SearchSettings}. */
   public static final class Builder {
 
     private int maxCellsVisited = DEFAULT_MAX_CELLS_VISITED;
@@ -120,8 +118,7 @@ public final class SearchSettings {
     private int runningAverageWidth = DEFAULT_RUNNING_AVERAGE_WIDTH;
     private double heuristicWeight = DEFAULT_HEURISTIC_WEIGHT;
 
-    private Builder() {
-    }
+    private Builder() {}
 
     /**
      * Sets the A* heuristic weight (must be &gt;= 1.0).

@@ -15,7 +15,6 @@ import net.whimxiqal.odyssey.Cell;
 import net.whimxiqal.odyssey.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
 import net.whimxiqal.odyssey.minecraft.MinecraftAgent;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
 import net.whimxiqal.odyssey.minecraft.MinecraftKeys;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
@@ -29,9 +28,16 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 final class SwimMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> {
 
   private static final int[][] DIRECTIONS = {
-      {0, 1, 0}, {0, -1, 0},
-      {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1},
-      {1, 0, 1}, {1, 0, -1}, {-1, 0, 1}, {-1, 0, -1}
+    {0, 1, 0},
+    {0, -1, 0},
+    {1, 0, 0},
+    {-1, 0, 0},
+    {0, 0, 1},
+    {0, 0, -1},
+    {1, 0, 1},
+    {1, 0, -1},
+    {-1, 0, 1},
+    {-1, 0, -1}
   };
 
   @Override

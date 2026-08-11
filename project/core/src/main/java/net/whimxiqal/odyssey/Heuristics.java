@@ -11,19 +11,16 @@ import net.whimxiqal.odyssey.api.TraversalState;
 
 /**
  * Factory for the built-in {@link HeuristicStrategy} implementations: the admissible {@link #zero}
- * and {@link #euclidean} (used for exact-optimal results and unit tests), and the adaptive
- * {@link #runningAverage} used in production for speed.
+ * and {@link #euclidean} (used for exact-optimal results and unit tests), and the adaptive {@link
+ * #runningAverage} used in production for speed.
  */
 public final class Heuristics {
 
-  private Heuristics() {
-  }
+  private Heuristics() {}
 
   /**
-   * A trivially-admissible heuristic that always returns {@code 0}, turning
-   * Tier-2 A* into
-   * uniform-cost (Dijkstra) search — always optimal for the explored terrain, but
-   * uninformed.
+   * A trivially-admissible heuristic that always returns {@code 0}, turning Tier-2 A* into
+   * uniform-cost (Dijkstra) search — always optimal for the explored terrain, but uninformed.
    *
    * @return the zero heuristic
    */
@@ -32,43 +29,40 @@ public final class Heuristics {
   }
 
   /**
-   * An admissible, consistent heuristic: euclidean distance to the region's
-   * nearest boundary cell
+   * An admissible, consistent heuristic: euclidean distance to the region's nearest boundary cell
    * times a globally-cheapest per-block cost.
    *
-   * <p>
-   * {@code cheapestCostPerBlock} must be a true lower bound on the cost of moving
-   * one block by
-   * any available means (e.g. the fastest mode's per-block cost); using a global
-   * lower bound keeps
-   * the estimate admissible for every agent without needing per-agent knowledge
-   * here.
+   * <p>{@code cheapestCostPerBlock} must be a true lower bound on the cost of moving one block by
+   * any available means (e.g. the fastest mode's per-block cost); using a global lower bound keeps
+   * the estimate admissible for every agent without needing per-agent knowledge here.
    *
-   * @param cheapestCostPerBlock a lower bound on per-block traversal cost, in
-   *                             seconds
+   * @param cheapestCostPerBlock a lower bound on per-block traversal cost, in seconds
    * @return the euclidean heuristic
    */
   public static HeuristicStrategy euclidean(double cheapestCostPerBlock) {
     if (cheapestCostPerBlock < 0) {
-      throw new IllegalArgumentException("cheapestCostPerBlock must be >= 0: " + cheapestCostPerBlock);
+      throw new IllegalArgumentException(
+          "cheapestCostPerBlock must be >= 0: " + cheapestCostPerBlock);
     }
-    return (from, target, state) -> from.distance(target.nearestBoundaryCell(from)) * cheapestCostPerBlock;
+    return (from, target, state) ->
+        from.distance(target.nearestBoundaryCell(from)) * cheapestCostPerBlock;
   }
 
   /**
-   * A production heuristic that scales the remaining distance by a sliding-window average of the real
-   * per-block cost seen so far in the current solve (falling back to {@code cheapestCostPerBlock}
-   * before any samples). This makes {@code h} track the terrain/mode actually being traversed, so A*
-   * explores far fewer cells — at the price of admissibility, so paths may be slightly sub-optimal
-   * (weighted-A*-style). Tier-1 still uses the admissible {@link #estimate} (distance ×
-   * {@code cheapestCostPerBlock}).
+   * A production heuristic that scales the remaining distance by a sliding-window average of the
+   * real per-block cost seen so far in the current solve (falling back to {@code
+   * cheapestCostPerBlock} before any samples). This makes {@code h} track the terrain/mode actually
+   * being traversed, so A* explores far fewer cells — at the price of admissibility, so paths may
+   * be slightly sub-optimal (weighted-A*-style). Tier-1 still uses the admissible {@link #estimate}
+   * (distance × {@code cheapestCostPerBlock}).
    *
    * @param cheapestCostPerBlock a lower bound on per-block cost, used before samples and by Tier-1
    * @return the running-average heuristic
    */
   public static HeuristicStrategy runningAverage(double cheapestCostPerBlock) {
     if (cheapestCostPerBlock < 0) {
-      throw new IllegalArgumentException("cheapestCostPerBlock must be >= 0: " + cheapestCostPerBlock);
+      throw new IllegalArgumentException(
+          "cheapestCostPerBlock must be >= 0: " + cheapestCostPerBlock);
     }
     return new HeuristicStrategy() {
       @Override

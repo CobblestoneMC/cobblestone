@@ -7,9 +7,7 @@
 
 package net.whimxiqal.odyssey.plugin.message;
 
-/**
- * A message that takes no parameters.
- */
+/** A message that takes no parameters. */
 public final class Message0 extends Message {
 
   /**

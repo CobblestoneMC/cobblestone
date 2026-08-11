@@ -14,8 +14,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
-/** A {@link PlatformApi} test double: records fetches and either completes them at once or defers them. */
-final class FakePlatform implements PlatformApi {
+/**
+ * A {@link PlatformApi} test double: records fetches and either completes them at once or defers
+ * them.
+ */
+final class FakePlatform implements PlatformApi<Object> {
 
   private final List<long[]> fetched = new ArrayList<>();
   private final Map<Long, CompletableFuture<Optional<MinecraftChunk>>> deferred = new HashMap<>();
@@ -34,7 +37,7 @@ final class FakePlatform implements PlatformApi {
   }
 
   @Override
-  public MinecraftScheduler scheduler() {
+  public MinecraftScheduler<Object> scheduler() {
     throw new UnsupportedOperationException("not needed for chunk-provider tests");
   }
 

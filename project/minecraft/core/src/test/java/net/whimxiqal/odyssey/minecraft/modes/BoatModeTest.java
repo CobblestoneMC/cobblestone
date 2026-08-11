@@ -13,15 +13,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import net.whimxiqal.odyssey.Cell;
 import net.whimxiqal.odyssey.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
+import net.whimxiqal.odyssey.minecraft.MinecraftKeys;
+import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
 import net.whimxiqal.odyssey.minecraft.TestBlocks;
 import net.whimxiqal.odyssey.minecraft.TestModes;
 import net.whimxiqal.odyssey.minecraft.TestPlayer;
 import net.whimxiqal.odyssey.minecraft.TestWorld;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
-import net.whimxiqal.odyssey.minecraft.MinecraftKeys;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
-import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
 import org.junit.jupiter.api.Test;
 
 class BoatModeTest {
@@ -31,10 +30,11 @@ class BoatModeTest {
 
   @Test
   void enteringWaterPlacesBoatAndSetsVehicleState() {
-    TestWorld world = TestWorld.builder("w")
-        .floor(0, -1, -1, 0, 1, TestBlocks.solid())
-        .set(1, 1, 0, TestBlocks.water())
-        .build();
+    TestWorld world =
+        TestWorld.builder("w")
+            .floor(0, -1, -1, 0, 1, TestBlocks.solid())
+            .set(1, 1, 0, TestBlocks.water())
+            .build();
     Movement<MinecraftStepPayload> place =
         TestModes.from(boat, withBoat, world, new Cell(0, 1, 0)).get(new Cell(1, 1, 0));
 
@@ -45,11 +45,13 @@ class BoatModeTest {
 
   @Test
   void travelsAcrossWaterWhileBoating() {
-    TestWorld world = TestWorld.builder("w")
-        .set(1, 1, 0, TestBlocks.water())
-        .set(2, 1, 0, TestBlocks.water())
-        .build();
-    TraversalState boating = TraversalState.DEFAULT.with(MinecraftKeys.VEHICLE, MinecraftKeys.Vehicle.BOAT);
+    TestWorld world =
+        TestWorld.builder("w")
+            .set(1, 1, 0, TestBlocks.water())
+            .set(2, 1, 0, TestBlocks.water())
+            .build();
+    TraversalState boating =
+        TraversalState.DEFAULT.with(MinecraftKeys.VEHICLE, MinecraftKeys.Vehicle.BOAT);
     Movement<MinecraftStepPayload> travel =
         TestModes.from(boat, withBoat, world, new Cell(1, 1, 0), boating).get(new Cell(2, 1, 0));
 

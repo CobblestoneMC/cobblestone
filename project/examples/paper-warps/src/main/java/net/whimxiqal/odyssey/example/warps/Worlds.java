@@ -15,8 +15,7 @@ import org.bukkit.World;
 /** Small helpers for turning world keys into live {@link World}s and back, with null handling. */
 final class Worlds {
 
-  private Worlds() {
-  }
+  private Worlds() {}
 
   /** The loaded world with the given key, or {@code null} if the key is malformed or unloaded. */
   static World byKey(String key) {

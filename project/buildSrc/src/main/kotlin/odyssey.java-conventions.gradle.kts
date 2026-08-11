@@ -4,7 +4,6 @@
 
 plugins {
     `java-library`
-    checkstyle
     id("com.diffplug.spotless")
 }
 
@@ -30,18 +29,12 @@ tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.addAll(listOf("-Xlint:all", "-Xlint:-processing"))
 }
 
-checkstyle {
-    toolVersion = "10.26.1"
-    configFile = rootProject.file("config/checkstyle/checkstyle.xml")
-    // Google config runs at "warning" severity; don't fail the build on style yet (Phase 0). We will
-    // tighten this (severity/error, maxWarnings=0) once real code lands.
-    isIgnoreFailures = true
-}
-
 spotless {
     java {
         target("src/**/*.java")
         licenseHeaderFile(rootProject.file("gradle/license-header.txt"))
+        googleJavaFormat()
+        forbidWildcardImports()
     }
 }
 

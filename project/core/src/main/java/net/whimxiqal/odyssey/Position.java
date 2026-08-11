@@ -14,5 +14,4 @@ package net.whimxiqal.odyssey;
  * @param cell the cell
  * @param domain the domain the cell lives in
  */
-public record Position<D extends Domain>(Cell cell, D domain) {
-}
+public record Position<D extends Domain>(Cell cell, D domain) {}

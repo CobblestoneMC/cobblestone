@@ -23,7 +23,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
@@ -73,40 +72,69 @@ final class NavigateCommand {
   private static final String PERMISSION_NAVIGATOR_PREFIX = "odyssey.navigator.";
   private static final Set<String> VALUE_FLAGS =
       Set.of("-navigator", "-no-world", "-no-dimension", "-no-mode");
-  // A tiny, greedy search for the off-trail "guide" path: bounded and heavily weighted so it's cheap.
-  private static final SearchSettings GUIDE_SETTINGS = SearchSettings.builder()
-      .maxCellsVisited(4000)
-      .maxWallClockMillis(1500L)
-      .heuristicWeight(2.0)
-      .build();
+  // A tiny, greedy search for the off-trail "guide" path: bounded and heavily weighted so it's
+  // cheap.
+  private static final SearchSettings GUIDE_SETTINGS =
+      SearchSettings.builder()
+          .maxCellsVisited(4000)
+          .maxWallClockMillis(1500L)
+          .heuristicWeight(2.0)
+          .build();
 
-  private NavigateCommand() {
-  }
+  private NavigateCommand() {}
 
   static LiteralCommandNode<CommandSourceStack> build(
-      PaperOdysseyApiImpl platformApi, TripManager<Entity, PaperTripAgent, Location> trips, SearchRegistry searches,
-      SearchGate gate, long liveIntervalMillis, Supplier<SearchSettings> searchSettings,
-      OdysseyLogger log, Messages messages) {
+      PaperOdysseyApiImpl platformApi,
+      TripManager<Entity, PaperTripAgent, Location> trips,
+      SearchRegistry searches,
+      SearchGate gate,
+      long liveIntervalMillis,
+      Supplier<SearchSettings> searchSettings,
+      OdysseyLogger log,
+      Messages messages) {
     return Commands.literal("navigate")
         .requires(source -> source.getSender().hasPermission(PERMISSION_NAVIGATE))
         .executes(ctx -> navHelp(ctx.getSource().getSender(), messages))
-        .then(Commands.literal("help").executes(ctx -> navHelp(ctx.getSource().getSender(), messages)))
+        .then(
+            Commands.literal("help")
+                .executes(ctx -> navHelp(ctx.getSource().getSender(), messages)))
         .then(Commands.literal("?").executes(ctx -> navHelp(ctx.getSource().getSender(), messages)))
-        .then(Commands.argument("args", StringArgumentType.greedyString())
-            .suggests(NavigateCommand::suggest)
-            .executes(ctx -> run(ctx, platformApi, trips, searches, gate, liveIntervalMillis,
-                searchSettings, log, messages)))
+        .then(
+            Commands.argument("args", StringArgumentType.greedyString())
+                .suggests(NavigateCommand::suggest)
+                .executes(
+                    ctx ->
+                        run(
+                            ctx,
+                            platformApi,
+                            trips,
+                            searches,
+                            gate,
+                            liveIntervalMillis,
+                            searchSettings,
+                            log,
+                            messages)))
         .build();
   }
 
   private static int navHelp(CommandSender sender, Messages messages) {
     Locale locale = localeOf(sender, messages);
     messages.send(sender, locale, OdysseyMessages.NAVIGATE_HELP_HEADER);
-    CommandHelp.line(sender, messages, locale, "/navigate <destination...>", "command.navigate.help.destination");
-    CommandHelp.line(sender, messages, locale, "-navigator <id>", "command.navigate.help.navigator");
+    CommandHelp.line(
+        sender,
+        messages,
+        locale,
+        "/navigate <destination...>",
+        "command.navigate.help.destination");
+    CommandHelp.line(
+        sender, messages, locale, "-navigator <id>", "command.navigate.help.navigator");
     CommandHelp.line(sender, messages, locale, "-no-mode <mode>", "command.navigate.help.no_mode");
-    CommandHelp.line(sender, messages, locale,
-        "-no-world <world> / -no-dimension <dim>", "command.navigate.help.no_world");
+    CommandHelp.line(
+        sender,
+        messages,
+        locale,
+        "-no-world <world> / -no-dimension <dim>",
+        "command.navigate.help.no_world");
     CommandHelp.line(sender, messages, locale, "-live", "command.navigate.help.live");
     return Command.SINGLE_SUCCESS;
   }
@@ -128,7 +156,8 @@ final class NavigateCommand {
       return Command.SINGLE_SUCCESS;
     }
 
-    FlagParser.Result parseResult = FlagParser.parse(tokenize(StringArgumentType.getString(ctx, "args")));
+    FlagParser.Result parseResult =
+        FlagParser.parse(tokenize(StringArgumentType.getString(ctx, "args")));
     if (parseResult instanceof FlagParser.Invalid invalid) {
       sendFlagError(player, locale, messages, invalid);
       return Command.SINGLE_SUCCESS;
@@ -147,29 +176,59 @@ final class NavigateCommand {
       return Command.SINGLE_SUCCESS;
     }
 
-    DestinationResolver.Resolution<World, Vector3i> resolution = DestinationResolver.resolve(
-        destinationRoots(player), parsed.destination(), player::hasPermission, canNavigate(player));
-    if (resolution instanceof DestinationResolver.Ambiguous<World, Vector3i>(List<List<String>> addresses)) {
-      messages.send(player, locale, OdysseyMessages.NAVIGATE_DESTINATION_AMBIGUOUS, formatAddresses(addresses));
+    DestinationResolver.Resolution<World, Vector3i> resolution =
+        DestinationResolver.resolve(
+            destinationRoots(player),
+            parsed.destination(),
+            player::hasPermission,
+            canNavigate(player));
+    if (resolution
+        instanceof DestinationResolver.Ambiguous<World, Vector3i>(List<List<String>> addresses)) {
+      messages.send(
+          player,
+          locale,
+          OdysseyMessages.NAVIGATE_DESTINATION_AMBIGUOUS,
+          formatAddresses(addresses));
       return Command.SINGLE_SUCCESS;
     }
-    if (!(resolution instanceof DestinationResolver.Resolved<World, Vector3i>(
-        MinecraftDestination<World, Vector3i> destination, List<String> address
-    ))) {
-      messages.send(player, locale, OdysseyMessages.NAVIGATE_DESTINATION_NOT_FOUND, String.join(" ", parsed.destination()));
+    if (!(resolution
+        instanceof
+        DestinationResolver.Resolved<World, Vector3i>(
+            MinecraftDestination<World, Vector3i> destination,
+            List<String> address))) {
+      messages.send(
+          player,
+          locale,
+          OdysseyMessages.NAVIGATE_DESTINATION_NOT_FOUND,
+          String.join(" ", parsed.destination()));
       return Command.SINGLE_SUCCESS;
     }
 
     String destinationLabel = String.join(" ", address);
     // Re-navigating to a place you already have a trip for replaces it rather than piling on.
     trips.cancelByDestination(player.getUniqueId(), destinationLabel);
-    boolean live = switch (flags.liveness()) {
-      case LIVE -> true;
-      case NO_LIVE -> false;
-      case DEFAULT -> destination.isMobile();
-    };
-    startSearch(player, locale, destinationLabel, destination, flags, live, factory, platformApi,
-        trips, searches, gate, liveIntervalMillis, searchSettings, log, messages);
+    boolean live =
+        switch (flags.liveness()) {
+          case LIVE -> true;
+          case NO_LIVE -> false;
+          case DEFAULT -> destination.isMobile();
+        };
+    startSearch(
+        player,
+        locale,
+        destinationLabel,
+        destination,
+        flags,
+        live,
+        factory,
+        platformApi,
+        trips,
+        searches,
+        gate,
+        liveIntervalMillis,
+        searchSettings,
+        log,
+        messages);
     return Command.SINGLE_SUCCESS;
   }
 
@@ -192,85 +251,145 @@ final class NavigateCommand {
     UUID uuid = player.getUniqueId();
     final long startNanos = System.nanoTime();
     gate.beginForced(uuid); // a manual search always runs and counts toward the budget
-    SearchHandle<Location, MinecraftStepPayload> handle = platformApi.navigatePlayerToDestination(
-        player, destination.destination(), new MinecraftSearchSettings(searchSettings.get(), flags.excludedModes(),
-        flags.excludedWorlds(), flags.excludedDimensions()));
+    SearchHandle<Location, MinecraftStepPayload> handle =
+        platformApi.navigatePlayerToDestination(
+            player,
+            destination.destination(),
+            new MinecraftSearchSettings(
+                searchSettings.get(),
+                flags.excludedModes(),
+                flags.excludedWorlds(),
+                flags.excludedDimensions()));
     searches.track(uuid, handle);
     messages.send(player, locale, OdysseyMessages.NAVIGATE_SEARCHING);
 
-    handle.future().whenComplete((result, error) -> {
-      searches.untrack(uuid, handle);
-      gate.end(uuid);
-      long elapsedMillis = (System.nanoTime() - startNanos) / 1_000_000L;
-      if (error != null) {
-        log.debug("navigate {} -> {}: errored in {}ms", player.getName(), destinationLabel, elapsedMillis);
-        messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
-        return;
-      }
-      if (result instanceof NavigationResult.Failure<Location, MinecraftStepPayload>(FailureReason reason)) {
-        log.debug("navigate {} -> {}: {} in {}ms",
-            player.getName(), destinationLabel, reason, elapsedMillis);
-        sendFailure(player, locale, messages, reason);
-        return;
-      }
-      Path<Location, MinecraftStepPayload> path =
-          ((NavigationResult.Success<Location, MinecraftStepPayload>) result).path();
-      log.debug("navigate {} -> {}: {} steps, {}s duration, found in {}ms",
-          player.getName(), destinationLabel, path.steps().size(), path.duration(), elapsedMillis);
-      Location origin = path.steps().isEmpty() ? null : path.steps().get(0).position();
-      if (origin == null || origin.getWorld() == null) {
-        messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
-        return;
-      }
-      // Trip creation and rendering must run on the location's owning thread (Folia-safe).
-      platformApi.scheduler().runAtPosition(platformApi.position(origin), () -> {
-        if (!player.isOnline()) {
-          return;
-        }
-        Navigator<Location> navigator = factory.create(player, path, new PaperNavigatorContext(player));
-        // Every trip carries the re-search function (for stray recalculation); `live` also runs it
-        // periodically.
-        Optional<Trip<Entity, PaperTripAgent, Location>> trip = trips.start(new PaperTripAgent(player), flags.navigator(),
-            navigator, destinationLabel,
-            liveSearch(player, destination, flags, platformApi, searches, gate, searchSettings),
-            guideSearch(player, flags, platformApi), live, liveIntervalMillis);
-        if (trip.isEmpty()) {
-          messages.send(player, locale, OdysseyMessages.NAVIGATE_TRIP_LIMIT);
-        } else {
-          // "Route found" carries a hover with how long the search took and how long the trip is.
-          Component started = messages.render(locale, OdysseyMessages.NAVIGATE_STARTED);
-          Component stats = messages.render(locale, OdysseyMessages.NAVIGATE_STATS,
-              elapsedMillis, messages.formatDuration(locale, path.duration()));
-          player.sendMessage(started.hoverEvent(HoverEvent.showText(stats)));
-        }
-      });
-    });
+    handle
+        .future()
+        .whenComplete(
+            (result, error) -> {
+              searches.untrack(uuid, handle);
+              gate.end(uuid);
+              long elapsedMillis = (System.nanoTime() - startNanos) / 1_000_000L;
+              if (error != null) {
+                log.debug(
+                    "navigate {} -> {}: errored in {}ms",
+                    player.getName(),
+                    destinationLabel,
+                    elapsedMillis);
+                messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
+                return;
+              }
+              if (result
+                  instanceof
+                  NavigationResult.Failure<Location, MinecraftStepPayload>(FailureReason reason)) {
+                log.debug(
+                    "navigate {} -> {}: {} in {}ms",
+                    player.getName(),
+                    destinationLabel,
+                    reason,
+                    elapsedMillis);
+                sendFailure(player, locale, messages, reason);
+                return;
+              }
+              Path<Location, MinecraftStepPayload> path =
+                  ((NavigationResult.Success<Location, MinecraftStepPayload>) result).path();
+              log.debug(
+                  "navigate {} -> {}: {} steps, {}s duration, found in {}ms",
+                  player.getName(),
+                  destinationLabel,
+                  path.steps().size(),
+                  path.duration(),
+                  elapsedMillis);
+              Location origin = path.steps().isEmpty() ? null : path.steps().get(0).position();
+              if (origin == null || origin.getWorld() == null) {
+                messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
+                return;
+              }
+              // Trip creation and rendering must run on the location's owning thread (Folia-safe).
+              platformApi
+                  .scheduler()
+                  .runAtPosition(
+                      platformApi.position(origin),
+                      () -> {
+                        if (!player.isOnline()) {
+                          return;
+                        }
+                        Navigator<Location> navigator =
+                            factory.create(player, path, new PaperNavigatorContext(player));
+                        // Every trip carries the re-search function (for stray recalculation);
+                        // `live` also runs it
+                        // periodically.
+                        Optional<Trip<Entity, PaperTripAgent, Location>> trip =
+                            trips.start(
+                                new PaperTripAgent(player),
+                                flags.navigator(),
+                                navigator,
+                                destinationLabel,
+                                liveSearch(
+                                    player,
+                                    destination,
+                                    flags,
+                                    platformApi,
+                                    searches,
+                                    gate,
+                                    searchSettings),
+                                guideSearch(player, flags, platformApi),
+                                live,
+                                liveIntervalMillis);
+                        if (trip.isEmpty()) {
+                          messages.send(player, locale, OdysseyMessages.NAVIGATE_TRIP_LIMIT);
+                        } else {
+                          // "Route found" carries a hover with how long the search took and how
+                          // long the trip is.
+                          Component started =
+                              messages.render(locale, OdysseyMessages.NAVIGATE_STARTED);
+                          Component stats =
+                              messages.render(
+                                  locale,
+                                  OdysseyMessages.NAVIGATE_STATS,
+                                  elapsedMillis,
+                                  messages.formatDuration(locale, path.duration()));
+                          player.sendMessage(started.hoverEvent(HoverEvent.showText(stats)));
+                        }
+                      });
+            });
   }
 
   /** Builds the short-range guide search (player -> current step) for off-trail drift. */
   private static GuideSearch<Location> guideSearch(
-      Player player,
-      NavigationFlags flags,
-      PaperOdysseyApiImpl platformApi) {
+      Player player, NavigationFlags flags, PaperOdysseyApiImpl platformApi) {
     return target -> {
       if (!player.isOnline()) {
         return CompletableFuture.completedFuture(Optional.empty());
       }
-      return platformApi.navigatePlayer(player, target, new MinecraftSearchSettings(GUIDE_SETTINGS,flags.excludedModes(),
-          flags.excludedWorlds(), flags.excludedDimensions())).future().handle((result, error) -> {
-        if (error == null
-            && result instanceof NavigationResult.Success<Location, MinecraftStepPayload>(
-            Path<Location, MinecraftStepPayload> path
-        )
-            && !path.steps().isEmpty()) {
-          return Optional.of(path);
-        }
-        return Optional.<Path<Location, MinecraftStepPayload>>empty();
-      });
+      return platformApi
+          .navigatePlayer(
+              player,
+              target,
+              new MinecraftSearchSettings(
+                  GUIDE_SETTINGS,
+                  flags.excludedModes(),
+                  flags.excludedWorlds(),
+                  flags.excludedDimensions()))
+          .future()
+          .handle(
+              (result, error) -> {
+                if (error == null
+                    && result
+                        instanceof
+                        NavigationResult.Success<Location, MinecraftStepPayload>(
+                            Path<Location, MinecraftStepPayload> path)
+                    && !path.steps().isEmpty()) {
+                  return Optional.of(path);
+                }
+                return Optional.<Path<Location, MinecraftStepPayload>>empty();
+              });
     };
   }
 
-  /** Builds the re-search behavior for a {@code -live} trip; yields to the per-player search budget. */
+  /**
+   * Builds the re-search behavior for a {@code -live} trip; yields to the per-player search budget.
+   */
   private static LiveSearch<Location> liveSearch(
       Player player,
       MinecraftDestination<World, Vector3i> destination,
@@ -284,22 +403,32 @@ final class NavigateCommand {
       if (!player.isOnline() || !gate.tryBegin(uuid)) {
         return CompletableFuture.completedFuture(Optional.empty());
       }
-      SearchHandle<Location, MinecraftStepPayload> handle = platformApi.navigatePlayerToDestination(
-          player, destination.destination(), new MinecraftSearchSettings(searchSettings.get(), flags.excludedModes(),
-          flags.excludedWorlds(), flags.excludedDimensions()));
+      SearchHandle<Location, MinecraftStepPayload> handle =
+          platformApi.navigatePlayerToDestination(
+              player,
+              destination.destination(),
+              new MinecraftSearchSettings(
+                  searchSettings.get(),
+                  flags.excludedModes(),
+                  flags.excludedWorlds(),
+                  flags.excludedDimensions()));
       searches.track(uuid, handle);
-      return handle.future().handle((result, error) -> {
-        searches.untrack(uuid, handle);
-        gate.end(uuid);
-        if (error == null
-            && result instanceof NavigationResult.Success<Location, MinecraftStepPayload>(
-            Path<Location, MinecraftStepPayload> path
-        )
-            && !path.steps().isEmpty()) {
-          return Optional.of(path);
-        }
-        return Optional.<Path<Location, MinecraftStepPayload>>empty();
-      });
+      return handle
+          .future()
+          .handle(
+              (result, error) -> {
+                searches.untrack(uuid, handle);
+                gate.end(uuid);
+                if (error == null
+                    && result
+                        instanceof
+                        NavigationResult.Success<Location, MinecraftStepPayload>(
+                            Path<Location, MinecraftStepPayload> path)
+                    && !path.steps().isEmpty()) {
+                  return Optional.of(path);
+                }
+                return Optional.<Path<Location, MinecraftStepPayload>>empty();
+              });
     };
   }
 
@@ -311,43 +440,52 @@ final class NavigateCommand {
     String remaining = builder.getRemaining();
     List<String> tokens = tokenizeKeepingTrailing(remaining);
     String last = tokens.isEmpty() ? "" : tokens.get(tokens.size() - 1);
-    String previous = tokens.size() >= 2 ? tokens.get(tokens.size() - 2).toLowerCase(Locale.ROOT) : "";
-    SuggestionsBuilder offset = builder.createOffset(builder.getStart() + remaining.length() - last.length());
+    String previous =
+        tokens.size() >= 2 ? tokens.get(tokens.size() - 2).toLowerCase(Locale.ROOT) : "";
+    SuggestionsBuilder offset =
+        builder.createOffset(builder.getStart() + remaining.length() - last.length());
 
     if (previous.equals("-navigator")) {
       navigatorIds().stream().filter(id -> id.startsWith(last)).forEach(offset::suggest);
     } else if (previous.equals("-no-mode")) {
-      FlagParser.modeWords().stream().filter(word -> word.startsWith(last)).sorted().forEach(offset::suggest);
+      FlagParser.modeWords().stream()
+          .filter(word -> word.startsWith(last))
+          .sorted()
+          .forEach(offset::suggest);
     } else if (last.startsWith("-")) {
       flagNames().stream().filter(flag -> flag.startsWith(last)).forEach(offset::suggest);
     } else {
-      DestinationResolver.suggest(destinationRoots(player), destinationTokens(tokens),
-              player::hasPermission, canNavigate(player))
+      DestinationResolver.suggest(
+              destinationRoots(player),
+              destinationTokens(tokens),
+              player::hasPermission,
+              canNavigate(player))
           .forEach(offset::suggest);
     }
     return offset.buildFuture();
   }
 
   /**
-   * The Odyssey navigation-gate check for a player: default-allow, so a destination is offered unless
-   * its {@code odyssey.navigate.<address>} node is explicitly denied.
+   * The Odyssey navigation-gate check for a player: default-allow, so a destination is offered
+   * unless its {@code odyssey.navigate.<address>} node is explicitly denied.
    */
   private static Predicate<List<String>> canNavigate(Player player) {
-    return address -> NavigationPermissions.allowed(address, player::isPermissionSet, player::hasPermission);
+    return address ->
+        NavigationPermissions.allowed(address, player::isPermissionSet, player::hasPermission);
   }
 
   private static List<DestinationTree<World, Vector3i>> destinationRoots(Player player) {
     List<DestinationTree<World, Vector3i>> roots = new ArrayList<>();
-    for (RegisteredServiceProvider<PaperDestinationProvider> registration
-        : Bukkit.getServicesManager().getRegistrations(PaperDestinationProvider.class)) {
+    for (RegisteredServiceProvider<PaperDestinationProvider> registration :
+        Bukkit.getServicesManager().getRegistrations(PaperDestinationProvider.class)) {
       roots.addAll(registration.getProvider().provide(player));
     }
     return roots;
   }
 
   private static PaperNavigatorFactory navigatorFactory(String id) {
-    for (RegisteredServiceProvider<PaperNavigatorFactory> registration
-        : Bukkit.getServicesManager().getRegistrations(PaperNavigatorFactory.class)) {
+    for (RegisteredServiceProvider<PaperNavigatorFactory> registration :
+        Bukkit.getServicesManager().getRegistrations(PaperNavigatorFactory.class)) {
       if (registration.getProvider().key().equals(id)) {
         return registration.getProvider();
       }
@@ -357,16 +495,16 @@ final class NavigateCommand {
 
   private static List<String> navigatorIds() {
     List<String> ids = new ArrayList<>();
-    for (RegisteredServiceProvider<PaperNavigatorFactory> registration
-        : Bukkit.getServicesManager().getRegistrations(PaperNavigatorFactory.class)) {
+    for (RegisteredServiceProvider<PaperNavigatorFactory> registration :
+        Bukkit.getServicesManager().getRegistrations(PaperNavigatorFactory.class)) {
       ids.add(registration.getProvider().key());
     }
     return ids;
   }
 
   private static List<String> flagNames() {
-    List<String> flags = new ArrayList<>(List.of(
-        "-navigator", "-no-world", "-no-dimension", "-no-mode", "-live"));
+    List<String> flags =
+        new ArrayList<>(List.of("-navigator", "-no-world", "-no-dimension", "-no-mode", "-live"));
     FlagParser.modeWords().stream().sorted().forEach(word -> flags.add("-no-" + word));
     return flags;
   }
@@ -390,13 +528,17 @@ final class NavigateCommand {
     return out;
   }
 
-  private static void sendFailure(Player player, Locale locale, Messages messages, FailureReason reason) {
+  private static void sendFailure(
+      Player player, Locale locale, Messages messages, FailureReason reason) {
     switch (reason) {
-      case NO_ROUTE, DESTINATION_UNREACHABLE -> messages.send(player, locale, OdysseyMessages.NAVIGATE_NO_ROUTE);
+      case NO_ROUTE, DESTINATION_UNREACHABLE ->
+          messages.send(player, locale, OdysseyMessages.NAVIGATE_NO_ROUTE);
       case LIMIT_EXCEEDED -> messages.send(player, locale, OdysseyMessages.NAVIGATE_LIMIT_EXCEEDED);
       case TIMED_OUT -> messages.send(player, locale, OdysseyMessages.NAVIGATE_TIMED_OUT);
       case ERROR -> messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
-      case CANCELLED -> { /* silent: the player asked for it */ }
+      case CANCELLED -> {
+        /* silent: the player asked for it */
+      }
       default -> messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
     }
   }
@@ -407,9 +549,11 @@ final class NavigateCommand {
       case UNKNOWN_FLAG ->
           messages.send(player, locale, OdysseyMessages.NAVIGATE_FLAG_UNKNOWN, invalid.token());
       case MISSING_VALUE ->
-          messages.send(player, locale, OdysseyMessages.NAVIGATE_FLAG_MISSING_VALUE, invalid.token());
+          messages.send(
+              player, locale, OdysseyMessages.NAVIGATE_FLAG_MISSING_VALUE, invalid.token());
       case UNKNOWN_MODE ->
-          messages.send(player, locale, OdysseyMessages.NAVIGATE_FLAG_UNKNOWN_MODE, invalid.token());
+          messages.send(
+              player, locale, OdysseyMessages.NAVIGATE_FLAG_UNKNOWN_MODE, invalid.token());
       default -> messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
     }
   }

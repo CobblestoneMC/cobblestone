@@ -7,7 +7,6 @@
 
 package net.whimxiqal.odyssey.integration.essentials;
 
-import com.earth2me.essentials.User;
 import com.earth2me.essentials.spawn.IEssentialsSpawn;
 import java.util.List;
 import net.ess3.api.IEssentials;
@@ -15,8 +14,8 @@ import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
 /**
- * A thin wrapper over the EssentialsX API — the only place this integration touches Essentials. Holds
- * the (interface) plugin handles resolved once at enable time; the spawn module is optional.
+ * A thin wrapper over the EssentialsX API — the only place this integration touches Essentials.
+ * Holds the (interface) plugin handles resolved once at enable time; the spawn module is optional.
  */
 final class Essentials {
 
@@ -36,7 +35,9 @@ final class Essentials {
     return essentials.getUser(player).getHomes();
   }
 
-  /** The location of one of the player's homes, or {@code null} if it is gone / its world unloaded. */
+  /**
+   * The location of one of the player's homes, or {@code null} if it is gone / its world unloaded.
+   */
   Location home(Player player, String name) {
     Location location = essentials.getUser(player).getHome(name);
     return location == null || location.getWorld() == null ? null : location;
@@ -47,7 +48,9 @@ final class Essentials {
     return spawn != null;
   }
 
-  /** The spawn location for the player's group, or {@code null} if unavailable / its world unloaded. */
+  /**
+   * The spawn location for the player's group, or {@code null} if unavailable / its world unloaded.
+   */
   Location spawn(Player player) {
     if (spawn == null) {
       return null;

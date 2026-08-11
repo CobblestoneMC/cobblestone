@@ -7,9 +7,7 @@
 
 package net.whimxiqal.odyssey.plugin.message;
 
-/**
- * A message that takes one parameter, referenced as {@code {1}} in the template.
- */
+/** A message that takes one parameter, referenced as {@code {1}} in the template. */
 public final class Message1 extends Message {
 
   /**

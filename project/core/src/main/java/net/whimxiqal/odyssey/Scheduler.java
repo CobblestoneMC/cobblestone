@@ -12,9 +12,9 @@ import java.util.concurrent.ExecutorService;
 /**
  * Platform abstraction for running work off the server thread(s).
  *
- * <p>The core search runs entirely on worker threads via this seam; platform implementations
- * extend it with location-aware scheduling for fetching world state. "Async" throughout Odyssey
- * means "on a worker thread".
+ * <p>The core search runs entirely on worker threads via this seam; platform implementations extend
+ * it with location-aware scheduling for fetching world state. "Async" throughout Odyssey means "on
+ * a worker thread".
  */
 public interface Scheduler {
 
@@ -34,8 +34,8 @@ public interface Scheduler {
   void runAsyncLater(Runnable task, long delayMillis);
 
   /**
-   * Returns the executor backing {@link #runAsync}, for {@link java.util.concurrent.CompletableFuture}
-   * composition.
+   * Returns the executor backing {@link #runAsync}, for {@link
+   * java.util.concurrent.CompletableFuture} composition.
    *
    * @return the async executor
    */

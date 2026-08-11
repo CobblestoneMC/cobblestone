@@ -8,7 +8,6 @@
 package net.whimxiqal.odyssey.plugin.api;
 
 import net.whimxiqal.odyssey.api.Path;
-import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 
 public interface NavigatorFactory<P, L> {

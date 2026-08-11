@@ -10,7 +10,6 @@ package net.whimxiqal.odyssey.plugin.trip;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import net.whimxiqal.odyssey.api.Path;
-import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 
 /**

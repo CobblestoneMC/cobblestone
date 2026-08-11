@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import net.whimxiqal.odyssey.api.Path;
-import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperNavigatorFactory;
 import net.whimxiqal.odyssey.plugin.api.Navigator;
@@ -25,10 +24,10 @@ import org.bukkit.Particle;
 import org.bukkit.entity.Player;
 
 /**
- * The built-in {@link PaperNavigatorFactory} (key {@code trail}) that creates {@link TrailNavigator}s.
- * Odyssey registers it as a Bukkit service so it is discovered like any third-party navigator.
- * Appearance (buffer, colors, density) is read from config on each creation, so a reload applies to
- * subsequently started trips.
+ * The built-in {@link PaperNavigatorFactory} (key {@code trail}) that creates {@link
+ * TrailNavigator}s. Odyssey registers it as a Bukkit service so it is discovered like any
+ * third-party navigator. Appearance (buffer, colors, density) is read from config on each creation,
+ * so a reload applies to subsequently started trips.
  */
 public final class PaperTrailNavigatorFactory implements PaperNavigatorFactory {
 
@@ -59,10 +58,10 @@ public final class PaperTrailNavigatorFactory implements PaperNavigatorFactory {
 
   @Override
   public Navigator<Location> create(
-      Player player,
-      Path<Location, MinecraftStepPayload> path,
-      NavigatorContext<Player> context) {
-    return new TrailNavigator(player, path,
+      Player player, Path<Location, MinecraftStepPayload> path, NavigatorContext<Player> context) {
+    return new TrailNavigator(
+        player,
+        path,
         config.get(keys.trailBufferCells),
         parseParticles(config.get(keys.trailParticles)),
         parseColors(config.get(keys.trailColors)),

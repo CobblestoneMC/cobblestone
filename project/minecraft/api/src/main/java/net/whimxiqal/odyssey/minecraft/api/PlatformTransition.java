@@ -11,26 +11,25 @@ import net.whimxiqal.odyssey.api.TraversalState;
 
 public interface PlatformTransition<R, P> {
 
-    R origin();
+  R origin();
 
-    P destination();
+  P destination();
 
-    double cost();
+  double cost();
 
-    /**
-     * The real traversal time in seconds (player-facing). Defaults to {@link #cost()} so existing
-     * providers need no change until they distinguish danger/penalty weighting from actual duration.
-     *
-     * @return the traversal time
-     */
-    default double time() {
-        return cost();
-    }
+  /**
+   * The real traversal time in seconds (player-facing). Defaults to {@link #cost()} so existing
+   * providers need no change until they distinguish danger/penalty weighting from actual duration.
+   *
+   * @return the traversal time
+   */
+  default double time() {
+    return cost();
+  }
 
-    MinecraftStepPayload payload();
+  MinecraftStepPayload payload();
 
-    default TraversalState apply(TraversalState in) {
-        return in;
-    }
-
+  default TraversalState apply(TraversalState in) {
+    return in;
+  }
 }

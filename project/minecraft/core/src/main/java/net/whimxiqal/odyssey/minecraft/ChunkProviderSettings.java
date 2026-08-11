@@ -8,8 +8,8 @@
 package net.whimxiqal.odyssey.minecraft;
 
 /**
- * Tunables for the {@link ChunkProvider}: cache capacity, snapshot staleness, the read-ahead margin,
- * and the load policy.
+ * Tunables for the {@link ChunkProvider}: cache capacity, snapshot staleness, the read-ahead
+ * margin, and the load policy.
  *
  * @param maxCachedChunks LRU capacity, in chunk snapshots
  * @param stalenessMillis a snapshot older than this (on access) is discarded and re-fetched

@@ -13,8 +13,8 @@ import java.util.UUID;
 import net.whimxiqal.odyssey.Position;
 
 /**
- * A human player. Each platform implements this as a thin wrapper around its native player type
- * (no downcasting). The capability accessors here drive mode-list assembly and transition building.
+ * A human player. Each platform implements this as a thin wrapper around its native player type (no
+ * downcasting). The capability accessors here drive mode-list assembly and transition building.
  */
 public interface OdysseyPlayer extends MinecraftAgent {
 

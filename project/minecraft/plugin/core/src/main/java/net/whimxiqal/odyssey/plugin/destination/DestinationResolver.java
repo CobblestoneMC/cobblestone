@@ -16,11 +16,11 @@ import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
 
 /**
  * Turns the arguments a player typed into a concrete {@link MinecraftDestination}, traversing the
- * {@link DestinationTree}s gathered from every registered provider and applying <b>name promotion</b>:
- * a level whose node is not {@code strict} may be omitted, so {@code /nav home} resolves when only one
- * provider offers {@code home}, while an ambiguous name forces the fuller path ({@code /nav essentials
- * home}). Strict levels can never be omitted. The same traversal powers tab-completion via
- * {@link #suggest}.
+ * {@link DestinationTree}s gathered from every registered provider and applying <b>name
+ * promotion</b>: a level whose node is not {@code strict} may be omitted, so {@code /nav home}
+ * resolves when only one provider offers {@code home}, while an ambiguous name forces the fuller
+ * path ({@code /nav essentials home}). Strict levels can never be omitted. The same traversal
+ * powers tab-completion via {@link #suggest}.
  *
  * <p>This is platform-neutral: callers gather the provider roots (on Paper, from the {@code
  * ServicesManager}) and pass a permission predicate; the resolver never touches a server type.
@@ -32,12 +32,10 @@ import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
  */
 public final class DestinationResolver {
 
-  private DestinationResolver() {
-  }
+  private DestinationResolver() {}
 
   /** The outcome of resolving typed arguments against the destination forest. */
-  public sealed interface Resolution<W, V> {
-  }
+  public sealed interface Resolution<W, V> {}
 
   /**
    * Exactly one destination matched.
@@ -48,8 +46,7 @@ public final class DestinationResolver {
    * @param <V> the vector type
    */
   public record Resolved<W, V>(MinecraftDestination<W, V> destination, List<String> address)
-      implements Resolution<W, V> {
-  }
+      implements Resolution<W, V> {}
 
   /**
    * More than one destination matched; the player must disambiguate with a fuller path.
@@ -58,8 +55,7 @@ public final class DestinationResolver {
    * @param <W> the world type
    * @param <V> the vector type
    */
-  public record Ambiguous<W, V>(List<List<String>> addresses) implements Resolution<W, V> {
-  }
+  public record Ambiguous<W, V>(List<List<String>> addresses) implements Resolution<W, V> {}
 
   /**
    * No destination matched (or none the player may use).
@@ -67,8 +63,7 @@ public final class DestinationResolver {
    * @param <W> the world type
    * @param <V> the vector type
    */
-  public record NotFound<W, V>() implements Resolution<W, V> {
-  }
+  public record NotFound<W, V>() implements Resolution<W, V> {}
 
   /**
    * Resolves the given arguments.
@@ -81,7 +76,9 @@ public final class DestinationResolver {
    * @return the resolution
    */
   public static <W, V> Resolution<W, V> resolve(
-      List<? extends DestinationTree<W, V>> roots, List<String> args, Predicate<String> hasPermission) {
+      List<? extends DestinationTree<W, V>> roots,
+      List<String> args,
+      Predicate<String> hasPermission) {
     return resolve(roots, args, hasPermission, address -> true);
   }
 
@@ -99,7 +96,9 @@ public final class DestinationResolver {
    * @return the resolution
    */
   public static <W, V> Resolution<W, V> resolve(
-      List<? extends DestinationTree<W, V>> roots, List<String> args, Predicate<String> hasPermission,
+      List<? extends DestinationTree<W, V>> roots,
+      List<String> args,
+      Predicate<String> hasPermission,
       Predicate<List<String>> canNavigate) {
     List<Address<W, V>> matched = new ArrayList<>();
     for (Address<W, V> address : addresses(roots, hasPermission, canNavigate)) {
@@ -117,9 +116,9 @@ public final class DestinationResolver {
   }
 
   /**
-   * Suggests completions for the token currently being typed (the last element of {@code args}, or a
-   * fresh token when {@code args} is empty). Honors promotion, so both a promoted leaf name and the
-   * fuller path are offered.
+   * Suggests completions for the token currently being typed (the last element of {@code args}, or
+   * a fresh token when {@code args} is empty). Honors promotion, so both a promoted leaf name and
+   * the fuller path are offered.
    *
    * @param roots the destination-tree roots from every provider
    * @param args the arguments typed so far; the last is treated as a partial prefix
@@ -129,7 +128,9 @@ public final class DestinationResolver {
    * @return the distinct candidate tokens, in first-seen order
    */
   public static <W, V> List<String> suggest(
-      List<? extends DestinationTree<W, V>> roots, List<String> args, Predicate<String> hasPermission) {
+      List<? extends DestinationTree<W, V>> roots,
+      List<String> args,
+      Predicate<String> hasPermission) {
     return suggest(roots, args, hasPermission, address -> true);
   }
 
@@ -145,7 +146,9 @@ public final class DestinationResolver {
    * @return the distinct candidate tokens, in first-seen order
    */
   public static <W, V> List<String> suggest(
-      List<? extends DestinationTree<W, V>> roots, List<String> args, Predicate<String> hasPermission,
+      List<? extends DestinationTree<W, V>> roots,
+      List<String> args,
+      Predicate<String> hasPermission,
       Predicate<List<String>> canNavigate) {
     int index = args.isEmpty() ? 0 : args.size() - 1;
     List<String> prefix = args.isEmpty() ? List.of() : args.subList(0, index);
@@ -166,7 +169,8 @@ public final class DestinationResolver {
   }
 
   private static <W, V> List<Address<W, V>> addresses(
-      List<? extends DestinationTree<W, V>> roots, Predicate<String> hasPermission,
+      List<? extends DestinationTree<W, V>> roots,
+      Predicate<String> hasPermission,
       Predicate<List<String>> canNavigate) {
     List<Address<W, V>> out = new ArrayList<>();
     for (DestinationTree<W, V> root : roots) {
@@ -184,23 +188,28 @@ public final class DestinationResolver {
       Predicate<List<String>> canNavigate) {
     keyTrail.add(node.key());
     strictTrail.add(node.strict());
-    node.destinations().forEach((key, supplier) -> {
-      List<String> tokens = new ArrayList<>(keyTrail);
-      tokens.add(key);
-      MinecraftDestination<W, V> destination = supplier.get();
-      // A destination's own required permissions (default-deny) and the Odyssey navigation gate
-      // (default-allow, by tree address) both apply.
-      if (hasAll(hasPermission, destination.permissions()) && canNavigate.test(tokens)) {
-        boolean[] required = new boolean[tokens.size()];
-        for (int i = 0; i < strictTrail.size(); i++) {
-          required[i] = strictTrail.get(i);
-        }
-        required[required.length - 1] = true; // the leaf name is always required
-        out.add(new Address<>(tokens, required, destination));
-      }
-    });
-    node.subTrees().forEach((key, supplier) ->
-        collect(supplier.get(), keyTrail, strictTrail, out, hasPermission, canNavigate));
+    node.destinations()
+        .forEach(
+            (key, supplier) -> {
+              List<String> tokens = new ArrayList<>(keyTrail);
+              tokens.add(key);
+              MinecraftDestination<W, V> destination = supplier.get();
+              // A destination's own required permissions (default-deny) and the Odyssey navigation
+              // gate
+              // (default-allow, by tree address) both apply.
+              if (hasAll(hasPermission, destination.permissions()) && canNavigate.test(tokens)) {
+                boolean[] required = new boolean[tokens.size()];
+                for (int i = 0; i < strictTrail.size(); i++) {
+                  required[i] = strictTrail.get(i);
+                }
+                required[required.length - 1] = true; // the leaf name is always required
+                out.add(new Address<>(tokens, required, destination));
+              }
+            });
+    node.subTrees()
+        .forEach(
+            (key, supplier) ->
+                collect(supplier.get(), keyTrail, strictTrail, out, hasPermission, canNavigate));
     keyTrail.removeLast();
     strictTrail.removeLast();
   }

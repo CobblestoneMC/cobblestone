@@ -10,14 +10,13 @@ package net.whimxiqal.odyssey.paper;
 import java.util.List;
 import net.whimxiqal.odyssey.api.Path;
 import net.whimxiqal.odyssey.api.Step;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 import org.bukkit.Location;
 
 /**
  * The native-located {@link Path} handed to Paper developers: each {@link Step} carries a Bukkit
- * {@link Location}. Built by mapping a solved core path's positions through {@link PaperConversions}.
+ * {@link Location}. Built by mapping a solved core path's positions through {@link
+ * PaperConversions}.
  *
  * <p>{@link Path#cost()}/{@link Path#duration()} are derived from the steps by the interface
  * defaults, so this record stores only the step list.
@@ -30,5 +29,4 @@ record PaperPath(Location origin, List<Step<Location, MinecraftStepPayload>> ste
   PaperPath {
     steps = List.copyOf(steps);
   }
-
 }

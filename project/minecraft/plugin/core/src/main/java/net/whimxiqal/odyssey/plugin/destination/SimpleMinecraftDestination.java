@@ -29,7 +29,8 @@ public record SimpleMinecraftDestination<W, V>(
     Destination<WorldRegion<W, V>> destination,
     Component displayName,
     List<String> permissions,
-    boolean mobile) implements MinecraftDestination<W, V> {
+    boolean mobile)
+    implements MinecraftDestination<W, V> {
 
   /** Canonical constructor; defensively copies the permission list. */
   public SimpleMinecraftDestination {

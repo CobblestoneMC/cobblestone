@@ -20,9 +20,9 @@ import org.joml.Vector3i;
 
 /**
  * Factories for {@link MinecraftDestination}s with Paper's world/vector types already bound — the
- * destination counterpart to {@link net.whimxiqal.odyssey.paper.api.PaperTransition}, so integrations
- * never echo the {@code WorldRegion<World, Vector3i>} generics. The region supplier is re-evaluated
- * each search, so a moving target (a home, a town's claims) stays current.
+ * destination counterpart to {@link net.whimxiqal.odyssey.paper.api.PaperTransition}, so
+ * integrations never echo the {@code WorldRegion<World, Vector3i>} generics. The region supplier is
+ * re-evaluated each search, so a moving target (a home, a town's claims) stays current.
  *
  * <p>Navigability is gated by Odyssey's {@code odyssey.navigate.*} permission; a destination's own
  * {@link MinecraftDestination#permissions()} is reserved for genuine hard requirements, so these
@@ -30,14 +30,18 @@ import org.joml.Vector3i;
  */
 public final class PaperDestination {
 
-  private PaperDestination() {
-  }
+  private PaperDestination() {}
 
-  /** A destination at a single location (its block cell), or an empty one if {@code location} is null. */
+  /**
+   * A destination at a single location (its block cell), or an empty one if {@code location} is
+   * null.
+   */
   public static MinecraftDestination<World, Vector3i> at(Location location, String name) {
-    return regions(location == null || location.getWorld() == null
-        ? List::of
-        : () -> List.of(SingleCellWorldRegion.of(location)), name);
+    return regions(
+        location == null || location.getWorld() == null
+            ? List::of
+            : () -> List.of(SingleCellWorldRegion.of(location)),
+        name);
   }
 
   /** A destination covering one region. */
@@ -46,7 +50,9 @@ public final class PaperDestination {
     return regions(() -> List.of(region), name);
   }
 
-  /** A destination covering a set of regions, re-resolved each search (the nearest one is the goal). */
+  /**
+   * A destination covering a set of regions, re-resolved each search (the nearest one is the goal).
+   */
   public static MinecraftDestination<World, Vector3i> regions(
       Supplier<List<WorldRegion<World, Vector3i>>> regions, String name) {
     return new Impl(regions::get, Component.text(name), List.of(), false);
@@ -56,7 +62,8 @@ public final class PaperDestination {
       Destination<WorldRegion<World, Vector3i>> destination,
       Component displayName,
       List<String> permissions,
-      boolean mobile) implements MinecraftDestination<World, Vector3i> {
+      boolean mobile)
+      implements MinecraftDestination<World, Vector3i> {
 
     @Override
     public boolean isMobile() {

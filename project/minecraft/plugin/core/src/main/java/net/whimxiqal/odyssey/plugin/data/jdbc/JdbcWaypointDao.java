@@ -30,8 +30,7 @@ final class JdbcWaypointDao implements WaypointDao {
 
   private static final String INSERT =
       "INSERT INTO odyssey_waypoint (owner, name, world, x, y, z) VALUES (?, ?, ?, ?, ?, ?)";
-  private static final String DELETE =
-      "DELETE FROM odyssey_waypoint WHERE owner = ? AND name = ?";
+  private static final String DELETE = "DELETE FROM odyssey_waypoint WHERE owner = ? AND name = ?";
   private static final String SELECT_ONE =
       "SELECT owner, name, world, x, y, z FROM odyssey_waypoint WHERE owner = ? AND name = ?";
   private static final String SELECT_BY_OWNER =
@@ -45,47 +44,53 @@ final class JdbcWaypointDao implements WaypointDao {
 
   @Override
   public void put(Waypoint waypoint) {
-    store.inTransaction("put waypoint", connection -> {
-      try (PreparedStatement delete = connection.prepareStatement(DELETE)) {
-        delete.setString(1, ownerKey(waypoint.owner()));
-        delete.setString(2, waypoint.name());
-        delete.executeUpdate();
-      }
-      try (PreparedStatement insert = connection.prepareStatement(INSERT)) {
-        insert.setString(1, ownerKey(waypoint.owner()));
-        insert.setString(2, waypoint.name());
-        insert.setString(3, waypoint.world());
-        insert.setInt(4, waypoint.x());
-        insert.setInt(5, waypoint.y());
-        insert.setInt(6, waypoint.z());
-        insert.executeUpdate();
-      }
-      return null;
-    });
+    store.inTransaction(
+        "put waypoint",
+        connection -> {
+          try (PreparedStatement delete = connection.prepareStatement(DELETE)) {
+            delete.setString(1, ownerKey(waypoint.owner()));
+            delete.setString(2, waypoint.name());
+            delete.executeUpdate();
+          }
+          try (PreparedStatement insert = connection.prepareStatement(INSERT)) {
+            insert.setString(1, ownerKey(waypoint.owner()));
+            insert.setString(2, waypoint.name());
+            insert.setString(3, waypoint.world());
+            insert.setInt(4, waypoint.x());
+            insert.setInt(5, waypoint.y());
+            insert.setInt(6, waypoint.z());
+            insert.executeUpdate();
+          }
+          return null;
+        });
   }
 
   @Override
   public boolean remove(Optional<UUID> owner, String name) {
-    return store.inTransaction("remove waypoint", connection -> {
-      try (PreparedStatement delete = connection.prepareStatement(DELETE)) {
-        delete.setString(1, ownerKey(owner));
-        delete.setString(2, name);
-        return delete.executeUpdate() > 0;
-      }
-    });
+    return store.inTransaction(
+        "remove waypoint",
+        connection -> {
+          try (PreparedStatement delete = connection.prepareStatement(DELETE)) {
+            delete.setString(1, ownerKey(owner));
+            delete.setString(2, name);
+            return delete.executeUpdate() > 0;
+          }
+        });
   }
 
   @Override
   public Optional<Waypoint> get(Optional<UUID> owner, String name) {
-    return store.query("get waypoint", connection -> {
-      try (PreparedStatement select = connection.prepareStatement(SELECT_ONE)) {
-        select.setString(1, ownerKey(owner));
-        select.setString(2, name);
-        try (ResultSet rows = select.executeQuery()) {
-          return rows.next() ? Optional.of(read(rows)) : Optional.<Waypoint>empty();
-        }
-      }
-    });
+    return store.query(
+        "get waypoint",
+        connection -> {
+          try (PreparedStatement select = connection.prepareStatement(SELECT_ONE)) {
+            select.setString(1, ownerKey(owner));
+            select.setString(2, name);
+            try (ResultSet rows = select.executeQuery()) {
+              return rows.next() ? Optional.of(read(rows)) : Optional.<Waypoint>empty();
+            }
+          }
+        });
   }
 
   @Override
@@ -99,25 +104,26 @@ final class JdbcWaypointDao implements WaypointDao {
   }
 
   private List<Waypoint> selectByOwner(String ownerKey) {
-    return store.query("list waypoints", connection -> {
-      try (PreparedStatement select = connection.prepareStatement(SELECT_BY_OWNER)) {
-        select.setString(1, ownerKey);
-        try (ResultSet rows = select.executeQuery()) {
-          List<Waypoint> result = new ArrayList<>();
-          while (rows.next()) {
-            result.add(read(rows));
+    return store.query(
+        "list waypoints",
+        connection -> {
+          try (PreparedStatement select = connection.prepareStatement(SELECT_BY_OWNER)) {
+            select.setString(1, ownerKey);
+            try (ResultSet rows = select.executeQuery()) {
+              List<Waypoint> result = new ArrayList<>();
+              while (rows.next()) {
+                result.add(read(rows));
+              }
+              return result;
+            }
           }
-          return result;
-        }
-      }
-    });
+        });
   }
 
   private static Waypoint read(ResultSet rows) throws SQLException {
     String ownerKey = rows.getString("owner");
-    Optional<UUID> owner = GLOBAL_OWNER.equals(ownerKey)
-        ? Optional.empty()
-        : Optional.of(UUID.fromString(ownerKey));
+    Optional<UUID> owner =
+        GLOBAL_OWNER.equals(ownerKey) ? Optional.empty() : Optional.of(UUID.fromString(ownerKey));
     return new Waypoint(
         owner,
         rows.getString("name"),

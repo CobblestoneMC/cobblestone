@@ -33,14 +33,16 @@ import org.joml.Vector3i;
  *   <li>{@code towny → town → <town>} — anywhere in the town (all its claimed plots)
  *   <li>{@code towny → town → <town> → home} — the town's home block
  *   <li>{@code towny → town → <town> → outpost → <#>} — an outpost's block
- *   <li>{@code towny → town → <town> → type → <plottype>} — the nearest plot of a type (bank, shop, …)
+ *   <li>{@code towny → town → <town> → type → <plottype>} — the nearest plot of a type (bank, shop,
+ *       …)
  *   <li>{@code towny → town → <town> → plot → <name>} — a named plot
- *   <li>{@code towny → resident → …} — the same, for the player's own town (no need to type its name)
+ *   <li>{@code towny → resident → …} — the same, for the player's own town (no need to type its
+ *       name)
  * </ul>
  *
- * <p>Navigability is gated by Odyssey's {@code odyssey.navigate.towny.*} permission (default-allow),
- * not by whether the player may teleport there. Regions are read from Towny lazily, on the
- * search-initiating thread.
+ * <p>Navigability is gated by Odyssey's {@code odyssey.navigate.towny.*} permission
+ * (default-allow), not by whether the player may teleport there. Regions are read from Towny
+ * lazily, on the search-initiating thread.
  */
 final class TownyDestinationProvider implements PaperDestinationProvider {
 
@@ -66,7 +68,8 @@ final class TownyDestinationProvider implements PaperDestinationProvider {
   }
 
   private static DestinationTree<World, Vector3i> townDetail(String key, Town town) {
-    return PaperDestinationTree.node(key).strict()
+    return PaperDestinationTree.node(key)
+        .strict()
         .leaf("home", () -> PaperDestination.at(town.getSpawnOrNull(), "home"))
         .subtree("outpost", () -> outposts(town))
         .subtree("type", () -> plots(town, "type", TownBlock::getTypeName))
@@ -96,8 +99,14 @@ final class TownyDestinationProvider implements PaperDestinationProvider {
       }
     }
     for (String key : keys) {
-      tree.leaf(key, () -> PaperDestination.regions(
-          () -> TownyRegions.plots(town, block -> key.equalsIgnoreCase(attribute.apply(block))), key));
+      tree.leaf(
+          key,
+          () ->
+              PaperDestination.regions(
+                  () ->
+                      TownyRegions.plots(
+                          town, block -> key.equalsIgnoreCase(attribute.apply(block))),
+                  key));
     }
     return tree.build();
   }

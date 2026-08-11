@@ -7,15 +7,16 @@
 
 package net.whimxiqal.odyssey.minecraft.api;
 
+import java.util.Set;
 import net.whimxiqal.odyssey.api.SearchSettings;
 
-import java.util.Set;
-
-public record MinecraftSearchSettings(SearchSettings settings, Set<MinecraftStepType> excludedModes,
-                                      Set<String> excludedWorlds, Set<String> excludedDimensions) {
+public record MinecraftSearchSettings(
+    SearchSettings settings,
+    Set<MinecraftStepType> excludedModes,
+    Set<String> excludedWorlds,
+    Set<String> excludedDimensions) {
 
   public static MinecraftSearchSettings defaults() {
     return new MinecraftSearchSettings(SearchSettings.defaults(), Set.of(), Set.of(), Set.of());
   }
-
 }

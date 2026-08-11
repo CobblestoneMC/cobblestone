@@ -11,11 +11,10 @@ import java.util.List;
 import net.whimxiqal.odyssey.Cell;
 
 /**
- * The six cardinal block directions, using Minecraft's axis conventions
- * (north = -Z, south = +Z, east = +X, west = -X, up = +Y, down = -Y).
+ * The six cardinal block directions, using Minecraft's axis conventions (north = -Z, south = +Z,
+ * east = +X, west = -X, up = +Y, down = -Y).
  */
 public enum Direction {
-
   NORTH(0, 0, -1),
   EAST(1, 0, 0),
   SOUTH(0, 0, 1),

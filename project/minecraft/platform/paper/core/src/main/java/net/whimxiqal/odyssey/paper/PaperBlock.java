@@ -19,19 +19,33 @@ import org.bukkit.block.data.Openable;
  * material→predicate table for Paper.
  *
  * <p>Collision facts use {@link Material#isSolid()} as a coarse proxy (fine for the 1×1×1 model);
- * material-level traits (danger, speed factor, climbable, boat support) use vanilla block tags and a
- * small hand-curated table; break time comes from vanilla hardness with the stone-tool assumption.
+ * material-level traits (danger, speed factor, climbable, boat support) use vanilla block tags and
+ * a small hand-curated table; break time comes from vanilla hardness with the stone-tool
+ * assumption.
  */
 final class PaperBlock implements MinecraftBlock {
 
-  private static final Set<Material> DANGEROUS = Set.of(
-      Material.LAVA, Material.FIRE, Material.SOUL_FIRE, Material.MAGMA_BLOCK,
-      Material.CAMPFIRE, Material.SOUL_CAMPFIRE, Material.CACTUS, Material.SWEET_BERRY_BUSH,
-      Material.WITHER_ROSE, Material.POWDER_SNOW);
-  private static final Set<Material> BOAT_SURFACES = Set.of(
-      Material.WATER, Material.ICE, Material.PACKED_ICE, Material.BLUE_ICE, Material.FROSTED_ICE);
-  private static final Set<Material> ICE = Set.of(
-      Material.ICE, Material.PACKED_ICE, Material.BLUE_ICE, Material.FROSTED_ICE);
+  private static final Set<Material> DANGEROUS =
+      Set.of(
+          Material.LAVA,
+          Material.FIRE,
+          Material.SOUL_FIRE,
+          Material.MAGMA_BLOCK,
+          Material.CAMPFIRE,
+          Material.SOUL_CAMPFIRE,
+          Material.CACTUS,
+          Material.SWEET_BERRY_BUSH,
+          Material.WITHER_ROSE,
+          Material.POWDER_SNOW);
+  private static final Set<Material> BOAT_SURFACES =
+      Set.of(
+          Material.WATER,
+          Material.ICE,
+          Material.PACKED_ICE,
+          Material.BLUE_ICE,
+          Material.FROSTED_ICE);
+  private static final Set<Material> ICE =
+      Set.of(Material.ICE, Material.PACKED_ICE, Material.BLUE_ICE, Material.FROSTED_ICE);
 
   private final BlockData data;
   private final Material material;

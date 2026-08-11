@@ -9,9 +9,9 @@ package net.whimxiqal.odyssey.plugin.data;
 
 /**
  * A persisted, empirically-discovered one-way portal link: entering the entry plane in one world
- * teleports the player to an arrival point (usually in another world). No platform API reveals where
- * a portal leads, so Odyssey learns these by watching players teleport and records them here; the
- * reverse direction is only learned when someone travels back (nether linking is asymmetric).
+ * teleports the player to an arrival point (usually in another world). No platform API reveals
+ * where a portal leads, so Odyssey learns these by watching players teleport and records them here;
+ * the reverse direction is only learned when someone travels back (nether linking is asymmetric).
  *
  * <p>The entry is stored as a block-coordinate bounding box (the portal plane); the arrival as a
  * single block coordinate.
@@ -31,9 +31,14 @@ package net.whimxiqal.odyssey.plugin.data;
  */
 public record PortalTransition(
     String fromWorld,
-    int minX, int minY, int minZ,
-    int maxX, int maxY, int maxZ,
+    int minX,
+    int minY,
+    int minZ,
+    int maxX,
+    int maxY,
+    int maxZ,
     String toWorld,
-    int toX, int toY, int toZ,
-    double cost) {
-}
+    int toX,
+    int toY,
+    int toZ,
+    double cost) {}

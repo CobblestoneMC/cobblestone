@@ -12,12 +12,13 @@ import net.whimxiqal.odyssey.LogLevel;
 import net.whimxiqal.odyssey.plugin.data.DataBackend;
 
 /**
- * Odyssey's registered configuration parameters, grouped to mirror {@code config.yml}. More sections
- * (search, chunks, navigators, trips, data, metrics, …) are added as their subsystems land in later
- * sub-phases; the foundational keys needed to bootstrap the plugin and its messages live here.
+ * Odyssey's registered configuration parameters, grouped to mirror {@code config.yml}. More
+ * sections (search, chunks, navigators, trips, data, metrics, …) are added as their subsystems land
+ * in later sub-phases; the foundational keys needed to bootstrap the plugin and its messages live
+ * here.
  *
- * <p>Hold an instance for the lifetime of the plugin: construct it once with the plugin's
- * {@link ConfigManager} (which registers every key), then read keys via {@code manager.get(...)}.
+ * <p>Hold an instance for the lifetime of the plugin: construct it once with the plugin's {@link
+ * ConfigManager} (which registers every key), then read keys via {@code manager.get(...)}.
  */
 public final class ConfigKeys {
 
@@ -39,7 +40,9 @@ public final class ConfigKeys {
   /** Window width for the running-average heuristic. Mutable. */
   public final ConfigKey<Integer> algorithmRunningAverageWidth;
 
-  /** A* heuristic weight (1.0 = optimal; &gt;1 = faster weighted A*, slightly sub-optimal). Mutable. */
+  /**
+   * A* heuristic weight (1.0 = optimal; &gt;1 = faster weighted A*, slightly sub-optimal). Mutable.
+   */
   public final ConfigKey<Double> algorithmHeuristicWeight;
 
   /** Whether the {@code [✦]} prefix badge precedes every player message. Mutable. */
@@ -93,47 +96,47 @@ public final class ConfigKeys {
    * @param manager the config manager to populate (before {@link ConfigManager#load()})
    */
   public ConfigKeys(ConfigManager manager) {
-    this.localeDefault = manager.register(
-        "locale.default", "en", Codec.ofString(), false);
-    this.loggingLevel = manager.register(
-        "logging.level", LogLevel.INFO, Codec.ofEnum(LogLevel.class), true);
-    this.algorithmMaxCellsVisited = manager.register(
-        "search.algorithm.max_cells_visited", 100_000, Codec.ofInt(), true);
-    this.algorithmMaxWallClockSeconds = manager.register(
-        "search.algorithm.max_wall_clock_seconds", 60, Codec.ofInt(), true);
-    this.algorithmTier1RecalcThreshold = manager.register(
-        "search.algorithm.tier1_recalc_threshold", 1.30, Codec.ofDouble(), true);
-    this.algorithmRunningAverageWidth = manager.register(
-        "search.algorithm.running_average_width", 5, Codec.ofInt(), true);
-    this.algorithmHeuristicWeight = manager.register(
-        "search.algorithm.heuristic_weight", 1.2, Codec.ofDouble(), true);
-    this.messagesShowPrefix = manager.register(
-        "messages.show_prefix", true, Codec.ofBoolean(), true);
-    this.dataBackend = manager.register(
-        "data.backend", DataBackend.SQLITE, Codec.ofEnum(DataBackend.class), false);
-    this.dataFile = manager.register(
-        "data.file", "odyssey", Codec.ofString(), false);
-    this.tripsMaxActivePerPlayer = manager.register(
-        "trips.max_active_per_player", 3, Codec.ofInt(), true);
-    this.tripsLiveIntervalTicks = manager.register(
-        "trips.live_interval_ticks", 100, Codec.ofInt(), true);
-    this.tripsRecalculateDistance = manager.register(
-        "trips.recalculate_distance", 32, Codec.ofInt(), true);
-    this.searchMaxConcurrentPerPlayer = manager.register(
-        "search.max_concurrent_per_player", 1, Codec.ofInt(), false);
-    this.trailBufferCells = manager.register(
-        "navigators.trail.buffer_cells", 100, Codec.ofInt(), true);
-    this.trailParticles = manager.register(
-        "navigators.trail.particles", List.of("GLOW", "DUST"), Codec.ofStringList(), true);
-    this.trailColors = manager.register(
-        "navigators.trail.colors", List.of("55FFFF", "FFAA00", "FFFFFF"), Codec.ofStringList(), true);
-    this.trailDensity = manager.register(
-        "navigators.trail.density", 0.7, Codec.ofDouble(), true);
-    this.portalsDiscovery = manager.register(
-        "portals.discovery", true, Codec.ofBoolean(), true);
-    this.portalsCostSeconds = manager.register(
-        "portals.cost_seconds", 5.0, Codec.ofDouble(), true);
-    this.metricsEnabled = manager.register(
-        "metrics.enabled", true, Codec.ofBoolean(), false);
+    this.localeDefault = manager.register("locale.default", "en", Codec.ofString(), false);
+    this.loggingLevel =
+        manager.register("logging.level", LogLevel.INFO, Codec.ofEnum(LogLevel.class), true);
+    this.algorithmMaxCellsVisited =
+        manager.register("search.algorithm.max_cells_visited", 100_000, Codec.ofInt(), true);
+    this.algorithmMaxWallClockSeconds =
+        manager.register("search.algorithm.max_wall_clock_seconds", 60, Codec.ofInt(), true);
+    this.algorithmTier1RecalcThreshold =
+        manager.register("search.algorithm.tier1_recalc_threshold", 1.30, Codec.ofDouble(), true);
+    this.algorithmRunningAverageWidth =
+        manager.register("search.algorithm.running_average_width", 5, Codec.ofInt(), true);
+    this.algorithmHeuristicWeight =
+        manager.register("search.algorithm.heuristic_weight", 1.2, Codec.ofDouble(), true);
+    this.messagesShowPrefix =
+        manager.register("messages.show_prefix", true, Codec.ofBoolean(), true);
+    this.dataBackend =
+        manager.register(
+            "data.backend", DataBackend.SQLITE, Codec.ofEnum(DataBackend.class), false);
+    this.dataFile = manager.register("data.file", "odyssey", Codec.ofString(), false);
+    this.tripsMaxActivePerPlayer =
+        manager.register("trips.max_active_per_player", 3, Codec.ofInt(), true);
+    this.tripsLiveIntervalTicks =
+        manager.register("trips.live_interval_ticks", 100, Codec.ofInt(), true);
+    this.tripsRecalculateDistance =
+        manager.register("trips.recalculate_distance", 32, Codec.ofInt(), true);
+    this.searchMaxConcurrentPerPlayer =
+        manager.register("search.max_concurrent_per_player", 1, Codec.ofInt(), false);
+    this.trailBufferCells =
+        manager.register("navigators.trail.buffer_cells", 100, Codec.ofInt(), true);
+    this.trailParticles =
+        manager.register(
+            "navigators.trail.particles", List.of("GLOW", "DUST"), Codec.ofStringList(), true);
+    this.trailColors =
+        manager.register(
+            "navigators.trail.colors",
+            List.of("55FFFF", "FFAA00", "FFFFFF"),
+            Codec.ofStringList(),
+            true);
+    this.trailDensity = manager.register("navigators.trail.density", 0.7, Codec.ofDouble(), true);
+    this.portalsDiscovery = manager.register("portals.discovery", true, Codec.ofBoolean(), true);
+    this.portalsCostSeconds = manager.register("portals.cost_seconds", 5.0, Codec.ofDouble(), true);
+    this.metricsEnabled = manager.register("metrics.enabled", true, Codec.ofBoolean(), false);
   }
 }

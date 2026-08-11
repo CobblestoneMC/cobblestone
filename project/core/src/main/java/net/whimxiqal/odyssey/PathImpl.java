@@ -7,10 +7,9 @@
 
 package net.whimxiqal.odyssey;
 
+import java.util.List;
 import net.whimxiqal.odyssey.api.Path;
 import net.whimxiqal.odyssey.api.Step;
-
-import java.util.List;
 
 /**
  * The immutable {@link Path} implementation returned by a successful search.

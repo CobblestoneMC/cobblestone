@@ -13,8 +13,9 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.ServicePriority;
 
 /**
- * One-line registration of an integration's hooks into Odyssey. Each {@code register} is exactly the
- * Bukkit-service call Odyssey discovers, without the class token, priority, or boilerplate:
+ * One-line registration of an integration's hooks into Odyssey. Each {@code register} is exactly
+ * the Bukkit-service call Odyssey discovers, without the class token, priority, or boilerplate:
+ *
  * <pre>{@code
  * public void onEnable() {
  *   Odyssey.register(this, new MyDestinationProvider());
@@ -22,13 +23,12 @@ import org.bukkit.plugin.ServicePriority;
  * }
  * }</pre>
  *
- * <p>There is nothing to undo on disable — Bukkit unregisters a plugin's services automatically when
- * it is disabled.
+ * <p>There is nothing to undo on disable — Bukkit unregisters a plugin's services automatically
+ * when it is disabled.
  */
 public final class Odyssey {
 
-  private Odyssey() {
-  }
+  private Odyssey() {}
 
   /**
    * Registers a search modifier (transitions, breakability, passability).

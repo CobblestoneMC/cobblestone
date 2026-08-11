@@ -11,10 +11,10 @@ import org.bukkit.Location;
 import org.bukkit.World;
 
 /**
- * A command warp: {@code /warp <name>} teleports the player here from anywhere. Unlike a {@link Portal},
- * a warp bakes in its own location at creation time (it does not reference a {@link Destination}).
- * Surfaced to navigation as a {@code COMMAND} transition whose origin is the whole current world, so
- * Odyssey can offer it immediately and prompt the player to type the command.
+ * A command warp: {@code /warp <name>} teleports the player here from anywhere. Unlike a {@link
+ * Portal}, a warp bakes in its own location at creation time (it does not reference a {@link
+ * Destination}). Surfaced to navigation as a {@code COMMAND} transition whose origin is the whole
+ * current world, so Odyssey can offer it immediately and prompt the player to type the command.
  *
  * @param name the warp name (unique, lower-case)
  * @param world the world key of the warp's location
@@ -25,7 +25,8 @@ import org.bukkit.World;
  * @param pitch the facing pitch
  * @param cost the traversal cost/time in seconds charged for taking this warp
  */
-record Warp(String name, String world, double x, double y, double z, float yaw, float pitch, double cost) {
+record Warp(
+    String name, String world, double x, double y, double z, float yaw, float pitch, double cost) {
 
   /** Builds a Bukkit location in the given (already-resolved) world. */
   Location toLocation(World resolved) {

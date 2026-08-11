@@ -12,8 +12,8 @@ import java.util.List;
 import java.util.Set;
 import net.whimxiqal.odyssey.minecraft.BreakChecker;
 import net.whimxiqal.odyssey.minecraft.MinecraftMode;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 
 /**
  * Assembles the mode list for a search. Ability gating happens here (not inside the modes): flying
@@ -22,8 +22,7 @@ import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
  */
 public final class MinecraftModes {
 
-  private MinecraftModes() {
-  }
+  private MinecraftModes() {}
 
   /**
    * Builds the modes available to {@code player} with no mining constraint (breaking is permitted
@@ -49,7 +48,8 @@ public final class MinecraftModes {
    * @return the mode list
    */
   public static List<MinecraftMode<OdysseyPlayer>> forPlayer(
-      OdysseyPlayer player, Set<MinecraftStepType> excluded,
+      OdysseyPlayer player,
+      Set<MinecraftStepType> excluded,
       BreakChecker<OdysseyPlayer> breakChecker) {
     List<MinecraftMode<OdysseyPlayer>> modes = new ArrayList<>();
     if (!excluded.contains(MinecraftStepType.WALK)) {
@@ -74,7 +74,8 @@ public final class MinecraftModes {
     if (!excluded.contains(MinecraftStepType.FLY) && player.canFly()) {
       modes.add(new FlyMode<>());
     }
-    if (!excluded.contains(MinecraftStepType.BOAT) && player.hasBoatInInventory() || player.isInBoat()) {
+    if (!excluded.contains(MinecraftStepType.BOAT) && player.hasBoatInInventory()
+        || player.isInBoat()) {
       modes.add(new BoatMode<>());
     }
     return modes;

@@ -21,8 +21,8 @@ public interface MinecraftAgent extends Agent {
 
   /**
    * Returns whether the agent is permitted to break the block at {@code cell} (region protection,
-   * claims, etc.). The v1 default from platform wrappers is {@code true}; region-plugin integrations
-   * refine it later.
+   * claims, etc.). The v1 default from platform wrappers is {@code true}; region-plugin
+   * integrations refine it later.
    *
    * @param cell the cell to break
    * @return {@code true} if breaking is allowed

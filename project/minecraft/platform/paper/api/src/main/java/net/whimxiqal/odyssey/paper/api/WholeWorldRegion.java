@@ -14,9 +14,10 @@ import org.bukkit.World;
 import org.joml.Vector3i;
 
 /**
- * A region that spans an entire world — every cell in it is contained. Used to navigate "to a world":
- * the search succeeds as soon as it arrives there (e.g. through a portal). Holds only the world's
- * key and re-resolves the {@link World} on demand, so it never pins a possibly-unloaded world object.
+ * A region that spans an entire world — every cell in it is contained. Used to navigate "to a
+ * world": the search succeeds as soon as it arrives there (e.g. through a portal). Holds only the
+ * world's key and re-resolves the {@link World} on demand, so it never pins a possibly-unloaded
+ * world object.
  */
 public final class WholeWorldRegion implements WorldRegion<World, Vector3i> {
 

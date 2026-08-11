@@ -12,8 +12,8 @@ import net.whimxiqal.odyssey.plugin.api.NavigatorContext;
 import org.bukkit.entity.Player;
 
 /**
- * The Paper {@link NavigatorContext}: a Bukkit {@link Player} is itself an Adventure {@link Audience},
- * so both accessors return the same object.
+ * The Paper {@link NavigatorContext}: a Bukkit {@link Player} is itself an Adventure {@link
+ * Audience}, so both accessors return the same object.
  *
  * @param player the guided player
  */

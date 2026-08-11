@@ -15,15 +15,14 @@ import net.whimxiqal.odyssey.Cell;
 import net.whimxiqal.odyssey.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
 import net.whimxiqal.odyssey.minecraft.MinecraftAgent;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
 import net.whimxiqal.odyssey.minecraft.MinecraftKeys;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 
 /**
- * Free 3D flight (creative / allow-flight). Moves to any of the 26 neighbors where a body fits, with
- * no footing requirement; cost scales with euclidean distance. Included in the mode list only when
- * the agent can fly, so this class need not re-check that.
+ * Free 3D flight (creative / allow-flight). Moves to any of the 26 neighbors where a body fits,
+ * with no footing requirement; cost scales with euclidean distance. Included in the mode list only
+ * when the agent can fly, so this class need not re-check that.
  *
  * @param <A> the agent type
  */

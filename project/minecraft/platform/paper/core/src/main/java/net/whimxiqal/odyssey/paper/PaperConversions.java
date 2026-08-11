@@ -19,20 +19,21 @@ import org.bukkit.World;
 import org.joml.Vector3i;
 
 /**
- * Static conversions between Bukkit's {@link Location} and Odyssey's internal {@link Cell}/
- * {@link Position}, so the Paper façade can speak native types on its surface while the core speaks
- * its own.
+ * Static conversions between Bukkit's {@link Location} and Odyssey's internal {@link Cell}/ {@link
+ * Position}, so the Paper façade can speak native types on its surface while the core speaks its
+ * own.
  */
 public final class PaperConversions {
 
-  private PaperConversions() {
-  }
+  private PaperConversions() {}
 
-  static DomainRegion<MinecraftWorld> region(WorldRegion<World, Vector3i> region, WorldWrapper wrapper) {
-    return new DomainRegion.Impl<>(wrapper.wrap(region.world()),
-            cell -> region.contains(vector(cell)),
-            cell -> cell(region.nearestBoundaryLocation(vector(cell))),
-            region::toString);
+  static DomainRegion<MinecraftWorld> region(
+      WorldRegion<World, Vector3i> region, WorldWrapper wrapper) {
+    return new DomainRegion.Impl<>(
+        wrapper.wrap(region.world()),
+        cell -> region.contains(vector(cell)),
+        cell -> cell(region.nearestBoundaryLocation(vector(cell))),
+        region::toString);
   }
 
   /**

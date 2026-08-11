@@ -19,25 +19,26 @@ import net.whimxiqal.odyssey.OdysseyLogger;
  * Renders and sends {@link Message}s as Adventure {@link Component}s, localized per recipient.
  *
  * <p>Templates live in {@code messages[_locale].properties} bundles. Parameters are referenced with
- * one-indexed braces ({@code {1}}, {@code {2}}, …) and rendered in the
- * {@link OdysseyColors#SECONDARY secondary} color; the surrounding literal text takes the message's
- * {@link MessageCategory} base color. Every line is prefixed with Odyssey's {@code [✦]} badge unless
- * the prefix is disabled in config.
+ * one-indexed braces ({@code {1}}, {@code {2}}, …) and rendered in the {@link
+ * OdysseyColors#SECONDARY secondary} color; the surrounding literal text takes the message's {@link
+ * MessageCategory} base color. Every line is prefixed with Odyssey's {@code [✦]} badge unless the
+ * prefix is disabled in config.
  *
  * <p>This helper is platform-neutral (it targets Adventure {@link Audience}s), so every platform
- * plugin — Paper, Sponge — shares one message pipeline. Logger diagnostics here are developer-facing
- * and never localized.
+ * plugin — Paper, Sponge — shares one message pipeline. Logger diagnostics here are
+ * developer-facing and never localized.
  */
 public final class Messages {
 
   private static final String BUNDLE_BASE = "net.whimxiqal.odyssey.plugin.messages";
   private static final Object[] NO_ARGS = new Object[0];
 
-  private static final Component PREFIX = Component.text()
-      .append(Component.text("[", OdysseyColors.PREFIX_FRAME))
-      .append(Component.text("✦", OdysseyColors.PRIMARY))
-      .append(Component.text("] ", OdysseyColors.PREFIX_FRAME))
-      .build();
+  private static final Component PREFIX =
+      Component.text()
+          .append(Component.text("[", OdysseyColors.PREFIX_FRAME))
+          .append(Component.text("✦", OdysseyColors.PRIMARY))
+          .append(Component.text("] ", OdysseyColors.PREFIX_FRAME))
+          .build();
 
   private final OdysseyLogger logger;
   private final Locale defaultLocale;
@@ -74,9 +75,7 @@ public final class Messages {
     this.showPrefix = showPrefix;
   }
 
-  /**
-   * Drops cached translation bundles so edited message files are re-read.
-   */
+  /** Drops cached translation bundles so edited message files are re-read. */
   public void reload() {
     ResourceBundle.clearCache(Messages.class.getClassLoader());
   }
@@ -177,7 +176,8 @@ public final class Messages {
    * @param arg2 the second parameter
    * @param arg3 the third parameter
    */
-  public void send(Audience audience, Locale locale, Message3 message, Object arg1, Object arg2, Object arg3) {
+  public void send(
+      Audience audience, Locale locale, Message3 message, Object arg1, Object arg2, Object arg3) {
     audience.sendMessage(render(locale, message, arg1, arg2, arg3));
   }
 
@@ -195,8 +195,8 @@ public final class Messages {
   }
 
   /**
-   * Formats a duration in seconds as localized, human-readable text (e.g. "4 minutes and 3 seconds").
-   * The unit words come from the message bundle so translations can localize them.
+   * Formats a duration in seconds as localized, human-readable text (e.g. "4 minutes and 3
+   * seconds"). The unit words come from the message bundle so translations can localize them.
    *
    * @param locale the locale whose unit words to use
    * @param seconds the duration in seconds
@@ -209,8 +209,15 @@ public final class Messages {
     String minuteWord = template("format.duration.minutes", locale);
     String secondWord = template("format.duration.seconds", locale);
     if (minutes > 0L && secs > 0L) {
-      return minutes + " " + minuteWord + " " + template("format.duration.and", locale)
-          + " " + secs + " " + secondWord;
+      return minutes
+          + " "
+          + minuteWord
+          + " "
+          + template("format.duration.and", locale)
+          + " "
+          + secs
+          + " "
+          + secondWord;
     }
     if (minutes > 0L) {
       return minutes + " " + minuteWord;
@@ -260,7 +267,8 @@ public final class Messages {
 
   private static Component param(Object arg) {
     if (arg instanceof Component component) {
-      // Wrap so an uncolored parameter inherits the secondary color, but a pre-styled one keeps its own.
+      // Wrap so an uncolored parameter inherits the secondary color, but a pre-styled one keeps its
+      // own.
       return Component.empty().color(OdysseyColors.SECONDARY).append(component);
     }
     return Component.text(String.valueOf(arg), OdysseyColors.SECONDARY);
@@ -277,7 +285,8 @@ public final class Messages {
 
   private String template(String key, Locale locale) {
     try {
-      return ResourceBundle.getBundle(BUNDLE_BASE, locale, Messages.class.getClassLoader()).getString(key);
+      return ResourceBundle.getBundle(BUNDLE_BASE, locale, Messages.class.getClassLoader())
+          .getString(key);
     } catch (MissingResourceException e) {
       logger.warn("Missing message for key '{}' (locale {}); showing the key.", key, locale);
       return key;

@@ -21,8 +21,7 @@ import java.util.List;
  * @param steps the solved steps (empty unless {@link Outcome#SOLVED})
  * @param cost the true cost (meaningful only when solved)
  */
-record Tier2Result<T, D extends Domain>(
-    Outcome outcome, List<RawStep<T, D>> steps, double cost) {
+record Tier2Result<T, D extends Domain>(Outcome outcome, List<RawStep<T, D>> steps, double cost) {
 
   /** How a Tier-2 solve ended. */
   enum Outcome {
@@ -38,8 +37,7 @@ record Tier2Result<T, D extends Domain>(
     return outcome == Outcome.SOLVED;
   }
 
-  static <T, D extends Domain> Tier2Result<T, D> solved(
-      List<RawStep<T, D>> steps, double cost) {
+  static <T, D extends Domain> Tier2Result<T, D> solved(List<RawStep<T, D>> steps, double cost) {
     return new Tier2Result<>(Outcome.SOLVED, List.copyOf(steps), cost);
   }
 

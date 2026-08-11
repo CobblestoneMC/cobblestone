@@ -7,12 +7,14 @@
 
 package net.whimxiqal.odyssey;
 
-import net.whimxiqal.odyssey.api.*;
-
 import java.util.List;
+import net.whimxiqal.odyssey.api.Destination;
+import net.whimxiqal.odyssey.api.SearchHandle;
+import net.whimxiqal.odyssey.api.SearchSettings;
 
 /**
- * The default {@link OdysseyApi} implementation, running the two-tier search on a {@link Scheduler}.
+ * The default {@link OdysseyApi} implementation, running the two-tier search on a {@link
+ * Scheduler}.
  *
  * <p>The {@link HeuristicStrategy} is supplied at construction (a single instance serves all
  * searches, since it is domain-type-agnostic). It defaults to {@link Heuristics#zero()}; supply
@@ -23,8 +25,8 @@ public final class OdysseyApiImpl implements OdysseyApi {
 
   @Override
   public <A extends Agent, T, D extends Domain> SearchHandle<Position<D>, T> navigate(
-          OdysseyLogger logger,
-          Scheduler scheduler,
+      OdysseyLogger logger,
+      Scheduler scheduler,
       A agent,
       Position<D> origin,
       Destination<DomainRegion<D>> destination,
@@ -33,9 +35,18 @@ public final class OdysseyApiImpl implements OdysseyApi {
       List<? extends Restriction<A, D>> restrictions,
       HeuristicStrategy heuristic,
       SearchSettings settings) {
-    SearchImpl<A, T, D> search = new SearchImpl<>(
-        logger, scheduler, heuristic, agent, origin, destination, modes, transitions, restrictions,
-        settings);
+    SearchImpl<A, T, D> search =
+        new SearchImpl<>(
+            logger,
+            scheduler,
+            heuristic,
+            agent,
+            origin,
+            destination,
+            modes,
+            transitions,
+            restrictions,
+            settings);
     search.start();
     return search;
   }

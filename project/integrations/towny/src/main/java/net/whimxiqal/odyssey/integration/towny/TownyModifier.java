@@ -30,14 +30,15 @@ import org.bukkit.plugin.Plugin;
  * The Towny search hook: teleport shortcuts as transitions, and Towny's build protection as a
  * breakability check.
  *
- * <p><b>Transitions</b> — {@code /town spawn}, {@code /nation spawn}, and {@code /town outpost}, each
- * offered only when the player may actually run it (Towny permission, plus public/own/nation/ally,
- * outlaw and enemy checks). The gating here mirrors Towny's common rules; unusual states (wars,
- * jailing) are left to Towny to reject. Read on the search-initiating (main) thread.
+ * <p><b>Transitions</b> — {@code /town spawn}, {@code /nation spawn}, and {@code /town outpost},
+ * each offered only when the player may actually run it (Towny permission, plus
+ * public/own/nation/ally, outlaw and enemy checks). The gating here mirrors Towny's common rules;
+ * unusual states (wars, jailing) are left to Towny to reject. Read on the search-initiating (main)
+ * thread.
  *
- * <p><b>Breakability</b> — {@code PlayerCacheUtil.getCachePermission(…, DESTROY)} decides whether the
- * player may dig a block, so mining routes avoid protected land. That call touches Towny's caches, so
- * it is hopped to the main thread and its result delivered through the future.
+ * <p><b>Breakability</b> — {@code PlayerCacheUtil.getCachePermission(…, DESTROY)} decides whether
+ * the player may dig a block, so mining routes avoid protected land. That call touches Towny's
+ * caches, so it is hopped to the main thread and its result delivered through the future.
  */
 final class TownyModifier implements PaperOdysseySearchModifier {
 
@@ -139,14 +140,18 @@ final class TownyModifier implements PaperOdysseySearchModifier {
     return (breaker, location, block) -> {
       CompletableFuture<Boolean> future = new CompletableFuture<>();
       // getCachePermission touches Towny's caches / Bukkit; evaluate it on the main thread.
-      Bukkit.getScheduler().runTask(plugin, () -> {
-        if (!breaker.isOnline()) {
-          future.complete(true); // gone; do not block mining
-          return;
-        }
-        future.complete(
-            PlayerCacheUtil.getCachePermission(breaker, location, block.getMaterial(), ActionType.DESTROY));
-      });
+      Bukkit.getScheduler()
+          .runTask(
+              plugin,
+              () -> {
+                if (!breaker.isOnline()) {
+                  future.complete(true); // gone; do not block mining
+                  return;
+                }
+                future.complete(
+                    PlayerCacheUtil.getCachePermission(
+                        breaker, location, block.getMaterial(), ActionType.DESTROY));
+              });
       return future;
     };
   }

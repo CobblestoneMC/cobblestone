@@ -17,14 +17,15 @@ import net.whimxiqal.odyssey.Cell;
 import net.whimxiqal.odyssey.FutureOr;
 
 /**
- * A thread-safe, size-bounded (LRU) cache of chunk snapshots, sitting between modes and the platform.
- * A block from a fresh cached chunk is served immediately (a cache hit); a miss triggers a single
- * de-duplicated fetch and is served as a pending {@link FutureOr}. Snapshots older than the staleness
- * window (measured from when they were cached) are discarded on access, and blocks near a chunk
- * border prefetch the adjacent chunk to keep subsequent linear expansions on the fast path.
+ * A thread-safe, size-bounded (LRU) cache of chunk snapshots, sitting between modes and the
+ * platform. A block from a fresh cached chunk is served immediately (a cache hit); a miss triggers
+ * a single de-duplicated fetch and is served as a pending {@link FutureOr}. Snapshots older than
+ * the staleness window (measured from when they were cached) are discarded on access, and blocks
+ * near a chunk border prefetch the adjacent chunk to keep subsequent linear expansions on the fast
+ * path.
  *
- * <p>A world implementation delegates {@link MinecraftWorld#blockAt(Cell)} to
- * {@link #block(Cell, MinecraftWorld)}.
+ * <p>A world implementation delegates {@link MinecraftWorld#blockAt(Cell)} to {@link #block(Cell,
+ * MinecraftWorld)}.
  */
 public final class ChunkProvider {
 
@@ -34,7 +35,8 @@ public final class ChunkProvider {
 
   private final Object lock = new Object();
   private final Map<ChunkKey, Cached> cache;
-  private final Map<ChunkKey, CompletableFuture<Optional<MinecraftChunk>>> inFlight = new HashMap<>();
+  private final Map<ChunkKey, CompletableFuture<Optional<MinecraftChunk>>> inFlight =
+      new HashMap<>();
 
   /**
    * Creates a chunk provider.
@@ -50,12 +52,13 @@ public final class ChunkProvider {
     this.platform = platform;
     this.settings = settings;
     this.clock = clock;
-    this.cache = new LinkedHashMap<>(16, 0.75f, true) {
-      @Override
-      protected boolean removeEldestEntry(Map.Entry<ChunkKey, Cached> eldest) {
-        return size() > settings.maxCachedChunks();
-      }
-    };
+    this.cache =
+        new LinkedHashMap<>(16, 0.75f, true) {
+          @Override
+          protected boolean removeEldestEntry(Map.Entry<ChunkKey, Cached> eldest) {
+            return size() > settings.maxCachedChunks();
+          }
+        };
   }
 
   /**
@@ -83,9 +86,12 @@ public final class ChunkProvider {
         cache.remove(key);
       }
       CompletableFuture<Optional<MinecraftChunk>> fetch = fetchLocked(key, chunkX, chunkZ, world);
-      return FutureOr.ofFuture(fetch.thenApply(
-          snapshot -> snapshot.map(chunk -> chunk.block(cell.x() & 15, cell.y(), cell.z() & 15))
-              .orElse(UnknownBlock.INSTANCE)));
+      return FutureOr.ofFuture(
+          fetch.thenApply(
+              snapshot ->
+                  snapshot
+                      .map(chunk -> chunk.block(cell.x() & 15, cell.y(), cell.z() & 15))
+                      .orElse(UnknownBlock.INSTANCE)));
     }
   }
 
@@ -102,14 +108,15 @@ public final class ChunkProvider {
     CompletableFuture<Optional<MinecraftChunk>> fetch =
         platform.fetchChunk(chunkX, chunkZ, world, settings.loadPolicy());
     inFlight.put(key, fetch);
-    fetch.whenComplete((snapshot, error) -> {
-      synchronized (lock) {
-        inFlight.remove(key);
-        if (error == null && snapshot != null && snapshot.isPresent()) {
-          cache.put(key, new Cached(snapshot.get(), clock.getAsLong()));
-        }
-      }
-    });
+    fetch.whenComplete(
+        (snapshot, error) -> {
+          synchronized (lock) {
+            inFlight.remove(key);
+            if (error == null && snapshot != null && snapshot.isPresent()) {
+              cache.put(key, new Cached(snapshot.get(), clock.getAsLong()));
+            }
+          }
+        });
     return fetch;
   }
 
@@ -141,9 +148,7 @@ public final class ChunkProvider {
     }
   }
 
-  private record ChunkKey(String worldKey, int chunkX, int chunkZ) {
-  }
+  private record ChunkKey(String worldKey, int chunkX, int chunkZ) {}
 
-  private record Cached(MinecraftChunk chunk, long cachedAt) {
-  }
+  private record Cached(MinecraftChunk chunk, long cachedAt) {}
 }

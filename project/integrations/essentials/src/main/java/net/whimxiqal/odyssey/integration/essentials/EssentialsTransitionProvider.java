@@ -17,15 +17,17 @@ import org.bukkit.entity.Player;
 
 /**
  * Surfaces the player's {@code /home} and {@code /spawn} teleports to searches as {@code COMMAND}
- * transitions: reach anywhere in the current world, run the command, arrive at the destination. So a
- * route may "use" a teleport as a wormhole in Tier 1, and the navigator prompts the player to run it.
+ * transitions: reach anywhere in the current world, run the command, arrive at the destination. So
+ * a route may "use" a teleport as a wormhole in Tier 1, and the navigator prompts the player to run
+ * it.
  *
  * <p>A teleport is only offered if the player actually has permission to run it — checked here, per
  * search, so revoking {@code essentials.home} immediately removes it as a routing option.
  */
 final class EssentialsTransitionProvider implements PaperOdysseySearchModifier {
 
-  // Teleport commands are ~instant; a small non-zero cost keeps the search from over-preferring them.
+  // Teleport commands are ~instant; a small non-zero cost keeps the search from over-preferring
+  // them.
   private static final double TELEPORT_COST_SECONDS = 3.0;
 
   private final Essentials essentials;

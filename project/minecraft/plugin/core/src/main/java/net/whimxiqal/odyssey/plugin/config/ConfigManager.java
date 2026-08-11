@@ -24,12 +24,12 @@ import org.yaml.snakeyaml.Yaml;
 
 /**
  * The platform-neutral configuration store. Register all typed {@link ConfigKey}s up front, call
- * {@link #load()} once at startup, then {@link #get(ConfigKey)} anywhere. {@link #reload()} re-reads
- * the file: mutable keys update live; immutable keys that changed emit a warning and keep their old
- * value (they take effect only on restart).
+ * {@link #load()} once at startup, then {@link #get(ConfigKey)} anywhere. {@link #reload()}
+ * re-reads the file: mutable keys update live; immutable keys that changed emit a warning and keep
+ * their old value (they take effect only on restart).
  *
- * <p>Values are parsed from a YAML file on disk. On first run the bundled default resource is copied
- * to that path so admins get the fully-commented template.
+ * <p>Values are parsed from a YAML file on disk. On first run the bundled default resource is
+ * copied to that path so admins get the fully-commented template.
  */
 public final class ConfigManager {
 
@@ -43,7 +43,8 @@ public final class ConfigManager {
    * Creates a config manager.
    *
    * @param file the on-disk YAML file (created from the default resource if absent)
-   * @param defaultResource the classpath resource holding the default file (e.g. {@code config.yml})
+   * @param defaultResource the classpath resource holding the default file (e.g. {@code
+   *     config.yml})
    * @param logger the logger for load/reload diagnostics (developer-facing, not localized)
    */
   public ConfigManager(Path file, String defaultResource, OdysseyLogger logger) {
@@ -132,8 +133,10 @@ public final class ConfigManager {
       values.put(key.path(), loaded);
       return false;
     }
-    logger.warn("Config key '{}' changed but requires a restart to take effect; keeping '{}'.",
-        key.path(), current);
+    logger.warn(
+        "Config key '{}' changed but requires a restart to take effect; keeping '{}'.",
+        key.path(),
+        current);
     return true;
   }
 
@@ -149,12 +152,15 @@ public final class ConfigManager {
     try {
       return key.codec().decode(raw);
     } catch (RuntimeException e) {
-      logger.warn("Config key '{}' is malformed ({}); using '{}'.", key.path(), e.getMessage(), fallback);
+      logger.warn(
+          "Config key '{}' is malformed ({}); using '{}'.", key.path(), e.getMessage(), fallback);
       return fallback;
     }
   }
 
-  /** Walks a nested map by the period-delimited path; returns {@code null} if any hop is missing. */
+  /**
+   * Walks a nested map by the period-delimited path; returns {@code null} if any hop is missing.
+   */
   private static Object lookup(Map<String, Object> root, String path) {
     Object node = root;
     int start = 0;
@@ -199,10 +205,13 @@ public final class ConfigManager {
     if (Files.exists(file)) {
       return;
     }
-    try (InputStream in = ConfigManager.class.getClassLoader().getResourceAsStream(defaultResource)) {
+    try (InputStream in =
+        ConfigManager.class.getClassLoader().getResourceAsStream(defaultResource)) {
       if (in == null) {
-        logger.error("Bundled default resource '{}' is missing; cannot create config file.",
-            new IllegalStateException(defaultResource), defaultResource);
+        logger.error(
+            "Bundled default resource '{}' is missing; cannot create config file.",
+            new IllegalStateException(defaultResource),
+            defaultResource);
         return;
       }
       if (file.getParent() != null) {

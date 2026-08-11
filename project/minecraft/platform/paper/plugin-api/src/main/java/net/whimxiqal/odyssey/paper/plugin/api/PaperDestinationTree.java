@@ -16,8 +16,9 @@ import org.bukkit.World;
 import org.joml.Vector3i;
 
 /**
- * A fluent builder for a {@link DestinationTree} node — so an integration writes its {@code /navigate}
- * structure as structure, not nested {@code Map<String, Supplier<…>>} plumbing:
+ * A fluent builder for a {@link DestinationTree} node — so an integration writes its {@code
+ * /navigate} structure as structure, not nested {@code Map<String, Supplier<…>>} plumbing:
+ *
  * <pre>{@code
  * PaperDestinationTree.node("towny")
  *     .subtree("town", townList)          // a lazily-built child
@@ -53,7 +54,8 @@ public final class PaperDestinationTree {
   }
 
   /** Adds a leaf destination, built on demand. */
-  public PaperDestinationTree leaf(String key, Supplier<MinecraftDestination<World, Vector3i>> destination) {
+  public PaperDestinationTree leaf(
+      String key, Supplier<MinecraftDestination<World, Vector3i>> destination) {
     destinations.put(key, destination);
     return this;
   }
@@ -64,7 +66,8 @@ public final class PaperDestinationTree {
   }
 
   /** Adds a child sub-tree, built on demand. */
-  public PaperDestinationTree subtree(String key, Supplier<? extends DestinationTree<World, Vector3i>> tree) {
+  public PaperDestinationTree subtree(
+      String key, Supplier<? extends DestinationTree<World, Vector3i>> tree) {
     subTrees.put(key, tree);
     return this;
   }
@@ -84,6 +87,5 @@ public final class PaperDestinationTree {
       boolean strict,
       Map<String, Supplier<? extends DestinationTree<World, Vector3i>>> subTrees,
       Map<String, Supplier<MinecraftDestination<World, Vector3i>>> destinations)
-      implements DestinationTree<World, Vector3i> {
-  }
+      implements DestinationTree<World, Vector3i> {}
 }

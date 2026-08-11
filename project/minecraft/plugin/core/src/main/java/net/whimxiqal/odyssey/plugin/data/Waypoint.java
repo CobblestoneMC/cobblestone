@@ -15,8 +15,8 @@ import java.util.UUID;
  *
  * <p>Storage keeps only a world key and integer block coordinates so the record survives across
  * restarts and platforms; the plugin layer re-hydrates it into a live {@code MinecraftDestination}
- * when a search is requested. A waypoint is identified by {@code (owner, name)}: an empty
- * {@link #owner()} denotes a server-wide ("global") waypoint visible to everyone.
+ * when a search is requested. A waypoint is identified by {@code (owner, name)}: an empty {@link
+ * #owner()} denotes a server-wide ("global") waypoint visible to everyone.
  *
  * @param owner the owning player, or empty for a global waypoint
  * @param name the case-sensitive name (unique within an owner's scope)

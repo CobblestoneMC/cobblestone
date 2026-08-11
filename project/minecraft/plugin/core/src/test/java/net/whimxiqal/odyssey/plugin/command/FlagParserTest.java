@@ -50,9 +50,11 @@ class FlagParserTest {
   @Test
   void modeExclusionsFromAliasAndExplicitFlag() {
     Parsed parsed = parsed("home", "-no-fly", "-no-mode", "boat");
-    assertEquals(Set.of(MinecraftStepType.FLY, MinecraftStepType.BOAT), parsed.flags().excludedModes());
+    assertEquals(
+        Set.of(MinecraftStepType.FLY, MinecraftStepType.BOAT), parsed.flags().excludedModes());
     // "door" maps to OPEN_DOOR.
-    assertEquals(Set.of(MinecraftStepType.OPEN_DOOR), parsed("home", "-no-door").flags().excludedModes());
+    assertEquals(
+        Set.of(MinecraftStepType.OPEN_DOOR), parsed("home", "-no-door").flags().excludedModes());
   }
 
   @Test
@@ -72,14 +74,16 @@ class FlagParserTest {
 
   @Test
   void missingValueIsReported() {
-    Invalid invalid = assertInstanceOf(Invalid.class, FlagParser.parse(List.of("home", "-navigator")));
+    Invalid invalid =
+        assertInstanceOf(Invalid.class, FlagParser.parse(List.of("home", "-navigator")));
     assertEquals(Error.MISSING_VALUE, invalid.error());
     assertEquals("-navigator", invalid.token());
   }
 
   @Test
   void unknownModeIsReported() {
-    Invalid invalid = assertInstanceOf(Invalid.class, FlagParser.parse(List.of("home", "-no-mode", "teleport")));
+    Invalid invalid =
+        assertInstanceOf(Invalid.class, FlagParser.parse(List.of("home", "-no-mode", "teleport")));
     assertEquals(Error.UNKNOWN_MODE, invalid.error());
     assertEquals("teleport", invalid.token());
   }

@@ -18,8 +18,8 @@ import net.whimxiqal.odyssey.plugin.api.Navigator;
 
 /**
  * Tracks each player's active {@link Trip}s and enforces {@code trips.max_active_per_player} (the
- * "path home + path to the caves at once" budget). Ticking cadence for every trip is a shared period.
- * Platform-neutral; the platform plugin builds one and calls {@link #stopAll} on logout and
+ * "path home + path to the caves at once" budget). Ticking cadence for every trip is a shared
+ * period. Platform-neutral; the platform plugin builds one and calls {@link #stopAll} on logout and
  * {@link #stopEverything} on disable.
  *
  * @param <L> the native location type the navigators render in
@@ -51,23 +51,40 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
    * @param navigatorId the navigator (display strategy) id
    * @param navigator the navigator to drive
    * @param destination the destination label (for the listing and same-destination replacement)
-   * @param liveSearch the re-search behavior (used for both live loops and stray recalculation); may
-   *     be {@code null} to disable re-searching entirely
+   * @param liveSearch the re-search behavior (used for both live loops and stray recalculation);
+   *     may be {@code null} to disable re-searching entirely
    * @param guideSearch the short-range guide search for off-trail drift; may be {@code null}
    * @param live whether to also re-search periodically (a "live" trip)
    * @param liveIntervalMillis the delay between periodic re-searches, in milliseconds
    * @return the started trip, or empty if the player is at their limit
    */
   public synchronized Optional<Trip<E, P, L>> start(
-      P player, String navigatorId,
-      Navigator<L> navigator, String destination, LiveSearch<L> liveSearch,
-      GuideSearch<L> guideSearch, boolean live, long liveIntervalMillis) {
+      P player,
+      String navigatorId,
+      Navigator<L> navigator,
+      String destination,
+      LiveSearch<L> liveSearch,
+      GuideSearch<L> guideSearch,
+      boolean live,
+      long liveIntervalMillis) {
     List<Trip<E, P, L>> active = byPlayer.computeIfAbsent(player.uuid(), key -> new ArrayList<>());
     if (active.size() >= maxActivePerPlayer) {
       return Optional.empty();
     }
-    Trip<E, P, L> trip = new Trip<>(player, nextId(active), destination, navigatorId, navigator, scheduler,
-        TICK_PERIOD, this::untrack, liveSearch, guideSearch, live, liveIntervalMillis);
+    Trip<E, P, L> trip =
+        new Trip<>(
+            player,
+            nextId(active),
+            destination,
+            navigatorId,
+            navigator,
+            scheduler,
+            TICK_PERIOD,
+            this::untrack,
+            liveSearch,
+            guideSearch,
+            live,
+            liveIntervalMillis);
     active.add(trip);
     trip.start();
     return Optional.of(trip);

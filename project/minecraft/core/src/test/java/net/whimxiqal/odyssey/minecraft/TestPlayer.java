@@ -32,7 +32,8 @@ public final class TestPlayer implements OdysseyPlayer {
     return new TestPlayer(false, false, false, true);
   }
 
-  public static TestPlayer create(boolean canFly, boolean hasBoat, boolean inBoat, boolean canBreak) {
+  public static TestPlayer create(
+      boolean canFly, boolean hasBoat, boolean inBoat, boolean canBreak) {
     return new TestPlayer(canFly, hasBoat, inBoat, canBreak);
   }
 

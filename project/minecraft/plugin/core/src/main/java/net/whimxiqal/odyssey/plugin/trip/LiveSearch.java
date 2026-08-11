@@ -10,7 +10,6 @@ package net.whimxiqal.odyssey.plugin.trip;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import net.whimxiqal.odyssey.api.Path;
-import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 
 /**
@@ -27,7 +26,8 @@ public interface LiveSearch<L> {
    * Runs one re-search.
    *
    * @return a future of the fresh path, or empty if the search failed, was skipped (e.g. the
-   *     concurrency budget was full), or the player is gone — in which case the current path is kept
+   *     concurrency budget was full), or the player is gone — in which case the current path is
+   *     kept
    */
   CompletableFuture<Optional<Path<L, MinecraftStepPayload>>> search();
 }

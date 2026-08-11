@@ -11,7 +11,10 @@ import net.whimxiqal.odyssey.minecraft.MinecraftBlock;
 import net.whimxiqal.odyssey.minecraft.MinecraftChunk;
 import org.bukkit.ChunkSnapshot;
 
-/** A {@link MinecraftChunk} backed by a Bukkit {@link ChunkSnapshot} (immutable, thread-safe to read). */
+/**
+ * A {@link MinecraftChunk} backed by a Bukkit {@link ChunkSnapshot} (immutable, thread-safe to
+ * read).
+ */
 record PaperChunk(ChunkSnapshot snapshot, int chunkX, int chunkZ, int minY, int maxY)
     implements MinecraftChunk {
 

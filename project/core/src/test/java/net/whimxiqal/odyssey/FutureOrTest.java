@@ -60,9 +60,12 @@ class FutureOrTest {
   void whenReadyImmediateRunsSynchronously() {
     AtomicReference<String> seen = new AtomicReference<>();
     // Executor must NOT be used for the immediate case; pass one that would fail if invoked.
-    FutureOr.of("now").whenReady(seen::set, task -> {
-      throw new AssertionError("executor should not be used for an immediate value");
-    });
+    FutureOr.of("now")
+        .whenReady(
+            seen::set,
+            task -> {
+              throw new AssertionError("executor should not be used for an immediate value");
+            });
     assertEquals("now", seen.get());
   }
 

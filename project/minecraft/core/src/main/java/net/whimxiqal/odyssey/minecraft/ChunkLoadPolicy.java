@@ -7,9 +7,7 @@
 
 package net.whimxiqal.odyssey.minecraft;
 
-/**
- * How aggressively the chunk provider may materialize a chunk that isn't already in memory.
- */
+/** How aggressively the chunk provider may materialize a chunk that isn't already in memory. */
 public enum ChunkLoadPolicy {
 
   /** Only use chunks already loaded in memory; everything else is impassable. */

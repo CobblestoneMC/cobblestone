@@ -15,9 +15,9 @@ import net.whimxiqal.odyssey.api.Step;
  * The platform-flavored navigation façade: it re-exposes the generic core operations entirely in a
  * platform's native types, so a plugin developer never touches Odyssey's internal abstractions.
  *
- * <p>Both the inputs (player, locations) and the results are native: a returned
- * {@link SearchHandle} yields {@link Step}s whose position is the native location type {@code L}
- * (e.g. {@code org.bukkit.Location}), not an internal {@code Position}.
+ * <p>Both the inputs (player, locations) and the results are native: a returned {@link
+ * SearchHandle} yields {@link Step}s whose position is the native location type {@code L} (e.g.
+ * {@code org.bukkit.Location}), not an internal {@code Position}.
  *
  * @param <P> the native player type (e.g. {@code org.bukkit.entity.Player})
  * @param <L> the native location type (e.g. {@code org.bukkit.Location})
@@ -42,8 +42,7 @@ public interface PlatformOdysseyApi<P, L> {
    * @param destination the goal location
    * @return a handle to the in-flight search
    */
-  default SearchHandle<L, MinecraftStepPayload> navigatePlayer(
-      P player, L destination) {
+  default SearchHandle<L, MinecraftStepPayload> navigatePlayer(P player, L destination) {
     return navigatePlayer(player, destination, MinecraftSearchSettings.defaults());
   }
 
@@ -72,5 +71,4 @@ public interface PlatformOdysseyApi<P, L> {
       P player, L location1, L location2) {
     return navigatePlayerToRegion(player, location1, location2, MinecraftSearchSettings.defaults());
   }
-
 }

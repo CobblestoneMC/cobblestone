@@ -7,9 +7,8 @@
 
 package net.whimxiqal.odyssey;
 
-import net.whimxiqal.odyssey.api.TraversalState;
-
 import java.util.List;
+import net.whimxiqal.odyssey.api.TraversalState;
 
 /**
  * A mutable Tier-1 edge: an <i>unsolved</i> same-domain hop from a cell to a target region, whose
@@ -24,7 +23,11 @@ import java.util.List;
  */
 final class VirtualPath<T, D extends Domain> {
 
-  private enum Status { UNSOLVED, SOLVED, INFEASIBLE }
+  private enum Status {
+    UNSOLVED,
+    SOLVED,
+    INFEASIBLE
+  }
 
   private final Cell fromCell;
   private final D domain;

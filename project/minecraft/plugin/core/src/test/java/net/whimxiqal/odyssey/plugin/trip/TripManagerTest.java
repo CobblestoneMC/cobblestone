@@ -36,9 +36,19 @@ class TripManagerTest {
     TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 2);
     TestTripAgent player = new TestTripAgent(UUID.randomUUID());
 
-    assertTrue(manager.start(player, "trail", new FakeNavigator(), "dest", null, null, false, 0L).isPresent());
-    assertTrue(manager.start(player,"trail", new FakeNavigator(), "dest", null, null, false, 0L).isPresent());
-    assertTrue(manager.start(player,  "trail", new FakeNavigator(), "dest", null, null, false, 0L).isEmpty(), "over limit");
+    assertTrue(
+        manager
+            .start(player, "trail", new FakeNavigator(), "dest", null, null, false, 0L)
+            .isPresent());
+    assertTrue(
+        manager
+            .start(player, "trail", new FakeNavigator(), "dest", null, null, false, 0L)
+            .isPresent());
+    assertTrue(
+        manager
+            .start(player, "trail", new FakeNavigator(), "dest", null, null, false, 0L)
+            .isEmpty(),
+        "over limit");
     assertEquals(2, manager.trips(player.uuid()).size());
   }
 
@@ -95,8 +105,14 @@ class TripManagerTest {
     RecordingScheduler scheduler = new RecordingScheduler();
     TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 3);
     TestTripAgent player = new TestTripAgent(UUID.randomUUID());
-    Trip<Object, TestTripAgent, Object> first = manager.start(player, "trail", new FakeNavigator(), "home", null, null, false, 0L).orElseThrow();
-    Trip<Object, TestTripAgent, Object> second = manager.start(player, "trail", new FakeNavigator(), "caves", null, null, false, 0L).orElseThrow();
+    Trip<Object, TestTripAgent, Object> first =
+        manager
+            .start(player, "trail", new FakeNavigator(), "home", null, null, false, 0L)
+            .orElseThrow();
+    Trip<Object, TestTripAgent, Object> second =
+        manager
+            .start(player, "trail", new FakeNavigator(), "caves", null, null, false, 0L)
+            .orElseThrow();
     assertEquals(1, first.id());
     assertEquals(2, second.id());
 
@@ -105,10 +121,14 @@ class TripManagerTest {
     assertEquals(1, manager.trips(player.uuid()).size());
 
     // id 1 is free again and is reused for the next trip
-    Trip<Object, TestTripAgent, Object> third = manager.start(player, "trail", new FakeNavigator(), "home", null, null, false, 0L).orElseThrow();
+    Trip<Object, TestTripAgent, Object> third =
+        manager
+            .start(player, "trail", new FakeNavigator(), "home", null, null, false, 0L)
+            .orElseThrow();
     assertEquals(1, third.id());
 
-    assertEquals(1, manager.cancelByDestination(player.uuid(), "HOME")); // case-insensitive; cancels "third"
+    assertEquals(
+        1, manager.cancelByDestination(player.uuid(), "HOME")); // case-insensitive; cancels "third"
     assertEquals(1, manager.trips(player.uuid()).size());
     assertEquals(2, manager.trips(player.uuid()).getFirst().id());
   }
@@ -176,17 +196,18 @@ class TripManagerTest {
     @Override
     public CompletableFuture<Optional<Path<Object, MinecraftStepPayload>>> search() {
       calls++;
-      Path<Object, MinecraftStepPayload> path = new Path<Object, MinecraftStepPayload>() {
-        @Override
-        public Object origin() {
-          return null;
-        }
+      Path<Object, MinecraftStepPayload> path =
+          new Path<Object, MinecraftStepPayload>() {
+            @Override
+            public Object origin() {
+              return null;
+            }
 
-        @Override
-        public List<Step<Object, MinecraftStepPayload>> steps() {
-          return List.of();
-        }
-      }; // steps(): empty; cost/duration default 0
+            @Override
+            public List<Step<Object, MinecraftStepPayload>> steps() {
+              return List.of();
+            }
+          }; // steps(): empty; cost/duration default 0
       return CompletableFuture.completedFuture(Optional.of(path));
     }
   }
@@ -225,7 +246,8 @@ class TripManagerTest {
     }
 
     @Override
-    public ScheduledTaskHandle runAtEntityRepeating(Object entity, Runnable task, long periodTicks) {
+    public ScheduledTaskHandle runAtEntityRepeating(
+        Object entity, Runnable task, long periodTicks) {
       repeating.add(task);
       handle = new FakeHandle();
       return handle;
@@ -265,5 +287,4 @@ class TripManagerTest {
       cancelled = true;
     }
   }
-
 }

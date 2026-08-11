@@ -17,7 +17,8 @@ import net.whimxiqal.odyssey.plugin.api.Navigator;
 /**
  * One active guided journey: it owns a {@link Navigator} and ticks it on the scheduler until the
  * navigator reports completion or the trip is stopped (cancellation or logout). Platform-neutral —
- * the navigator supplies all platform-specific rendering. Created and tracked by {@link TripManager}.
+ * the navigator supplies all platform-specific rendering. Created and tracked by {@link
+ * TripManager}.
  *
  * @param <L> the native location type the navigator renders in
  */
@@ -78,31 +79,38 @@ public final class Trip<E, P extends TripAgent<E>, L> {
     scheduler.runAsyncLater(() -> reSearch(true), liveIntervalMillis);
   }
 
-  /** Runs one re-search; {@code reschedule} continues the periodic live loop, off for a one-shot. */
+  /**
+   * Runs one re-search; {@code reschedule} continues the periodic live loop, off for a one-shot.
+   */
   private void reSearch(boolean reschedule) {
     if (stopped || liveSearch == null) {
       return;
     }
-    liveSearch.search().whenComplete((result, error) -> {
-      if (stopped) {
-        return;
-      }
-      if (error == null) {
-        result.ifPresent(this::applyNewPath);
-      }
-      if (reschedule && !stopped) {
-        scheduleReSearch();
-      }
-    });
+    liveSearch
+        .search()
+        .whenComplete(
+            (result, error) -> {
+              if (stopped) {
+                return;
+              }
+              if (error == null) {
+                result.ifPresent(this::applyNewPath);
+              }
+              if (reschedule && !stopped) {
+                scheduleReSearch();
+              }
+            });
   }
 
   private void applyNewPath(Path<L, MinecraftStepPayload> path) {
     // Hot-swap on the render thread so it never races the navigator's tick.
-    scheduler.runAtEntity(player.entity(), () -> {
-      if (!stopped) {
-        navigator.update(path);
-      }
-    });
+    scheduler.runAtEntity(
+        player.entity(),
+        () -> {
+          if (!stopped) {
+            navigator.update(path);
+          }
+        });
   }
 
   private void tick() {
@@ -124,16 +132,25 @@ public final class Trip<E, P extends TripAgent<E>, L> {
   }
 
   private void runGuideSearch(L target) {
-    guideSearch.search(target).whenComplete((result, error) -> {
-      if (stopped || error != null || result.isEmpty()) {
-        return;
-      }
-      result.ifPresent(path -> scheduler.runAtEntity(player.entity(), () -> {
-        if (!stopped) {
-          navigator.setGuidePath(path); // hand the short path to the navigator on the render thread
-        }
-      }));
-    });
+    guideSearch
+        .search(target)
+        .whenComplete(
+            (result, error) -> {
+              if (stopped || error != null || result.isEmpty()) {
+                return;
+              }
+              result.ifPresent(
+                  path ->
+                      scheduler.runAtEntity(
+                          player.entity(),
+                          () -> {
+                            if (!stopped) {
+                              navigator.setGuidePath(
+                                  path); // hand the short path to the navigator on the render
+                              // thread
+                            }
+                          }));
+            });
   }
 
   /** Stops rendering and releases the navigator's display state. Idempotent. */

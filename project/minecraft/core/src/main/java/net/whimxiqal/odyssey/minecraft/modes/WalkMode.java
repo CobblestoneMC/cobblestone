@@ -15,7 +15,6 @@ import net.whimxiqal.odyssey.Cell;
 import net.whimxiqal.odyssey.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
 import net.whimxiqal.odyssey.minecraft.MinecraftAgent;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
 import net.whimxiqal.odyssey.minecraft.MinecraftKeys;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
@@ -31,7 +30,7 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 final class WalkMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> {
 
   private static final int[][] HORIZONTAL = {
-      {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}
+    {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}
   };
 
   @Override
@@ -69,7 +68,11 @@ final class WalkMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
   }
 
   private void addStepUpOrDown(
-      Cell from, int dx, int dz, BlockView view, TraversalState state,
+      Cell from,
+      int dx,
+      int dz,
+      BlockView view,
+      TraversalState state,
       List<Movement<MinecraftStepPayload>> moves) {
     Cell up = from.plus(dx, 1, dz);
     if (Geometry.standable(view, up) && view.at(from, 0, 2, 0).isPassable()) {

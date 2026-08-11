@@ -27,8 +27,8 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
  *
  * <p>A closed door is passable if it opens by hand (wooden) or is iron with an activating pressure
  * plate the player is standing on — buttons/levers and distant redstone are out of scope. The step
- * lands the player beyond the doorway (so they never get stuck standing in a closed door) at a small
- * open-door cost.
+ * lands the player beyond the doorway (so they never get stuck standing in a closed door) at a
+ * small open-door cost.
  *
  * @param <A> the agent type
  */
@@ -38,10 +38,10 @@ final class DoorMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
   private final boolean canOpenDoor;
 
   DoorMode(boolean canOpenDoor) {
-      this.canOpenDoor = canOpenDoor;
+    this.canOpenDoor = canOpenDoor;
   }
 
-    @Override
+  @Override
   protected boolean applies(A agent, TraversalState state) {
     return state.get(MinecraftKeys.VEHICLE) == null;
   }
@@ -74,7 +74,9 @@ final class DoorMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
       }
       boolean canOpen = door.opensByHand() || standingOnPlate;
       Cell beyond = from.plus(dir[0] * 2, 0, dir[1] * 2);
-      if (!canOpen || !view.at(doorway, 0, -1, 0).isSolidTop() || !Geometry.standable(view, beyond)) {
+      if (!canOpen
+          || !view.at(doorway, 0, -1, 0).isSolidTop()
+          || !Geometry.standable(view, beyond)) {
         continue;
       }
       double cost = MovementCosts.WALK + MovementCosts.OPEN_DOOR;

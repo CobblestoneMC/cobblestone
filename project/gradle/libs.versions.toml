@@ -1,5 +1,5 @@
 # Version catalog for module-level dependencies.
-# Build-plugin versions (checkstyle tool, spotless) are pinned in buildSrc/ where the convention
+# Build-plugin versions (spotless) are pinned in buildSrc/ where the convention
 # plugins live. External platform/library deps are added here in their respective implementation
 # phases.
 

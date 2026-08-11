@@ -7,25 +7,41 @@
 
 package net.whimxiqal.odyssey.paper;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-
-import net.whimxiqal.odyssey.*;
-import net.whimxiqal.odyssey.minecraft.api.*;
-import net.whimxiqal.odyssey.paper.api.BoxWorldRegion;
+import net.whimxiqal.odyssey.CellRegion;
+import net.whimxiqal.odyssey.DomainRegion;
+import net.whimxiqal.odyssey.FutureOr;
+import net.whimxiqal.odyssey.HeuristicStrategy;
+import net.whimxiqal.odyssey.Heuristics;
+import net.whimxiqal.odyssey.OdysseyApi;
+import net.whimxiqal.odyssey.OdysseyLogger;
+import net.whimxiqal.odyssey.Position;
+import net.whimxiqal.odyssey.Restriction;
+import net.whimxiqal.odyssey.SingleDestination;
+import net.whimxiqal.odyssey.Transition;
 import net.whimxiqal.odyssey.api.Destination;
 import net.whimxiqal.odyssey.api.SearchHandle;
+import net.whimxiqal.odyssey.minecraft.BreakChecker;
 import net.whimxiqal.odyssey.minecraft.ChunkProvider;
 import net.whimxiqal.odyssey.minecraft.ChunkProviderSettings;
 import net.whimxiqal.odyssey.minecraft.MinecraftMode;
 import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftSearchSettings;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
+import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
 import net.whimxiqal.odyssey.minecraft.modes.MinecraftModes;
-import net.whimxiqal.odyssey.minecraft.BreakChecker;
-import net.whimxiqal.odyssey.paper.api.PaperOdysseySearchModifier;
+import net.whimxiqal.odyssey.paper.api.BoxWorldRegion;
 import net.whimxiqal.odyssey.paper.api.PaperBreakChecker;
 import net.whimxiqal.odyssey.paper.api.PaperOdysseyApi;
+import net.whimxiqal.odyssey.paper.api.PaperOdysseySearchModifier;
 import net.whimxiqal.odyssey.paper.api.PaperPassChecker;
 import net.whimxiqal.odyssey.paper.api.PaperTransition;
 import org.bukkit.Bukkit;
@@ -41,8 +57,8 @@ import org.joml.Vector3i;
 
 public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper {
 
-  // The true global-minimum per-block cost (flying, MovementCosts.FLY = 0.10). Used as the admissible
-  // Tier-1 bound and the running-average's cold-start estimate.
+  // The true global-minimum per-block cost (flying, MovementCosts.FLY = 0.10). Used as the
+  // admissible Tier-1 bound and the running-average's cold-start estimate.
   private static final double CHEAPEST_COST_PER_BLOCK = 0.10;
 
   private final OdysseyLogger logger;
@@ -55,7 +71,7 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
   /**
    * Creates the API for a plugin.
    *
-   * @param plugin      the owning plugin
+   * @param plugin the owning plugin
    */
   public PaperOdysseyApiImpl(Plugin plugin, OdysseyLogger logger) {
     this.logger = logger;
@@ -69,20 +85,15 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
 
   @Override
   public SearchHandle<Location, MinecraftStepPayload> navigatePlayer(
-      Player player,
-      Location destination,
-      MinecraftSearchSettings settings) {
-    DomainRegion<MinecraftWorld> region = new CellRegion<>(
-        PaperConversions.cell(destination), wrap(destination.getWorld()));
+      Player player, Location destination, MinecraftSearchSettings settings) {
+    DomainRegion<MinecraftWorld> region =
+        new CellRegion<>(PaperConversions.cell(destination), wrap(destination.getWorld()));
     return search(player, new SingleDestination<>(region), settings);
   }
 
   @Override
   public SearchHandle<Location, MinecraftStepPayload> navigatePlayerToRegion(
-      Player player,
-      Location location1,
-      Location location2,
-      MinecraftSearchSettings settings) {
+      Player player, Location location1, Location location2, MinecraftSearchSettings settings) {
     BoxWorldRegion region = BoxWorldRegion.of(location1, location2);
     return search(player, new SingleDestination<>(PaperConversions.region(region, this)), settings);
   }
@@ -131,40 +142,55 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
     return scheduler;
   }
 
-  /**
-   * Stops the search worker pool; call on plugin disable.
-   */
+  /** Stops the search worker pool; call on plugin disable. */
   public void shutdown() {
     scheduler.shutdown();
   }
 
   private SearchHandle<Location, MinecraftStepPayload> search(
-      Player player, Destination<DomainRegion<MinecraftWorld>> destination,
+      Player player,
+      Destination<DomainRegion<MinecraftWorld>> destination,
       MinecraftSearchSettings settings) {
     OdysseyPlayer agent = new PaperPlayer(player);
     Location origin = player.getLocation();
-    Position<MinecraftWorld> originPosition = new Position<>(
-        PaperConversions.cell(origin), wrap(origin.getWorld()));
+    Position<MinecraftWorld> originPosition =
+        new Position<>(PaperConversions.cell(origin), wrap(origin.getWorld()));
     // One snapshot of the registered modifiers drives all three influences on this search.
-    List<PaperOdysseySearchModifier> modifiers = Bukkit.getServicesManager()
-        .getRegistrations(PaperOdysseySearchModifier.class).stream()
-        .map(RegisteredServiceProvider::getProvider).toList();
+    List<PaperOdysseySearchModifier> modifiers =
+        Bukkit.getServicesManager().getRegistrations(PaperOdysseySearchModifier.class).stream()
+            .map(RegisteredServiceProvider::getProvider)
+            .toList();
     BreakChecker<OdysseyPlayer> breakChecker = buildBreakChecker(modifiers, player);
-    List<Restriction<OdysseyPlayer, MinecraftWorld>> restrictions = buildRestrictions(modifiers, player);
+    List<Restriction<OdysseyPlayer, MinecraftWorld>> restrictions =
+        buildRestrictions(modifiers, player);
     List<MinecraftMode<OdysseyPlayer>> modes =
         MinecraftModes.forPlayer(agent, settings.excludedModes(), breakChecker);
 
-    CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>>
-        handleFuture = gatherTransitions(modifiers, player, settings.excludedWorlds(),
-        settings.excludedDimensions()).thenApply(gathered -> core.navigate(
-            logger, scheduler, agent, originPosition, destination, modes, gathered, restrictions,
-            heuristic, settings.settings()));
+    CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
+        gatherTransitions(
+                modifiers, player, settings.excludedWorlds(), settings.excludedDimensions())
+            .thenApply(
+                gathered ->
+                    core.navigate(
+                        logger,
+                        scheduler,
+                        agent,
+                        originPosition,
+                        destination,
+                        modes,
+                        gathered,
+                        restrictions,
+                        heuristic,
+                        settings.settings()));
     return new PaperSearchHandle(handleFuture);
   }
 
   private CompletableFuture<List<Transition<MinecraftStepPayload, MinecraftWorld>>>
-  gatherTransitions(List<PaperOdysseySearchModifier> modifiers, Player player,
-                    Set<String> excludedWorlds, Set<String> excludedDimensions) {
+      gatherTransitions(
+          List<PaperOdysseySearchModifier> modifiers,
+          Player player,
+          Set<String> excludedWorlds,
+          Set<String> excludedDimensions) {
     if (modifiers.isEmpty()) {
       return CompletableFuture.completedFuture(List.of());
     }
@@ -172,24 +198,30 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
     for (PaperOdysseySearchModifier modifier : modifiers) {
       futures.add(modifier.computeTransitions(player));
     }
-    return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).thenApply(ignored -> {
-      List<Transition<MinecraftStepPayload, MinecraftWorld>> all = new ArrayList<>();
-      for (CompletableFuture<List<PaperTransition>> future : futures) {
-        for (PaperTransition transition : future.join()) {
-          PaperTransitionAdapter wrapped = new PaperTransitionAdapter(transition, this);
-          // A world is reachable only through a transition, so excluding a world/dimension means
-          // dropping any transition that crosses into (or out of) it.
-          if (worldAllowed(wrapped.origin().domain(), excludedWorlds, excludedDimensions)
-              && worldAllowed(wrapped.destination().domain(), excludedWorlds, excludedDimensions)) {
-            all.add(wrapped);
-          }
-        }
-      }
-      return all;
-    });
+    return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0]))
+        .thenApply(
+            ignored -> {
+              List<Transition<MinecraftStepPayload, MinecraftWorld>> all = new ArrayList<>();
+              for (CompletableFuture<List<PaperTransition>> future : futures) {
+                for (PaperTransition transition : future.join()) {
+                  PaperTransitionAdapter wrapped = new PaperTransitionAdapter(transition, this);
+                  // A world is reachable only through a transition, so excluding a world/dimension
+                  // means
+                  // dropping any transition that crosses into (or out of) it.
+                  if (worldAllowed(wrapped.origin().domain(), excludedWorlds, excludedDimensions)
+                      && worldAllowed(
+                          wrapped.destination().domain(), excludedWorlds, excludedDimensions)) {
+                    all.add(wrapped);
+                  }
+                }
+              }
+              return all;
+            });
   }
 
-  /** Composes every modifier's break checker into one; a block is breakable only if all permit it. */
+  /**
+   * Composes every modifier's break checker into one; a block is breakable only if all permit it.
+   */
   private BreakChecker<OdysseyPlayer> buildBreakChecker(
       List<PaperOdysseySearchModifier> modifiers, Player player) {
     List<PaperBreakChecker> checkers = new ArrayList<>();
@@ -233,19 +265,20 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
       return List.of(); // no constraint: Tier-2 skips restriction filtering entirely
     }
     UUID playerId = player.getUniqueId();
-    Restriction<OdysseyPlayer, MinecraftWorld> restriction = (agent, cell, domain) -> {
-      Player online = Bukkit.getPlayer(playerId);
-      World bukkitWorld = bukkitWorld(domain.key());
-      if (online == null || bukkitWorld == null) {
-        return FutureOr.of(false); // cannot evaluate; do not bar entry
-      }
-      Location location = new Location(bukkitWorld, cell.x(), cell.y(), cell.z());
-      List<CompletableFuture<Boolean>> results = new ArrayList<>(checkers.size());
-      for (PaperPassChecker checker : checkers) {
-        results.add(checker.passable(online, location));
-      }
-      return FutureOr.from(anyFalse(results));
-    };
+    Restriction<OdysseyPlayer, MinecraftWorld> restriction =
+        (agent, cell, domain) -> {
+          Player online = Bukkit.getPlayer(playerId);
+          World bukkitWorld = bukkitWorld(domain.key());
+          if (online == null || bukkitWorld == null) {
+            return FutureOr.of(false); // cannot evaluate; do not bar entry
+          }
+          Location location = new Location(bukkitWorld, cell.x(), cell.y(), cell.z());
+          List<CompletableFuture<Boolean>> results = new ArrayList<>(checkers.size());
+          for (PaperPassChecker checker : checkers) {
+            results.add(checker.passable(online, location));
+          }
+          return FutureOr.from(anyFalse(results));
+        };
     return List.of(restriction);
   }
 
@@ -254,28 +287,34 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
     return namespacedKey == null ? null : Bukkit.getWorld(namespacedKey);
   }
 
-  /** A future of whether every input is {@code true} (AND). Already-complete inputs stay immediate. */
+  /**
+   * A future of whether every input is {@code true} (AND). Already-complete inputs stay immediate.
+   */
   private static CompletableFuture<Boolean> allTrue(List<CompletableFuture<Boolean>> futures) {
-    return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).thenApply(ignored -> {
-      for (CompletableFuture<Boolean> future : futures) {
-        if (!Boolean.TRUE.equals(future.getNow(Boolean.FALSE))) {
-          return false;
-        }
-      }
-      return true;
-    });
+    return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0]))
+        .thenApply(
+            ignored -> {
+              for (CompletableFuture<Boolean> future : futures) {
+                if (!Boolean.TRUE.equals(future.getNow(Boolean.FALSE))) {
+                  return false;
+                }
+              }
+              return true;
+            });
   }
 
   /** A future of whether any input is {@code false} — i.e. some checker bars the action. */
   private static CompletableFuture<Boolean> anyFalse(List<CompletableFuture<Boolean>> futures) {
-    return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).thenApply(ignored -> {
-      for (CompletableFuture<Boolean> future : futures) {
-        if (!Boolean.TRUE.equals(future.getNow(Boolean.TRUE))) {
-          return true;
-        }
-      }
-      return false;
-    });
+    return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0]))
+        .thenApply(
+            ignored -> {
+              for (CompletableFuture<Boolean> future : futures) {
+                if (!Boolean.TRUE.equals(future.getNow(Boolean.TRUE))) {
+                  return true;
+                }
+              }
+              return false;
+            });
   }
 
   private static boolean worldAllowed(
@@ -286,6 +325,7 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
 
   @Override
   public MinecraftWorld wrap(World world) {
-    return worldCache.computeIfAbsent(world.getKey().asString(), key -> new PaperWorld(world, chunkProvider));
+    return worldCache.computeIfAbsent(
+        world.getKey().asString(), key -> new PaperWorld(world, chunkProvider));
   }
 }

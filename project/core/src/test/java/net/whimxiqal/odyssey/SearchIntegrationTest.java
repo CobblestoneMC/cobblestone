@@ -11,7 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.util.List;
-
 import net.whimxiqal.odyssey.api.NavigationResult;
 import net.whimxiqal.odyssey.api.Path;
 import net.whimxiqal.odyssey.api.SearchSettings;
@@ -25,9 +24,10 @@ class SearchIntegrationTest {
 
   private Path<Position<TestDomain>, TestStep> requireSuccess(
       NavigationResult<Position<TestDomain>, TestStep> result) {
-    if (result instanceof NavigationResult.Success<Position<TestDomain>, TestStep>(
-            Path<Position<TestDomain>, TestStep> path
-    )) {
+    if (result
+        instanceof
+        NavigationResult.Success<Position<TestDomain>, TestStep>(
+            Path<Position<TestDomain>, TestStep> path)) {
       return path;
     }
     throw new AssertionError("expected a successful navigation, got: " + result);
@@ -45,17 +45,20 @@ class SearchIntegrationTest {
     List<CorridorMode> modes = List.of(new CorridorMode(false));
     List<Transition<TestStep, TestDomain>> transitions = List.of();
 
-    NavigationResult<Position<TestDomain>, TestStep> result = api.navigate(
-            new TestOdysseyLogger(),
-        scheduler,
-        new TestAgent(),
-        new Position<>(new Cell(0, 0, 0), domain),
-        new SingleDestination<>(new CellRegion<>(new Cell(5, 0, 0), domain)),
-        modes,
-        transitions,
-        List.of(),
-        Heuristics.zero(),
-        SearchSettings.defaults()).future().join();
+    NavigationResult<Position<TestDomain>, TestStep> result =
+        api.navigate(
+                new TestOdysseyLogger(),
+                scheduler,
+                new TestAgent(),
+                new Position<>(new Cell(0, 0, 0), domain),
+                new SingleDestination<>(new CellRegion<>(new Cell(5, 0, 0), domain)),
+                modes,
+                transitions,
+                List.of(),
+                Heuristics.zero(),
+                SearchSettings.defaults())
+            .future()
+            .join();
 
     Path<Position<TestDomain>, TestStep> path = requireSuccess(result);
     assertEquals(5.0, path.cost(), 1e-9);
@@ -68,24 +71,28 @@ class SearchIntegrationTest {
   void crossesDomainThroughTransition() {
     TestDomain overworld = new TestDomain("overworld");
     TestDomain nether = new TestDomain("nether");
-    TestTransition portal = new TestTransition(
-        new CellRegion<>(new Cell(3, 0, 0), overworld),
-        new Position<>(new Cell(0, 0, 0), nether),
-        10.0,
-        TestStep.TELEPORT);
+    TestTransition portal =
+        new TestTransition(
+            new CellRegion<>(new Cell(3, 0, 0), overworld),
+            new Position<>(new Cell(0, 0, 0), nether),
+            10.0,
+            TestStep.TELEPORT);
     List<CorridorMode> modes = List.of(new CorridorMode(false));
 
-    NavigationResult<Position<TestDomain>, TestStep> result = api.navigate(
-            new TestOdysseyLogger(),
-        scheduler,
-        new TestAgent(),
-        new Position<>(new Cell(0, 0, 0), overworld),
-        new SingleDestination<>(new CellRegion<>(new Cell(0, 0, 0), nether)),
-        modes,
-        List.of(portal),
-        List.of(),
-        Heuristics.zero(),
-        SearchSettings.defaults()).future().join();
+    NavigationResult<Position<TestDomain>, TestStep> result =
+        api.navigate(
+                new TestOdysseyLogger(),
+                scheduler,
+                new TestAgent(),
+                new Position<>(new Cell(0, 0, 0), overworld),
+                new SingleDestination<>(new CellRegion<>(new Cell(0, 0, 0), nether)),
+                modes,
+                List.of(portal),
+                List.of(),
+                Heuristics.zero(),
+                SearchSettings.defaults())
+            .future()
+            .join();
 
     Path<Position<TestDomain>, TestStep> path = requireSuccess(result);
     // 3 corridor steps in the overworld + 1 teleport step arriving in the nether.
@@ -103,17 +110,20 @@ class SearchIntegrationTest {
     List<CorridorMode> modes = List.of(new CorridorMode(false));
     List<Transition<TestStep, TestDomain>> noTransitions = List.of();
 
-    NavigationResult<Position<TestDomain>, TestStep> result = api.navigate(
-            new TestOdysseyLogger(),
-        scheduler,
-        new TestAgent(),
-        new Position<>(new Cell(0, 0, 0), overworld),
-        new SingleDestination<>(new CellRegion<>(new Cell(0, 0, 0), nether)),
-        modes,
-        noTransitions,
-        List.of(),
-        Heuristics.zero(),
-        SearchSettings.defaults()).future().join();
+    NavigationResult<Position<TestDomain>, TestStep> result =
+        api.navigate(
+                new TestOdysseyLogger(),
+                scheduler,
+                new TestAgent(),
+                new Position<>(new Cell(0, 0, 0), overworld),
+                new SingleDestination<>(new CellRegion<>(new Cell(0, 0, 0), nether)),
+                modes,
+                noTransitions,
+                List.of(),
+                Heuristics.zero(),
+                SearchSettings.defaults())
+            .future()
+            .join();
 
     assertEquals(NavigationResult.Failure.class, result.getClass());
   }

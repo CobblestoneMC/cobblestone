@@ -11,9 +11,7 @@ package net.whimxiqal.odyssey;
  * Marker for the entity that is navigating.
  *
  * <p>Intentionally empty at the core level: it exists so {@link Mode}s can be typed against a
- * concrete agent downstream (via the {@code A} generic) without casting. Capability accessors
- * (e.g. {@code canFly()}) are added by subtypes such as {@code MinecraftAgent} and
- * {@code OdysseyPlayer}.
+ * concrete agent downstream (via the {@code A} generic) without casting. Capability accessors (e.g.
+ * {@code canFly()}) are added by subtypes such as {@code MinecraftAgent} and {@code OdysseyPlayer}.
  */
-public interface Agent {
-}
+public interface Agent {}

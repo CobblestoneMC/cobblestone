@@ -9,19 +9,14 @@ package net.whimxiqal.odyssey.plugin.api;
 
 import java.util.Optional;
 import net.whimxiqal.odyssey.api.Path;
-import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 
 public interface Navigator<L> {
 
-  /**
-   * Called once when the trip begins.
-   */
+  /** Called once when the trip begins. */
   void start();
 
-  /**
-   * Called on a schedule to render and advance the display.
-   */
+  /** Called on a schedule to render and advance the display. */
   void tick();
 
   /**
@@ -32,7 +27,8 @@ public interface Navigator<L> {
   void update(Path<L, MinecraftStepPayload> newPath);
 
   /**
-   * Called once when the trip ends (completion, cancellation, or logout); releases any display state.
+   * Called once when the trip ends (completion, cancellation, or logout); releases any display
+   * state.
    */
   void stop();
 

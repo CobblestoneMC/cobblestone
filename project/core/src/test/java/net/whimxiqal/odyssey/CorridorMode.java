@@ -7,12 +7,11 @@
 
 package net.whimxiqal.odyssey;
 
-import net.whimxiqal.odyssey.api.TraversalState;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import net.whimxiqal.odyssey.api.TraversalState;
 
 /**
  * A test {@link Mode} that always offers a single move of {@code +1} in x at cost 1 — a
@@ -56,6 +55,5 @@ final class CorridorMode implements Mode<TestAgent, TestStep, TestDomain> {
 
   private record Gate(
       CompletableFuture<Collection<Movement<TestStep>>> future,
-      Collection<Movement<TestStep>> movements) {
-  }
+      Collection<Movement<TestStep>> movements) {}
 }

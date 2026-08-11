@@ -30,8 +30,7 @@ public sealed interface NavigationResult<P, T>
    * @param <T> the payload type
    * @param path the solved path
    */
-  record Success<P, T>(Path<P, T> path)
-      implements NavigationResult<P, T> {
+  record Success<P, T>(Path<P, T> path) implements NavigationResult<P, T> {
 
     @Override
     public boolean success() {
@@ -46,8 +45,7 @@ public sealed interface NavigationResult<P, T>
    * @param <T> the payload type
    * @param reason why the search failed
    */
-  record Failure<P, T>(FailureReason reason)
-      implements NavigationResult<P, T> {
+  record Failure<P, T>(FailureReason reason) implements NavigationResult<P, T> {
 
     @Override
     public boolean success() {

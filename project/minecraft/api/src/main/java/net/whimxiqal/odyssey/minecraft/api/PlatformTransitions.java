@@ -15,11 +15,11 @@ package net.whimxiqal.odyssey.minecraft.api;
  */
 public final class PlatformTransitions {
 
-  private PlatformTransitions() {
-  }
+  private PlatformTransitions() {}
 
   /**
-   * A transition whose player-facing {@link PlatformTransition#time() time} equals its {@code cost}.
+   * A transition whose player-facing {@link PlatformTransition#time() time} equals its {@code
+   * cost}.
    *
    * @param origin the origin region the agent must reach
    * @param destination the arrival location
@@ -53,6 +53,5 @@ public final class PlatformTransitions {
 
   private record SimplePlatformTransition<R, P>(
       R origin, P destination, double cost, double time, MinecraftStepPayload payload)
-      implements PlatformTransition<R, P> {
-  }
+      implements PlatformTransition<R, P> {}
 }

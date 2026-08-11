@@ -9,8 +9,8 @@ package net.whimxiqal.odyssey.plugin.config;
 
 /**
  * A typed handle to a single configuration parameter: its period-delimited, snake_case path (e.g.
- * {@code navigators.trail.particle_type}), default value, decoding {@link Codec}, and whether it can
- * change live on {@link ConfigManager#reload()}.
+ * {@code navigators.trail.particle_type}), default value, decoding {@link Codec}, and whether it
+ * can change live on {@link ConfigManager#reload()}.
  *
  * <p>Obtain one from {@link ConfigManager#register}; read it with {@link ConfigManager#get}.
  *

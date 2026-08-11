@@ -15,8 +15,7 @@ import net.whimxiqal.odyssey.Cell;
  */
 final class Geometry {
 
-  private Geometry() {
-  }
+  private Geometry() {}
 
   /** Whether a body fits in {@code cell} — the cell and the cell above it are both passable. */
   static boolean bodyFits(BlockView view, Cell cell) {

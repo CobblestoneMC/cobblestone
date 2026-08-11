@@ -17,19 +17,22 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import net.whimxiqal.odyssey.Cell;
 import net.whimxiqal.odyssey.Movement;
-import net.whimxiqal.odyssey.minecraft.*;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
+import net.whimxiqal.odyssey.minecraft.BreakChecker;
+import net.whimxiqal.odyssey.minecraft.MinecraftBlock;
+import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
+import net.whimxiqal.odyssey.minecraft.TestBlocks;
+import net.whimxiqal.odyssey.minecraft.TestModes;
+import net.whimxiqal.odyssey.minecraft.TestPlayer;
+import net.whimxiqal.odyssey.minecraft.TestWorld;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
-import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
 import org.junit.jupiter.api.Test;
 
 class MineModeTest {
 
   private final MineMode<OdysseyPlayer> mine = new MineMode<>();
 
-  private static TestWorld wallTo(int wallX, MinecraftBlock feet,
-                                  MinecraftBlock head) {
+  private static TestWorld wallTo(int wallX, MinecraftBlock feet, MinecraftBlock head) {
     return TestWorld.builder("w")
         .floor(0, -1, -1, 2, 1, TestBlocks.solid())
         .set(wallX, 1, 0, feet)
@@ -51,18 +54,18 @@ class MineModeTest {
 
   @Test
   void willNotMineUnbreakableBlocks() {
-    TestWorld world = wallTo(1, TestBlocks.
-            bedrock(), TestBlocks.solid(2.0));
-    assertFalse(TestModes.from(mine, TestPlayer.walker(), world, new Cell(0, 1, 0))
-        .containsKey(new Cell(1, 1, 0)));
+    TestWorld world = wallTo(1, TestBlocks.bedrock(), TestBlocks.solid(2.0));
+    assertFalse(
+        TestModes.from(mine, TestPlayer.walker(), world, new Cell(0, 1, 0))
+            .containsKey(new Cell(1, 1, 0)));
   }
 
   @Test
   void willNotMineWhenBreakingIsNotAllowed() {
     TestWorld world = wallTo(1, TestBlocks.solid(2.0), TestBlocks.solid(2.0));
     OdysseyPlayer cannotBreak = TestPlayer.create(false, false, false, false);
-    assertFalse(TestModes.from(mine, cannotBreak, world, new Cell(0, 1, 0))
-        .containsKey(new Cell(1, 1, 0)));
+    assertFalse(
+        TestModes.from(mine, cannotBreak, world, new Cell(0, 1, 0)).containsKey(new Cell(1, 1, 0)));
   }
 
   @Test
@@ -72,7 +75,8 @@ class MineModeTest {
     // move (optimistically), but tags it with a restricted future that resolves true — the search
     // drops the edge when it does.
     BreakChecker<OdysseyPlayer> forbidWall =
-        (agent, cell, breakWorld, block) -> CompletableFuture.completedFuture(!cell.equals(new Cell(1, 1, 0)));
+        (agent, cell, breakWorld, block) ->
+            CompletableFuture.completedFuture(!cell.equals(new Cell(1, 1, 0)));
     MineMode<OdysseyPlayer> mode = new MineMode<>(forbidWall);
 
     Movement<MinecraftStepPayload> tunnel =

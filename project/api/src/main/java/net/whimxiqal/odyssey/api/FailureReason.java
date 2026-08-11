@@ -7,9 +7,7 @@
 
 package net.whimxiqal.odyssey.api;
 
-/**
- * Why a search failed to produce a path.
- */
+/** Why a search failed to produce a path. */
 public enum FailureReason {
 
   /** No sequence of transitions connects the origin to the destination's domain(s). */

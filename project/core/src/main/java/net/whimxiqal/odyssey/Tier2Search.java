@@ -7,8 +7,6 @@
 
 package net.whimxiqal.odyssey;
 
-import net.whimxiqal.odyssey.api.TraversalState;
-
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -26,6 +24,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
+import net.whimxiqal.odyssey.api.TraversalState;
 
 /**
  * A single-domain A* solve for one {@link VirtualPath}, run cooperatively so it never blocks a
@@ -37,19 +36,19 @@ import java.util.function.BooleanSupplier;
  * <p><b>Restrictions</b> (integration passability checks) are handled <i>optimistically</i>: a cell
  * whose verdict is not yet known is expanded through as if passable, and its check is fired in the
  * background (integrations resolve it on the main/region thread). Verdicts land in a mailbox the
- * search drains as it runs — so the beam never stalls on a check, and a wall right next to the start
- * is caught the moment its verdict returns, not at the end.
+ * search drains as it runs — so the beam never stalls on a check, and a wall right next to the
+ * start is caught the moment its verdict returns, not at the end.
  *
  * <p>To make that correct on a graph, every node keeps <b>all</b> the candidate parents that ever
- * relaxed it (not just its best), so removing a cell never forgets an alternative route. When a cell
- * already in the tree comes back impassable it joins a persistent impassable set (never probed again)
- * and the search <b>incrementally repairs</b>: it removes the cell, then re-parents its dependent
- * subtree to the best surviving route via a mini-Dijkstra over the retained edges — pruning only the
- * nodes with no route left. No global re-solve, no re-exploration.
+ * relaxed it (not just its best), so removing a cell never forgets an alternative route. When a
+ * cell already in the tree comes back impassable it joins a persistent impassable set (never probed
+ * again) and the search <b>incrementally repairs</b>: it removes the cell, then re-parents its
+ * dependent subtree to the best surviving route via a mini-Dijkstra over the retained edges —
+ * pruning only the nodes with no route left. No global re-solve, no re-exploration.
  *
- * <p>All state mutation happens inside {@link #pump()}, which the {@code scheduled}/{@code signalled}
- * flags keep single-flight; verdict and mode-completion callbacks only enqueue/wake, so no locks are
- * needed.
+ * <p>All state mutation happens inside {@link #pump()}, which the {@code scheduled}/{@code
+ * signalled} flags keep single-flight; verdict and mode-completion callbacks only enqueue/wake, so
+ * no locks are needed.
  *
  * @param <A> the agent type
  * @param <T> the payload type
@@ -75,8 +74,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   // --- search state; touched only inside pump() (single-flight) ---
   private final Map<CellState, Node<T>> nodes = new HashMap<>();
   private final Map<Cell, Set<CellState>> byCell = new HashMap<>();
-  private final PriorityQueue<Entry> open = new PriorityQueue<>(
-      (a, b) -> Double.compare(a.estimatedTotalCost(), b.estimatedTotalCost()));
+  private final PriorityQueue<Entry> open =
+      new PriorityQueue<>((a, b) -> Double.compare(a.estimatedTotalCost(), b.estimatedTotalCost()));
   private int expandedCount;
   private PendingModes<T> pendingModes;
   private CellState pendingGoal; // an optimistically-reached goal awaiting path confirmation
@@ -96,8 +95,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private final CompletableFuture<Tier2Result<T, D>> result = new CompletableFuture<>();
 
   Tier2Search(
-          OdysseyLogger logger,
-          A agent,
+      OdysseyLogger logger,
+      A agent,
       VirtualPath<T, D> virtualPath,
       List<? extends Mode<A, T, D>> modes,
       List<? extends Restriction<A, D>> restrictions,
@@ -123,7 +122,9 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     this.start = new CellState(virtualPath.fromCell(), virtualPath.state());
     Node<T> startNode = getOrCreate(start);
     startNode.cost = 0.0;
-    open.add(new Entry(start, 0.0, heuristicWeight * heuristic.estimate(start.cell(), target, start.state())));
+    open.add(
+        new Entry(
+            start, 0.0, heuristicWeight * heuristic.estimate(start.cell(), target, start.state())));
   }
 
   CompletableFuture<Tier2Result<T, D>> solve() {
@@ -141,7 +142,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
 
   private void pump() {
     try {
-      // Consume signals: each pass runs the loop until it hits a wait; re-run while new work arrived.
+      // Consume signals: each pass runs the loop until it hits a wait; re-run while new work
+      // arrived.
       while (signalled.compareAndSet(true, false)) {
         loop();
         if (result.isDone()) {
@@ -213,8 +215,12 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         continue;
       }
       if (expandedCount++ > maxCellsVisited) {
-        logger.debug("Tier2Search(agent:{},target:{}) visited cells ({}) > max ({})",
-            agent, target, expandedCount, maxCellsVisited);
+        logger.debug(
+            "Tier2Search(agent:{},target:{}) visited cells ({}) > max ({})",
+            agent,
+            target,
+            expandedCount,
+            maxCellsVisited);
         result.complete(Tier2Result.limitExceeded());
         return;
       }
@@ -226,7 +232,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     List<FutureOr<Collection<Movement<T>>>> results = new ArrayList<>(modes.size());
     boolean anyPending = false;
     for (Mode<A, T, D> mode : modes) {
-      FutureOr<Collection<Movement<T>>> movements = mode.step(agent, node.key.cell(), domain, node.key.state());
+      FutureOr<Collection<Movement<T>>> movements =
+          mode.step(agent, node.key.cell(), domain, node.key.state());
       results.add(movements);
       anyPending |= !movements.isImmediate();
     }
@@ -239,12 +246,13 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         }
       }
       CompletableFuture.allOf(pending.toArray(new CompletableFuture<?>[0]))
-          .whenComplete((ignored, error) -> {
-            if (error != null) {
-              result.completeExceptionally(error);
-            }
-            wake();
-          });
+          .whenComplete(
+              (ignored, error) -> {
+                if (error != null) {
+                  result.completeExceptionally(error);
+                }
+                wake();
+              });
       return;
     }
     relaxAll(node.key, unwrap(results));
@@ -265,9 +273,11 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
           continue; // resolved immediately as impassable
         }
       }
-      // A mode-scoped edge restriction (mining breakability) resolved as barred is dropped outright.
+      // A mode-scoped edge restriction (mining breakability) resolved as barred is dropped
+      // outright.
       CompletableFuture<Boolean> restricted = movement.restricted();
-      if (restricted != null && restricted.isDone()
+      if (restricted != null
+          && restricted.isDone()
           && !restricted.isCompletedExceptionally()
           && Boolean.TRUE.equals(restricted.getNow(Boolean.FALSE))) {
         continue;
@@ -276,14 +286,18 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       Node<T> neighbor = getOrCreate(key);
       neighbor.parents.put(parentKey, movement); // retained candidate parent
       if (restricted != null && !restricted.isDone()) {
-        watchEdge(parentKey, key, restricted); // pending: expand optimistically, drop the edge if barred
+        watchEdge(
+            parentKey, key, restricted); // pending: expand optimistically, drop the edge if barred
       }
       // Use the parent's current g: a repair may have raised it while these modes were pending.
       double tentative = parent.cost + movement.cost();
       if (tentative < neighbor.cost) {
         setBestParent(neighbor, parentKey, movement, tentative);
-        open.add(new Entry(key, tentative,
-            tentative + heuristicWeight * heuristic.estimate(cell, target, movement.state())));
+        open.add(
+            new Entry(
+                key,
+                tentative,
+                tentative + heuristicWeight * heuristic.estimate(cell, target, movement.state())));
       }
     }
   }
@@ -336,8 +350,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
 
   /**
    * Ensures a passability check for {@code cell} is under way. Returns {@code false} if the verdict
-   * resolved immediately as impassable (skip the cell), {@code true} otherwise (passable, or pending —
-   * expand optimistically).
+   * resolved immediately as impassable (skip the cell), {@code true} otherwise (passable, or
+   * pending — expand optimistically).
    */
   private boolean fireCheck(Cell cell) {
     FutureOr<Boolean> verdict = impassable(cell);
@@ -348,25 +362,32 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     }
     if (inFlight.add(cell)) {
       pendingChecks.incrementAndGet();
-      verdict.future().whenComplete((value, error) -> {
-        mailbox.add(new Verdict(cell, error == null && Boolean.TRUE.equals(value)));
-        pendingChecks.decrementAndGet();
-        wake();
-      });
+      verdict
+          .future()
+          .whenComplete(
+              (value, error) -> {
+                mailbox.add(new Verdict(cell, error == null && Boolean.TRUE.equals(value)));
+                pendingChecks.decrementAndGet();
+                wake();
+              });
     }
     return true; // optimistic
   }
 
-  /** Watches a pending mode-scoped edge restriction; if it resolves barred, that edge is dropped. */
-  private void watchEdge(CellState parentKey, CellState childKey, CompletableFuture<Boolean> restricted) {
+  /**
+   * Watches a pending mode-scoped edge restriction; if it resolves barred, that edge is dropped.
+   */
+  private void watchEdge(
+      CellState parentKey, CellState childKey, CompletableFuture<Boolean> restricted) {
     pendingChecks.incrementAndGet();
-    restricted.whenComplete((value, error) -> {
-      if (error == null && Boolean.TRUE.equals(value)) {
-        edgeMailbox.add(new EdgeRef(parentKey, childKey));
-      }
-      pendingChecks.decrementAndGet();
-      wake();
-    });
+    restricted.whenComplete(
+        (value, error) -> {
+          if (error == null && Boolean.TRUE.equals(value)) {
+            edgeMailbox.add(new EdgeRef(parentKey, childKey));
+          }
+          pendingChecks.decrementAndGet();
+          wake();
+        });
   }
 
   /** Combined verdict over all restrictions: impassable if any bars the cell. */
@@ -422,9 +443,10 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   }
 
   /**
-   * Repairs in place every node whose best route was invalidated (a cell removed above them, or their
-   * best edge dropped): re-parents each — via a mini-Dijkstra over the retained candidate edges — to
-   * the cheapest surviving route, or removes it if it has none left. No re-solve, no re-exploration.
+   * Repairs in place every node whose best route was invalidated (a cell removed above them, or
+   * their best edge dropped): re-parents each — via a mini-Dijkstra over the retained candidate
+   * edges — to the cheapest surviving route, or removes it if it has none left. No re-solve, no
+   * re-exploration.
    */
   private void repairFrom(Collection<CellState> invalidated) {
     // The dependent subtree: the invalidated nodes plus their best-parent descendants.
@@ -443,7 +465,11 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     if (affected.isEmpty()) {
       return;
     }
-    logger.trace("Tier2Search(agent:{},target:{}) repairing {} node(s) after a wall", agent, target, affected.size());
+    logger.trace(
+        "Tier2Search(agent:{},target:{}) repairing {} node(s) after a wall",
+        agent,
+        target,
+        affected.size());
 
     // Invalidate the subtree, seed each node from its surviving external parents, and index the
     // internal (affected→affected) edges for the mini-Dijkstra.
@@ -469,7 +495,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       }
     }
 
-    PriorityQueue<RepairEntry> queue = new PriorityQueue<>((a, b) -> Double.compare(a.cost(), b.cost()));
+    PriorityQueue<RepairEntry> queue =
+        new PriorityQueue<>((a, b) -> Double.compare(a.cost(), b.cost()));
     for (Map.Entry<CellState, Repair<T>> seed : tentative.entrySet()) {
       queue.add(new RepairEntry(seed.getKey(), seed.getValue().cost()));
     }
@@ -484,8 +511,11 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       Node<T> node = nodes.get(key);
       setBestParent(node, best.parent(), best.edge(), best.cost());
       if (!node.closed) {
-        open.add(new Entry(key, node.cost,
-            node.cost + heuristicWeight * heuristic.estimate(key.cell(), target, key.state())));
+        open.add(
+            new Entry(
+                key,
+                node.cost,
+                node.cost + heuristicWeight * heuristic.estimate(key.cell(), target, key.state())));
       }
       List<CellState> children = internalEdges.get(key);
       if (children == null) {
@@ -509,9 +539,15 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     }
   }
 
-  /** Records a candidate repair route for {@code key} via {@code parentKey}; true if it is a new best. */
+  /**
+   * Records a candidate repair route for {@code key} via {@code parentKey}; true if it is a new
+   * best.
+   */
   private boolean relaxRepair(
-      Map<CellState, Repair<T>> tentative, CellState key, CellState parentKey, Movement<T> edge,
+      Map<CellState, Repair<T>> tentative,
+      CellState key,
+      CellState parentKey,
+      Movement<T> edge,
       double parentG) {
     double g = parentG + edge.cost();
     Repair<T> current = tentative.get(key);
@@ -533,7 +569,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       if (node == null) {
         return false; // vanished under a repair
       }
-      if (hasRestrictions && !cursor.equals(start)
+      if (hasRestrictions
+          && !cursor.equals(start)
           && !Boolean.FALSE.equals(passability.get(cursor.cell()))) {
         return false; // cell unknown (or, defensively, impassable) — not yet confirmed
       }
@@ -551,7 +588,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private static boolean edgeConfirmed(CompletableFuture<Boolean> restricted) {
     return restricted == null
         || (restricted.isDone()
-            && (restricted.isCompletedExceptionally() || !Boolean.TRUE.equals(restricted.getNow(Boolean.FALSE))));
+            && (restricted.isCompletedExceptionally()
+                || !Boolean.TRUE.equals(restricted.getNow(Boolean.FALSE))));
   }
 
   private void finishSolved(CellState goal) {
@@ -576,15 +614,22 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     Node<T> node = nodes.get(cursor);
     while (node != null && node.bestParent != null) {
       Movement<T> movement = node.bestEdge;
-      steps.addFirst(new RawStep<>(
-          new Position<>(cursor.cell(), domain), movement.cost(), movement.time(), movement.payload()));
+      steps.addFirst(
+          new RawStep<>(
+              new Position<>(cursor.cell(), domain),
+              movement.cost(),
+              movement.time(),
+              movement.payload()));
       cursor = node.bestParent;
       node = nodes.get(cursor);
     }
     return new ArrayList<>(steps);
   }
 
-  /** A search node: its cost, its chosen parent, and — the key to correct repair — every candidate parent. */
+  /**
+   * A search node: its cost, its chosen parent, and — the key to correct repair — every candidate
+   * parent.
+   */
   private static final class Node<T> {
     final CellState key;
     double cost = Double.POSITIVE_INFINITY;
@@ -599,26 +644,19 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     }
   }
 
-  private record CellState(Cell cell, TraversalState state) {
-  }
+  private record CellState(Cell cell, TraversalState state) {}
 
-  private record Entry(CellState key, double currentCost, double estimatedTotalCost) {
-  }
+  private record Entry(CellState key, double currentCost, double estimatedTotalCost) {}
 
-  private record RepairEntry(CellState key, double cost) {
-  }
+  private record RepairEntry(CellState key, double cost) {}
 
-  private record Repair<T>(double cost, CellState parent, Movement<T> edge) {
-  }
+  private record Repair<T>(double cost, CellState parent, Movement<T> edge) {}
 
-  private record Verdict(Cell cell, boolean impassable) {
-  }
+  private record Verdict(Cell cell, boolean impassable) {}
 
-  private record EdgeRef(CellState parent, CellState child) {
-  }
+  private record EdgeRef(CellState parent, CellState child) {}
 
-  private record PendingModes<T>(
-      CellState node, List<FutureOr<Collection<Movement<T>>>> results) {
+  private record PendingModes<T>(CellState node, List<FutureOr<Collection<Movement<T>>>> results) {
     boolean ready() {
       for (FutureOr<Collection<Movement<T>>> movements : results) {
         if (!movements.isImmediate() && !movements.future().isDone()) {

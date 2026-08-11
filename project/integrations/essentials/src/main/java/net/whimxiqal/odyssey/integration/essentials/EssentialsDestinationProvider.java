@@ -19,11 +19,11 @@ import org.joml.Vector3i;
 
 /**
  * Surfaces Essentials teleports as navigation targets: {@code essentials → home → <name>} (one leaf
- * per the player's homes) and {@code essentials → spawn}. Navigating to one is gated by Odyssey's own
- * {@code odyssey.navigate.essentials.*} permission (default-allow) rather than the Essentials teleport
- * permission — so a player can walk to a place even where {@code /home}/{@code /spawn} is revoked (the
- * teleport transition still requires the Essentials permission). Destinations re-resolve on query, so
- * moving a home or the spawn is reflected without a restart.
+ * per the player's homes) and {@code essentials → spawn}. Navigating to one is gated by Odyssey's
+ * own {@code odyssey.navigate.essentials.*} permission (default-allow) rather than the Essentials
+ * teleport permission — so a player can walk to a place even where {@code /home}/{@code /spawn} is
+ * revoked (the teleport transition still requires the Essentials permission). Destinations
+ * re-resolve on query, so moving a home or the spawn is reflected without a restart.
  */
 final class EssentialsDestinationProvider implements PaperDestinationProvider {
 

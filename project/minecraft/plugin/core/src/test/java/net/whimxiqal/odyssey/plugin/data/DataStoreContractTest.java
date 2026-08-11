@@ -43,10 +43,8 @@ class DataStoreContractTest {
 
   static List<Arguments> backends() {
     return List.of(
-        Arguments.of(new Backend("sqlite",
-            (file, logger) -> new SqliteDataStore(file, logger))),
-        Arguments.of(new Backend("h2",
-            (file, logger) -> new H2DataStore(file, logger))));
+        Arguments.of(new Backend("sqlite", (file, logger) -> new SqliteDataStore(file, logger))),
+        Arguments.of(new Backend("h2", (file, logger) -> new H2DataStore(file, logger))));
   }
 
   private static DataStore opened(Backend backend, Path dir) {
@@ -104,7 +102,8 @@ class DataStoreContractTest {
       assertTrue(found.isPresent());
       assertEquals("minecraft:the_nether", found.get().world());
       assertEquals(2, found.get().x());
-      assertEquals(1, store.waypoints().ownedBy(owner).size(), "upsert must not create a duplicate");
+      assertEquals(
+          1, store.waypoints().ownedBy(owner).size(), "upsert must not create a duplicate");
     } finally {
       store.close();
     }
@@ -150,15 +149,30 @@ class DataStoreContractTest {
   void portalTransitionAddIsIdempotentAndClears(Backend backend, @TempDir Path dir) {
     DataStore store = opened(backend, dir);
     try {
-      PortalTransition portal = new PortalTransition(
-          "minecraft:overworld", 10, 60, 10, 11, 62, 10, "minecraft:the_nether", 1, 60, 1, 5.0);
+      PortalTransition portal =
+          new PortalTransition(
+              "minecraft:overworld", 10, 60, 10, 11, 62, 10, "minecraft:the_nether", 1, 60, 1, 5.0);
       store.portalTransitions().add(portal);
       store.portalTransitions().add(portal); // identical — must not duplicate
       assertEquals(List.of(portal), store.portalTransitions().all());
 
       // A different arrival is a distinct transition.
-      store.portalTransitions().add(new PortalTransition(
-          "minecraft:overworld", 10, 60, 10, 11, 62, 10, "minecraft:the_nether", 2, 60, 2, 5.0));
+      store
+          .portalTransitions()
+          .add(
+              new PortalTransition(
+                  "minecraft:overworld",
+                  10,
+                  60,
+                  10,
+                  11,
+                  62,
+                  10,
+                  "minecraft:the_nether",
+                  2,
+                  60,
+                  2,
+                  5.0));
       assertEquals(2, store.portalTransitions().all().size());
 
       assertEquals(2, store.portalTransitions().clear());

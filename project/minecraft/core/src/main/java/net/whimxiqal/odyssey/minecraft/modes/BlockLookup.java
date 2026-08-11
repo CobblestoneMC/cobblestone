@@ -13,12 +13,13 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import net.whimxiqal.odyssey.Cell;
 import net.whimxiqal.odyssey.FutureOr;
-import net.whimxiqal.odyssey.minecraft.UnknownBlock;
 import net.whimxiqal.odyssey.minecraft.MinecraftBlock;
 import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
+import net.whimxiqal.odyssey.minecraft.UnknownBlock;
 
 /**
- * Fetches the set of blocks a mode needs for one expansion and packages them as a {@link BlockView}.
+ * Fetches the set of blocks a mode needs for one expansion and packages them as a {@link
+ * BlockView}.
  *
  * <p>The result is {@link FutureOr#isImmediate() immediate} when every block was a cache hit — the
  * common case — and pending only when at least one block is being loaded, in which case the search
@@ -26,8 +27,7 @@ import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
  */
 final class BlockLookup {
 
-  private BlockLookup() {
-  }
+  private BlockLookup() {}
 
   static FutureOr<BlockView> fetch(MinecraftWorld world, Collection<Cell> cells) {
     Map<Cell, MinecraftBlock> immediate = new HashMap<>();
@@ -45,11 +45,13 @@ final class BlockLookup {
     }
     CompletableFuture<BlockView> combined =
         CompletableFuture.allOf(pending.values().toArray(new CompletableFuture<?>[0]))
-            .thenApply(ignored -> {
-              Map<Cell, MinecraftBlock> merged = new HashMap<>(immediate);
-              pending.forEach((cell, future) -> merged.put(cell, future.getNow(UnknownBlock.INSTANCE)));
-              return new BlockView(merged);
-            });
+            .thenApply(
+                ignored -> {
+                  Map<Cell, MinecraftBlock> merged = new HashMap<>(immediate);
+                  pending.forEach(
+                      (cell, future) -> merged.put(cell, future.getNow(UnknownBlock.INSTANCE)));
+                  return new BlockView(merged);
+                });
     return FutureOr.ofFuture(combined);
   }
 }

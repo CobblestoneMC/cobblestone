@@ -20,11 +20,11 @@ import java.util.function.Predicate;
  * An abstract, reusable, unit-testable shortest-path engine over a lazily-described directed graph
  * with non-negative edge costs (Dijkstra's algorithm).
  *
- * <p>Subclasses describe the graph on demand via {@link #outboundEdges}, {@link #head}, and
- * {@link #cost} — nodes and edges are never enumerated up front, so an effectively-infinite graph
+ * <p>Subclasses describe the graph on demand via {@link #outboundEdges}, {@link #head}, and {@link
+ * #cost} — nodes and edges are never enumerated up front, so an effectively-infinite graph
  * (Odyssey's Tier-1 transition graph) can be searched by materializing only the frontier actually
- * reached. Edge costs may be {@link Double#POSITIVE_INFINITY} to mark an edge as untraversable; such
- * edges are skipped.
+ * reached. Edge costs may be {@link Double#POSITIVE_INFINITY} to mark an edge as untraversable;
+ * such edges are skipped.
  *
  * <p>Node type {@code N} must provide value-based {@code equals}/{@code hashCode}.
  *
@@ -50,8 +50,8 @@ public abstract class Graph<N, E> {
   protected abstract N head(E edge);
 
   /**
-   * Returns the non-negative cost of traversing {@code edge}, possibly
-   * {@link Double#POSITIVE_INFINITY} to mark it untraversable.
+   * Returns the non-negative cost of traversing {@code edge}, possibly {@link
+   * Double#POSITIVE_INFINITY} to mark it untraversable.
    *
    * @param edge the edge
    * @return the edge cost
@@ -115,9 +115,7 @@ public abstract class Graph<N, E> {
     return new GraphPath<>(new ArrayList<>(nodes), new ArrayList<>(edges));
   }
 
-  private record Frontier<N>(N node, double dist) {
-  }
+  private record Frontier<N>(N node, double dist) {}
 
-  private record Backlink<N, E>(N from, E edge) {
-  }
+  private record Backlink<N, E>(N from, E edge) {}
 }

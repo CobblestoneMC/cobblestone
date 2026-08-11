@@ -14,8 +14,8 @@ import net.kyori.adventure.audience.Audience;
  * to talk to them.
  *
  * <p>This is intentionally minimal for now. As the Trip subsystem lands (Phase 6c), it gains
- * accessors for particle/output helpers, config, and i18n so navigator authors can render and prompt
- * without reaching back into a specific platform.
+ * accessors for particle/output helpers, config, and i18n so navigator authors can render and
+ * prompt without reaching back into a specific platform.
  *
  * @param <P> the native player type (e.g. {@code org.bukkit.entity.Player})
  */

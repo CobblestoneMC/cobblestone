@@ -17,7 +17,6 @@ import net.whimxiqal.odyssey.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
 import net.whimxiqal.odyssey.minecraft.MinecraftAgent;
 import net.whimxiqal.odyssey.minecraft.MinecraftBlock;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
 import net.whimxiqal.odyssey.minecraft.MinecraftKeys;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
@@ -76,7 +75,11 @@ final class FallMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
   }
 
   private void addFall(
-      Cell from, Cell entry, BlockView view, TraversalState state, double stepOff,
+      Cell from,
+      Cell entry,
+      BlockView view,
+      TraversalState state,
+      double stepOff,
       List<Movement<MinecraftStepPayload>> moves) {
     for (int d = 0; d <= MAX_FALL_SCAN; d++) {
       Cell here = entry.plus(0, -d, 0);
@@ -98,8 +101,13 @@ final class FallMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
   }
 
   private void addLanding(
-      Cell landing, int distance, double stepOff, boolean onSolid, BlockView view,
-      TraversalState state, List<Movement<MinecraftStepPayload>> moves) {
+      Cell landing,
+      int distance,
+      double stepOff,
+      boolean onSolid,
+      BlockView view,
+      TraversalState state,
+      List<Movement<MinecraftStepPayload>> moves) {
     if (distance < 2) {
       return; // one-block drops are WalkMode's job
     }
@@ -109,8 +117,10 @@ final class FallMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
     double cost = stepOff + MovementCosts.FALL_PER_BLOCK * distance;
     if (onSolid) {
       double damageHalfHearts = Math.max(0, distance - MovementCosts.SAFE_FALL_BLOCKS);
-      cost += MovementCosts.DAMAGE_COST_MULTIPLIER
-          * MovementCosts.HEAL_SECONDS_PER_HALF_HEART * damageHalfHearts;
+      cost +=
+          MovementCosts.DAMAGE_COST_MULTIPLIER
+              * MovementCosts.HEAL_SECONDS_PER_HALF_HEART
+              * damageHalfHearts;
     }
     moves.add(move(landing, cost, MinecraftStepType.FALL, state));
   }

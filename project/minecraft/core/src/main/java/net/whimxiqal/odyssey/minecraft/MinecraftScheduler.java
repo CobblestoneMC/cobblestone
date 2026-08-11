@@ -11,8 +11,9 @@ import net.whimxiqal.odyssey.Position;
 import net.whimxiqal.odyssey.Scheduler;
 
 /**
- * The Minecraft {@link Scheduler}, adding location-aware scheduling so world state can be read on the
- * thread that owns a location (Paper: main thread; Folia: the owning region; Sponge: server thread).
+ * The Minecraft {@link Scheduler}, adding location-aware scheduling so world state can be read on
+ * the thread that owns a location (Paper: main thread; Folia: the owning region; Sponge: server
+ * thread).
  */
 public interface MinecraftScheduler<E> extends Scheduler {
 
@@ -32,8 +33,9 @@ public interface MinecraftScheduler<E> extends Scheduler {
   void runGlobal(Runnable task);
 
   /**
-   * Runs a task repeatedly on the thread that owns the given location, until cancelled. Used to tick
-   * a trip's navigator (rendering the trail). The period is in server ticks (20 ticks per second).
+   * Runs a task repeatedly on the thread that owns the given location, until cancelled. Used to
+   * tick a trip's navigator (rendering the trail). The period is in server ticks (20 ticks per
+   * second).
    *
    * @param position the location whose owning thread runs the task
    * @param task the task to run each period
@@ -43,11 +45,7 @@ public interface MinecraftScheduler<E> extends Scheduler {
   ScheduledTaskHandle runAtPositionRepeating(
       Position<? extends MinecraftWorld> position, Runnable task, long periodTicks);
 
-  void runAtEntity(
-      E entity, Runnable task
-  );
+  void runAtEntity(E entity, Runnable task);
 
-  ScheduledTaskHandle runAtEntityRepeating(
-      E entity, Runnable task, long periodTicks
-  );
+  ScheduledTaskHandle runAtEntityRepeating(E entity, Runnable task, long periodTicks);
 }

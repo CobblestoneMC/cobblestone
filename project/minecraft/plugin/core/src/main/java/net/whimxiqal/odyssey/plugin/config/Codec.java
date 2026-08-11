@@ -12,8 +12,8 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Converts a raw YAML node (the loosely-typed {@code String}/{@code Number}/{@code Boolean}/
- * {@code List}/{@code Map} that a YAML parser yields) into a typed config value.
+ * Converts a raw YAML node (the loosely-typed {@code String}/{@code Number}/{@code Boolean}/ {@code
+ * List}/{@code Map} that a YAML parser yields) into a typed config value.
  *
  * <p>A codec throws {@link IllegalArgumentException} when the raw value cannot be interpreted; the
  * {@link ConfigManager} catches that, logs it, and falls back to the key's default.
@@ -132,7 +132,11 @@ public interface Codec<V> {
         }
       }
       throw new IllegalArgumentException(
-          "expected one of " + java.util.Arrays.toString(type.getEnumConstants()) + " but got '" + raw + "'");
+          "expected one of "
+              + java.util.Arrays.toString(type.getEnumConstants())
+              + " but got '"
+              + raw
+              + "'");
     };
   }
 

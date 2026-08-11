@@ -39,55 +39,70 @@ final class JdbcPortalTransitionDao implements PortalTransitionDao {
 
   @Override
   public void add(PortalTransition transition) {
-    store.inTransaction("add portal transition", connection -> {
-      try (PreparedStatement exists = connection.prepareStatement(EXISTS)) {
-        bindKey(exists, transition);
-        try (ResultSet rows = exists.executeQuery()) {
-          if (rows.next() && rows.getInt(1) > 0) {
-            return null; // already recorded
+    store.inTransaction(
+        "add portal transition",
+        connection -> {
+          try (PreparedStatement exists = connection.prepareStatement(EXISTS)) {
+            bindKey(exists, transition);
+            try (ResultSet rows = exists.executeQuery()) {
+              if (rows.next() && rows.getInt(1) > 0) {
+                return null; // already recorded
+              }
+            }
           }
-        }
-      }
-      try (PreparedStatement insert = connection.prepareStatement(INSERT)) {
-        bindKey(insert, transition);
-        insert.setDouble(12, transition.cost());
-        insert.executeUpdate();
-      }
-      return null;
-    });
+          try (PreparedStatement insert = connection.prepareStatement(INSERT)) {
+            bindKey(insert, transition);
+            insert.setDouble(12, transition.cost());
+            insert.executeUpdate();
+          }
+          return null;
+        });
   }
 
   @Override
   public List<PortalTransition> all() {
-    return store.query("list portal transitions", connection -> {
-      try (PreparedStatement select = connection.prepareStatement(SELECT_ALL);
-          ResultSet rows = select.executeQuery()) {
-        List<PortalTransition> result = new ArrayList<>();
-        while (rows.next()) {
-          result.add(new PortalTransition(
-              rows.getString("from_world"),
-              rows.getInt("min_x"), rows.getInt("min_y"), rows.getInt("min_z"),
-              rows.getInt("max_x"), rows.getInt("max_y"), rows.getInt("max_z"),
-              rows.getString("to_world"),
-              rows.getInt("to_x"), rows.getInt("to_y"), rows.getInt("to_z"),
-              rows.getDouble("cost")));
-        }
-        return result;
-      }
-    });
+    return store.query(
+        "list portal transitions",
+        connection -> {
+          try (PreparedStatement select = connection.prepareStatement(SELECT_ALL);
+              ResultSet rows = select.executeQuery()) {
+            List<PortalTransition> result = new ArrayList<>();
+            while (rows.next()) {
+              result.add(
+                  new PortalTransition(
+                      rows.getString("from_world"),
+                      rows.getInt("min_x"),
+                      rows.getInt("min_y"),
+                      rows.getInt("min_z"),
+                      rows.getInt("max_x"),
+                      rows.getInt("max_y"),
+                      rows.getInt("max_z"),
+                      rows.getString("to_world"),
+                      rows.getInt("to_x"),
+                      rows.getInt("to_y"),
+                      rows.getInt("to_z"),
+                      rows.getDouble("cost")));
+            }
+            return result;
+          }
+        });
   }
 
   @Override
   public int clear() {
-    return store.inTransaction("clear portal transitions", connection -> {
-      try (PreparedStatement delete = connection.prepareStatement("DELETE FROM odyssey_portal_transition")) {
-        return delete.executeUpdate();
-      }
-    });
+    return store.inTransaction(
+        "clear portal transitions",
+        connection -> {
+          try (PreparedStatement delete =
+              connection.prepareStatement("DELETE FROM odyssey_portal_transition")) {
+            return delete.executeUpdate();
+          }
+        });
   }
 
   /** Binds the 11 identity columns (everything but cost) in order, starting at index 1. */
-  private static void bindKey(PreparedStatement statement, PortalTransition transition) throws SQLException {
+  private static void bindKey(PreparedStatement statement, PortalTransition transition)
+      throws SQLException {
     statement.setString(1, transition.fromWorld());
     statement.setInt(2, transition.minX());
     statement.setInt(3, transition.minY());

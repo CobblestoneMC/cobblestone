@@ -28,9 +28,9 @@ import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
 
 /**
  * Discovers vanilla portal links empirically: no API reveals where a portal leads, so when a player
- * teleports through one this captures the entry portal (as a bounding box) and the arrival point, and
- * persists a one-way {@link PortalTransition}. The reverse direction is only learned when a player
- * travels back. Persisting is idempotent, so re-walking a known portal is a no-op.
+ * teleports through one this captures the entry portal (as a bounding box) and the arrival point,
+ * and persists a one-way {@link PortalTransition}. The reverse direction is only learned when a
+ * player travels back. Persisting is idempotent, so re-walking a known portal is a no-op.
  *
  * <p>Both {@link PlayerPortalEvent} and {@link PlayerTeleportEvent} are handled for coverage: the
  * former can arrive with an unresolved {@code getTo()} (skipped), the latter carries the real
@@ -42,8 +42,8 @@ final class PortalListener implements Listener {
       EnumSet.of(Material.NETHER_PORTAL, Material.END_PORTAL, Material.END_GATEWAY);
   private static final Set<TeleportCause> PORTAL_CAUSES =
       EnumSet.of(TeleportCause.NETHER_PORTAL, TeleportCause.END_PORTAL, TeleportCause.END_GATEWAY);
-  private static final int SEED_RADIUS = 2;   // where to look for the entry portal block near `from`
-  private static final int MAX_EXPAND = 64;   // cap the outward scan (nether portals top out at ~23)
+  private static final int SEED_RADIUS = 2; // where to look for the entry portal block near `from`
+  private static final int MAX_EXPAND = 64; // cap the outward scan (nether portals top out at ~23)
 
   private final PortalTransitionDao portals;
   private final MinecraftScheduler<?> scheduler;
@@ -52,8 +52,11 @@ final class PortalListener implements Listener {
   private final BooleanSupplier enabled;
 
   PortalListener(
-      PortalTransitionDao portals, MinecraftScheduler<?> scheduler, OdysseyLogger logger,
-      DoubleSupplier cost, BooleanSupplier enabled) {
+      PortalTransitionDao portals,
+      MinecraftScheduler<?> scheduler,
+      OdysseyLogger logger,
+      DoubleSupplier cost,
+      BooleanSupplier enabled) {
     this.portals = portals;
     this.scheduler = scheduler;
     this.logger = logger;
@@ -79,22 +82,36 @@ final class PortalListener implements Listener {
       return; // arrival not resolved on this event; another handler / direction will catch it
     }
     int[] box = scanPortalBox(from);
-    PortalTransition transition = new PortalTransition(
-        from.getWorld().getKey().asString(),
-        box[0], box[1], box[2], box[3], box[4], box[5],
-        to.getWorld().getKey().asString(), to.getBlockX(), to.getBlockY(), to.getBlockZ(),
-        cost.getAsDouble());
-    logger.debug("Discovered portal {} -> {}:{},{},{}", from.getWorld().getKey(),
-        to.getWorld().getKey(), to.getBlockX(), to.getBlockY(), to.getBlockZ());
+    PortalTransition transition =
+        new PortalTransition(
+            from.getWorld().getKey().asString(),
+            box[0],
+            box[1],
+            box[2],
+            box[3],
+            box[4],
+            box[5],
+            to.getWorld().getKey().asString(),
+            to.getBlockX(),
+            to.getBlockY(),
+            to.getBlockZ(),
+            cost.getAsDouble());
+    logger.debug(
+        "Discovered portal {} -> {}:{},{},{}",
+        from.getWorld().getKey(),
+        to.getWorld().getKey(),
+        to.getBlockX(),
+        to.getBlockY(),
+        to.getBlockZ());
     // Persist off the server thread; the block reads above already happened on it.
     scheduler.runAsync(() -> portals.add(transition));
   }
 
   /**
-   * Returns {@code {minX, minY, minZ, maxX, maxY, maxZ}} of the entry portal: it seeds on the portal
-   * block the player was in and expands outward in every axis while that <i>same</i> material
-   * continues, so a large nether portal is captured in full. Falls back to a single cell at
-   * {@code from} if no portal block is found nearby.
+   * Returns {@code {minX, minY, minZ, maxX, maxY, maxZ}} of the entry portal: it seeds on the
+   * portal block the player was in and expands outward in every axis while that <i>same</i>
+   * material continues, so a large nether portal is captured in full. Falls back to a single cell
+   * at {@code from} if no portal block is found nearby.
    */
   private static int[] scanPortalBox(Location from) {
     World world = from.getWorld();
@@ -110,12 +127,13 @@ final class PortalListener implements Listener {
     int sy = seed.getY();
     int sz = seed.getZ();
     return new int[] {
-        expand(world, material, sx, sy, sz, -1, 0, 0),
-        expand(world, material, sx, sy, sz, 0, -1, 0),
-        expand(world, material, sx, sy, sz, 0, 0, -1),
-        expand(world, material, sx, sy, sz, 1, 0, 0),
-        expand(world, material, sx, sy, sz, 0, 1, 0),
-        expand(world, material, sx, sy, sz, 0, 0, 1)};
+      expand(world, material, sx, sy, sz, -1, 0, 0),
+      expand(world, material, sx, sy, sz, 0, -1, 0),
+      expand(world, material, sx, sy, sz, 0, 0, -1),
+      expand(world, material, sx, sy, sz, 1, 0, 0),
+      expand(world, material, sx, sy, sz, 0, 1, 0),
+      expand(world, material, sx, sy, sz, 0, 0, 1)
+    };
   }
 
   /** The nearest portal block within {@link #SEED_RADIUS} of the given block, or {@code null}. */
@@ -133,8 +151,11 @@ final class PortalListener implements Listener {
     return null;
   }
 
-  /** Walks from the seed along one direction while the material continues; returns the moving coord. */
-  private static int expand(World world, Material material, int sx, int sy, int sz, int dx, int dy, int dz) {
+  /**
+   * Walks from the seed along one direction while the material continues; returns the moving coord.
+   */
+  private static int expand(
+      World world, Material material, int sx, int sy, int sz, int dx, int dy, int dz) {
     int cx = sx;
     int cy = sy;
     int cz = sz;

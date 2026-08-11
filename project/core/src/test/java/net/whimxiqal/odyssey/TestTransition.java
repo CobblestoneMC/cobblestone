@@ -19,5 +19,5 @@ record TestTransition(
     DomainRegion<TestDomain> origin,
     Position<TestDomain> destination,
     double cost,
-    TestStep payload) implements Transition<TestStep, TestDomain> {
-}
+    TestStep payload)
+    implements Transition<TestStep, TestDomain> {}

@@ -14,14 +14,14 @@ import java.util.concurrent.CompletableFuture;
  * The seam each platform (Paper/Folia, Sponge) fills to connect Odyssey's world model to the live
  * server. The chunk provider and world implementations are built on top of this.
  */
-public interface PlatformApi {
+public interface PlatformApi<E> {
 
   /**
    * Returns the platform scheduler.
    *
    * @return the scheduler
    */
-  MinecraftScheduler scheduler();
+  MinecraftScheduler<E> scheduler();
 
   /**
    * Fetches an immutable snapshot of the chunk at the given chunk coordinates, honoring the load

@@ -11,9 +11,9 @@ import java.nio.file.Path;
 import net.whimxiqal.odyssey.OdysseyLogger;
 
 /**
- * An H2-backed {@link net.whimxiqal.odyssey.plugin.data.DataStore}, stored in a single embedded file
- * (H2 appends its own {@code .mv.db} suffix). An alternative embedded backend to SQLite; the {@code
- * h2} driver is downloaded at runtime by the platform plugin's library loader.
+ * An H2-backed {@link net.whimxiqal.odyssey.plugin.data.DataStore}, stored in a single embedded
+ * file (H2 appends its own {@code .mv.db} suffix). An alternative embedded backend to SQLite; the
+ * {@code h2} driver is downloaded at runtime by the platform plugin's library loader.
  */
 public final class H2DataStore extends AbstractJdbcDataStore {
 

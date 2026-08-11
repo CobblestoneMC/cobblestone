@@ -23,8 +23,8 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 /**
- * The internal {@link PaperOdysseySearchModifier} that surfaces Odyssey's discovered portal links to
- * searches. Registered as a Bukkit service like any third-party modifier; it reads the persisted
+ * The internal {@link PaperOdysseySearchModifier} that surfaces Odyssey's discovered portal links
+ * to searches. Registered as a Bukkit service like any third-party modifier; it reads the persisted
  * transitions on demand, skipping any whose worlds are currently unloaded.
  */
 public final class PortalTransitionProvider implements PaperOdysseySearchModifier {
@@ -51,9 +51,10 @@ public final class PortalTransitionProvider implements PaperOdysseySearchModifie
       if (fromWorld == null || toWorld == null) {
         continue; // a world unloaded since discovery; skip until it is back
       }
-      BoxWorldRegion origin = BoxWorldRegion.of(
-          new Location(fromWorld, portal.minX(), portal.minY(), portal.minZ()),
-          new Location(fromWorld, portal.maxX(), portal.maxY(), portal.maxZ()));
+      BoxWorldRegion origin =
+          BoxWorldRegion.of(
+              new Location(fromWorld, portal.minX(), portal.minY(), portal.minZ()),
+              new Location(fromWorld, portal.maxX(), portal.maxY(), portal.maxZ()));
       Location destination = new Location(toWorld, portal.toX(), portal.toY(), portal.toZ());
       result.add(PaperTransition.of(origin, destination, portal.cost(), PORTAL_PAYLOAD));
     }

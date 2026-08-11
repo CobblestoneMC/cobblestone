@@ -12,13 +12,13 @@ import net.whimxiqal.odyssey.Domain;
 import net.whimxiqal.odyssey.FutureOr;
 
 /**
- * A Minecraft world — the single concrete {@link Domain} type for the Minecraft embedder. Dimensions
- * are distinguished by {@link #environment()}, never by subtyping (so the {@code D} generic stays a
- * single type across a search).
+ * A Minecraft world — the single concrete {@link Domain} type for the Minecraft embedder.
+ * Dimensions are distinguished by {@link #environment()}, never by subtyping (so the {@code D}
+ * generic stays a single type across a search).
  *
- * <p>A world is also the block-access handle a mode uses: {@link #blockAt(Cell)} returns a
- * {@link FutureOr} that is immediate on a cache hit and pending on a miss (the platform's chunk
- * provider backs it). Equality/hash are by the world's namespaced {@link #key()}.
+ * <p>A world is also the block-access handle a mode uses: {@link #blockAt(Cell)} returns a {@link
+ * FutureOr} that is immediate on a cache hit and pending on a miss (the platform's chunk provider
+ * backs it). Equality/hash are by the world's namespaced {@link #key()}.
  */
 public interface MinecraftWorld extends Domain {
 
@@ -37,8 +37,8 @@ public interface MinecraftWorld extends Domain {
   Environment environment();
 
   /**
-   * Returns the block at {@code cell}, possibly pending on a chunk fetch. An unavailable cell (chunk
-   * not loaded under the configured policy) resolves to an impassable "unknown" block.
+   * Returns the block at {@code cell}, possibly pending on a chunk fetch. An unavailable cell
+   * (chunk not loaded under the configured policy) resolves to an impassable "unknown" block.
    *
    * @param cell the cell
    * @return the block, immediate or pending

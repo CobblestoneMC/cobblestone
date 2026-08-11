@@ -11,5 +11,4 @@ import net.whimxiqal.odyssey.plugin.api.NavigatorFactory;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
-public interface PaperNavigatorFactory extends NavigatorFactory<Player, Location> {
-}
+public interface PaperNavigatorFactory extends NavigatorFactory<Player, Location> {}

@@ -7,12 +7,11 @@
 
 package net.whimxiqal.odyssey.paper.plugin.api;
 
+import java.util.Collection;
 import net.whimxiqal.odyssey.plugin.api.DestinationTree;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.joml.Vector3i;
-
-import java.util.Collection;
 
 public interface PaperDestinationProvider {
 
@@ -23,5 +22,4 @@ public interface PaperDestinationProvider {
    * @return the (lazily-evaluated) tree
    */
   Collection<DestinationTree<World, Vector3i>> provide(Player player);
-
 }

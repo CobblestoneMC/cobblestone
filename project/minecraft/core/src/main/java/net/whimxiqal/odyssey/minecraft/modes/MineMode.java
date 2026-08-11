@@ -33,9 +33,9 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
  *
  * <p>An optional {@link BreakChecker} lets integrations forbid breaking specific blocks
  * asynchronously (protected regions, man-made block types). The mode does not wait on it: it emits
- * the mining edge <b>optimistically</b> and attaches the check as the movement's
- * {@link Movement#restricted() restricted} future (the logical OR of the feet/head block checks), so
- * the search drops just that edge if the block turns out barred. With no checker (the common case) no
+ * the mining edge <b>optimistically</b> and attaches the check as the movement's {@link
+ * Movement#restricted() restricted} future (the logical OR of the feet/head block checks), so the
+ * search drops just that edge if the block turns out barred. With no checker (the common case) no
  * future is attached at all. Odyssey never actually breaks blocks — this only routes through blocks
  * the player is expected to mine.
  *
@@ -71,15 +71,15 @@ final class MineMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
     List<Movement<MinecraftStepPayload>> moves = new ArrayList<>();
     for (int[] dir : HORIZONTAL) {
       Cell dest = from.plus(dir[0], 0, dir[1]);
-      Movement<MinecraftStepPayload> move = mineMove(agent, world, state, view, dest,
-          MovementCosts.WALK, dest, dest.plus(0, 1, 0));
+      Movement<MinecraftStepPayload> move =
+          mineMove(agent, world, state, view, dest, MovementCosts.WALK, dest, dest.plus(0, 1, 0));
       if (move != null) {
         moves.add(move);
       }
     }
     Cell down = from.plus(0, -1, 0);
-    Movement<MinecraftStepPayload> move = mineMove(agent, world, state, view, down,
-        MovementCosts.FALL_PER_BLOCK, down);
+    Movement<MinecraftStepPayload> move =
+        mineMove(agent, world, state, view, down, MovementCosts.FALL_PER_BLOCK, down);
     if (move != null) {
       moves.add(move);
     }
@@ -92,8 +92,13 @@ final class MineMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
    * async breakability check is attached to the movement rather than awaited.
    */
   private Movement<MinecraftStepPayload> mineMove(
-      A agent, MinecraftWorld world, TraversalState state, BlockView view, Cell dest,
-      double moveCost, Cell... breakCells) {
+      A agent,
+      MinecraftWorld world,
+      TraversalState state,
+      BlockView view,
+      Cell dest,
+      double moveCost,
+      Cell... breakCells) {
     if (!view.at(dest, 0, -1, 0).isSolidTop()) {
       return null; // nothing to stand on after mining
     }
@@ -130,13 +135,15 @@ final class MineMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
     if (breakable.size() == 1) {
       return breakable.get(0).thenApply(allowed -> !allowed);
     }
-    return CompletableFuture.allOf(breakable.toArray(new CompletableFuture<?>[0])).thenApply(ignored -> {
-      for (CompletableFuture<Boolean> check : breakable) {
-        if (!Boolean.TRUE.equals(check.getNow(Boolean.TRUE))) {
-          return true; // a block may not be broken → the edge is restricted
-        }
-      }
-      return false;
-    });
+    return CompletableFuture.allOf(breakable.toArray(new CompletableFuture<?>[0]))
+        .thenApply(
+            ignored -> {
+              for (CompletableFuture<Boolean> check : breakable) {
+                if (!Boolean.TRUE.equals(check.getNow(Boolean.TRUE))) {
+                  return true; // a block may not be broken → the edge is restricted
+                }
+              }
+              return false;
+            });
   }
 }

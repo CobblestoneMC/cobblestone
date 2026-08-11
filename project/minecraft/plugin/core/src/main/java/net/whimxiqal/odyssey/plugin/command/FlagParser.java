@@ -18,13 +18,13 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 
 /**
  * Splits the raw tokens of a {@code /navigate} invocation into the positional destination arguments
- * and the {@link NavigationFlags}. Any token starting with {@code -} is a flag; everything else is a
- * destination token (fed to the {@code DestinationResolver}).
+ * and the {@link NavigationFlags}. Any token starting with {@code -} is a flag; everything else is
+ * a destination token (fed to the {@code DestinationResolver}).
  *
  * <p>Recognized flags: {@code -navigator <id>}, {@code -no-world <world>}, {@code -no-dimension
  * <dim>}, {@code -no-mode <mode>}, {@code -live}, plus per-mode aliases {@code -no-<mode>} (e.g.
- * {@code -no-fly} ⇒ {@code -no-mode fly}). Parsing is platform-neutral and returns structured errors
- * so the command layer can localize them.
+ * {@code -no-fly} ⇒ {@code -no-mode fly}). Parsing is platform-neutral and returns structured
+ * errors so the command layer can localize them.
  */
 public final class FlagParser {
 
@@ -46,8 +46,7 @@ public final class FlagParser {
     MODE_WORDS.put("door", MinecraftStepType.OPEN_DOOR);
   }
 
-  private FlagParser() {
-  }
+  private FlagParser() {}
 
   /** Why a parse failed. */
   public enum Error {
@@ -60,8 +59,7 @@ public final class FlagParser {
   }
 
   /** The result of a parse: {@link Parsed} on success, {@link Invalid} otherwise. */
-  public sealed interface Result {
-  }
+  public sealed interface Result {}
 
   /**
    * A successful parse.
@@ -69,8 +67,7 @@ public final class FlagParser {
    * @param destination the positional destination tokens, in order
    * @param flags the parsed flags
    */
-  public record Parsed(List<String> destination, NavigationFlags flags) implements Result {
-  }
+  public record Parsed(List<String> destination, NavigationFlags flags) implements Result {}
 
   /**
    * A failed parse.
@@ -78,8 +75,7 @@ public final class FlagParser {
    * @param error what went wrong
    * @param token the offending token (the flag, or the bad value)
    */
-  public record Invalid(Error error, String token) implements Result {
-  }
+  public record Invalid(Error error, String token) implements Result {}
 
   /** The set of accepted mode words (for tab-completion of {@code -no-mode}). */
   public static Set<String> modeWords() {
@@ -151,7 +147,9 @@ public final class FlagParser {
       }
     }
 
-    return new Parsed(List.copyOf(destination),
-        new NavigationFlags(excludedModes, excludedWorlds, excludedDimensions, navigator, liveness));
+    return new Parsed(
+        List.copyOf(destination),
+        new NavigationFlags(
+            excludedModes, excludedWorlds, excludedDimensions, navigator, liveness));
   }
 }

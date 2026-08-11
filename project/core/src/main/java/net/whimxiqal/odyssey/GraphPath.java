@@ -10,18 +10,15 @@ package net.whimxiqal.odyssey;
 import java.util.List;
 
 /**
- * The result of a {@link Graph} shortest-path query: an alternating sequence
- * <i>node, edge, node, …, node</i>.
+ * The result of a {@link Graph} shortest-path query: an alternating sequence <i>node, edge, node,
+ * …, node</i>.
  *
- * <p>
- * {@code nodes} always has exactly one more element than {@code edges}:
- * {@code edges.get(i)}
+ * <p>{@code nodes} always has exactly one more element than {@code edges}: {@code edges.get(i)}
  * connects {@code nodes.get(i)} to {@code nodes.get(i + 1)}.
  *
- * @param <N>   the node type
- * @param <E>   the edge type
- * @param nodes the ordered nodes, source first and goal last (size
- *              {@code edges.size() + 1})
+ * @param <N> the node type
+ * @param <E> the edge type
+ * @param nodes the ordered nodes, source first and goal last (size {@code edges.size() + 1})
  * @param edges the ordered edges between consecutive nodes
  */
 public record GraphPath<N, E>(List<N> nodes, List<E> edges) {
@@ -38,7 +35,9 @@ public record GraphPath<N, E>(List<N> nodes, List<E> edges) {
     if (nodes.size() != edges.size() + 1) {
       throw new IllegalArgumentException(
           "nodes must have exactly one more element than edges: "
-              + nodes.size() + " vs " + edges.size());
+              + nodes.size()
+              + " vs "
+              + edges.size());
     }
   }
 }

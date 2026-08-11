@@ -10,8 +10,7 @@ package net.whimxiqal.odyssey.minecraft;
 /** Factory helpers producing {@link MinecraftBlock}s for mode tests. */
 public final class TestBlocks {
 
-  private TestBlocks() {
-  }
+  private TestBlocks() {}
 
   static MinecraftBlock air() {
     return new MinecraftBlock() {

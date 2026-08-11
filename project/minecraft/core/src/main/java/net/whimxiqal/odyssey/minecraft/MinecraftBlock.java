@@ -13,9 +13,9 @@ package net.whimxiqal.odyssey.minecraft;
  * by modes composing several {@code MinecraftBlock} lookups.
  *
  * <p>Many methods have sensible defaults so a platform implementation only overrides what differs
- * from a plain solid block. Facts that depend on the live block state (passability, door open/closed,
- * break time) are computed by the platform; material-level traits (danger, speed factor, climbable,
- * boat support) may come from a shared trait table.
+ * from a plain solid block. Facts that depend on the live block state (passability, door
+ * open/closed, break time) are computed by the platform; material-level traits (danger, speed
+ * factor, climbable, boat support) may come from a shared trait table.
  */
 public interface MinecraftBlock {
 
@@ -65,8 +65,8 @@ public interface MinecraftBlock {
   }
 
   /**
-   * Returns whether the body can exit this block toward the given side. Defaults to
-   * {@link #isPassable()}.
+   * Returns whether the body can exit this block toward the given side. Defaults to {@link
+   * #isPassable()}.
    *
    * @param to the side exited toward
    * @return {@code true} if exitable toward that side
@@ -104,8 +104,8 @@ public interface MinecraftBlock {
   }
 
   /**
-   * Returns the time in seconds to break this block with the assumed (stone) tool, or
-   * {@link Double#POSITIVE_INFINITY} if unbreakable.
+   * Returns the time in seconds to break this block with the assumed (stone) tool, or {@link
+   * Double#POSITIVE_INFINITY} if unbreakable.
    *
    * @return the break time in seconds
    */

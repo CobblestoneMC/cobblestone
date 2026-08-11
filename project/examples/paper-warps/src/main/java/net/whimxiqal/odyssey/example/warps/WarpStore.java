@@ -54,8 +54,14 @@ final class WarpStore {
     loadDestinations(yaml.getConfigurationSection("destinations"));
     loadWarps(yaml.getConfigurationSection("warps"));
     loadPortals(yaml.getConfigurationSection("portals"));
-    logger.info("Loaded " + destinations.size() + " destination(s), " + warps.size()
-        + " warp(s), " + portals.size() + " portal(s).");
+    logger.info(
+        "Loaded "
+            + destinations.size()
+            + " destination(s), "
+            + warps.size()
+            + " warp(s), "
+            + portals.size()
+            + " portal(s).");
   }
 
   private void loadDestinations(ConfigurationSection root) {
@@ -67,9 +73,16 @@ final class WarpStore {
       if (d == null) {
         continue;
       }
-      destinations.put(key(name), new Destination(key(name), d.getString("world", ""),
-          d.getDouble("x"), d.getDouble("y"), d.getDouble("z"),
-          (float) d.getDouble("yaw"), (float) d.getDouble("pitch")));
+      destinations.put(
+          key(name),
+          new Destination(
+              key(name),
+              d.getString("world", ""),
+              d.getDouble("x"),
+              d.getDouble("y"),
+              d.getDouble("z"),
+              (float) d.getDouble("yaw"),
+              (float) d.getDouble("pitch")));
     }
   }
 
@@ -82,9 +95,17 @@ final class WarpStore {
       if (w == null) {
         continue;
       }
-      warps.put(key(name), new Warp(key(name), w.getString("world", ""),
-          w.getDouble("x"), w.getDouble("y"), w.getDouble("z"),
-          (float) w.getDouble("yaw"), (float) w.getDouble("pitch"), w.getDouble("cost", 5.0)));
+      warps.put(
+          key(name),
+          new Warp(
+              key(name),
+              w.getString("world", ""),
+              w.getDouble("x"),
+              w.getDouble("y"),
+              w.getDouble("z"),
+              (float) w.getDouble("yaw"),
+              (float) w.getDouble("pitch"),
+              w.getDouble("cost", 5.0)));
     }
   }
 
@@ -97,10 +118,19 @@ final class WarpStore {
       if (p == null) {
         continue;
       }
-      portals.put(key(name), new Portal(key(name), p.getString("world", ""),
-          p.getInt("minX"), p.getInt("minY"), p.getInt("minZ"),
-          p.getInt("maxX"), p.getInt("maxY"), p.getInt("maxZ"),
-          key(p.getString("destination", "")), p.getDouble("cost", 5.0)));
+      portals.put(
+          key(name),
+          new Portal(
+              key(name),
+              p.getString("world", ""),
+              p.getInt("minX"),
+              p.getInt("minY"),
+              p.getInt("minZ"),
+              p.getInt("maxX"),
+              p.getInt("maxY"),
+              p.getInt("maxZ"),
+              key(p.getString("destination", "")),
+              p.getDouble("cost", 5.0)));
     }
   }
 

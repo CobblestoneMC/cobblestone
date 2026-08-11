@@ -67,7 +67,8 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
     // The transition registry is owned by the plugin; the platform API only reads from / registers
     // into it (design/05). Both are reachable to other plugins via the registered plugin API.
     this.platformApi = new PaperOdysseyApiImpl(this, logger);
-    getServer().getServicesManager()
+    getServer()
+        .getServicesManager()
         .register(PaperOdysseyApi.class, this.platformApi, this, ServicePriority.Normal);
 
     // Waypoints are surfaced to searches like any third-party provider — via the same registration
@@ -77,48 +78,84 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
     Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
     Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), logger);
 
-    // Trips tick on the platform scheduler (Folia-safe region tasks); the default trail navigator is
+    // Trips tick on the platform scheduler (Folia-safe region tasks); the default trail navigator
+    // is
     // registered as a service so it is discovered like any third-party navigator.
-    this.tripManager = new TripManager<>(platformApi.scheduler(),
-        config.get(keys.tripsMaxActivePerPlayer));
+    this.tripManager =
+        new TripManager<>(platformApi.scheduler(), config.get(keys.tripsMaxActivePerPlayer));
     Odyssey.register(this, new PaperTrailNavigatorFactory(config, keys, messages));
 
     // Discovered vanilla portals are surfaced to searches as an internal transition provider, and
     // learned from player teleports by the portal listener.
     Odyssey.register(this, new PortalTransitionProvider(dataStore.portalTransitions()));
-    getServer().getPluginManager().registerEvents(
-        new PortalListener(dataStore.portalTransitions(), platformApi.scheduler(), logger,
-            () -> config.get(keys.portalsCostSeconds), () -> config.get(keys.portalsDiscovery)), this);
+    getServer()
+        .getPluginManager()
+        .registerEvents(
+            new PortalListener(
+                dataStore.portalTransitions(),
+                platformApi.scheduler(),
+                logger,
+                () -> config.get(keys.portalsCostSeconds),
+                () -> config.get(keys.portalsDiscovery)),
+            this);
 
-    getServer().getPluginManager().registerEvents(
-        new OdysseyListener(tripManager, searchRegistry), this);
+    getServer()
+        .getPluginManager()
+        .registerEvents(new OdysseyListener(tripManager, searchRegistry), this);
 
     SearchGate searchGate = new SearchGate(config.get(keys.searchMaxConcurrentPerPlayer));
     long liveIntervalMillis = config.get(keys.tripsLiveIntervalTicks) * 50L; // 50 ms per tick
-    Supplier<SearchSettings> searchSettings = () -> SearchSettings.builder()
-        .maxCellsVisited(config.get(keys.algorithmMaxCellsVisited))
-        .maxWallClockMillis(config.get(keys.algorithmMaxWallClockSeconds) * 1000L)
-        .tier1RecalcThreshold(config.get(keys.algorithmTier1RecalcThreshold))
-        .runningAverageWidth(config.get(keys.algorithmRunningAverageWidth))
-        .heuristicWeight(config.get(keys.algorithmHeuristicWeight))
-        .build();
-    getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
-      event.registrar().register(
-          OdysseyCommand.build(config, keys, messages, logger, dataStore.waypoints(),
-              dataStore.portalTransitions(), tripManager, searchRegistry),
-          "Odyssey admin and utility commands",
-          List.of("ody"));
-      event.registrar().register(
-          NavigateCommand.build(platformApi, tripManager, searchRegistry, searchGate,
-              liveIntervalMillis, searchSettings, logger, messages),
-          "Navigate to a destination",
-          List.of("nav"));
-    });
+    Supplier<SearchSettings> searchSettings =
+        () ->
+            SearchSettings.builder()
+                .maxCellsVisited(config.get(keys.algorithmMaxCellsVisited))
+                .maxWallClockMillis(config.get(keys.algorithmMaxWallClockSeconds) * 1000L)
+                .tier1RecalcThreshold(config.get(keys.algorithmTier1RecalcThreshold))
+                .runningAverageWidth(config.get(keys.algorithmRunningAverageWidth))
+                .heuristicWeight(config.get(keys.algorithmHeuristicWeight))
+                .build();
+    getLifecycleManager()
+        .registerEventHandler(
+            LifecycleEvents.COMMANDS,
+            event -> {
+              event
+                  .registrar()
+                  .register(
+                      OdysseyCommand.build(
+                          config,
+                          keys,
+                          messages,
+                          logger,
+                          dataStore.waypoints(),
+                          dataStore.portalTransitions(),
+                          tripManager,
+                          searchRegistry),
+                      "Odyssey admin and utility commands",
+                      List.of("ody"));
+              event
+                  .registrar()
+                  .register(
+                      NavigateCommand.build(
+                          platformApi,
+                          tripManager,
+                          searchRegistry,
+                          searchGate,
+                          liveIntervalMillis,
+                          searchSettings,
+                          logger,
+                          messages),
+                      "Navigate to a destination",
+                      List.of("nav"));
+            });
 
     if (config.get(keys.metricsEnabled)) {
-      this.metrics = new OdysseyMetrics(this,
-          config.get(keys.dataBackend).name().toLowerCase(Locale.ROOT),
-          config.get(keys.portalsDiscovery), tripManager, searchRegistry);
+      this.metrics =
+          new OdysseyMetrics(
+              this,
+              config.get(keys.dataBackend).name().toLowerCase(Locale.ROOT),
+              config.get(keys.portalsDiscovery),
+              tripManager,
+              searchRegistry);
     }
 
     getLogger().info("Odyssey enabled.");

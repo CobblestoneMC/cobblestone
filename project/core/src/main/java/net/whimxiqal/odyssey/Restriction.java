@@ -8,10 +8,10 @@
 package net.whimxiqal.odyssey;
 
 /**
- * An "anti-mode": where a {@link Mode} <i>produces</i> reachable cells, a restriction <i>removes</i>
- * them. After the modes propose movements for a cell, the search discards any whose destination a
- * restriction marks impassable — used by integrations (region-protection plugins, donor-only areas)
- * to keep routes out of places the agent may not enter.
+ * An "anti-mode": where a {@link Mode} <i>produces</i> reachable cells, a restriction
+ * <i>removes</i> them. After the modes propose movements for a cell, the search discards any whose
+ * destination a restriction marks impassable — used by integrations (region-protection plugins,
+ * donor-only areas) to keep routes out of places the agent may not enter.
  *
  * <p>The verdict is a {@link FutureOr} so a check may resolve asynchronously (e.g. a protection
  * plugin doing a database lookup); an immediate answer never parks the search.

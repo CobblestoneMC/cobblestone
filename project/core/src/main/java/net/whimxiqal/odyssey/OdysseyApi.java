@@ -7,16 +7,17 @@
 
 package net.whimxiqal.odyssey;
 
-import net.whimxiqal.odyssey.api.*;
-
 import java.util.List;
 import java.util.ServiceLoader;
+import net.whimxiqal.odyssey.api.Destination;
+import net.whimxiqal.odyssey.api.SearchHandle;
+import net.whimxiqal.odyssey.api.SearchSettings;
 
 /**
  * The generic, Minecraft-agnostic navigation service.
  *
- * <p>Given an origin, a destination, and the modes and transitions available to an agent, it runs
- * a two-tier search asynchronously and returns a {@link SearchHandle}. The five type parameters are
+ * <p>Given an origin, a destination, and the modes and transitions available to an agent, it runs a
+ * two-tier search asynchronously and returns a {@link SearchHandle}. The five type parameters are
  * verbose here, but downstream façades bind them all to concrete types (e.g. {@code OdysseyPlayer},
  * {@code MinecraftStepType}, {@code MinecraftInstruction}, {@code OdysseyWorld}) so end users never
  * see a generic.
@@ -48,8 +49,8 @@ public interface OdysseyApi {
    * @return a handle to the in-flight search
    */
   <A extends Agent, T, D extends Domain> SearchHandle<Position<D>, T> navigate(
-          OdysseyLogger logger,
-          Scheduler scheduler,
+      OdysseyLogger logger,
+      Scheduler scheduler,
       A agent,
       Position<D> origin,
       Destination<DomainRegion<D>> destination,

@@ -15,7 +15,8 @@ import java.util.function.Supplier;
  * (upper-case allowed, no special characters; spaces are allowed but discouraged).
  *
  * <p>Children are exposed as {@link Supplier}s so that huge sets — every town, every player home —
- * are not materialized until the node is actually visited during command traversal or tab-completion.
+ * are not materialized until the node is actually visited during command traversal or
+ * tab-completion.
  */
 public interface DestinationTree<W, V> {
 

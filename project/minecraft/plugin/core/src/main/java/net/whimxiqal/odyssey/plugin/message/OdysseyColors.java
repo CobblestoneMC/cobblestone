@@ -34,6 +34,5 @@ public final class OdysseyColors {
   /** Muted framing around the prefix glyph (dark gray brackets). */
   public static final TextColor PREFIX_FRAME = TextColor.color(0x8A8A8A);
 
-  private OdysseyColors() {
-  }
+  private OdysseyColors() {}
 }

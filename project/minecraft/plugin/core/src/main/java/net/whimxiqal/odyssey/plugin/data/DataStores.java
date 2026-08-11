@@ -15,8 +15,7 @@ import net.whimxiqal.odyssey.plugin.data.jdbc.SqliteDataStore;
 /** Constructs the configured {@link DataStore}. Platform plugins call this at enable. */
 public final class DataStores {
 
-  private DataStores() {
-  }
+  private DataStores() {}
 
   /**
    * Creates (but does not {@link DataStore#init() open}) the store for a backend.

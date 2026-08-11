@@ -14,8 +14,7 @@ import net.whimxiqal.odyssey.Cell;
 /** Helpers for enumerating the block cells a mode needs to inspect. */
 final class Neighborhood {
 
-  private Neighborhood() {
-  }
+  private Neighborhood() {}
 
   /**
    * Returns every cell within {@code xzRadius} horizontally and {@code [yLow, yHigh]} vertically of

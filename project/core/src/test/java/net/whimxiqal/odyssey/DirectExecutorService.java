@@ -11,7 +11,10 @@ import java.util.List;
 import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.TimeUnit;
 
-/** An {@link java.util.concurrent.ExecutorService} that runs every task inline, for deterministic tests. */
+/**
+ * An {@link java.util.concurrent.ExecutorService} that runs every task inline, for deterministic
+ * tests.
+ */
 final class DirectExecutorService extends AbstractExecutorService {
 
   private volatile boolean shutdown;

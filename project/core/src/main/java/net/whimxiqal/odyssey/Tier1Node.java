@@ -23,22 +23,19 @@ sealed interface Tier1Node<T, D extends Domain>
   }
 
   record Source<T, D extends Domain>(Position<D> position, TraversalState state)
-      implements Tier1Node<T, D> {
-  }
+      implements Tier1Node<T, D> {}
 
   /**
-   * Being located at a transition's destination, having arrived in a particular
-   * accumulated state.
-   * Value-based equality on {@code (transition, state)} keys the Dijkstra
-   * frontier.
+   * Being located at a transition's destination, having arrived in a particular accumulated state.
+   * Value-based equality on {@code (transition, state)} keys the Dijkstra frontier.
    *
-   * @param <T>        the payload type
-   * @param <D>        the domain type
+   * @param <T> the payload type
+   * @param <D> the domain type
    * @param transition the transition whose destination this node sits at
-   * @param state      the accumulated traversal state on arrival
+   * @param state the accumulated traversal state on arrival
    */
-  record AtTransition<T, D extends Domain>(
-      Transition<T, D> transition, TraversalState state) implements Tier1Node<T, D> {
+  record AtTransition<T, D extends Domain>(Transition<T, D> transition, TraversalState state)
+      implements Tier1Node<T, D> {
     @Override
     public double cost() {
       return transition.cost();
@@ -46,13 +43,11 @@ sealed interface Tier1Node<T, D extends Domain>
   }
 
   /**
-   * The synthetic super-sink; the Dijkstra goal. One instance per search, so
-   * identity equality is
+   * The synthetic super-sink; the Dijkstra goal. One instance per search, so identity equality is
    * sufficient.
    *
    * @param <T> the payload type
    * @param <D> the domain type
    */
-  record Sink<T, D extends Domain>() implements Tier1Node<T, D> {
-  }
+  record Sink<T, D extends Domain>() implements Tier1Node<T, D> {}
 }

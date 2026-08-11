@@ -7,32 +7,30 @@
 
 package net.whimxiqal.odyssey;
 
-import net.whimxiqal.odyssey.api.*;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
+import net.whimxiqal.odyssey.api.Destination;
+import net.whimxiqal.odyssey.api.FailureReason;
+import net.whimxiqal.odyssey.api.NavigationResult;
+import net.whimxiqal.odyssey.api.Path;
+import net.whimxiqal.odyssey.api.SearchHandle;
+import net.whimxiqal.odyssey.api.SearchSettings;
+import net.whimxiqal.odyssey.api.Step;
 
 /**
- * Orchestrates one search: runs Tier-1 Dijkstra, solves each chosen
- * {@link VirtualPath} with a
- * cooperative {@link Tier2Search}, and re-plans after every solve so
- * alternative routes are
- * reconsidered as true edge costs become known (the anytime recalc loop).
- * Everything runs on the
+ * Orchestrates one search: runs Tier-1 Dijkstra, solves each chosen {@link VirtualPath} with a
+ * cooperative {@link Tier2Search}, and re-plans after every solve so alternative routes are
+ * reconsidered as true edge costs become known (the anytime recalc loop). Everything runs on the
  * {@link Scheduler}; the search never blocks a thread.
  *
- * <p>
- * Phase-2 note: this re-plans after <i>every</i> edge solve rather than only on
- * a threshold
- * overshoot, and solves each edge to completion rather than pausing mid-solve —
- * a simpler, still
- * terminating and still result-optimal realization of the design's recalc loop.
- * The
- * {@code tier1RecalcThreshold} knob is therefore not yet consulted.
+ * <p>Phase-2 note: this re-plans after <i>every</i> edge solve rather than only on a threshold
+ * overshoot, and solves each edge to completion rather than pausing mid-solve — a simpler, still
+ * terminating and still result-optimal realization of the design's recalc loop. The {@code
+ * tier1RecalcThreshold} knob is therefore not yet consulted.
  *
  * @param <A> the agent type
  * @param <T> the payload type
@@ -54,13 +52,15 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
   private final long deadlineMillis;
 
   private final AtomicBoolean cancelled = new AtomicBoolean(false);
-  private final CompletableFuture<NavigationResult<Position<D>, T>> future = new CompletableFuture<>();
+  private final CompletableFuture<NavigationResult<Position<D>, T>> future =
+      new CompletableFuture<>();
 
   private GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>> graphPath;
-  private boolean limitHit; // a Tier-2 solve gave up on the cell limit (memory guard), not a real dead end
+  private boolean
+      limitHit; // a Tier-2 solve gave up on the cell limit (memory guard), not a real dead end
 
   SearchImpl(
-          OdysseyLogger logger,
+      OdysseyLogger logger,
       Scheduler scheduler,
       HeuristicStrategy heuristic,
       A agent,
@@ -109,12 +109,13 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
     }
     try {
       if (graphPath == null) {
-        Optional<GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>>> found = tier1.shortestPath(tier1.originNode(),
-            tier1::isGoal);
+        Optional<GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>>> found =
+            tier1.shortestPath(tier1.originNode(), tier1::isGoal);
         if (found.isEmpty()) {
           // If a leg gave up on the cell limit, that — not a genuine disconnect — is why we failed.
-          finish(new NavigationResult.Failure<>(
-              limitHit ? FailureReason.LIMIT_EXCEEDED : FailureReason.NO_ROUTE));
+          finish(
+              new NavigationResult.Failure<>(
+                  limitHit ? FailureReason.LIMIT_EXCEEDED : FailureReason.NO_ROUTE));
           return;
         }
         graphPath = found.get();
@@ -124,36 +125,49 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
         finish(new NavigationResult.Success<>(buildPath(graphPath)));
         return;
       }
-      Tier2Search<A, T, D> tier2 = new Tier2Search<>(
-         logger, agent, edge.virtualPath(), modes, restrictions, heuristic, settings.maxCellsVisited(),
-         settings.runningAverageWidth(), settings.heuristicWeight(), cancelled::get, executor);
+      Tier2Search<A, T, D> tier2 =
+          new Tier2Search<>(
+              logger,
+              agent,
+              edge.virtualPath(),
+              modes,
+              restrictions,
+              heuristic,
+              settings.maxCellsVisited(),
+              settings.runningAverageWidth(),
+              settings.heuristicWeight(),
+              cancelled::get,
+              executor);
       VirtualPath<T, D> virtualPath = edge.virtualPath();
-      tier2.solve().whenCompleteAsync((result, error) -> {
-        if (cancelled.get()) {
-          return;
-        }
-        if (error != null) {
-          finish(new NavigationResult.Failure<>(FailureReason.ERROR));
-          return;
-        }
-        if (result.solved()) {
-          virtualPath.solve(result.steps(), result.cost());
-        } else {
-          if (result.outcome() == Tier2Result.Outcome.LIMIT_EXCEEDED) {
-            limitHit = true;
-          }
-          virtualPath.markInfeasible();
-        }
-        graphPath = null; // re-plan with the now-known edge cost
-        step();
-      }, executor);
+      tier2
+          .solve()
+          .whenCompleteAsync(
+              (result, error) -> {
+                if (cancelled.get()) {
+                  return;
+                }
+                if (error != null) {
+                  finish(new NavigationResult.Failure<>(FailureReason.ERROR));
+                  return;
+                }
+                if (result.solved()) {
+                  virtualPath.solve(result.steps(), result.cost());
+                } else {
+                  if (result.outcome() == Tier2Result.Outcome.LIMIT_EXCEEDED) {
+                    limitHit = true;
+                  }
+                  virtualPath.markInfeasible();
+                }
+                graphPath = null; // re-plan with the now-known edge cost
+                step();
+              },
+              executor);
     } catch (Throwable throwable) {
       finish(new NavigationResult.Failure<>(FailureReason.ERROR));
     }
   }
 
-  private Tier1Edge<T, D> firstUnsolvedEdge(
-      GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>> path) {
+  private Tier1Edge<T, D> firstUnsolvedEdge(GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>> path) {
     for (Tier1Edge<T, D> edge : path.edges()) {
       if (!edge.virtualPath().isResolved()) {
         return edge;
@@ -171,8 +185,12 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
       Tier1Node<T, D> target = edge.target();
       if (target instanceof Tier1Node.AtTransition<T, D> atTransition) {
         Transition<T, D> transition = atTransition.transition();
-        steps.add(new Step<>(
-            transition.destination(), transition.cost(), transition.time(), transition.payload()));
+        steps.add(
+            new Step<>(
+                transition.destination(),
+                transition.cost(),
+                transition.time(),
+                transition.payload()));
       }
     }
     return new PathImpl<>(origin, steps);

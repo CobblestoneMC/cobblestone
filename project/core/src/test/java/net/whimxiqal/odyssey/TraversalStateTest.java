@@ -20,7 +20,10 @@ import org.junit.jupiter.api.Test;
 
 class TraversalStateTest {
 
-  private enum Vehicle { BOAT, HORSE }
+  private enum Vehicle {
+    BOAT,
+    HORSE
+  }
 
   private static final TraversalKey<Vehicle> VEHICLE = new TraversalKey<>("vehicle");
   private static final TraversalKey<Boolean> BOAT_CONSUMED = new TraversalKey<>("boat_consumed");

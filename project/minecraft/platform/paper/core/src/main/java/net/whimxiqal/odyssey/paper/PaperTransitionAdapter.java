@@ -9,17 +9,19 @@ package net.whimxiqal.odyssey.paper;
 
 import net.whimxiqal.odyssey.DomainRegion;
 import net.whimxiqal.odyssey.Position;
-import net.whimxiqal.odyssey.api.TraversalState;
 import net.whimxiqal.odyssey.Transition;
-import net.whimxiqal.odyssey.minecraft.api.*;
+import net.whimxiqal.odyssey.api.TraversalState;
 import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
+import net.whimxiqal.odyssey.minecraft.api.PlatformTransition;
+import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.joml.Vector3i;
 
 /**
- * Adapts a platform {@link PlatformTransition} (Bukkit region/location) into a core
- * {@link Transition} (domain region/position) for the search. One is created per provider-supplied
+ * Adapts a platform {@link PlatformTransition} (Bukkit region/location) into a core {@link
+ * Transition} (domain region/position) for the search. One is created per provider-supplied
  * transition at the start of each search.
  */
 final class PaperTransitionAdapter implements Transition<MinecraftStepPayload, MinecraftWorld> {
@@ -29,13 +31,16 @@ final class PaperTransitionAdapter implements Transition<MinecraftStepPayload, M
   private final Position<MinecraftWorld> destination;
 
   PaperTransitionAdapter(
-          PlatformTransition<WorldRegion<World, Vector3i>, Location> delegate, WorldWrapper worldWrapper) {
+      PlatformTransition<WorldRegion<World, Vector3i>, Location> delegate,
+      WorldWrapper worldWrapper) {
     this.delegate = delegate;
     WorldRegion<World, Vector3i> originLocation = delegate.origin();
     Location destinationLocation = delegate.destination();
     this.origin = PaperConversions.region(originLocation, worldWrapper);
-    this.destination = new Position<>(
-        PaperConversions.cell(destinationLocation), worldWrapper.wrap(destinationLocation.getWorld()));
+    this.destination =
+        new Position<>(
+            PaperConversions.cell(destinationLocation),
+            worldWrapper.wrap(destinationLocation.getWorld()));
   }
 
   @Override

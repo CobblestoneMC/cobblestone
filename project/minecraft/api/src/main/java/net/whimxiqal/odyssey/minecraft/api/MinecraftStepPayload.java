@@ -12,8 +12,8 @@ package net.whimxiqal.odyssey.minecraft.api;
  * instruction-bearing kinds, the concrete instruction.
  *
  * @param stepType the step type
- * @param instruction the instruction payload (never {@code null}; use {@link MinecraftInstruction.None}
- *     for the common parameterless case)
+ * @param instruction the instruction payload (never {@code null}; use {@link
+ *     MinecraftInstruction.None} for the common parameterless case)
  */
 public record MinecraftStepPayload(MinecraftStepType stepType, MinecraftInstruction instruction) {
 

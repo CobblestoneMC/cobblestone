@@ -12,8 +12,8 @@ import java.util.function.Supplier;
 
 /**
  * A region of cells confined to a single {@link Domain} — the unifying "target/entry area"
- * abstraction. A single block, a 2×3 nether-portal plane, and a whole town are all
- * {@code DomainRegion}s.
+ * abstraction. A single block, a 2×3 nether-portal plane, and a whole town are all {@code
+ * DomainRegion}s.
  *
  * <p>It exposes geometry only; the cost estimate to reach it lives in the pluggable A* heuristic,
  * which picks its own metric over {@link #nearestBoundaryCell(Cell)}.
@@ -46,7 +46,12 @@ public interface DomainRegion<D extends Domain> {
    */
   Cell nearestBoundaryCell(Cell from);
 
-  record Impl<D extends Domain>(D domain, Function<Cell, Boolean> containsFunc, Function<Cell, Cell> nearestBoundaryFunc, Supplier<String> toStringFunc) implements DomainRegion<D> {
+  record Impl<D extends Domain>(
+      D domain,
+      Function<Cell, Boolean> containsFunc,
+      Function<Cell, Cell> nearestBoundaryFunc,
+      Supplier<String> toStringFunc)
+      implements DomainRegion<D> {
 
     @Override
     public boolean contains(Cell cell) {

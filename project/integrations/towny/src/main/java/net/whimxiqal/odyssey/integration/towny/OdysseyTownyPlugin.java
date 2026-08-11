@@ -11,9 +11,9 @@ import net.whimxiqal.odyssey.paper.plugin.api.Odyssey;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
- * Entry point for the Towny integration. Registers a destination provider (navigate to towns, plots,
- * outposts) and a search modifier (route through spawns; respect build protection when mining) as
- * ordinary Bukkit services, which Odyssey discovers automatically.
+ * Entry point for the Towny integration. Registers a destination provider (navigate to towns,
+ * plots, outposts) and a search modifier (route through spawns; respect build protection when
+ * mining) as ordinary Bukkit services, which Odyssey discovers automatically.
  */
 public final class OdysseyTownyPlugin extends JavaPlugin {
 

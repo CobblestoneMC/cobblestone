@@ -7,9 +7,7 @@
 
 package net.whimxiqal.odyssey.plugin.message;
 
-/**
- * A message that takes three parameters, referenced as {@code {1}}, {@code {2}}, {@code {3}}.
- */
+/** A message that takes three parameters, referenced as {@code {1}}, {@code {2}}, {@code {3}}. */
 public final class Message3 extends Message {
 
   /**

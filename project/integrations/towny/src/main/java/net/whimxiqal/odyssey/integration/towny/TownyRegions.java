@@ -20,17 +20,17 @@ import org.bukkit.World;
 import org.joml.Vector3i;
 
 /**
- * Turns Towny's claimed chunks into Odyssey {@link WorldRegion}s. A claimed chunk becomes a
- * {@code 16 × (world height) × 16} box; a town/plot destination is the union of its chunks, so the
- * search finds the nearest claimed block of it.
+ * Turns Towny's claimed chunks into Odyssey {@link WorldRegion}s. A claimed chunk becomes a {@code
+ * 16 × (world height) × 16} box; a town/plot destination is the union of its chunks, so the search
+ * finds the nearest claimed block of it.
  *
- * <p>These are pure-geometry snapshots — they call Towny only while being built (which happens on the
- * search-initiating thread), never during the search itself, so {@code contains()} stays lock-free.
+ * <p>These are pure-geometry snapshots — they call Towny only while being built (which happens on
+ * the search-initiating thread), never during the search itself, so {@code contains()} stays
+ * lock-free.
  */
 final class TownyRegions {
 
-  private TownyRegions() {
-  }
+  private TownyRegions() {}
 
   /** The box region covering one claimed chunk. */
   static WorldRegion<World, Vector3i> chunk(World world, int chunkX, int chunkZ) {

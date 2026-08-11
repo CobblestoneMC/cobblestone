@@ -7,10 +7,9 @@
 
 package net.whimxiqal.odyssey;
 
-import net.whimxiqal.odyssey.api.Destination;
-
 import java.util.Collection;
 import java.util.List;
+import net.whimxiqal.odyssey.api.Destination;
 
 /**
  * A {@link Destination} of exactly one region — the overwhelmingly common case (navigate to one

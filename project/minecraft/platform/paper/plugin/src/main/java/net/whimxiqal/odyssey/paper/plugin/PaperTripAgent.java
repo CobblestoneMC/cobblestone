@@ -7,10 +7,9 @@
 
 package net.whimxiqal.odyssey.paper.plugin;
 
+import java.util.UUID;
 import net.whimxiqal.odyssey.plugin.trip.TripAgent;
 import org.bukkit.entity.Entity;
-
-import java.util.UUID;
 
 public class PaperTripAgent implements TripAgent<Entity> {
 

@@ -15,13 +15,13 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
- * A value that is <i>either</i> immediately available <i>or</i> pending on a
- * {@link CompletableFuture} — never both.
+ * A value that is <i>either</i> immediately available <i>or</i> pending on a {@link
+ * CompletableFuture} — never both.
  *
- * <p>This is the linchpin of Odyssey's cooperative scheduling: a search consumes
- * {@link Immediate} results in a tight synchronous loop (cache hits) and only registers a
- * continuation — parking its worker thread — when it encounters a {@link Pending} value (a cache
- * miss). Modelled as a sealed sum type so callers can switch exhaustively.
+ * <p>This is the linchpin of Odyssey's cooperative scheduling: a search consumes {@link Immediate}
+ * results in a tight synchronous loop (cache hits) and only registers a continuation — parking its
+ * worker thread — when it encounters a {@link Pending} value (a cache miss). Modelled as a sealed
+ * sum type so callers can switch exhaustively.
  *
  * @param <T> the value type
  */
@@ -50,8 +50,8 @@ public sealed interface FutureOr<T> permits FutureOr.Immediate, FutureOr.Pending
   }
 
   /**
-   * Adapts a {@link CompletableFuture} to a {@code FutureOr}, preserving the immediate fast-path: an
-   * already-(successfully)-completed future becomes {@link Immediate} (no parking), otherwise
+   * Adapts a {@link CompletableFuture} to a {@code FutureOr}, preserving the immediate fast-path:
+   * an already-(successfully)-completed future becomes {@link Immediate} (no parking), otherwise
    * {@link Pending}. Used at platform boundaries where callbacks hand back plain futures.
    *
    * @param future the future
@@ -93,13 +93,15 @@ public sealed interface FutureOr<T> permits FutureOr.Immediate, FutureOr.Pending
       futures.add(item.toFuture());
     }
     CompletableFuture<List<T>> combined =
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).thenApply(ignored -> {
-          List<T> values = new ArrayList<>(futures.size());
-          for (CompletableFuture<? extends T> future : futures) {
-            values.add(future.getNow(null));
-          }
-          return values;
-        });
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0]))
+            .thenApply(
+                ignored -> {
+                  List<T> values = new ArrayList<>(futures.size());
+                  for (CompletableFuture<? extends T> future : futures) {
+                    values.add(future.getNow(null));
+                  }
+                  return values;
+                });
     return ofFuture(combined);
   }
 
@@ -158,9 +160,9 @@ public sealed interface FutureOr<T> permits FutureOr.Immediate, FutureOr.Pending
   }
 
   /**
-   * Runs {@code callback} with the value: synchronously right now if immediate, otherwise on
-   * {@code executor} once the future completes successfully. Exceptional completions are ignored
-   * here (the search observes failures through the future itself).
+   * Runs {@code callback} with the value: synchronously right now if immediate, otherwise on {@code
+   * executor} once the future completes successfully. Exceptional completions are ignored here (the
+   * search observes failures through the future itself).
    *
    * @param callback the consumer of the value
    * @param executor the executor for the pending case
@@ -234,11 +236,13 @@ public sealed interface FutureOr<T> permits FutureOr.Immediate, FutureOr.Pending
 
     @Override
     public void whenReady(Consumer<? super T> callback, Executor executor) {
-      future.whenCompleteAsync((value, error) -> {
-        if (error == null) {
-          callback.accept(value);
-        }
-      }, executor);
+      future.whenCompleteAsync(
+          (value, error) -> {
+            if (error == null) {
+              callback.accept(value);
+            }
+          },
+          executor);
     }
   }
 }

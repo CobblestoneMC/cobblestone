@@ -12,7 +12,6 @@ package net.whimxiqal.odyssey.minecraft;
  * impassable and unbreakable, so modes treat it exactly like a wall they can't get through.
  */
 public enum UnknownBlock implements MinecraftBlock {
-
   INSTANCE;
 
   @Override

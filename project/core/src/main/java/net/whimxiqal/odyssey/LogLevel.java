@@ -8,9 +8,9 @@
 package net.whimxiqal.odyssey;
 
 /**
- * The verbosity threshold for {@link OdysseyLogger} output, admin-selectable in config. A message is
- * emitted when its level is at or above the configured threshold; the constants are ordered from most
- * to least verbose.
+ * The verbosity threshold for {@link OdysseyLogger} output, admin-selectable in config. A message
+ * is emitted when its level is at or above the configured threshold; the constants are ordered from
+ * most to least verbose.
  */
 public enum LogLevel {
 

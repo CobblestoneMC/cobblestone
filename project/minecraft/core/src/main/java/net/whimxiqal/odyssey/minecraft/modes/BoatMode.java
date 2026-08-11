@@ -15,7 +15,6 @@ import net.whimxiqal.odyssey.Cell;
 import net.whimxiqal.odyssey.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
 import net.whimxiqal.odyssey.minecraft.MinecraftAgent;
-import net.whimxiqal.odyssey.minecraft.api.MinecraftInstruction;
 import net.whimxiqal.odyssey.minecraft.MinecraftKeys;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
@@ -24,15 +23,15 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
  * Boat travel — the vehicle mode that demonstrates {@code TraversalState} transitions.
  *
  * <p>On foot (with a boat, ensured at mode-list assembly) it can enter adjacent water, placing the
- * boat and setting {@code VEHICLE = BOAT} (a {@code PLACE_BOAT} step). While boating it travels fast
- * over water and can step out onto adjacent land, clearing the vehicle state.
+ * boat and setting {@code VEHICLE = BOAT} (a {@code PLACE_BOAT} step). While boating it travels
+ * fast over water and can step out onto adjacent land, clearing the vehicle state.
  *
  * @param <A> the agent type
  */
 final class BoatMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> {
 
   private static final int[][] HORIZONTAL = {
-      {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}
+    {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}
   };
 
   @Override
@@ -55,17 +54,21 @@ final class BoatMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
       Cell dest = from.plus(dir[0], 0, dir[1]);
       boolean diagonal = dir[0] != 0 && dir[1] != 0;
       if (boating) {
-        if (view.at(dest).supportsBoat() && view.at(dest, 0, 1, 0).isPassable() && !view.at(dest, 0, 1, 0).isWater()) {
+        if (view.at(dest).supportsBoat()
+            && view.at(dest, 0, 1, 0).isPassable()
+            && !view.at(dest, 0, 1, 0).isWater()) {
           double cost = MovementCosts.BOAT * (diagonal ? MovementCosts.DIAGONAL : 1.0);
           moves.add(move(dest, cost, MinecraftStepType.BOAT, state));
         } else if (!diagonal && Geometry.standable(view, dest)) {
-          TraversalState onLand = state.without(MinecraftKeys.VEHICLE).without(MinecraftKeys.BOAT_CONSUMED);
+          TraversalState onLand =
+              state.without(MinecraftKeys.VEHICLE).without(MinecraftKeys.BOAT_CONSUMED);
           moves.add(move(dest, MovementCosts.BOAT, MinecraftStepType.WALK, onLand));
         }
       } else if (!diagonal && view.at(dest).supportsBoat() && view.at(dest, 0, 1, 0).isPassable()) {
-        TraversalState inBoat = state
-            .with(MinecraftKeys.VEHICLE, MinecraftKeys.Vehicle.BOAT)
-            .with(MinecraftKeys.BOAT_CONSUMED, Boolean.TRUE);
+        TraversalState inBoat =
+            state
+                .with(MinecraftKeys.VEHICLE, MinecraftKeys.Vehicle.BOAT)
+                .with(MinecraftKeys.BOAT_CONSUMED, Boolean.TRUE);
         moves.add(move(dest, MovementCosts.PLACE_BOAT, MinecraftStepType.PLACE_BOAT, inBoat));
       }
     }

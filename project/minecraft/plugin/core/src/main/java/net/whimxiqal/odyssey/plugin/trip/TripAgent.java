@@ -14,5 +14,4 @@ public interface TripAgent<E> {
   UUID uuid();
 
   E entity();
-
 }

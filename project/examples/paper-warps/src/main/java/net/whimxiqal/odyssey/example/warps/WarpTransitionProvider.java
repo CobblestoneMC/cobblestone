@@ -21,18 +21,20 @@ import org.bukkit.entity.Player;
 
 /**
  * Surfaces both travel modalities to Odyssey's searches:
+ *
  * <ul>
  *   <li><b>Warps</b> → a {@code COMMAND} transition whose origin is the whole world the player is
- *       currently in. Because the origin already contains the search start, Odyssey can take it right
- *       away and prompt the player to type {@code /warp <name>}.
+ *       currently in. Because the origin already contains the search start, Odyssey can take it
+ *       right away and prompt the player to type {@code /warp <name>}.
  *   <li><b>Portals</b> → a {@code PORTAL} transition whose origin is the entrance box; the player
- *       walks into it and is auto-teleported (see {@link WarpListeners}). Its destination is resolved
- *       live from the referenced {@link Destination}, so editing that destination moves the edge.
+ *       walks into it and is auto-teleported (see {@link WarpListeners}). Its destination is
+ *       resolved live from the referenced {@link Destination}, so editing that destination moves
+ *       the edge.
  * </ul>
  *
- * <p>Registered as a Bukkit service; Odyssey discovers it and calls
- * {@link #computeTransitions(Player)} per search. (A modifier can also constrain mining or passage;
- * this example only adds routes and leaves those at their permissive defaults.)
+ * <p>Registered as a Bukkit service; Odyssey discovers it and calls {@link
+ * #computeTransitions(Player)} per search. (A modifier can also constrain mining or passage; this
+ * example only adds routes and leaves those at their permissive defaults.)
  */
 final class WarpTransitionProvider implements PaperOdysseySearchModifier {
 
@@ -58,7 +60,9 @@ final class WarpTransitionProvider implements PaperOdysseySearchModifier {
       }
       // /warp works from anywhere: a wormhole from the player's whole current world, so the search
       // can prompt "/warp <name>" immediately.
-      result.add(PaperTransition.command(player, warp.toLocation(world), warp.cost(), "/warp " + warp.name()));
+      result.add(
+          PaperTransition.command(
+              player, warp.toLocation(world), warp.cost(), "/warp " + warp.name()));
     }
   }
 
@@ -73,9 +77,10 @@ final class WarpTransitionProvider implements PaperOdysseySearchModifier {
       if (portalWorld == null || destWorld == null) {
         continue; // a world unloaded; skip until it is back
       }
-      BoxWorldRegion origin = BoxWorldRegion.of(
-          new Location(portalWorld, portal.minX(), portal.minY(), portal.minZ()),
-          new Location(portalWorld, portal.maxX(), portal.maxY(), portal.maxZ()));
+      BoxWorldRegion origin =
+          BoxWorldRegion.of(
+              new Location(portalWorld, portal.minX(), portal.minY(), portal.minZ()),
+              new Location(portalWorld, portal.maxX(), portal.maxY(), portal.maxZ()));
       Location dest = destination.get().toLocation(destWorld);
       result.add(PaperTransition.of(origin, dest, portal.cost(), MinecraftStepPayload.portal()));
     }

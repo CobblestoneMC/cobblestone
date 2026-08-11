@@ -51,7 +51,8 @@ class DestinationResolverTest {
   void resolvesExactAndPromotedPaths() {
     List<DestinationTree<String, Integer>> roots = List.of(leafTree("waypoint", false, "home"));
 
-    assertInstanceOf(Resolved.class, DestinationResolver.resolve(roots, List.of("waypoint", "home"), ALL));
+    assertInstanceOf(
+        Resolved.class, DestinationResolver.resolve(roots, List.of("waypoint", "home"), ALL));
     // Promotion: the non-strict "waypoint" level may be omitted.
     Resolution<String, Integer> promoted = DestinationResolver.resolve(roots, List.of("home"), ALL);
     assertInstanceOf(Resolved.class, promoted);
@@ -60,17 +61,17 @@ class DestinationResolverTest {
 
   @Test
   void ambiguousPromotionForcesFullerPath() {
-    List<DestinationTree<String, Integer>> roots = List.of(
-        leafTree("waypoint", false, "home"),
-        leafTree("essentials", false, "home"));
+    List<DestinationTree<String, Integer>> roots =
+        List.of(leafTree("waypoint", false, "home"), leafTree("essentials", false, "home"));
 
-    Resolution<String, Integer> ambiguous = DestinationResolver.resolve(roots, List.of("home"), ALL);
+    Resolution<String, Integer> ambiguous =
+        DestinationResolver.resolve(roots, List.of("home"), ALL);
     assertInstanceOf(Ambiguous.class, ambiguous);
     assertEquals(2, ((Ambiguous<String, Integer>) ambiguous).addresses().size());
 
     // Naming the provider disambiguates.
-    assertInstanceOf(Resolved.class,
-        DestinationResolver.resolve(roots, List.of("essentials", "home"), ALL));
+    assertInstanceOf(
+        Resolved.class, DestinationResolver.resolve(roots, List.of("essentials", "home"), ALL));
   }
 
   @Test
@@ -78,8 +79,8 @@ class DestinationResolverTest {
     List<DestinationTree<String, Integer>> roots = List.of(leafTree("towny", true, "spawn"));
 
     assertInstanceOf(NotFound.class, DestinationResolver.resolve(roots, List.of("spawn"), ALL));
-    assertInstanceOf(Resolved.class,
-        DestinationResolver.resolve(roots, List.of("towny", "spawn"), ALL));
+    assertInstanceOf(
+        Resolved.class, DestinationResolver.resolve(roots, List.of("towny", "spawn"), ALL));
   }
 
   @Test
@@ -89,36 +90,42 @@ class DestinationResolverTest {
     List<DestinationTree<String, Integer>> roots =
         List.of(new SimpleDestinationTree<>("secret", false, Map.of(), leaves));
 
-    assertInstanceOf(NotFound.class,
-        DestinationResolver.resolve(roots, List.of("vault"), permission -> false));
-    assertInstanceOf(Resolved.class,
+    assertInstanceOf(
+        NotFound.class, DestinationResolver.resolve(roots, List.of("vault"), permission -> false));
+    assertInstanceOf(
+        Resolved.class,
         DestinationResolver.resolve(roots, List.of("vault"), "odyssey.dest.vault"::equals));
   }
 
   @Test
   void navigationGateHidesDeniedAddresses() {
-    List<DestinationTree<String, Integer>> roots = List.of(leafTree("essentials", false, "home", "bed"));
+    List<DestinationTree<String, Integer>> roots =
+        List.of(leafTree("essentials", false, "home", "bed"));
     Predicate<List<String>> gate = address -> !address.equals(List.of("essentials", "home"));
 
-    assertInstanceOf(NotFound.class,
+    assertInstanceOf(
+        NotFound.class,
         DestinationResolver.resolve(roots, List.of("essentials", "home"), ALL, gate));
-    assertInstanceOf(Resolved.class,
+    assertInstanceOf(
+        Resolved.class,
         DestinationResolver.resolve(roots, List.of("essentials", "bed"), ALL, gate));
     // Suggestions also drop the gated leaf.
-    assertEquals(List.of("bed"), DestinationResolver.suggest(roots, List.of("essentials", ""), ALL, gate));
+    assertEquals(
+        List.of("bed"), DestinationResolver.suggest(roots, List.of("essentials", ""), ALL, gate));
   }
 
   @Test
   void suggestsPromotedNamesAndProviderKeys() {
-    List<DestinationTree<String, Integer>> roots = List.of(
-        leafTree("waypoint", false, "home", "camp"),
-        leafTree("essentials", false, "bed"));
+    List<DestinationTree<String, Integer>> roots =
+        List.of(leafTree("waypoint", false, "home", "camp"), leafTree("essentials", false, "bed"));
 
     List<String> top = DestinationResolver.suggest(roots, List.of(), ALL);
-    assertTrue(top.containsAll(List.of("waypoint", "essentials", "home", "camp", "bed")), top.toString());
+    assertTrue(
+        top.containsAll(List.of("waypoint", "essentials", "home", "camp", "bed")), top.toString());
 
     // After naming a provider, only that provider's leaves complete.
-    assertEquals(List.of("bed"), DestinationResolver.suggest(roots, List.of("essentials", ""), ALL));
+    assertEquals(
+        List.of("bed"), DestinationResolver.suggest(roots, List.of("essentials", ""), ALL));
     // Partial prefix filters.
     assertEquals(List.of("camp"), DestinationResolver.suggest(roots, List.of("ca"), ALL));
   }

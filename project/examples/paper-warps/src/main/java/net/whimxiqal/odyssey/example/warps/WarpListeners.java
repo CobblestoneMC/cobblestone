@@ -9,7 +9,6 @@ package net.whimxiqal.odyssey.example.warps;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -21,7 +20,6 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.plugin.Plugin;
 import org.joml.Vector3i;
 
@@ -60,11 +58,13 @@ final class WarpListeners implements Listener {
     if (event.getAction() == Action.LEFT_CLICK_BLOCK) {
       event.setCancelled(true); // don't start breaking the block
       selections.setCorner1(player.getUniqueId(), world, cell);
-      player.sendMessage(Component.text("Corner 1 set to " + describe(cell) + ".", NamedTextColor.YELLOW));
+      player.sendMessage(
+          Component.text("Corner 1 set to " + describe(cell) + ".", NamedTextColor.YELLOW));
     } else if (event.getAction() == Action.RIGHT_CLICK_BLOCK) {
       event.setCancelled(true);
       selections.setCorner2(player.getUniqueId(), world, cell);
-      player.sendMessage(Component.text("Corner 2 set to " + describe(cell) + ".", NamedTextColor.YELLOW));
+      player.sendMessage(
+          Component.text("Corner 2 set to " + describe(cell) + ".", NamedTextColor.YELLOW));
     }
   }
 
@@ -82,15 +82,21 @@ final class WarpListeners implements Listener {
       if (!portal.contains(world, to.getBlockX(), to.getBlockY(), to.getBlockZ())) {
         continue;
       }
-      store.getDestination(portal.destination()).ifPresent(destination -> {
-        World destWorld = Worlds.byKey(destination.world());
-        if (destWorld != null) {
-          // teleportAsync is Folia-safe: it hops to the destination's region thread for us.
-          event.setTo(destination.toLocation(destWorld));
-          event.getPlayer().sendMessage(
-              Component.text("Warped through '" + portal.name() + "'.", NamedTextColor.AQUA));
-        }
-      });
+      store
+          .getDestination(portal.destination())
+          .ifPresent(
+              destination -> {
+                World destWorld = Worlds.byKey(destination.world());
+                if (destWorld != null) {
+                  // teleportAsync is Folia-safe: it hops to the destination's region thread for us.
+                  event.setTo(destination.toLocation(destWorld));
+                  event
+                      .getPlayer()
+                      .sendMessage(
+                          Component.text(
+                              "Warped through '" + portal.name() + "'.", NamedTextColor.AQUA));
+                }
+              });
       return; // one portal per move is plenty
     }
   }

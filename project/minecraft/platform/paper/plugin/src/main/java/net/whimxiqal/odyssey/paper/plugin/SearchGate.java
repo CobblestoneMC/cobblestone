@@ -13,10 +13,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * A per-player concurrency budget for searches (design/06 {@code max_concurrent_searches_per_player},
- * default 1). A manual {@code /navigate} always runs ({@link #beginForced}) and counts toward the
- * budget for its duration; live re-searches {@link #tryBegin} and skip a cycle when the budget is
- * full, so they yield to manual searches and serialize behind one another.
+ * A per-player concurrency budget for searches (design/06 {@code
+ * max_concurrent_searches_per_player}, default 1). A manual {@code /navigate} always runs ({@link
+ * #beginForced}) and counts toward the budget for its duration; live re-searches {@link #tryBegin}
+ * and skip a cycle when the budget is full, so they yield to manual searches and serialize behind
+ * one another.
  */
 final class SearchGate {
 
@@ -31,8 +32,8 @@ final class SearchGate {
    * Tries to reserve a search slot for a player.
    *
    * @param player the player id
-   * @return {@code true} if a slot was reserved (release it with {@link #end}); {@code false} if the
-   *     player is already at the budget
+   * @return {@code true} if a slot was reserved (release it with {@link #end}); {@code false} if
+   *     the player is already at the budget
    */
   boolean tryBegin(UUID player) {
     AtomicInteger count = active.computeIfAbsent(player, key -> new AtomicInteger());

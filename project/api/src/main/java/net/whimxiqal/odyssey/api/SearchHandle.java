@@ -29,5 +29,4 @@ public interface SearchHandle<P, T> {
    * not already finished. Idempotent.
    */
   void cancel();
-
 }

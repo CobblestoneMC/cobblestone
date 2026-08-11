@@ -16,7 +16,8 @@ import org.joml.Vector3i;
 /**
  * An axis-aligned box of block cells in one world, inclusive of both corners — the region type most
  * transitions use for their origin (a portal frame, a warp pad, a trigger volume). Holds a live
- * {@link World} reference; build it fresh from current worlds rather than caching it across reloads.
+ * {@link World} reference; build it fresh from current worlds rather than caching it across
+ * reloads.
  */
 public final class BoxWorldRegion implements WorldRegion<World, Vector3i> {
 
@@ -43,7 +44,8 @@ public final class BoxWorldRegion implements WorldRegion<World, Vector3i> {
     if (!world.equals(corner2.getWorld())) {
       throw new IllegalArgumentException("Locations must be in the same world");
     }
-    return new BoxWorldRegion(world, corner1.toVector().toVector3i(), corner2.toVector().toVector3i());
+    return new BoxWorldRegion(
+        world, corner1.toVector().toVector3i(), corner2.toVector().toVector3i());
   }
 
   /**
@@ -72,7 +74,8 @@ public final class BoxWorldRegion implements WorldRegion<World, Vector3i> {
       throw new IllegalArgumentException("radius must be >= 0");
     }
     Vector3i block = center.toVector().toVector3i();
-    return new BoxWorldRegion(world,
+    return new BoxWorldRegion(
+        world,
         new Vector3i(block.x() - radius, block.y() - radius, block.z() - radius),
         new Vector3i(block.x() + radius, block.y() + radius, block.z() + radius));
   }
@@ -94,9 +97,12 @@ public final class BoxWorldRegion implements WorldRegion<World, Vector3i> {
 
   @Override
   public boolean contains(Vector3i vector) {
-    return vector.x() >= minX && vector.x() <= maxX
-        && vector.y() >= minY && vector.y() <= maxY
-        && vector.z() >= minZ && vector.z() <= maxZ;
+    return vector.x() >= minX
+        && vector.x() <= maxX
+        && vector.y() >= minY
+        && vector.y() <= maxY
+        && vector.z() >= minZ
+        && vector.z() <= maxZ;
   }
 
   @Override
@@ -112,14 +118,21 @@ public final class BoxWorldRegion implements WorldRegion<World, Vector3i> {
 
   @Override
   public String toString() {
-    return "BoxWorldRegion{" +
-        "world=" + world +
-        ", [" + minX +
-        ", " + minY +
-        ", " + minZ +
-        "], [" + maxX +
-        ", " + maxY +
-        ", " + maxZ +
-        "]}";
+    return "BoxWorldRegion{"
+        + "world="
+        + world
+        + ", ["
+        + minX
+        + ", "
+        + minY
+        + ", "
+        + minZ
+        + "], ["
+        + maxX
+        + ", "
+        + maxY
+        + ", "
+        + maxZ
+        + "]}";
   }
 }

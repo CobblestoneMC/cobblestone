@@ -18,6 +18,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChunkSnapshot;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
+import org.bukkit.entity.Entity;
 import org.bukkit.plugin.Plugin;
 
 /**
@@ -25,7 +26,7 @@ import org.bukkit.plugin.Plugin;
  * according to the load policy. Snapshots are taken on the chunk's owning thread (via the async
  * chunk load or the region scheduler), then read freely from search worker threads.
  */
-final class PaperPlatformApi implements PlatformApi {
+final class PaperPlatformApi implements PlatformApi<Entity> {
 
   private final Plugin plugin;
   private final PaperScheduler scheduler;
@@ -36,7 +37,7 @@ final class PaperPlatformApi implements PlatformApi {
   }
 
   @Override
-  public MinecraftScheduler scheduler() {
+  public MinecraftScheduler<Entity> scheduler() {
     return scheduler;
   }
 
@@ -56,15 +57,25 @@ final class PaperPlatformApi implements PlatformApi {
         return CompletableFuture.completedFuture(Optional.empty());
       }
       CompletableFuture<Optional<MinecraftChunk>> future = new CompletableFuture<>();
-      Bukkit.getRegionScheduler().execute(plugin, bukkit, chunkX, chunkZ, () -> {
-        ChunkSnapshot snapshot = bukkit.getChunkAt(chunkX, chunkZ).getChunkSnapshot();
-        future.complete(Optional.of(new PaperChunk(snapshot, chunkX, chunkZ, minY, maxY)));
-      });
+      Bukkit.getRegionScheduler()
+          .execute(
+              plugin,
+              bukkit,
+              chunkX,
+              chunkZ,
+              () -> {
+                ChunkSnapshot snapshot = bukkit.getChunkAt(chunkX, chunkZ).getChunkSnapshot();
+                future.complete(Optional.of(new PaperChunk(snapshot, chunkX, chunkZ, minY, maxY)));
+              });
       return future;
     }
 
     boolean generate = policy == ChunkLoadPolicy.GENERATE;
-    return bukkit.getChunkAtAsync(chunkX, chunkZ, generate).thenApply(chunk ->
-        Optional.<MinecraftChunk>of(new PaperChunk(chunk.getChunkSnapshot(), chunkX, chunkZ, minY, maxY)));
+    return bukkit
+        .getChunkAtAsync(chunkX, chunkZ, generate)
+        .thenApply(
+            chunk ->
+                Optional.<MinecraftChunk>of(
+                    new PaperChunk(chunk.getChunkSnapshot(), chunkX, chunkZ, minY, maxY)));
   }
 }

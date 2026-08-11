@@ -17,7 +17,8 @@ import java.util.List;
  * change or an instruction-bearing step marks a transition point.
  *
  * <p>{@link #cost()} and {@link #duration()} are derived from the steps rather than stored, so they
- * can never drift from the step list. A caller that reads them in a hot loop should cache the result.
+ * can never drift from the step list. A caller that reads them in a hot loop should cache the
+ * result.
  *
  * @param <P> the position type
  * @param <T> the payload type
