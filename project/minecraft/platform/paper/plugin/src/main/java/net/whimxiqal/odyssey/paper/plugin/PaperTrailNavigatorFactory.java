@@ -14,7 +14,6 @@ import net.whimxiqal.odyssey.api.Path;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperNavigatorFactory;
 import net.whimxiqal.odyssey.plugin.api.Navigator;
-import net.whimxiqal.odyssey.plugin.api.NavigatorContext;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
 import net.whimxiqal.odyssey.plugin.config.ConfigManager;
 import net.whimxiqal.odyssey.plugin.message.Messages;
@@ -57,8 +56,7 @@ public final class PaperTrailNavigatorFactory implements PaperNavigatorFactory {
   }
 
   @Override
-  public Navigator<Location> create(
-      Player player, Path<Location, MinecraftStepPayload> path, NavigatorContext<Player> context) {
+  public Navigator<Location> create(Player player, Path<Location, MinecraftStepPayload> path) {
     return new TrailNavigator(
         player,
         path,

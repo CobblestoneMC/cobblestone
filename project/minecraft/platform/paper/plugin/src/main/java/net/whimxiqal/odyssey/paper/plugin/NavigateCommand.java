@@ -314,8 +314,7 @@ final class NavigateCommand {
                         if (!player.isOnline()) {
                           return;
                         }
-                        Navigator<Location> navigator =
-                            factory.create(player, path, new PaperNavigatorContext(player));
+                        Navigator<Location> navigator = factory.create(player, path);
                         // Every trip carries the re-search function (for stray recalculation);
                         // `live` also runs it
                         // periodically.
