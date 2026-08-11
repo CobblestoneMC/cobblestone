@@ -1,0 +1,34 @@
+# OdysseyBeautyQuests — guide players to their BeautyQuests stages.
+#
+# When a player advances to a new quest stage that has a precise location (a "reach location", an NPC
+# to talk to), OdysseyBeautyQuests can start a guided Odyssey trip there. Each started quest's current
+# locatable stage is also offered as a `/navigate quest <name>` destination.
+
+# Whether to automatically start a trip when a player advances to a locatable quest stage. Individual
+# quests can override below.
+auto-navigate: true
+
+# The navigator (display style) to guide quest trips with. "trail" is Odyssey's built-in particle
+# trail; particles/colors below only apply to it.
+navigator: trail
+
+# The particle types the trail is drawn with (only DUST is colored). Bukkit Particle names.
+particles:
+  - SCRAPE
+  - WAX_OFF
+
+# The colors DUST particles are randomly drawn in, as RRGGBB hex.
+colors:
+  - FFD54F
+  - 4FC3F7
+
+# Per-quest overrides, keyed by the quest's numeric id (shown in BeautyQuests' quest list / editor).
+# Any field left out falls back to the global setting above.
+#
+# quests:
+#   '3':
+#     enabled: false          # never auto-navigate this quest
+#   '7':
+#     colors:
+#       - E57373
+quests: {}

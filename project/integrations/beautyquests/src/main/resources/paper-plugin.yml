@@ -1,0 +1,14 @@
+name: OdysseyBeautyQuests
+version: '0.1.0-SNAPSHOT'
+description: Odyssey integration for BeautyQuests — guide players to their quest stages.
+author: whimxiqal
+website: https://github.com/whimxiqal/Odyssey
+main: net.whimxiqal.odyssey.integration.beautyquests.OdysseyBeautyQuestsPlugin
+api-version: '1.21'
+folia-supported: false
+dependencies:
+  server:
+    odyssey:
+      load: BEFORE
+    BeautyQuests:
+      load: BEFORE
