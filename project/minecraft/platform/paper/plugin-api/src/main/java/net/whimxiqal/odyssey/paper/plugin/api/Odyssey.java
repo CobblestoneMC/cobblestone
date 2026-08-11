@@ -7,13 +7,12 @@
 
 package net.whimxiqal.odyssey.paper.plugin.api;
 
+import java.util.Objects;
 import net.whimxiqal.odyssey.paper.api.PaperNavigationService;
 import net.whimxiqal.odyssey.paper.api.PaperOdysseySearchModifier;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.ServicePriority;
-
-import java.util.Objects;
 
 /**
  * One-line registration of an integration's hooks into Odyssey. Each {@code register} is exactly
@@ -33,8 +32,27 @@ public final class Odyssey {
 
   private Odyssey() {}
 
+  /**
+   * The navigation service — run searches and compute paths.
+   *
+   * @return the registered navigation service
+   */
   public static PaperNavigationService navigationService() {
-    return Objects.requireNonNull(Bukkit.getServicesManager().getRegistration(PaperNavigationService.class)).getProvider();
+    return Objects.requireNonNull(
+            Bukkit.getServicesManager().getRegistration(PaperNavigationService.class))
+        .getProvider();
+  }
+
+  /**
+   * The trip service — start a guided trip for a player (search-then-guide, or from a path you
+   * already computed). This is what quest/integration plugins use to "take me there".
+   *
+   * @return the registered trip service
+   */
+  public static PaperTripService tripService() {
+    return Objects.requireNonNull(
+            Bukkit.getServicesManager().getRegistration(PaperTripService.class))
+        .getProvider();
   }
 
   /**

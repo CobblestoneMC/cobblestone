@@ -38,9 +38,10 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.paper.PaperNavigationServiceImpl;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperNavigatorFactory;
+import net.whimxiqal.odyssey.paper.plugin.api.PaperTripService;
 import net.whimxiqal.odyssey.plugin.api.DestinationTree;
 import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
-import net.whimxiqal.odyssey.plugin.api.Navigator;
+import net.whimxiqal.odyssey.plugin.api.NavigatorSettings;
 import net.whimxiqal.odyssey.plugin.command.FlagParser;
 import net.whimxiqal.odyssey.plugin.command.NavigationFlags;
 import net.whimxiqal.odyssey.plugin.destination.DestinationResolver;
@@ -49,13 +50,10 @@ import net.whimxiqal.odyssey.plugin.message.Messages;
 import net.whimxiqal.odyssey.plugin.message.OdysseyMessages;
 import net.whimxiqal.odyssey.plugin.trip.GuideSearch;
 import net.whimxiqal.odyssey.plugin.trip.LiveSearch;
-import net.whimxiqal.odyssey.plugin.trip.Trip;
-import net.whimxiqal.odyssey.plugin.trip.TripManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.joml.Vector3i;
@@ -85,10 +83,9 @@ final class NavigateCommand {
 
   static LiteralCommandNode<CommandSourceStack> build(
       PaperNavigationServiceImpl platformApi,
-      TripManager<Entity, PaperTripAgent, Location> trips,
+      PaperTripServiceImpl tripService,
       SearchRegistry searches,
       SearchGate gate,
-      long liveIntervalMillis,
       Supplier<SearchSettings> searchSettings,
       OdysseyLogger log,
       Messages messages) {
@@ -107,10 +104,9 @@ final class NavigateCommand {
                         run(
                             ctx,
                             platformApi,
-                            trips,
+                            tripService,
                             searches,
                             gate,
-                            liveIntervalMillis,
                             searchSettings,
                             log,
                             messages)))
@@ -142,10 +138,9 @@ final class NavigateCommand {
   private static int run(
       CommandContext<CommandSourceStack> ctx,
       PaperNavigationServiceImpl platformApi,
-      TripManager<Entity, PaperTripAgent, Location> trips,
+      PaperTripServiceImpl tripService,
       SearchRegistry searches,
       SearchGate gate,
-      long liveIntervalMillis,
       Supplier<SearchSettings> searchSettings,
       OdysseyLogger log,
       Messages messages) {
@@ -205,8 +200,6 @@ final class NavigateCommand {
     }
 
     String destinationLabel = String.join(" ", address);
-    // Re-navigating to a place you already have a trip for replaces it rather than piling on.
-    trips.cancelByDestination(player.getUniqueId(), destinationLabel);
     boolean live =
         switch (flags.liveness()) {
           case LIVE -> true;
@@ -220,12 +213,10 @@ final class NavigateCommand {
         destination,
         flags,
         live,
-        factory,
         platformApi,
-        trips,
+        tripService,
         searches,
         gate,
-        liveIntervalMillis,
         searchSettings,
         log,
         messages);
@@ -239,12 +230,10 @@ final class NavigateCommand {
       MinecraftDestination<World, Vector3i> destination,
       NavigationFlags flags,
       boolean live,
-      PaperNavigatorFactory factory,
       PaperNavigationServiceImpl platformApi,
-      TripManager<Entity, PaperTripAgent, Location> trips,
+      PaperTripServiceImpl tripService,
       SearchRegistry searches,
       SearchGate gate,
-      long liveIntervalMillis,
       Supplier<SearchSettings> searchSettings,
       OdysseyLogger log,
       Messages messages) {
@@ -300,46 +289,31 @@ final class NavigateCommand {
                   path.steps().size(),
                   path.duration(),
                   elapsedMillis);
-              Location origin = path.steps().isEmpty() ? null : path.steps().get(0).position();
-              if (origin == null || origin.getWorld() == null) {
-                messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
-                return;
-              }
-              // Trip creation and rendering must run on the location's owning thread (Folia-safe).
-              platformApi
-                  .scheduler()
-                  .runAtPosition(
-                      platformApi.position(origin),
-                      () -> {
-                        if (!player.isOnline()) {
-                          return;
-                        }
-                        Navigator<Location> navigator = factory.create(player, path);
-                        // Every trip carries the re-search function (for stray recalculation);
-                        // `live` also runs it
-                        // periodically.
-                        Optional<Trip<Entity, PaperTripAgent, Location>> trip =
-                            trips.start(
-                                new PaperTripAgent(player),
-                                flags.navigator(),
-                                navigator,
-                                destinationLabel,
-                                liveSearch(
-                                    player,
-                                    destination,
-                                    flags,
-                                    platformApi,
-                                    searches,
-                                    gate,
-                                    searchSettings),
-                                guideSearch(player, flags, platformApi),
-                                live,
-                                liveIntervalMillis);
-                        if (trip.isEmpty()) {
+              // Hand the found route to the shared trip service — the same code path integrations
+              // use. The command only carries the chosen navigator id (appearance comes from
+              // config);
+              // the flag-scoped re-search/guide closures ride along for stray recalculation.
+              NavigatorSettings settings = NavigatorSettings.builder(flags.navigator()).build();
+              tripService
+                  .start(
+                      player,
+                      path,
+                      destinationLabel,
+                      settings,
+                      liveSearch(
+                          player, destination, flags, platformApi, searches, gate, searchSettings),
+                      guideSearch(player, flags, platformApi),
+                      live)
+                  .whenComplete(
+                      (outcome, tripError) -> {
+                        if (tripError != null
+                            || outcome instanceof PaperTripService.TripOutcome.Failed) {
+                          messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
+                        } else if (outcome
+                            instanceof PaperTripService.TripOutcome.TripLimitReached) {
                           messages.send(player, locale, OdysseyMessages.NAVIGATE_TRIP_LIMIT);
                         } else {
-                          // "Route found" carries a hover with how long the search took and how
-                          // long the trip is.
+                          // "Route found" carries a hover with the search time and the trip length.
                           Component started =
                               messages.render(locale, OdysseyMessages.NAVIGATE_STARTED);
                           Component stats =

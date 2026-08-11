@@ -16,6 +16,7 @@ import net.whimxiqal.odyssey.api.SearchSettings;
 import net.whimxiqal.odyssey.paper.PaperNavigationServiceImpl;
 import net.whimxiqal.odyssey.paper.api.PaperNavigationService;
 import net.whimxiqal.odyssey.paper.plugin.api.Odyssey;
+import net.whimxiqal.odyssey.paper.plugin.api.PaperTripService;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
 import net.whimxiqal.odyssey.plugin.config.ConfigManager;
 import net.whimxiqal.odyssey.plugin.data.DataStore;
@@ -32,9 +33,9 @@ import org.bukkit.plugin.java.JavaPlugin;
  * The Odyssey Paper/Folia plugin entry point.
  *
  * <p>Phase 6a bootstrap: load config, build the message pipeline, construct the plugin-owned
- * transition registry and the native platform API, register the single {@link PaperNavigationService}
- * service, and wire the {@code /odyssey} command. Data store, listeners, waypoints, trips, portal
- * discovery, and the {@code /navigate} tree arrive in Phases 6b/6c.
+ * transition registry and the native platform API, register the single {@link
+ * PaperNavigationService} service, and wire the {@code /odyssey} command. Data store, listeners,
+ * waypoints, trips, portal discovery, and the {@code /navigate} tree arrive in Phases 6b/6c.
  */
 public final class OdysseyPaperPlugin extends JavaPlugin {
 
@@ -114,6 +115,21 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
                 .runningAverageWidth(config.get(keys.algorithmRunningAverageWidth))
                 .heuristicWeight(config.get(keys.algorithmHeuristicWeight))
                 .build();
+
+    // The trip service is the shared "search-then-guide" code path: the /navigate command and
+    // integration plugins both start trips through it. Registered as a service like the rest.
+    PaperTripServiceImpl tripService =
+        new PaperTripServiceImpl(
+            platformApi,
+            tripManager,
+            searchRegistry,
+            searchGate,
+            searchSettings,
+            liveIntervalMillis);
+    getServer()
+        .getServicesManager()
+        .register(PaperTripService.class, tripService, this, ServicePriority.Normal);
+
     getLifecycleManager()
         .registerEventHandler(
             LifecycleEvents.COMMANDS,
@@ -137,10 +153,9 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
                   .register(
                       NavigateCommand.build(
                           platformApi,
-                          tripManager,
+                          tripService,
                           searchRegistry,
                           searchGate,
-                          liveIntervalMillis,
                           searchSettings,
                           logger,
                           messages),

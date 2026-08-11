@@ -25,6 +25,6 @@ import org.bukkit.entity.Player;
  *       // handle error, which happens if the Odyssey plugin is not enabled
  *     }
  *     PaperNavigationService odysseyApi = registration.getProvider();
- *}
+ * }
  */
 public interface PaperNavigationService extends NavigationService<Player, Location> {}

@@ -13,7 +13,9 @@ import java.util.Locale;
 import net.whimxiqal.odyssey.api.Path;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperNavigatorFactory;
+import net.whimxiqal.odyssey.paper.plugin.api.TrailNavigatorSettings;
 import net.whimxiqal.odyssey.plugin.api.Navigator;
+import net.whimxiqal.odyssey.plugin.api.NavigatorSettings;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
 import net.whimxiqal.odyssey.plugin.config.ConfigManager;
 import net.whimxiqal.odyssey.plugin.message.Messages;
@@ -56,13 +58,23 @@ public final class PaperTrailNavigatorFactory implements PaperNavigatorFactory {
   }
 
   @Override
-  public Navigator<Location> create(Player player, Path<Location, MinecraftStepPayload> path) {
+  public Navigator<Location> create(
+      Player player, Path<Location, MinecraftStepPayload> path, NavigatorSettings settings) {
+    // Per-trip settings override the config defaults; anything unset falls back to config.
+    List<Particle> particles =
+        settings
+            .get(TrailNavigatorSettings.PARTICLES)
+            .orElseGet(() -> parseParticles(config.get(keys.trailParticles)));
+    List<Color> colors =
+        settings
+            .get(TrailNavigatorSettings.COLORS)
+            .orElseGet(() -> parseColors(config.get(keys.trailColors)));
     return new TrailNavigator(
         player,
         path,
         config.get(keys.trailBufferCells),
-        parseParticles(config.get(keys.trailParticles)),
-        parseColors(config.get(keys.trailColors)),
+        particles,
+        colors,
         config.get(keys.trailDensity),
         config.get(keys.tripsRecalculateDistance),
         messages);

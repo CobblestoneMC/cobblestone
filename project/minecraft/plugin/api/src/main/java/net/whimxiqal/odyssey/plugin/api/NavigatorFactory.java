@@ -19,7 +19,8 @@ public interface NavigatorFactory<P, L> {
    *
    * @param player the player to guide
    * @param path the path to follow
+   * @param settings per-trip appearance overrides; anything unset falls back to configured defaults
    * @return the navigator
    */
-  Navigator<L> create(P player, Path<L, MinecraftStepPayload> path);
+  Navigator<L> create(P player, Path<L, MinecraftStepPayload> path, NavigatorSettings settings);
 }
