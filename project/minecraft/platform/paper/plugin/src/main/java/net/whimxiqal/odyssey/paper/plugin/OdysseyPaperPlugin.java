@@ -116,8 +116,7 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
           List.of("ody"));
       event.registrar().register(
           NavigateCommand.build(platformApi, tripManager, searchRegistry, searchGate,
-              liveIntervalMillis, () -> config.get(keys.tripsLiveMobileDefault),
-              () -> config.get(keys.tripsLiveStationaryDefault), searchSettings, logger, messages),
+              liveIntervalMillis, searchSettings, logger, messages),
           "Navigate to a destination",
           List.of("nav"));
     });

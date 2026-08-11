@@ -63,12 +63,6 @@ public final class ConfigKeys {
   /** Blocks a player may stray from the trail before the trip quietly recalculates. Mutable. */
   public final ConfigKey<Integer> tripsRecalculateDistance;
 
-  /** Default liveness for trips to a moving destination (e.g. a player). Mutable. */
-  public final ConfigKey<Boolean> tripsLiveMobileDefault;
-
-  /** Default liveness for trips to a stationary destination (e.g. a waypoint). Mutable. */
-  public final ConfigKey<Boolean> tripsLiveStationaryDefault;
-
   /** The most concurrent searches (manual + live) one player may run. Requires a restart. */
   public final ConfigKey<Integer> searchMaxConcurrentPerPlayer;
 
@@ -125,10 +119,6 @@ public final class ConfigKeys {
         "trips.live_interval_ticks", 100, Codec.ofInt(), true);
     this.tripsRecalculateDistance = manager.register(
         "trips.recalculate_distance", 32, Codec.ofInt(), true);
-    this.tripsLiveMobileDefault = manager.register(
-        "trips.live_mobile_destination_trips", true, Codec.ofBoolean(), true);
-    this.tripsLiveStationaryDefault = manager.register(
-        "trips.live_stationary_destination_trips", false, Codec.ofBoolean(), true);
     this.searchMaxConcurrentPerPlayer = manager.register(
         "search.max_concurrent_per_player", 1, Codec.ofInt(), false);
     this.trailBufferCells = manager.register(

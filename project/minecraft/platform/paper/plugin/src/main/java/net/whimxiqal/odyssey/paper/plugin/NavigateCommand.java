@@ -33,7 +33,6 @@ import net.whimxiqal.odyssey.api.NavigationResult;
 import net.whimxiqal.odyssey.api.Path;
 import net.whimxiqal.odyssey.api.SearchHandle;
 import net.whimxiqal.odyssey.api.SearchSettings;
-import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftSearchSettings;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.paper.PaperOdysseyApiImpl;
@@ -84,8 +83,7 @@ final class NavigateCommand {
 
   static LiteralCommandNode<CommandSourceStack> build(
       PaperOdysseyApiImpl platformApi, TripManager<Entity, PaperTripAgent, Location> trips, SearchRegistry searches,
-      SearchGate gate, long liveIntervalMillis, BooleanSupplier liveMobileDefault,
-      BooleanSupplier liveStationaryDefault, Supplier<SearchSettings> searchSettings,
+      SearchGate gate, long liveIntervalMillis, Supplier<SearchSettings> searchSettings,
       OdysseyLogger log, Messages messages) {
     return Commands.literal("navigate")
         .requires(source -> source.getSender().hasPermission(PERMISSION_NAVIGATE))
@@ -95,7 +93,7 @@ final class NavigateCommand {
         .then(Commands.argument("args", StringArgumentType.greedyString())
             .suggests(NavigateCommand::suggest)
             .executes(ctx -> run(ctx, platformApi, trips, searches, gate, liveIntervalMillis,
-                liveMobileDefault, liveStationaryDefault, searchSettings, log, messages)))
+                searchSettings, log, messages)))
         .build();
   }
 
@@ -118,8 +116,6 @@ final class NavigateCommand {
       SearchRegistry searches,
       SearchGate gate,
       long liveIntervalMillis,
-      BooleanSupplier liveMobileDefault,
-      BooleanSupplier liveStationaryDefault,
       Supplier<SearchSettings> searchSettings,
       OdysseyLogger log,
       Messages messages) {
@@ -168,8 +164,7 @@ final class NavigateCommand {
     boolean live = switch (flags.liveness()) {
       case LIVE -> true;
       case NO_LIVE -> false;
-      case DEFAULT -> destination.isMobile()
-          ? liveMobileDefault.getAsBoolean() : liveStationaryDefault.getAsBoolean();
+      case DEFAULT -> destination.isMobile();
     };
     startSearch(player, locale, destinationLabel, destination, flags, live, factory, platformApi,
         trips, searches, gate, liveIntervalMillis, searchSettings, log, messages);

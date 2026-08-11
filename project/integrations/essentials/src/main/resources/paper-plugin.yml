@@ -1,0 +1,14 @@
+name: OdysseyEssentials
+version: '0.1.0-SNAPSHOT'
+description: Odyssey integration for EssentialsX — navigate to /home and /spawn.
+author: whimxiqal
+website: https://github.com/whimxiqal/Odyssey
+main: net.whimxiqal.odyssey.integration.essentials.OdysseyEssentialsPlugin
+api-version: '1.21'
+folia-supported: false
+dependencies:
+  server:
+    odyssey:
+      load: BEFORE
+    Essentials:
+      load: BEFORE

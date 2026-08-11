@@ -43,7 +43,7 @@ public interface OdysseySearchModifier {
    * @param player the player about to be routed
    * @return the transitions, in a future (use {@link CompletableFuture#completedFuture} when synchronous)
    */
-  default CompletableFuture<List<? extends PaperTransition>> computeTransitions(Player player) {
+  default CompletableFuture<List<PaperTransition>> computeTransitions(Player player) {
     return CompletableFuture.completedFuture(List.of());
   }
 

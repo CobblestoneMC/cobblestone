@@ -44,7 +44,7 @@ final class WarpTransitionProvider implements OdysseySearchModifier {
   }
 
   @Override
-  public CompletableFuture<List<? extends PaperTransition>> computeTransitions(Player player) {
+  public CompletableFuture<List<PaperTransition>> computeTransitions(Player player) {
     List<PaperTransition> result = new ArrayList<>();
     addWarps(player, result);
     addPortals(result);

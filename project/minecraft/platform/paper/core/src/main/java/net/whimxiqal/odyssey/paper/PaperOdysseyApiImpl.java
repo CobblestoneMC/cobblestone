@@ -169,13 +169,13 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
     if (modifiers.isEmpty()) {
       return CompletableFuture.completedFuture(List.of());
     }
-    List<CompletableFuture<List<? extends PaperTransition>>> futures = new ArrayList<>();
+    List<CompletableFuture<List<PaperTransition>>> futures = new ArrayList<>();
     for (OdysseySearchModifier modifier : modifiers) {
       futures.add(modifier.computeTransitions(player));
     }
     return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).thenApply(ignored -> {
       List<Transition<MinecraftStepPayload, MinecraftWorld>> all = new ArrayList<>();
-      for (CompletableFuture<List<? extends PaperTransition>> future : futures) {
+      for (CompletableFuture<List<PaperTransition>> future : futures) {
         for (PaperTransition transition : future.join()) {
           PaperTransitionAdapter wrapped = new PaperTransitionAdapter(transition, this);
           // A world is reachable only through a transition, so excluding a world/dimension means

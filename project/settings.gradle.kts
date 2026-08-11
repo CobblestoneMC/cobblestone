@@ -34,3 +34,7 @@ project(":minecraft:platform:sponge-16:plugin").name = "sponge-16-plugin"
 // depend only on Odyssey's published API to demonstrate extending navigation (design/08).
 include(":examples:paper-warps")
 project(":examples:paper-warps").name = "example-warps"
+
+// Real integration plugins live under integrations/ — each connects one third-party plugin to Odyssey.
+include(":integrations:essentials")
+project(":integrations:essentials").name = "odyssey-essentials"

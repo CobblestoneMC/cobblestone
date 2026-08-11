@@ -43,7 +43,7 @@ public final class PortalTransitionProvider implements OdysseySearchModifier {
   }
 
   @Override
-  public CompletableFuture<List<? extends PaperTransition>> computeTransitions(Player player) {
+  public CompletableFuture<List<PaperTransition>> computeTransitions(Player player) {
     List<PaperTransition> result = new ArrayList<>();
     for (PortalTransition portal : portals.all()) {
       World fromWorld = worldOf(portal.fromWorld());
