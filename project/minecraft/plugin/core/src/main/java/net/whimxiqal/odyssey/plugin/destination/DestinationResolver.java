@@ -82,8 +82,27 @@ public final class DestinationResolver {
    */
   public static <W, V> Resolution<W, V> resolve(
       List<? extends DestinationTree<W, V>> roots, List<String> args, Predicate<String> hasPermission) {
+    return resolve(roots, args, hasPermission, address -> true);
+  }
+
+  /**
+   * Resolves the given arguments, also honoring the Odyssey navigation-gate permission.
+   *
+   * @param roots the destination-tree roots from every provider
+   * @param args the arguments typed so far (each a full token)
+   * @param hasPermission tests whether the player holds a permission node (a destination's own
+   *     required permissions)
+   * @param canNavigate tests whether the player may navigate to a destination at a given address
+   *     (see {@link NavigationPermissions})
+   * @param <W> the world type
+   * @param <V> the vector type
+   * @return the resolution
+   */
+  public static <W, V> Resolution<W, V> resolve(
+      List<? extends DestinationTree<W, V>> roots, List<String> args, Predicate<String> hasPermission,
+      Predicate<List<String>> canNavigate) {
     List<Address<W, V>> matched = new ArrayList<>();
-    for (Address<W, V> address : addresses(roots, hasPermission)) {
+    for (Address<W, V> address : addresses(roots, hasPermission, canNavigate)) {
       if (address.sequences().stream().anyMatch(sequence -> sequence.equals(args))) {
         matched.add(address);
       }
@@ -92,7 +111,7 @@ public final class DestinationResolver {
       return new NotFound<>();
     }
     if (matched.size() == 1) {
-      return new Resolved<>(matched.get(0).destination(), matched.get(0).tokens());
+      return new Resolved<>(matched.getFirst().destination(), matched.getFirst().tokens());
     }
     return new Ambiguous<>(matched.stream().map(Address::tokens).toList());
   }
@@ -111,11 +130,28 @@ public final class DestinationResolver {
    */
   public static <W, V> List<String> suggest(
       List<? extends DestinationTree<W, V>> roots, List<String> args, Predicate<String> hasPermission) {
+    return suggest(roots, args, hasPermission, address -> true);
+  }
+
+  /**
+   * Suggests completions, also honoring the Odyssey navigation-gate permission.
+   *
+   * @param roots the destination-tree roots from every provider
+   * @param args the arguments typed so far; the last is treated as a partial prefix
+   * @param hasPermission tests whether the player holds a permission node
+   * @param canNavigate tests whether the player may navigate to a destination at a given address
+   * @param <W> the world type
+   * @param <V> the vector type
+   * @return the distinct candidate tokens, in first-seen order
+   */
+  public static <W, V> List<String> suggest(
+      List<? extends DestinationTree<W, V>> roots, List<String> args, Predicate<String> hasPermission,
+      Predicate<List<String>> canNavigate) {
     int index = args.isEmpty() ? 0 : args.size() - 1;
     List<String> prefix = args.isEmpty() ? List.of() : args.subList(0, index);
     String partial = args.isEmpty() ? "" : args.get(index);
     LinkedHashSet<String> out = new LinkedHashSet<>();
-    for (Address<W, V> address : addresses(roots, hasPermission)) {
+    for (Address<W, V> address : addresses(roots, hasPermission, canNavigate)) {
       for (List<String> sequence : address.sequences()) {
         if (sequence.size() <= index || !sequence.subList(0, index).equals(prefix)) {
           continue;
@@ -130,10 +166,11 @@ public final class DestinationResolver {
   }
 
   private static <W, V> List<Address<W, V>> addresses(
-      List<? extends DestinationTree<W, V>> roots, Predicate<String> hasPermission) {
+      List<? extends DestinationTree<W, V>> roots, Predicate<String> hasPermission,
+      Predicate<List<String>> canNavigate) {
     List<Address<W, V>> out = new ArrayList<>();
     for (DestinationTree<W, V> root : roots) {
-      collect(root, new ArrayList<>(), new ArrayList<>(), out, hasPermission);
+      collect(root, new ArrayList<>(), new ArrayList<>(), out, hasPermission, canNavigate);
     }
     return out;
   }
@@ -143,14 +180,17 @@ public final class DestinationResolver {
       List<String> keyTrail,
       List<Boolean> strictTrail,
       List<Address<W, V>> out,
-      Predicate<String> hasPermission) {
+      Predicate<String> hasPermission,
+      Predicate<List<String>> canNavigate) {
     keyTrail.add(node.key());
     strictTrail.add(node.strict());
     node.destinations().forEach((key, supplier) -> {
+      List<String> tokens = new ArrayList<>(keyTrail);
+      tokens.add(key);
       MinecraftDestination<W, V> destination = supplier.get();
-      if (hasAll(hasPermission, destination.permissions())) {
-        List<String> tokens = new ArrayList<>(keyTrail);
-        tokens.add(key);
+      // A destination's own required permissions (default-deny) and the Odyssey navigation gate
+      // (default-allow, by tree address) both apply.
+      if (hasAll(hasPermission, destination.permissions()) && canNavigate.test(tokens)) {
         boolean[] required = new boolean[tokens.size()];
         for (int i = 0; i < strictTrail.size(); i++) {
           required[i] = strictTrail.get(i);
@@ -160,9 +200,9 @@ public final class DestinationResolver {
       }
     });
     node.subTrees().forEach((key, supplier) ->
-        collect(supplier.get(), keyTrail, strictTrail, out, hasPermission));
-    keyTrail.remove(keyTrail.size() - 1);
-    strictTrail.remove(strictTrail.size() - 1);
+        collect(supplier.get(), keyTrail, strictTrail, out, hasPermission, canNavigate));
+    keyTrail.removeLast();
+    strictTrail.removeLast();
   }
 
   private static boolean hasAll(Predicate<String> hasPermission, List<String> permissions) {
@@ -195,7 +235,7 @@ public final class DestinationResolver {
       }
       acc.add(tokens.get(i));
       build(i + 1, acc, out); // include it
-      acc.remove(acc.size() - 1);
+      acc.removeLast();
     }
   }
 }

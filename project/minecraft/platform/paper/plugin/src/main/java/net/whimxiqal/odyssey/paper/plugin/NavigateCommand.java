@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -44,6 +45,7 @@ import net.whimxiqal.odyssey.plugin.api.Navigator;
 import net.whimxiqal.odyssey.plugin.command.FlagParser;
 import net.whimxiqal.odyssey.plugin.command.NavigationFlags;
 import net.whimxiqal.odyssey.plugin.destination.DestinationResolver;
+import net.whimxiqal.odyssey.plugin.destination.NavigationPermissions;
 import net.whimxiqal.odyssey.plugin.message.Messages;
 import net.whimxiqal.odyssey.plugin.message.OdysseyMessages;
 import net.whimxiqal.odyssey.plugin.trip.GuideSearch;
@@ -145,8 +147,8 @@ final class NavigateCommand {
       return Command.SINGLE_SUCCESS;
     }
 
-    DestinationResolver.Resolution<World, Vector3i> resolution =
-        DestinationResolver.resolve(destinationRoots(player), parsed.destination(), player::hasPermission);
+    DestinationResolver.Resolution<World, Vector3i> resolution = DestinationResolver.resolve(
+        destinationRoots(player), parsed.destination(), player::hasPermission, canNavigate(player));
     if (resolution instanceof DestinationResolver.Ambiguous<World, Vector3i>(List<List<String>> addresses)) {
       messages.send(player, locale, OdysseyMessages.NAVIGATE_DESTINATION_AMBIGUOUS, formatAddresses(addresses));
       return Command.SINGLE_SUCCESS;
@@ -319,10 +321,19 @@ final class NavigateCommand {
     } else if (last.startsWith("-")) {
       flagNames().stream().filter(flag -> flag.startsWith(last)).forEach(offset::suggest);
     } else {
-      DestinationResolver.suggest(destinationRoots(player), destinationTokens(tokens), player::hasPermission)
+      DestinationResolver.suggest(destinationRoots(player), destinationTokens(tokens),
+              player::hasPermission, canNavigate(player))
           .forEach(offset::suggest);
     }
     return offset.buildFuture();
+  }
+
+  /**
+   * The Odyssey navigation-gate check for a player: default-allow, so a destination is offered unless
+   * its {@code odyssey.navigate.<address>} node is explicitly denied.
+   */
+  private static Predicate<List<String>> canNavigate(Player player) {
+    return address -> NavigationPermissions.allowed(address, player::isPermissionSet, player::hasPermission);
   }
 
   private static List<DestinationTree<World, Vector3i>> destinationRoots(Player player) {

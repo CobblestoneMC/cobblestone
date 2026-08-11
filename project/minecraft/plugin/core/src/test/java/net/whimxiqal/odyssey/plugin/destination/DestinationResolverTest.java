@@ -96,6 +96,19 @@ class DestinationResolverTest {
   }
 
   @Test
+  void navigationGateHidesDeniedAddresses() {
+    List<DestinationTree<String, Integer>> roots = List.of(leafTree("essentials", false, "home", "bed"));
+    Predicate<List<String>> gate = address -> !address.equals(List.of("essentials", "home"));
+
+    assertInstanceOf(NotFound.class,
+        DestinationResolver.resolve(roots, List.of("essentials", "home"), ALL, gate));
+    assertInstanceOf(Resolved.class,
+        DestinationResolver.resolve(roots, List.of("essentials", "bed"), ALL, gate));
+    // Suggestions also drop the gated leaf.
+    assertEquals(List.of("bed"), DestinationResolver.suggest(roots, List.of("essentials", ""), ALL, gate));
+  }
+
+  @Test
   void suggestsPromotedNamesAndProviderKeys() {
     List<DestinationTree<String, Integer>> roots = List.of(
         leafTree("waypoint", false, "home", "camp"),

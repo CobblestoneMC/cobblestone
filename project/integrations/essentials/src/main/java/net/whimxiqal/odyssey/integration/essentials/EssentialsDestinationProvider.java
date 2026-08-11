@@ -28,8 +28,10 @@ import org.joml.Vector3i;
 
 /**
  * Surfaces Essentials teleports as navigation targets: {@code essentials → home → <name>} (one leaf
- * per the player's homes) and {@code essentials → spawn}. Each carries the Essentials permission that
- * gates the corresponding command, so Odyssey hides a target the player is not allowed to use.
+ * per the player's homes) and {@code essentials → spawn}. Navigating to one is gated by Odyssey's own
+ * {@code odyssey.navigate.essentials.*} permission (default-allow) rather than the Essentials teleport
+ * permission — so a player can walk to a place even where {@code /home}/{@code /spawn} is revoked (the
+ * teleport transition still requires the Essentials permission).
  *
  * <p>The destinations are re-resolved when queried (behind {@link Supplier}s), so moving a home or the
  * spawn is reflected without a restart.
@@ -53,7 +55,7 @@ final class EssentialsDestinationProvider implements PaperDestinationProvider {
 
     Map<String, Supplier<MinecraftDestination<World, Vector3i>>> leaves = new LinkedHashMap<>();
     if (essentials.hasSpawn()) {
-      leaves.put(SPAWN_KEY, () -> destination(essentials.spawn(player), "spawn", Essentials.SPAWN_PERMISSION));
+      leaves.put(SPAWN_KEY, () -> destination(essentials.spawn(player), "spawn"));
     }
     return List.of(new SimpleDestinationTree<>(TREE_KEY, false, subTrees, leaves));
   }
@@ -61,17 +63,16 @@ final class EssentialsDestinationProvider implements PaperDestinationProvider {
   private DestinationTree<World, Vector3i> homeTree(Player player) {
     Map<String, Supplier<MinecraftDestination<World, Vector3i>>> leaves = new LinkedHashMap<>();
     for (String home : essentials.homes(player)) {
-      leaves.put(home, () -> destination(essentials.home(player, home), home, Essentials.HOME_PERMISSION));
+      leaves.put(home, () -> destination(essentials.home(player, home), home));
     }
     return new SimpleDestinationTree<>(HOME_KEY, true, Map.of(), leaves);
   }
 
   /** Builds a single-cell destination at the given location, or an empty one if it is unavailable. */
-  private static MinecraftDestination<World, Vector3i> destination(
-      Location location, String name, String permission) {
+  private static MinecraftDestination<World, Vector3i> destination(Location location, String name) {
     Destination<WorldRegion<World, Vector3i>> destination = location == null
         ? List::of
         : () -> List.of(SingleCellWorldRegion.of(location));
-    return new SimpleMinecraftDestination<>(destination, Component.text(name), List.of(permission));
+    return new SimpleMinecraftDestination<>(destination, Component.text(name), List.of());
   }
 }
