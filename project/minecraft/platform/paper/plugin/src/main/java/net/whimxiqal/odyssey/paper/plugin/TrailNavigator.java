@@ -58,7 +58,6 @@ final class TrailNavigator implements Navigator<Location> {
   private static final int RECALC_COOLDOWN_TICKS = 20;         // at most one stray-recalc per second
   private static final int GUIDE_COOLDOWN_TICKS = 20;          // re-request the guide path ~1x/second
   private static final float DUST_SIZE = 1.0f;
-  private static final Particle.DustOptions MINE_DUST = new Particle.DustOptions(Color.RED, 1.0f);
   private static final double MINE_MARGIN = 0.05;             // cage hugs the block to mine
 
   /**
@@ -77,9 +76,10 @@ final class TrailNavigator implements Navigator<Location> {
   private final Locale locale;
 
   private List<Step<Location, MinecraftStepPayload>> steps;
-  private List<Vec3> points;
+  private List<Vec3> points; // step destinations, index-aligned with steps
+  private Vec3 origin; // where step 0 departs from (the player's start); the segment before points[0]
   private Map<BlockKey, Integer> stepByBlock;
-  private int foremost;
+  private int foremost; // the step the player still needs to complete (0 = the first step)
   private int lastPromptedIndex = -1;
   private boolean complete;
   private boolean recalcRequested;
@@ -89,11 +89,13 @@ final class TrailNavigator implements Navigator<Location> {
   private int guideCooldown;
   private List<Step<Location, MinecraftStepPayload>> guideSteps;
   private List<Vec3> guidePoints;   // a real short path back to the trail; null when on-trail
-  private String guideWorld;        // world key of the current guide path
+  private String guideWorld;        // world key of the current guide path\
+  // record last prompted instruction so we don't repeat ourselves on a recalculation
+  private MinecraftInstruction lastPromptedInstruction;
 
   TrailNavigator(
       Player player,
-      Path<Step<Location, MinecraftStepPayload>> path,
+      Path<Location, MinecraftStepPayload> path,
       int bufferCells,
       List<Particle> particleTypes,
       List<Color> palette,
@@ -115,8 +117,12 @@ final class TrailNavigator implements Navigator<Location> {
     setPath(path);
   }
 
-  private void setPath(Path<Step<Location, MinecraftStepPayload>> path) {
+  private void setPath(Path<Location, MinecraftStepPayload> path) {
     this.steps = path.steps();
+    // points are the step destinations, index-aligned with steps; the origin (where step 0 departs
+    // from) is tracked separately. So foremost == i means "step i is not yet completed" — no step is
+    // credited until the player actually projects past its destination.
+    this.origin = pathLocationToRenderPoint(path.origin());
     this.points = new ArrayList<>(steps.size());
     this.stepByBlock = new HashMap<>();
     for (int i = 0; i < steps.size(); i++) {
@@ -160,13 +166,18 @@ final class TrailNavigator implements Navigator<Location> {
 
     // Advance only in the trail head's world; a cross-domain hop is handled by the action prompt.
     if (onTrailWorld) {
-      foremost = TrailProgress.advance(points, foremost, playerVec);
+      // advance returns points.size() once every step is done; clamp so it stays a valid step index.
+      foremost = Math.min(TrailProgress.advance(points, origin, foremost, playerVec), steps.size() - 1);
       // Shortcut: if the player is standing exactly on a later step within the buffer (e.g. they cut
-      // a curve the projection didn't credit), jump the trail forward to it.
+      // a curve the projection didn't credit), jump the trail forward to it. Standing on step i means
+      // the player has reached point i + 1.
       Integer atBlock = stepByBlock.get(new BlockKey(
           playerLocation.getBlockX(), playerLocation.getBlockY(), playerLocation.getBlockZ()));
-      if (atBlock != null && atBlock > foremost && atBlock <= foremost + bufferCells) {
-        foremost = atBlock;
+      if (atBlock != null) {
+        int reached = Math.min(atBlock + 1, steps.size() - 1);
+        if (reached > foremost && reached <= foremost + bufferCells) {
+          foremost = reached;
+        }
       }
     }
 
@@ -205,7 +216,7 @@ final class TrailNavigator implements Navigator<Location> {
   }
 
   @Override
-  public void update(Path<Step<Location, MinecraftStepPayload>> newPath) {
+  public void update(Path<Location, MinecraftStepPayload> newPath) {
     setPath(newPath); // live re-search hot-swap; the next tick re-advances from the player
   }
 
@@ -241,7 +252,7 @@ final class TrailNavigator implements Navigator<Location> {
   }
 
   @Override
-  public void setGuidePath(Path<Step<Location, MinecraftStepPayload>> guide) {
+  public void setGuidePath(Path<Location, MinecraftStepPayload> guide) {
     if (guide.steps().isEmpty()) {
       guideSteps = null;
       guidePoints = null;
@@ -279,7 +290,7 @@ final class TrailNavigator implements Navigator<Location> {
 
   private boolean reachedGoal(Vec3 playerVec, World playerWorld) {
     if (foremost < points.size() - 1) {
-      return false;
+      return false; // not yet on the final step
     }
     Vec3 goal = points.getLast();
     return sameWorld(playerWorld, steps.getLast().position())
@@ -299,6 +310,12 @@ final class TrailNavigator implements Navigator<Location> {
       return;
     }
     lastPromptedIndex = foremost;
+    // do not prompt again if the starting prompt on this path is exactly the same as what we've already seen,
+    // potentially from a different path before it updated via a live search
+    if (foremost == 0 && lastPromptedInstruction != null && lastPromptedInstruction.equals(instruction)) {
+      return;
+    }
+    lastPromptedInstruction = instruction;
     switch (instruction) {
       case MinecraftInstruction.CommandInstruction commandInstruction -> {
         messages.send(player, locale, OdysseyMessages.NAV_TRAIL_PROMPT_COMMAND, commandInstruction.command());
@@ -439,14 +456,12 @@ final class TrailNavigator implements Navigator<Location> {
   }
 
   /**
-   * The nearest point on the current segment ahead — so a slight deviation nudges back, not rewinds.
+   * The nearest point on the current step's segment — so a slight deviation nudges back, not rewinds.
+   * The segment runs from the previous destination (or the origin for step 0) to {@code points[foremost]}.
    */
   private Vec3 projectedTarget(Vec3 playerVec) {
-    Vec3 start = points.get(foremost);
-    if (foremost + 1 >= points.size()) {
-      return start;
-    }
-    Vec3 segment = points.get(foremost + 1).minus(start);
+    Vec3 start = foremost == 0 ? origin : points.get(foremost - 1);
+    Vec3 segment = points.get(foremost).minus(start);
     double lengthSquared = segment.lengthSquared();
     double t = lengthSquared == 0.0
         ? 0.0 : Math.clamp(playerVec.minus(start).dot(segment) / lengthSquared, 0.0, 1.0);

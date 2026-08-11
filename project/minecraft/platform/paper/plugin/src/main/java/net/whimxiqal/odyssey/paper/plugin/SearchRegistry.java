@@ -24,15 +24,15 @@ import org.bukkit.Location;
  */
 final class SearchRegistry {
 
-  private final Map<UUID, Set<SearchHandle<Step<Location, MinecraftStepPayload>>>> byPlayer =
+  private final Map<UUID, Set<SearchHandle<Location, MinecraftStepPayload>>> byPlayer =
       new ConcurrentHashMap<>();
 
-  void track(UUID player, SearchHandle<Step<Location, MinecraftStepPayload>> handle) {
+  void track(UUID player, SearchHandle<Location, MinecraftStepPayload> handle) {
     byPlayer.computeIfAbsent(player, key -> ConcurrentHashMap.newKeySet()).add(handle);
   }
 
-  void untrack(UUID player, SearchHandle<Step<Location, MinecraftStepPayload>> handle) {
-    Set<SearchHandle<Step<Location, MinecraftStepPayload>>> handles = byPlayer.get(player);
+  void untrack(UUID player, SearchHandle<Location, MinecraftStepPayload> handle) {
+    Set<SearchHandle<Location, MinecraftStepPayload>> handles = byPlayer.get(player);
     if (handles != null) {
       handles.remove(handle);
       if (handles.isEmpty()) {
@@ -57,11 +57,11 @@ final class SearchRegistry {
    * @return how many searches were cancelled
    */
   int cancelAll(UUID player) {
-    Set<SearchHandle<Step<Location, MinecraftStepPayload>>> handles = byPlayer.remove(player);
+    Set<SearchHandle<Location, MinecraftStepPayload>> handles = byPlayer.remove(player);
     if (handles == null) {
       return 0;
     }
-    List<SearchHandle<Step<Location, MinecraftStepPayload>>> snapshot = new ArrayList<>(handles);
+    List<SearchHandle<Location, MinecraftStepPayload>> snapshot = new ArrayList<>(handles);
     snapshot.forEach(SearchHandle::cancel);
     return snapshot.size();
   }

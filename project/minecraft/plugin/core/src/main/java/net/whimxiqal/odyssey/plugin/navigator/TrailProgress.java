@@ -13,10 +13,12 @@ import java.util.List;
  * The platform-neutral follow logic for a trail navigator: given the ordered path points and the
  * player's current position, decide how far along the trail the player has gotten.
  *
- * <p>Each consecutive pair of points forms a segment. The player's position is projected onto the
- * foremost segment's direction; if the projection passes the segment's end, that segment is complete
- * and the foremost index advances. This tolerates a player cutting corners — they still "complete"
- * segments in the right order — without any exact-position tracking.
+ * <p>{@code points} are the step destinations, index-aligned with the path's steps, and
+ * {@code foremost} is the index of the step the player still needs to complete (0 = the first step,
+ * not yet done). Step {@code foremost} runs from {@code points[foremost - 1]} — or the passed
+ * {@code origin} when {@code foremost == 0} — to {@code points[foremost]}; the player completes it by
+ * projecting past that destination, and {@code foremost} advances. This tolerates a player cutting
+ * corners — they still "complete" steps in order — without any exact-position tracking.
  */
 public final class TrailProgress {
 
@@ -24,20 +26,22 @@ public final class TrailProgress {
   }
 
   /**
-   * Advances the foremost index past every segment the player has already projected beyond.
+   * Advances the foremost index past every step the player has already projected beyond.
    *
-   * @param points the ordered trail points (path step positions)
-   * @param foremost the index of the start of the segment currently being followed
+   * @param points the ordered step destinations (index-aligned with the path's steps)
+   * @param origin the position the first step departs from (the player's start)
+   * @param foremost the index of the step the player still needs to complete
    * @param player the player's current position
-   * @return the new foremost index (never less than {@code foremost}, never past the last point)
+   * @return the new foremost index (never below {@code foremost}; {@code points.size()} once every
+   *     step is complete)
    */
-  public static int advance(List<Vec3> points, int foremost, Vec3 player) {
+  public static int advance(List<Vec3> points, Vec3 origin, int foremost, Vec3 player) {
     int index = Math.max(0, foremost);
-    while (index + 1 < points.size()) {
-      Vec3 start = points.get(index);
-      Vec3 segment = points.get(index + 1).minus(start);
+    while (index < points.size()) {
+      Vec3 start = index == 0 ? origin : points.get(index - 1);
+      Vec3 segment = points.get(index).minus(start);
       double lengthSquared = segment.lengthSquared();
-      // A zero-length segment (duplicate point) is treated as already passed.
+      // A zero-length segment (duplicate point / standing on the origin) is treated as passed.
       double projection = lengthSquared == 0.0 ? 1.0 : player.minus(start).dot(segment) / lengthSquared;
       if (projection >= 1.0) {
         index++;

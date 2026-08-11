@@ -23,5 +23,5 @@ public interface NavigatorFactory<P, L> {
    * @param context the navigator's runtime services
    * @return the navigator
    */
-  Navigator<L> create(P player, Path<Step<L, MinecraftStepPayload>> path, NavigatorContext<P> context);
+  Navigator<L> create(P player, Path<L, MinecraftStepPayload> path, NavigatorContext<P> context);
 }

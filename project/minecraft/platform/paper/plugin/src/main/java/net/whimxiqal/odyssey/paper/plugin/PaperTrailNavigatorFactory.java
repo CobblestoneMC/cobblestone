@@ -60,7 +60,7 @@ public final class PaperTrailNavigatorFactory implements PaperNavigatorFactory {
   @Override
   public Navigator<Location> create(
       Player player,
-      Path<Step<Location, MinecraftStepPayload>> path,
+      Path<Location, MinecraftStepPayload> path,
       NavigatorContext<Player> context) {
     return new TrailNavigator(player, path,
         config.get(keys.trailBufferCells),

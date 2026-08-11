@@ -29,7 +29,7 @@ public interface Navigator<L> {
    *
    * @param newPath the replacement path
    */
-  void update(Path<Step<L, MinecraftStepPayload>> newPath);
+  void update(Path<L, MinecraftStepPayload> newPath);
 
   /**
    * Called once when the trip ends (completion, cancellation, or logout); releases any display state.
@@ -78,7 +78,7 @@ public interface Navigator<L> {
    *
    * @param guide the short path from the player toward the current step
    */
-  default void setGuidePath(Path<Step<L, MinecraftStepPayload>> guide) {
+  default void setGuidePath(Path<L, MinecraftStepPayload> guide) {
     // Navigators that don't use guide paths ignore this.
   }
 }

@@ -19,16 +19,19 @@ import java.util.List;
  * <p>{@link #cost()} and {@link #duration()} are derived from the steps rather than stored, so they
  * can never drift from the step list. A caller that reads them in a hot loop should cache the result.
  *
- * @param <S> the step type
+ * @param <P> the position type
+ * @param <T> the payload type
  */
-public interface Path<S extends Step<?, ?>> {
+public interface Path<P, T> {
+
+  P origin();
 
   /**
    * Returns the ordered steps of this path, origin first.
    *
    * @return the steps (non-empty)
    */
-  List<S> steps();
+  List<Step<P, T>> steps();
 
   /**
    * Returns the total algorithm cost of the path in seconds, summed from its steps.
@@ -37,7 +40,7 @@ public interface Path<S extends Step<?, ?>> {
    */
   default double cost() {
     double total = 0.0;
-    for (S step : steps()) {
+    for (Step<P, T> step : steps()) {
       total += step.cost();
     }
     return total;
@@ -50,7 +53,7 @@ public interface Path<S extends Step<?, ?>> {
    */
   default double duration() {
     double total = 0.0;
-    for (S step : steps()) {
+    for (Step<P, T> step : steps()) {
       total += step.time();
     }
     return total;

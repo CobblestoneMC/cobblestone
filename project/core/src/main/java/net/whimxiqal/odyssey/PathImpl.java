@@ -22,8 +22,8 @@ import java.util.List;
  * @param <D> the domain type
  * @param steps the ordered steps
  */
-record PathImpl<T, D extends Domain>(List<Step<Position<D>, T>> steps)
-    implements Path<Step<Position<D>, T>> {
+record PathImpl<T, D extends Domain>(Position<D> origin, List<Step<Position<D>, T>> steps)
+    implements Path<Position<D>, T> {
 
   PathImpl {
     steps = List.copyOf(steps);

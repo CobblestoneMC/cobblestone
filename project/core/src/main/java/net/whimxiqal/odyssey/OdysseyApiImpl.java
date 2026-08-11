@@ -22,7 +22,7 @@ import java.util.List;
 public final class OdysseyApiImpl implements OdysseyApi {
 
   @Override
-  public <A extends Agent, T, D extends Domain> SearchHandle<Step<Position<D>, T>> navigate(
+  public <A extends Agent, T, D extends Domain> SearchHandle<Position<D>, T> navigate(
           OdysseyLogger logger,
           Scheduler scheduler,
       A agent,

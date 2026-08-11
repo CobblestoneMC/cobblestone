@@ -195,7 +195,7 @@ final class NavigateCommand {
     UUID uuid = player.getUniqueId();
     final long startNanos = System.nanoTime();
     gate.beginForced(uuid); // a manual search always runs and counts toward the budget
-    SearchHandle<Step<Location, MinecraftStepPayload>> handle = platformApi.navigatePlayerToDestination(
+    SearchHandle<Location, MinecraftStepPayload> handle = platformApi.navigatePlayerToDestination(
         player, destination.destination(), new MinecraftSearchSettings(searchSettings.get(), flags.excludedModes(),
         flags.excludedWorlds(), flags.excludedDimensions()));
     searches.track(uuid, handle);
@@ -210,14 +210,14 @@ final class NavigateCommand {
         messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
         return;
       }
-      if (result instanceof NavigationResult.Failure<Step<Location, MinecraftStepPayload>>(FailureReason reason)) {
+      if (result instanceof NavigationResult.Failure<Location, MinecraftStepPayload>(FailureReason reason)) {
         log.debug("navigate {} -> {}: {} in {}ms",
             player.getName(), destinationLabel, reason, elapsedMillis);
         sendFailure(player, locale, messages, reason);
         return;
       }
-      Path<Step<Location, MinecraftStepPayload>> path =
-          ((NavigationResult.Success<Step<Location, MinecraftStepPayload>>) result).path();
+      Path<Location, MinecraftStepPayload> path =
+          ((NavigationResult.Success<Location, MinecraftStepPayload>) result).path();
       log.debug("navigate {} -> {}: {} steps, {}s duration, found in {}ms",
           player.getName(), destinationLabel, path.steps().size(), path.duration(), elapsedMillis);
       Location origin = path.steps().isEmpty() ? null : path.steps().get(0).position();
@@ -262,13 +262,13 @@ final class NavigateCommand {
       return platformApi.navigatePlayer(player, target, new MinecraftSearchSettings(GUIDE_SETTINGS,flags.excludedModes(),
           flags.excludedWorlds(), flags.excludedDimensions())).future().handle((result, error) -> {
         if (error == null
-            && result instanceof NavigationResult.Success<Step<Location, MinecraftStepPayload>>(
-            Path<Step<Location, MinecraftStepPayload>> path
+            && result instanceof NavigationResult.Success<Location, MinecraftStepPayload>(
+            Path<Location, MinecraftStepPayload> path
         )
             && !path.steps().isEmpty()) {
           return Optional.of(path);
         }
-        return Optional.<Path<Step<Location, MinecraftStepPayload>>>empty();
+        return Optional.<Path<Location, MinecraftStepPayload>>empty();
       });
     };
   }
@@ -287,7 +287,7 @@ final class NavigateCommand {
       if (!player.isOnline() || !gate.tryBegin(uuid)) {
         return CompletableFuture.completedFuture(Optional.empty());
       }
-      SearchHandle<Step<Location, MinecraftStepPayload>> handle = platformApi.navigatePlayerToDestination(
+      SearchHandle<Location, MinecraftStepPayload> handle = platformApi.navigatePlayerToDestination(
           player, destination.destination(), new MinecraftSearchSettings(searchSettings.get(), flags.excludedModes(),
           flags.excludedWorlds(), flags.excludedDimensions()));
       searches.track(uuid, handle);
@@ -295,13 +295,13 @@ final class NavigateCommand {
         searches.untrack(uuid, handle);
         gate.end(uuid);
         if (error == null
-            && result instanceof NavigationResult.Success<Step<Location, MinecraftStepPayload>>(
-            Path<Step<Location, MinecraftStepPayload>> path
+            && result instanceof NavigationResult.Success<Location, MinecraftStepPayload>(
+            Path<Location, MinecraftStepPayload> path
         )
             && !path.steps().isEmpty()) {
           return Optional.of(path);
         }
-        return Optional.<Path<Step<Location, MinecraftStepPayload>>>empty();
+        return Optional.<Path<Location, MinecraftStepPayload>>empty();
       });
     };
   }

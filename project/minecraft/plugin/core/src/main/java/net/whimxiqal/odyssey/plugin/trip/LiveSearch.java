@@ -29,5 +29,5 @@ public interface LiveSearch<L> {
    * @return a future of the fresh path, or empty if the search failed, was skipped (e.g. the
    *     concurrency budget was full), or the player is gone — in which case the current path is kept
    */
-  CompletableFuture<Optional<Path<Step<L, MinecraftStepPayload>>>> search();
+  CompletableFuture<Optional<Path<L, MinecraftStepPayload>>> search();
 }

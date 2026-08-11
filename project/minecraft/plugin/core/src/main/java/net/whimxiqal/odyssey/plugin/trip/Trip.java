@@ -7,13 +7,9 @@
 
 package net.whimxiqal.odyssey.plugin.trip;
 
-import java.util.UUID;
 import java.util.function.Consumer;
-import net.whimxiqal.odyssey.Position;
 import net.whimxiqal.odyssey.api.Path;
-import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.MinecraftScheduler;
-import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 import net.whimxiqal.odyssey.minecraft.ScheduledTaskHandle;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.plugin.api.Navigator;
@@ -84,7 +80,6 @@ public final class Trip<E, P extends TripAgent<E>, L> {
 
   /** Runs one re-search; {@code reschedule} continues the periodic live loop, off for a one-shot. */
   private void reSearch(boolean reschedule) {
-    System.out.println("reSearch");
     if (stopped || liveSearch == null) {
       return;
     }
@@ -96,13 +91,12 @@ public final class Trip<E, P extends TripAgent<E>, L> {
         result.ifPresent(this::applyNewPath);
       }
       if (reschedule && !stopped) {
-        System.out.println("scheduling reSearch");
         scheduleReSearch();
       }
     });
   }
 
-  private void applyNewPath(Path<Step<L, MinecraftStepPayload>> path) {
+  private void applyNewPath(Path<L, MinecraftStepPayload> path) {
     // Hot-swap on the render thread so it never races the navigator's tick.
     scheduler.runAtEntity(player.entity(), () -> {
       if (!stopped) {

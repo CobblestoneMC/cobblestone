@@ -39,13 +39,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @param <D> the domain type
  */
 final class SearchImpl<A extends Agent, T, D extends Domain>
-    implements SearchHandle<Step<Position<D>, T>> {
+    implements SearchHandle<Position<D>, T> {
 
   private final OdysseyLogger logger;
   private final Scheduler scheduler;
   private final Executor executor;
   private final HeuristicStrategy heuristic;
   private final A agent;
+  private final Position<D> origin;
   private final List<? extends Mode<A, T, D>> modes;
   private final List<? extends Restriction<A, D>> restrictions;
   private final SearchSettings settings;
@@ -53,7 +54,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
   private final long deadlineMillis;
 
   private final AtomicBoolean cancelled = new AtomicBoolean(false);
-  private final CompletableFuture<NavigationResult<Step<Position<D>, T>>> future = new CompletableFuture<>();
+  private final CompletableFuture<NavigationResult<Position<D>, T>> future = new CompletableFuture<>();
 
   private GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>> graphPath;
   private boolean limitHit; // a Tier-2 solve gave up on the cell limit (memory guard), not a real dead end
@@ -74,6 +75,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
     this.executor = scheduler.asyncExecutor();
     this.heuristic = heuristic;
     this.agent = agent;
+    this.origin = origin;
     this.modes = List.copyOf(modes);
     this.restrictions = List.copyOf(restrictions);
     this.settings = settings;
@@ -86,7 +88,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
   }
 
   @Override
-  public CompletableFuture<NavigationResult<Step<Position<D>, T>>> future() {
+  public CompletableFuture<NavigationResult<Position<D>, T>> future() {
     return future;
   }
 
@@ -160,7 +162,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
     return null;
   }
 
-  private Path<Step<Position<D>, T>> buildPath(GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>> path) {
+  private Path<Position<D>, T> buildPath(GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>> path) {
     List<Step<Position<D>, T>> steps = new ArrayList<>();
     for (Tier1Edge<T, D> edge : path.edges()) {
       for (RawStep<T, D> raw : edge.virtualPath().solvedSteps()) {
@@ -173,10 +175,10 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
             transition.destination(), transition.cost(), transition.time(), transition.payload()));
       }
     }
-    return new PathImpl<>(steps);
+    return new PathImpl<>(origin, steps);
   }
 
-  private void finish(NavigationResult<Step<Position<D>, T>> result) {
+  private void finish(NavigationResult<Position<D>, T> result) {
     future.complete(result);
   }
 }

@@ -29,5 +29,5 @@ public interface GuideSearch<L> {
    * @param target the location to guide the player toward
    * @return a future of the guide path, or empty if none was found
    */
-  CompletableFuture<Optional<Path<Step<L, MinecraftStepPayload>>>> search(L target);
+  CompletableFuture<Optional<Path<L, MinecraftStepPayload>>> search(L target);
 }

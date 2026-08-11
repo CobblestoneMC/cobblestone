@@ -24,10 +24,11 @@ import org.bukkit.Location;
  *
  * @param steps the ordered steps, origin first
  */
-record PaperPath(List<Step<Location, MinecraftStepPayload>> steps)
-    implements Path<Step<Location, MinecraftStepPayload>> {
+record PaperPath(Location origin, List<Step<Location, MinecraftStepPayload>> steps)
+    implements Path<Location, MinecraftStepPayload> {
 
   PaperPath {
     steps = List.copyOf(steps);
   }
+
 }

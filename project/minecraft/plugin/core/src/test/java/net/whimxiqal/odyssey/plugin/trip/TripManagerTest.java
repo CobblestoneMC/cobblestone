@@ -149,7 +149,7 @@ class TripManagerTest {
     }
 
     @Override
-    public void update(Path<Step<Object, MinecraftStepPayload>> newPath) {
+    public void update(Path<Object, MinecraftStepPayload> newPath) {
       updates++;
     }
 
@@ -174,9 +174,19 @@ class TripManagerTest {
     int calls;
 
     @Override
-    public CompletableFuture<Optional<Path<Step<Object, MinecraftStepPayload>>>> search() {
+    public CompletableFuture<Optional<Path<Object, MinecraftStepPayload>>> search() {
       calls++;
-      Path<Step<Object, MinecraftStepPayload>> path = List::of; // steps(): empty; cost/duration default 0
+      Path<Object, MinecraftStepPayload> path = new Path<Object, MinecraftStepPayload>() {
+        @Override
+        public Object origin() {
+          return null;
+        }
+
+        @Override
+        public List<Step<Object, MinecraftStepPayload>> steps() {
+          return List.of();
+        }
+      }; // steps(): empty; cost/duration default 0
       return CompletableFuture.completedFuture(Optional.of(path));
     }
   }

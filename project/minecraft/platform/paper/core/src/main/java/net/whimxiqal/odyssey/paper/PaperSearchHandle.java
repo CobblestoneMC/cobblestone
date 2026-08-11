@@ -34,15 +34,15 @@ import org.bukkit.Location;
  * </ul>
  */
 final class PaperSearchHandle
-    implements SearchHandle<Step<Location, MinecraftStepPayload>> {
+    implements SearchHandle<Location, MinecraftStepPayload> {
 
-  private final CompletableFuture<NavigationResult<Step<Location, MinecraftStepPayload>>>
+  private final CompletableFuture<NavigationResult<Location, MinecraftStepPayload>>
       future = new CompletableFuture<>();
-  private volatile SearchHandle<Step<Position<MinecraftWorld>, MinecraftStepPayload>> inner;
+  private volatile SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> inner;
   private volatile boolean cancelled;
 
   PaperSearchHandle(
-      CompletableFuture<SearchHandle<Step<Position<MinecraftWorld>, MinecraftStepPayload>>>
+      CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>>
           handleFuture) {
     handleFuture.whenComplete((handle, error) -> {
       if (error != null || handle == null) {
@@ -63,9 +63,9 @@ final class PaperSearchHandle
     });
   }
 
-  private static NavigationResult<Step<Location, MinecraftStepPayload>> map(
-      NavigationResult<Step<Position<MinecraftWorld>, MinecraftStepPayload>> result) {
-    if (result instanceof NavigationResult.Success<Step<Position<MinecraftWorld>, MinecraftStepPayload>>(Path<Step<Position<MinecraftWorld>, MinecraftStepPayload>> path)) {
+  private static NavigationResult<Location, MinecraftStepPayload> map(
+      NavigationResult<Position<MinecraftWorld>, MinecraftStepPayload> result) {
+    if (result instanceof NavigationResult.Success<Position<MinecraftWorld>, MinecraftStepPayload>(Path<Position<MinecraftWorld>, MinecraftStepPayload> path)) {
         List<Step<Location, MinecraftStepPayload>> steps = new ArrayList<>();
       for (Step<Position<MinecraftWorld>, MinecraftStepPayload> step : path.steps()) {
         steps.add(new Step<>(
@@ -74,22 +74,22 @@ final class PaperSearchHandle
             step.time(),
             step.payload()));
       }
-      return new NavigationResult.Success<>(new PaperPath(steps));
+      return new NavigationResult.Success<>(new PaperPath(PaperConversions.location(path.origin()), steps));
     }
-    NavigationResult.Failure<Step<Position<MinecraftWorld>, MinecraftStepPayload>> failure =
-        (NavigationResult.Failure<Step<Position<MinecraftWorld>, MinecraftStepPayload>>) result;
+    NavigationResult.Failure<Position<MinecraftWorld>, MinecraftStepPayload> failure =
+        (NavigationResult.Failure<Position<MinecraftWorld>, MinecraftStepPayload>) result;
     return new NavigationResult.Failure<>(failure.reason());
   }
 
   @Override
-  public CompletableFuture<NavigationResult<Step<Location, MinecraftStepPayload>>> future() {
+  public CompletableFuture<NavigationResult<Location, MinecraftStepPayload>> future() {
     return future;
   }
 
   @Override
   public void cancel() {
     cancelled = true;
-    SearchHandle<Step<Position<MinecraftWorld>, MinecraftStepPayload>> handle = inner;
+    SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> handle = inner;
     if (handle != null) {
       handle.cancel();
     }

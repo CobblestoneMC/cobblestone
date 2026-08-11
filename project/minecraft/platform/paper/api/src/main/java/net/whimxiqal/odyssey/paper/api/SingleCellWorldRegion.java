@@ -52,6 +52,6 @@ public class SingleCellWorldRegion implements WorldRegion<World, Vector3i> {
 
     @Override
     public String toString() {
-        return String.format("Region[%s - %s]", location.toVector().toVector3i().toString(NumberFormat.getIntegerInstance()), location.getWorld().getKey());
+        return String.format("Cell[%s (%s)]", location.toVector().toVector3i().toString(NumberFormat.getIntegerInstance()), location.getWorld().getKey());
     }
 }

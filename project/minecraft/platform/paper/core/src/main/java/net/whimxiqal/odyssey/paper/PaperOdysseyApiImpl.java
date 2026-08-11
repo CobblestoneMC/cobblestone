@@ -69,7 +69,7 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
   }
 
   @Override
-  public SearchHandle<Step<Location, MinecraftStepPayload>> navigatePlayer(
+  public SearchHandle<Location, MinecraftStepPayload> navigatePlayer(
       Player player,
       Location destination,
       MinecraftSearchSettings settings) {
@@ -79,7 +79,7 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
   }
 
   @Override
-  public SearchHandle<Step<Location, MinecraftStepPayload>> navigatePlayerToRegion(
+  public SearchHandle<Location, MinecraftStepPayload> navigatePlayerToRegion(
       Player player,
       Location location1,
       Location location2,
@@ -98,7 +98,7 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
    * @param settings the search limits and knobs
    * @return a handle to the in-flight search, yielding native-located steps
    */
-  public SearchHandle<Step<Location, MinecraftStepPayload>> navigatePlayerToDestination(
+  public SearchHandle<Location, MinecraftStepPayload> navigatePlayerToDestination(
       Player player,
       Destination<WorldRegion<World, Vector3i>> destination,
       MinecraftSearchSettings settings) {
@@ -139,7 +139,7 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
     scheduler.shutdown();
   }
 
-  private SearchHandle<Step<Location, MinecraftStepPayload>> search(
+  private SearchHandle<Location, MinecraftStepPayload> search(
       Player player, Destination<DomainRegion<MinecraftWorld>> destination,
       MinecraftSearchSettings settings) {
     OdysseyPlayer agent = new PaperPlayer(player);
@@ -155,7 +155,7 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
     List<MinecraftMode<OdysseyPlayer>> modes =
         MinecraftModes.forPlayer(agent, settings.excludedModes(), breakChecker);
 
-    CompletableFuture<SearchHandle<Step<Position<MinecraftWorld>, MinecraftStepPayload>>>
+    CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>>
         handleFuture = gatherTransitions(modifiers, player, settings.excludedWorlds(),
         settings.excludedDimensions()).thenApply(gathered -> core.navigate(
             logger, scheduler, agent, originPosition, destination, modes, gathered, restrictions,

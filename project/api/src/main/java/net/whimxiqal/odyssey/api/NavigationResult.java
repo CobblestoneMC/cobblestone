@@ -10,9 +10,10 @@ package net.whimxiqal.odyssey.api;
 /**
  * The outcome of a search: either a solved {@link Path} or a {@link FailureReason}.
  *
- * @param <S> the step type
+ * @param <P> the position type
+ * @param <T> the payload type
  */
-public sealed interface NavigationResult<S extends Step<?, ?>>
+public sealed interface NavigationResult<P, T>
     permits NavigationResult.Success, NavigationResult.Failure {
 
   /**
@@ -25,11 +26,12 @@ public sealed interface NavigationResult<S extends Step<?, ?>>
   /**
    * A successful result carrying the solved path.
    *
-   * @param <S> the step type
+   * @param <P> the position type
+   * @param <T> the payload type
    * @param path the solved path
    */
-  record Success<S extends Step<?, ?>>(Path<S> path)
-      implements NavigationResult<S> {
+  record Success<P, T>(Path<P, T> path)
+      implements NavigationResult<P, T> {
 
     @Override
     public boolean success() {
@@ -40,11 +42,12 @@ public sealed interface NavigationResult<S extends Step<?, ?>>
   /**
    * A failed result carrying the reason.
    *
-   * @param <S> the step type
+   * @param <P> the position type
+   * @param <T> the payload type
    * @param reason why the search failed
    */
-  record Failure<S extends Step<?, ?>>(FailureReason reason)
-      implements NavigationResult<S> {
+  record Failure<P, T>(FailureReason reason)
+      implements NavigationResult<P, T> {
 
     @Override
     public boolean success() {
