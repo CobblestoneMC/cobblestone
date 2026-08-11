@@ -201,14 +201,14 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
       }
     }
     if (checkers.isEmpty()) {
-      return BreakChecker.allowAll(); // no constraint: keep the mining mode on its fast path
+      return null; // no constraint: the mining mode attaches no restriction future at all
     }
     UUID playerId = player.getUniqueId();
     return (agent, cell, world, block) -> {
       Player online = Bukkit.getPlayer(playerId);
       World bukkitWorld = bukkitWorld(world.key());
       if (online == null || bukkitWorld == null) {
-        return FutureOr.of(true); // cannot evaluate; do not block mining
+        return CompletableFuture.completedFuture(true); // cannot evaluate; do not block mining
       }
       Location location = new Location(bukkitWorld, cell.x(), cell.y(), cell.z());
       BlockData data = block instanceof PaperBlock paperBlock ? paperBlock.data() : null;
@@ -216,7 +216,7 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
       for (PaperBreakChecker checker : checkers) {
         results.add(checker.breakable(online, location, data));
       }
-      return FutureOr.from(allTrue(results));
+      return allTrue(results);
     };
   }
 

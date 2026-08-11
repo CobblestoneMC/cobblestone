@@ -12,6 +12,8 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.joml.Vector3i;
 
+import java.text.NumberFormat;
+
 public class SingleCellWorldRegion implements WorldRegion<World, Vector3i> {
 
     private final Location location;
@@ -50,6 +52,6 @@ public class SingleCellWorldRegion implements WorldRegion<World, Vector3i> {
 
     @Override
     public String toString() {
-        return String.format("Region[%s - %s]", location.toVector().toVector3i(), location.getWorld().getKey());
+        return String.format("Region[%s - %s]", location.toVector().toVector3i().toString(NumberFormat.getIntegerInstance()), location.getWorld().getKey());
     }
 }

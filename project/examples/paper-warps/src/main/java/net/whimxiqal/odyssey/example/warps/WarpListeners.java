@@ -86,12 +86,9 @@ final class WarpListeners implements Listener {
         World destWorld = Worlds.byKey(destination.world());
         if (destWorld != null) {
           // teleportAsync is Folia-safe: it hops to the destination's region thread for us.
-          Bukkit.getGlobalRegionScheduler().run(plugin, (task) -> event.getPlayer().teleportAsync(destination.toLocation(destWorld), PlayerTeleportEvent.TeleportCause.PLUGIN).thenAccept(success -> {
-            if (success) {
-              event.getPlayer().sendMessage(
-                  Component.text("Warped through '" + portal.name() + "'.", NamedTextColor.AQUA));
-            }
-          }));
+          event.setTo(destination.toLocation(destWorld));
+          event.getPlayer().sendMessage(
+              Component.text("Warped through '" + portal.name() + "'.", NamedTextColor.AQUA));
         }
       });
       return; // one portal per move is plenty

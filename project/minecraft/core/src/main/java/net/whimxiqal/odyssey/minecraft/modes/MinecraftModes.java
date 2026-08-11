@@ -35,7 +35,7 @@ public final class MinecraftModes {
    */
   public static List<MinecraftMode<OdysseyPlayer>> forPlayer(
       OdysseyPlayer player, Set<MinecraftStepType> excluded) {
-    return forPlayer(player, excluded, BreakChecker.allowAll());
+    return forPlayer(player, excluded, null);
   }
 
   /**
@@ -44,7 +44,8 @@ public final class MinecraftModes {
    *
    * @param player the player being navigated
    * @param excluded step types to leave out
-   * @param breakChecker the injected breakability check for the mining mode
+   * @param breakChecker the injected breakability check for the mining mode, or {@code null} if no
+   *     integration constrains mining
    * @return the mode list
    */
   public static List<MinecraftMode<OdysseyPlayer>> forPlayer(

@@ -77,6 +77,17 @@ abstract class AbstractMinecraftMode<A extends MinecraftAgent> implements Minecr
     return new Movement<>(cell, cost, cost, new MinecraftStepPayload(type, new MinecraftInstruction.None()), state);
   }
 
+  /**
+   * Builds a movement carrying a mode-scoped restriction future (see {@link Movement#restricted()}) —
+   * used by the mining mode to tag an edge whose breakability an integration may still forbid.
+   */
+  protected static Movement<MinecraftStepPayload> move(
+      Cell cell, double cost, MinecraftStepType type, TraversalState state,
+      java.util.concurrent.CompletableFuture<Boolean> restricted) {
+    return new Movement<>(
+        cell, cost, cost, new MinecraftStepPayload(type, new MinecraftInstruction.None()), state, restricted);
+  }
+
   /** Builds a movement carrying an instruction. Time equals cost until danger weighting diverges them. */
   protected static Movement<MinecraftStepPayload> move(
       Cell cell, double cost, MinecraftStepType type, TraversalState state, MinecraftInstruction instruction) {

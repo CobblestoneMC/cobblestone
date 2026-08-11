@@ -84,6 +84,7 @@ public final class Trip<E, P extends TripAgent<E>, L> {
 
   /** Runs one re-search; {@code reschedule} continues the periodic live loop, off for a one-shot. */
   private void reSearch(boolean reschedule) {
+    System.out.println("reSearch");
     if (stopped || liveSearch == null) {
       return;
     }
@@ -95,6 +96,7 @@ public final class Trip<E, P extends TripAgent<E>, L> {
         result.ifPresent(this::applyNewPath);
       }
       if (reschedule && !stopped) {
+        System.out.println("scheduling reSearch");
         scheduleReSearch();
       }
     });

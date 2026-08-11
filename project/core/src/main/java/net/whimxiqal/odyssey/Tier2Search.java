@@ -15,30 +15,41 @@ import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 
 /**
- * A single-domain A* solve for one {@link VirtualPath}, implemented as a
- * <b>resumable</b> object so
- * it can run cooperatively: {@link #advance()} consumes cache-hit movements in
- * a tight synchronous
- * loop and only <i>parks</i> (freeing its worker) when a mode's
- * {@link FutureOr} is pending, then
- * resumes on the {@link Executor} once the block(s) arrive.
+ * A single-domain A* solve for one {@link VirtualPath}, run cooperatively so it never blocks a
+ * worker thread.
  *
- * <p>
- * The visited set is keyed on {@code (cell, TraversalState)}; the heuristic is
- * consistent, so a
- * closed-set A* returns least-cost paths for the explored terrain. Completes
- * {@link #solve()}'s
- * future with a {@link Tier2Result}.
+ * <p><b>Modes</b> may return a pending {@link FutureOr} (a chunk-load cache miss); the search parks
+ * that expansion and resumes when the blocks arrive.
+ *
+ * <p><b>Restrictions</b> (integration passability checks) are handled <i>optimistically</i>: a cell
+ * whose verdict is not yet known is expanded through as if passable, and its check is fired in the
+ * background (integrations resolve it on the main/region thread). Verdicts land in a mailbox the
+ * search drains as it runs — so the beam never stalls on a check, and a wall right next to the start
+ * is caught the moment its verdict returns, not at the end.
+ *
+ * <p>To make that correct on a graph, every node keeps <b>all</b> the candidate parents that ever
+ * relaxed it (not just its best), so removing a cell never forgets an alternative route. When a cell
+ * already in the tree comes back impassable it joins a persistent impassable set (never probed again)
+ * and the search <b>incrementally repairs</b>: it removes the cell, then re-parents its dependent
+ * subtree to the best surviving route via a mini-Dijkstra over the retained edges — pruning only the
+ * nodes with no route left. No global re-solve, no re-exploration.
+ *
+ * <p>All state mutation happens inside {@link #pump()}, which the {@code scheduled}/{@code signalled}
+ * flags keep single-flight; verdict and mode-completion callbacks only enqueue/wake, so no locks are
+ * needed.
  *
  * @param <A> the agent type
  * @param <T> the payload type
@@ -53,23 +64,36 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private final DomainRegion<D> target;
   private final List<? extends Mode<A, T, D>> modes;
   private final List<? extends Restriction<A, D>> restrictions;
+  private final boolean hasRestrictions;
   private final SolveHeuristic heuristic;
   private final double heuristicWeight;
   private final int maxCellsVisited;
   private final BooleanSupplier cancelled;
   private final Executor executor;
-  private final Map<CellState, Double> bestCosts = new HashMap<>();
-  private final Map<CellState, Came<T>> cameFrom = new HashMap<>();
-  private final Set<CellState> closed = new HashSet<>();
-  // A cell's passability does not change mid-solve, so immediate verdicts are memoized to spare
-  // integrations repeat lookups for a cell reached from several parents.
-  private final Map<Cell, Boolean> impassableCache = new HashMap<>();
-  private final PriorityQueue<OpenEntry> open = new PriorityQueue<>(
-      (a, b) -> Double.compare(a.estimatedTotalCost(), b.estimatedTotalCost()));
-  private final CompletableFuture<Tier2Result<T, D>> result = new CompletableFuture<>();
+  private final CellState start;
 
+  // --- search state; touched only inside pump() (single-flight) ---
+  private final Map<CellState, Node<T>> nodes = new HashMap<>();
+  private final Map<Cell, Set<CellState>> byCell = new HashMap<>();
+  private final PriorityQueue<Entry> open = new PriorityQueue<>(
+      (a, b) -> Double.compare(a.estimatedTotalCost(), b.estimatedTotalCost()));
+  private int expandedCount;
   private PendingModes<T> pendingModes;
-  private PendingRelax<T> pendingRelax;
+  private CellState pendingGoal; // an optimistically-reached goal awaiting path confirmation
+
+  // --- passability; verdicts are permanent ---
+  // true = impassable, false = passable, absent = unknown (or unchecked).
+  private final Map<Cell, Boolean> passability = new HashMap<>();
+  private final Set<Cell> inFlight = new HashSet<>();
+  private final ConcurrentLinkedQueue<Verdict> mailbox = new ConcurrentLinkedQueue<>();
+  private final ConcurrentLinkedQueue<EdgeRef> edgeMailbox = new ConcurrentLinkedQueue<>();
+  private final AtomicInteger pendingChecks = new AtomicInteger();
+  // scheduled: a pump task is queued/running. signalled: new work arrived (mailbox add, mode or
+  // verdict completion) — the pump consumes it so no wakeup is ever lost.
+  private final AtomicBoolean scheduled = new AtomicBoolean();
+  private final AtomicBoolean signalled = new AtomicBoolean();
+
+  private final CompletableFuture<Tier2Result<T, D>> result = new CompletableFuture<>();
 
   Tier2Search(
           OdysseyLogger logger,
@@ -89,168 +113,450 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     this.target = virtualPath.targetRegion();
     this.modes = modes;
     this.restrictions = restrictions;
+    this.hasRestrictions = !restrictions.isEmpty();
     this.heuristic = heuristic.newSolve(runningAverageWidth);
     this.heuristicWeight = heuristicWeight;
     this.maxCellsVisited = maxCellsVisited;
     this.cancelled = cancelled;
     this.executor = executor;
 
-    CellState start = new CellState(virtualPath.fromCell(), virtualPath.state());
-    bestCosts.put(start, 0.0);
-    open.add(new OpenEntry(start, 0.0,
-        heuristicWeight * this.heuristic.estimate(start.cell(), target, start.state())));
+    this.start = new CellState(virtualPath.fromCell(), virtualPath.state());
+    Node<T> startNode = getOrCreate(start);
+    startNode.cost = 0.0;
+    open.add(new Entry(start, 0.0, heuristicWeight * heuristic.estimate(start.cell(), target, start.state())));
   }
 
   CompletableFuture<Tier2Result<T, D>> solve() {
-    advance();
+    wake();
     return result;
   }
 
-  private void advance() {
-    try {
-      while (true) {
-        if (cancelled.getAsBoolean()) {
-          return; // abandoned; the outer search has already completed with CANCELLED
-        }
-        if (pendingModes != null) {
-          PendingModes<T> expansion = pendingModes;
-          pendingModes = null;
-          // Modes resolved; now apply restrictions (which may park again) before relaxing.
-          if (applyRestrictions(expansion.node(), expansion.g(), unwrap(expansion.results()))) {
-            return;
-          }
-          continue;
-        }
-        if (pendingRelax != null) {
-          PendingRelax<T> ready = pendingRelax;
-          pendingRelax = null;
-          relax(ready.node(), ready.g(), ready.allowed().value());
-          continue;
-        }
-        if (open.isEmpty()) {
-          logger.debug("Tier2Search(agent:{},target:{}) failed: open set is empty", agent, target);
-          result.complete(Tier2Result.unreachable());
-          return;
-        }
-        OpenEntry entry = open.poll();
-        CellState node = entry.key();
-        if (closed.contains(node) || entry.currentCost() > bestCosts.getOrDefault(node, Double.POSITIVE_INFINITY)) {
-          continue; // stale duplicate
-        }
-        closed.add(node);
-        Came<T> reachedBy = cameFrom.get(node);
-        if (reachedBy != null) {
-          // Feed the real cost of the committed step to the (possibly adaptive) heuristic.
-          heuristic.observe(reachedBy.movement().cost(), reachedBy.parent().cell().distance(node.cell()));
-        }
-        if (target.contains(node.cell())) {
-          logger.debug("Tier2Search(agent:{},target:{}) solved. visited:{}", agent, target, closed.size());
-          result.complete(Tier2Result.solved(reconstruct(node), entry.currentCost()));
-          return;
-        }
-        if (closed.size() > maxCellsVisited) {
-          logger.debug("Tier2Search(agent:{},target:{}) visited cells ({}) > max ({})", agent, target, closed.size(), maxCellsVisited);
-          result.complete(Tier2Result.limitExceeded());
-          return;
-        }
+  /** Signals that there is work and schedules a single {@link #pump()} run if one is not active. */
+  private void wake() {
+    signalled.set(true);
+    if (scheduled.compareAndSet(false, true)) {
+      executor.execute(this::pump);
+    }
+  }
 
-        List<FutureOr<Collection<Movement<T>>>> results = new ArrayList<>(modes.size());
-        boolean anyPending = false;
-        for (Mode<A, T, D> mode : modes) {
-          FutureOr<Collection<Movement<T>>> movements = mode.step(agent, node.cell(), domain, node.state());
-          results.add(movements);
-          anyPending |= !movements.isImmediate();
-        }
-        if (anyPending) {
-          logger.trace("Tier2Search(agent:{},target:{}) parked search due to pending modes", agent, target);
-          parkModes(node, entry.currentCost(), results);
-          return;
-        }
-        if (applyRestrictions(node, entry.currentCost(), unwrap(results))) {
+  private void pump() {
+    try {
+      // Consume signals: each pass runs the loop until it hits a wait; re-run while new work arrived.
+      while (signalled.compareAndSet(true, false)) {
+        loop();
+        if (result.isDone()) {
           return;
         }
       }
     } catch (Throwable throwable) {
       result.completeExceptionally(throwable);
+    } finally {
+      scheduled.set(false);
+      if (!result.isDone() && signalled.get()) {
+        wake(); // a signal raced our release; re-schedule
+      }
+    }
+  }
+
+  private void loop() {
+    while (true) {
+      if (cancelled.getAsBoolean()) {
+        return; // abandoned; the outer search has already completed with CANCELLED
+      }
+      drainVerdicts();
+      if (result.isDone()) {
+        return;
+      }
+      if (pendingModes != null) {
+        if (!pendingModes.ready()) {
+          return; // still waiting on block I/O; the mode future will wake us
+        }
+        PendingModes<T> ready = pendingModes;
+        pendingModes = null;
+        relaxAll(ready.node(), unwrap(ready.results()));
+        continue;
+      }
+      if (pendingGoal != null) {
+        Node<T> goal = nodes.get(pendingGoal);
+        if (goal == null) {
+          pendingGoal = null; // a repair dropped it; fall through and keep searching
+        } else if (pathConfirmed(pendingGoal)) {
+          finishSolved(pendingGoal);
+          return;
+        } else {
+          return; // path still has unconfirmed cells; a verdict will wake us
+        }
+      }
+      if (open.isEmpty()) {
+        if (pendingChecks.get() > 0) {
+          return; // nothing to expand, but a pending verdict may yet repair; wait
+        }
+        logger.debug("Tier2Search(agent:{},target:{}) failed: open set is empty", agent, target);
+        result.complete(Tier2Result.unreachable());
+        return;
+      }
+      Entry entry = open.poll();
+      Node<T> node = nodes.get(entry.key());
+      if (node == null || node.closed || entry.currentCost() != node.cost) {
+        continue; // stale duplicate (superseded, or dropped/raised by a repair)
+      }
+      node.closed = true;
+      if (node.bestParent != null) {
+        heuristic.observe(node.bestEdge.cost(), node.bestParent.cell().distance(node.key.cell()));
+      }
+      if (target.contains(node.key.cell())) {
+        if (pathConfirmed(node.key)) {
+          finishSolved(node.key);
+          return;
+        }
+        pendingGoal = node.key; // reached optimistically; wait for its path's checks to confirm
+        continue;
+      }
+      if (expandedCount++ > maxCellsVisited) {
+        logger.debug("Tier2Search(agent:{},target:{}) visited cells ({}) > max ({})",
+            agent, target, expandedCount, maxCellsVisited);
+        result.complete(Tier2Result.limitExceeded());
+        return;
+      }
+      expand(node);
+    }
+  }
+
+  private void expand(Node<T> node) {
+    List<FutureOr<Collection<Movement<T>>>> results = new ArrayList<>(modes.size());
+    boolean anyPending = false;
+    for (Mode<A, T, D> mode : modes) {
+      FutureOr<Collection<Movement<T>>> movements = mode.step(agent, node.key.cell(), domain, node.key.state());
+      results.add(movements);
+      anyPending |= !movements.isImmediate();
+    }
+    if (anyPending) {
+      pendingModes = new PendingModes<>(node.key, results);
+      List<CompletableFuture<?>> pending = new ArrayList<>();
+      for (FutureOr<Collection<Movement<T>>> movements : results) {
+        if (!movements.isImmediate()) {
+          pending.add(movements.future());
+        }
+      }
+      CompletableFuture.allOf(pending.toArray(new CompletableFuture<?>[0]))
+          .whenComplete((ignored, error) -> {
+            if (error != null) {
+              result.completeExceptionally(error);
+            }
+            wake();
+          });
+      return;
+    }
+    relaxAll(node.key, unwrap(results));
+  }
+
+  private void relaxAll(CellState parentKey, List<Movement<T>> movements) {
+    Node<T> parent = nodes.get(parentKey);
+    if (parent == null) {
+      return; // parent was removed by a repair while its modes were pending; drop the expansion
+    }
+    for (Movement<T> movement : movements) {
+      Cell cell = movement.cell();
+      if (Boolean.TRUE.equals(passability.get(cell))) {
+        continue; // known impassable
+      }
+      if (hasRestrictions && !passability.containsKey(cell) && !inFlight.contains(cell)) {
+        if (!fireCheck(cell)) {
+          continue; // resolved immediately as impassable
+        }
+      }
+      // A mode-scoped edge restriction (mining breakability) resolved as barred is dropped outright.
+      CompletableFuture<Boolean> restricted = movement.restricted();
+      if (restricted != null && restricted.isDone()
+          && !restricted.isCompletedExceptionally()
+          && Boolean.TRUE.equals(restricted.getNow(Boolean.FALSE))) {
+        continue;
+      }
+      CellState key = new CellState(cell, movement.state());
+      Node<T> neighbor = getOrCreate(key);
+      neighbor.parents.put(parentKey, movement); // retained candidate parent
+      if (restricted != null && !restricted.isDone()) {
+        watchEdge(parentKey, key, restricted); // pending: expand optimistically, drop the edge if barred
+      }
+      // Use the parent's current g: a repair may have raised it while these modes were pending.
+      double tentative = parent.cost + movement.cost();
+      if (tentative < neighbor.cost) {
+        setBestParent(neighbor, parentKey, movement, tentative);
+        open.add(new Entry(key, tentative,
+            tentative + heuristicWeight * heuristic.estimate(cell, target, movement.state())));
+      }
+    }
+  }
+
+  private void setBestParent(Node<T> node, CellState parentKey, Movement<T> edge, double g) {
+    if (node.bestParent != null) {
+      Node<T> old = nodes.get(node.bestParent);
+      if (old != null) {
+        old.children.remove(node.key);
+      }
+    }
+    node.cost = g;
+    node.bestParent = parentKey;
+    node.bestEdge = edge;
+    Node<T> parent = nodes.get(parentKey);
+    if (parent != null) {
+      parent.children.add(node.key);
+    }
+  }
+
+  private Node<T> getOrCreate(CellState key) {
+    Node<T> node = nodes.get(key);
+    if (node == null) {
+      node = new Node<>(key);
+      nodes.put(key, node);
+      byCell.computeIfAbsent(key.cell(), c -> new HashSet<>()).add(key);
+    }
+    return node;
+  }
+
+  private void removeNode(CellState key) {
+    Node<T> node = nodes.remove(key);
+    if (node == null) {
+      return;
+    }
+    Set<CellState> at = byCell.get(key.cell());
+    if (at != null) {
+      at.remove(key);
+      if (at.isEmpty()) {
+        byCell.remove(key.cell());
+      }
+    }
+    if (node.bestParent != null) {
+      Node<T> parent = nodes.get(node.bestParent);
+      if (parent != null) {
+        parent.children.remove(key);
+      }
     }
   }
 
   /**
-   * Filters the movements by the restrictions, then relaxes. Returns {@code true} if it parked on a
-   * pending restriction (the caller must return); {@code false} if it relaxed inline (loop on).
+   * Ensures a passability check for {@code cell} is under way. Returns {@code false} if the verdict
+   * resolved immediately as impassable (skip the cell), {@code true} otherwise (passable, or pending —
+   * expand optimistically).
    */
-  private boolean applyRestrictions(CellState node, double nodeCost, List<Movement<T>> movements) {
-    FutureOr<List<Movement<T>>> allowed = allowed(movements);
-    if (allowed.isImmediate()) {
-      relax(node, nodeCost, allowed.value());
-      return false;
+  private boolean fireCheck(Cell cell) {
+    FutureOr<Boolean> verdict = impassable(cell);
+    if (verdict.isImmediate()) {
+      boolean impassable = Boolean.TRUE.equals(verdict.value());
+      passability.put(cell, impassable);
+      return !impassable;
     }
-    logger.trace("Tier2Search(agent:{},target:{}) parked search due to pending restrictions", agent, target);
-    pendingRelax = new PendingRelax<>(node, nodeCost, allowed);
-    allowed.future().whenCompleteAsync((ignored, error) -> {
-      if (error != null) {
-        result.completeExceptionally(error);
-      } else {
-        advance();
-      }
-    }, executor);
-    return true;
+    if (inFlight.add(cell)) {
+      pendingChecks.incrementAndGet();
+      verdict.future().whenComplete((value, error) -> {
+        mailbox.add(new Verdict(cell, error == null && Boolean.TRUE.equals(value)));
+        pendingChecks.decrementAndGet();
+        wake();
+      });
+    }
+    return true; // optimistic
   }
 
-  /** The movements whose destination cell no restriction bars, possibly pending on async checks. */
-  private FutureOr<List<Movement<T>>> allowed(List<Movement<T>> movements) {
-    if (restrictions.isEmpty() || movements.isEmpty()) {
-      return FutureOr.of(movements);
-    }
-    Map<Cell, FutureOr<Boolean>> verdicts = new LinkedHashMap<>();
-    for (Movement<T> movement : movements) {
-      verdicts.computeIfAbsent(movement.cell(), this::impassable);
-    }
-    List<FutureOr<Boolean>> pending = new ArrayList<>(verdicts.values());
-    return FutureOr.all(pending).map(ignored -> {
-      List<Movement<T>> kept = new ArrayList<>(movements.size());
-      for (Movement<T> movement : movements) {
-        if (!Boolean.TRUE.equals(verdicts.get(movement.cell()).value())) {
-          kept.add(movement);
-        }
+  /** Watches a pending mode-scoped edge restriction; if it resolves barred, that edge is dropped. */
+  private void watchEdge(CellState parentKey, CellState childKey, CompletableFuture<Boolean> restricted) {
+    pendingChecks.incrementAndGet();
+    restricted.whenComplete((value, error) -> {
+      if (error == null && Boolean.TRUE.equals(value)) {
+        edgeMailbox.add(new EdgeRef(parentKey, childKey));
       }
-      return kept;
+      pendingChecks.decrementAndGet();
+      wake();
     });
   }
 
-  /** Whether any restriction bars the cell; {@code true} verdicts (immediate ones) are memoized. */
+  /** Combined verdict over all restrictions: impassable if any bars the cell. */
   private FutureOr<Boolean> impassable(Cell cell) {
-    Boolean cached = impassableCache.get(cell);
-    if (cached != null) {
-      return FutureOr.of(cached);
-    }
     List<FutureOr<Boolean>> verdicts = new ArrayList<>(restrictions.size());
     for (Restriction<A, D> restriction : restrictions) {
       verdicts.add(restriction.impassable(agent, cell, domain));
     }
-    FutureOr<Boolean> combined = FutureOr.all(verdicts).map(list -> list.contains(Boolean.TRUE));
-    if (combined.isImmediate()) {
-      impassableCache.put(cell, combined.value());
-    }
-    return combined;
+    return FutureOr.all(verdicts).map(list -> list.contains(Boolean.TRUE));
   }
 
-  private void parkModes(CellState node, double nodeCost, List<FutureOr<Collection<Movement<T>>>> results) {
-    pendingModes = new PendingModes<>(node, nodeCost, results);
-    List<CompletableFuture<?>> pending = new ArrayList<>();
-    for (FutureOr<Collection<Movement<T>>> movements : results) {
-      if (!movements.isImmediate()) {
-        pending.add(movements.future());
+  private void drainVerdicts() {
+    Verdict verdict;
+    while ((verdict = mailbox.poll()) != null) {
+      passability.put(verdict.cell(), verdict.impassable());
+      inFlight.remove(verdict.cell());
+      if (verdict.impassable() && byCell.containsKey(verdict.cell())) {
+        repairCell(verdict.cell());
       }
     }
-    CompletableFuture.allOf(pending.toArray(new CompletableFuture<?>[0]))
-        .whenCompleteAsync((ignored, error) -> {
-          if (error != null) {
-            result.completeExceptionally(error);
-          } else {
-            advance();
-          }
-        }, executor);
+    EdgeRef edge;
+    while ((edge = edgeMailbox.poll()) != null) {
+      removeEdge(edge.parent(), edge.child());
+    }
+  }
+
+  /** Removes an impassable cell's nodes and repairs the subtrees that depended on them. */
+  private void repairCell(Cell impassableCell) {
+    Set<CellState> roots = byCell.get(impassableCell);
+    if (roots == null || roots.isEmpty()) {
+      return;
+    }
+    List<CellState> seeds = new ArrayList<>();
+    for (CellState root : new ArrayList<>(roots)) {
+      Node<T> node = nodes.get(root);
+      if (node != null) {
+        seeds.addAll(node.children); // its dependents lose their best route
+      }
+      removeNode(root);
+    }
+    repairFrom(seeds);
+  }
+
+  /** Drops one mode-scoped edge; if it was the child's best route, repairs the child's subtree. */
+  private void removeEdge(CellState parentKey, CellState childKey) {
+    Node<T> child = nodes.get(childKey);
+    if (child == null || child.parents.remove(parentKey) == null) {
+      return; // already gone
+    }
+    if (parentKey.equals(child.bestParent)) {
+      repairFrom(List.of(childKey));
+    }
+  }
+
+  /**
+   * Repairs in place every node whose best route was invalidated (a cell removed above them, or their
+   * best edge dropped): re-parents each — via a mini-Dijkstra over the retained candidate edges — to
+   * the cheapest surviving route, or removes it if it has none left. No re-solve, no re-exploration.
+   */
+  private void repairFrom(Collection<CellState> invalidated) {
+    // The dependent subtree: the invalidated nodes plus their best-parent descendants.
+    Set<CellState> affected = new LinkedHashSet<>();
+    Deque<CellState> frontier = new ArrayDeque<>(invalidated);
+    while (!frontier.isEmpty()) {
+      CellState key = frontier.pop();
+      if (!affected.add(key)) {
+        continue;
+      }
+      Node<T> node = nodes.get(key);
+      if (node != null) {
+        frontier.addAll(node.children);
+      }
+    }
+    if (affected.isEmpty()) {
+      return;
+    }
+    logger.trace("Tier2Search(agent:{},target:{}) repairing {} node(s) after a wall", agent, target, affected.size());
+
+    // Invalidate the subtree, seed each node from its surviving external parents, and index the
+    // internal (affected→affected) edges for the mini-Dijkstra.
+    Map<CellState, List<CellState>> internalEdges = new HashMap<>();
+    Map<CellState, Repair<T>> tentative = new HashMap<>();
+    for (CellState key : affected) {
+      Node<T> node = nodes.get(key);
+      node.children.clear();
+      node.cost = Double.POSITIVE_INFINITY;
+      node.bestParent = null;
+      node.bestEdge = null;
+      for (Map.Entry<CellState, Movement<T>> candidate : node.parents.entrySet()) {
+        CellState parentKey = candidate.getKey();
+        if (affected.contains(parentKey)) {
+          internalEdges.computeIfAbsent(parentKey, k -> new ArrayList<>()).add(key);
+          continue;
+        }
+        Node<T> parent = nodes.get(parentKey);
+        if (parent == null || parent.cost == Double.POSITIVE_INFINITY) {
+          continue; // removed, dangling, or not itself reachable
+        }
+        relaxRepair(tentative, key, parentKey, candidate.getValue(), parent.cost);
+      }
+    }
+
+    PriorityQueue<RepairEntry> queue = new PriorityQueue<>((a, b) -> Double.compare(a.cost(), b.cost()));
+    for (Map.Entry<CellState, Repair<T>> seed : tentative.entrySet()) {
+      queue.add(new RepairEntry(seed.getKey(), seed.getValue().cost()));
+    }
+    Set<CellState> settled = new HashSet<>();
+    while (!queue.isEmpty()) {
+      RepairEntry entry = queue.poll();
+      CellState key = entry.key();
+      Repair<T> best = tentative.get(key);
+      if (!settled.add(key) || best == null || entry.cost() != best.cost()) {
+        continue; // settled already, or a stale queue entry
+      }
+      Node<T> node = nodes.get(key);
+      setBestParent(node, best.parent(), best.edge(), best.cost());
+      if (!node.closed) {
+        open.add(new Entry(key, node.cost,
+            node.cost + heuristicWeight * heuristic.estimate(key.cell(), target, key.state())));
+      }
+      List<CellState> children = internalEdges.get(key);
+      if (children == null) {
+        continue;
+      }
+      for (CellState childKey : children) {
+        if (settled.contains(childKey)) {
+          continue;
+        }
+        Movement<T> edge = nodes.get(childKey).parents.get(key);
+        if (edge != null && relaxRepair(tentative, childKey, key, edge, node.cost)) {
+          queue.add(new RepairEntry(childKey, node.cost + edge.cost()));
+        }
+      }
+    }
+
+    for (CellState key : affected) {
+      if (!settled.contains(key)) {
+        removeNode(key); // no surviving route — orphaned
+      }
+    }
+  }
+
+  /** Records a candidate repair route for {@code key} via {@code parentKey}; true if it is a new best. */
+  private boolean relaxRepair(
+      Map<CellState, Repair<T>> tentative, CellState key, CellState parentKey, Movement<T> edge,
+      double parentG) {
+    double g = parentG + edge.cost();
+    Repair<T> current = tentative.get(key);
+    if (current != null && current.cost() <= g) {
+      return false;
+    }
+    tentative.put(key, new Repair<>(g, parentKey, edge));
+    return true;
+  }
+
+  /**
+   * Whether {@code goal}'s current best path is fully confirmed: every cell has a passable verdict
+   * (for global restrictions) and every edge's mode-scoped restriction has resolved as not-barred.
+   */
+  private boolean pathConfirmed(CellState goal) {
+    CellState cursor = goal;
+    while (true) {
+      Node<T> node = nodes.get(cursor);
+      if (node == null) {
+        return false; // vanished under a repair
+      }
+      if (hasRestrictions && !cursor.equals(start)
+          && !Boolean.FALSE.equals(passability.get(cursor.cell()))) {
+        return false; // cell unknown (or, defensively, impassable) — not yet confirmed
+      }
+      if (node.bestParent == null) {
+        return true; // reached the start
+      }
+      if (!edgeConfirmed(node.bestEdge.restricted())) {
+        return false; // the edge's breakability check is still pending (or came back barred)
+      }
+      cursor = node.bestParent;
+    }
+  }
+
+  /** An edge is confirmed once its restriction future is absent or resolved as not-barred. */
+  private static boolean edgeConfirmed(CompletableFuture<Boolean> restricted) {
+    return restricted == null
+        || (restricted.isDone()
+            && (restricted.isCompletedExceptionally() || !Boolean.TRUE.equals(restricted.getNow(Boolean.FALSE))));
+  }
+
+  private void finishSolved(CellState goal) {
+    logger.debug("Tier2Search(agent:{},target:{}) solved. visited:{}", agent, target, nodes.size());
+    result.complete(Tier2Result.solved(reconstruct(goal), nodes.get(goal).cost));
   }
 
   private List<Movement<T>> unwrap(List<FutureOr<Collection<Movement<T>>>> results) {
@@ -264,45 +570,62 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     return movements;
   }
 
-  private void relax(CellState node, double nodeCost, List<Movement<T>> movements) {
-    for (Movement<T> movement : movements) {
-      CellState neighbor = new CellState(movement.cell(), movement.state());
-      double tentative = nodeCost + movement.cost();
-      if (tentative < bestCosts.getOrDefault(neighbor, Double.POSITIVE_INFINITY)) {
-        bestCosts.put(neighbor, tentative);
-        cameFrom.put(neighbor, new Came<>(node, movement));
-        open.add(new OpenEntry(neighbor, tentative,
-            tentative + heuristicWeight * heuristic.estimate(movement.cell(), target, movement.state())));
-      }
-    }
-  }
-
   private List<RawStep<T, D>> reconstruct(CellState goal) {
     Deque<RawStep<T, D>> steps = new ArrayDeque<>();
     CellState cursor = goal;
-    while (cameFrom.containsKey(cursor)) {
-      Came<T> came = cameFrom.get(cursor);
-      Movement<T> movement = came.movement();
+    Node<T> node = nodes.get(cursor);
+    while (node != null && node.bestParent != null) {
+      Movement<T> movement = node.bestEdge;
       steps.addFirst(new RawStep<>(
           new Position<>(cursor.cell(), domain), movement.cost(), movement.time(), movement.payload()));
-      cursor = came.parent();
+      cursor = node.bestParent;
+      node = nodes.get(cursor);
     }
     return new ArrayList<>(steps);
+  }
+
+  /** A search node: its cost, its chosen parent, and — the key to correct repair — every candidate parent. */
+  private static final class Node<T> {
+    final CellState key;
+    double cost = Double.POSITIVE_INFINITY;
+    CellState bestParent;
+    Movement<T> bestEdge;
+    final Map<CellState, Movement<T>> parents = new HashMap<>();
+    final Set<CellState> children = new HashSet<>();
+    boolean closed;
+
+    Node(CellState key) {
+      this.key = key;
+    }
   }
 
   private record CellState(Cell cell, TraversalState state) {
   }
 
-  private record OpenEntry(CellState key, double currentCost, double estimatedTotalCost) {
+  private record Entry(CellState key, double currentCost, double estimatedTotalCost) {
   }
 
-  private record Came<T>(CellState parent, Movement<T> movement) {
+  private record RepairEntry(CellState key, double cost) {
+  }
+
+  private record Repair<T>(double cost, CellState parent, Movement<T> edge) {
+  }
+
+  private record Verdict(Cell cell, boolean impassable) {
+  }
+
+  private record EdgeRef(CellState parent, CellState child) {
   }
 
   private record PendingModes<T>(
-      CellState node, double g, List<FutureOr<Collection<Movement<T>>>> results) {
-  }
-
-  private record PendingRelax<T>(CellState node, double g, FutureOr<List<Movement<T>>> allowed) {
+      CellState node, List<FutureOr<Collection<Movement<T>>>> results) {
+    boolean ready() {
+      for (FutureOr<Collection<Movement<T>>> movements : results) {
+        if (!movements.isImmediate() && !movements.future().isDone()) {
+          return false;
+        }
+      }
+      return true;
+    }
   }
 }
