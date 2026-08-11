@@ -133,5 +133,7 @@ public interface PaperTripService {
 
     /** The player is already at their trip limit. */
     record TripLimitReached() implements TripOutcome {}
+
+    record Error(Throwable throwable) implements TripOutcome {}
   }
 }

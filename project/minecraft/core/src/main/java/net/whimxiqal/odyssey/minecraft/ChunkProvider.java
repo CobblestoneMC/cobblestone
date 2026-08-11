@@ -10,7 +10,6 @@ package net.whimxiqal.odyssey.minecraft;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.LongSupplier;
 import net.whimxiqal.odyssey.Cell;
@@ -35,8 +34,7 @@ public final class ChunkProvider {
 
   private final Object lock = new Object();
   private final Map<ChunkKey, Cached> cache;
-  private final Map<ChunkKey, CompletableFuture<Optional<MinecraftChunk>>> inFlight =
-      new HashMap<>();
+  private final Map<ChunkKey, CompletableFuture<MinecraftChunk>> inFlight = new HashMap<>();
 
   /**
    * Creates a chunk provider.
@@ -85,13 +83,9 @@ public final class ChunkProvider {
       if (cached != null) {
         cache.remove(key);
       }
-      CompletableFuture<Optional<MinecraftChunk>> fetch = fetchLocked(key, chunkX, chunkZ, world);
+      CompletableFuture<MinecraftChunk> fetch = fetchLocked(key, chunkX, chunkZ, world);
       return FutureOr.ofFuture(
-          fetch.thenApply(
-              snapshot ->
-                  snapshot
-                      .map(chunk -> chunk.block(cell.x() & 15, cell.y(), cell.z() & 15))
-                      .orElse(UnknownBlock.INSTANCE)));
+          fetch.thenApply(snapshot -> snapshot.block(cell.x() & 15, cell.y(), cell.z() & 15)));
     }
   }
 
@@ -99,21 +93,21 @@ public final class ChunkProvider {
     return clock.getAsLong() - cached.cachedAt() > settings.stalenessMillis();
   }
 
-  private CompletableFuture<Optional<MinecraftChunk>> fetchLocked(
+  private CompletableFuture<MinecraftChunk> fetchLocked(
       ChunkKey key, int chunkX, int chunkZ, MinecraftWorld world) {
-    CompletableFuture<Optional<MinecraftChunk>> pending = inFlight.get(key);
+    CompletableFuture<MinecraftChunk> pending = inFlight.get(key);
     if (pending != null) {
       return pending;
     }
-    CompletableFuture<Optional<MinecraftChunk>> fetch =
+    CompletableFuture<MinecraftChunk> fetch =
         platform.fetchChunk(chunkX, chunkZ, world, settings.loadPolicy());
     inFlight.put(key, fetch);
     fetch.whenComplete(
         (snapshot, error) -> {
           synchronized (lock) {
             inFlight.remove(key);
-            if (error == null && snapshot != null && snapshot.isPresent()) {
-              cache.put(key, new Cached(snapshot.get(), clock.getAsLong()));
+            if (error == null && snapshot != null) {
+              cache.put(key, new Cached(snapshot, clock.getAsLong()));
             }
           }
         });

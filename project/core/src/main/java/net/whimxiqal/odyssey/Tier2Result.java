@@ -17,35 +17,20 @@ import java.util.List;
  *
  * @param <T> the payload type
  * @param <D> the domain type
- * @param outcome how the solve ended
- * @param steps the solved steps (empty unless {@link Outcome#SOLVED})
- * @param cost the true cost (meaningful only when solved)
  */
-record Tier2Result<T, D extends Domain>(Outcome outcome, List<RawStep<T, D>> steps, double cost) {
+sealed interface Tier2Result<T, D extends Domain> permits Tier2Result.Solved, Tier2Result.Failed {
 
   /** How a Tier-2 solve ended. */
-  enum Outcome {
-    /** A path to the target was found. */
-    SOLVED,
+  enum FailureOutcome {
     /** The frontier emptied without reaching the target — no path in this domain. */
     UNREACHABLE,
     /** The solve visited more cells than allowed and gave up (a memory guard, not a verdict). */
-    LIMIT_EXCEEDED
+    LIMIT_EXCEEDED,
+    TIMED_OUT
   }
 
-  boolean solved() {
-    return outcome == Outcome.SOLVED;
-  }
+  record Solved<T, D extends Domain>(List<RawStep<T, D>> steps, double cost)
+      implements Tier2Result<T, D> {}
 
-  static <T, D extends Domain> Tier2Result<T, D> solved(List<RawStep<T, D>> steps, double cost) {
-    return new Tier2Result<>(Outcome.SOLVED, List.copyOf(steps), cost);
-  }
-
-  static <T, D extends Domain> Tier2Result<T, D> unreachable() {
-    return new Tier2Result<>(Outcome.UNREACHABLE, List.of(), Double.POSITIVE_INFINITY);
-  }
-
-  static <T, D extends Domain> Tier2Result<T, D> limitExceeded() {
-    return new Tier2Result<>(Outcome.LIMIT_EXCEEDED, List.of(), Double.POSITIVE_INFINITY);
-  }
+  record Failed<T, D extends Domain>(FailureOutcome outcome) implements Tier2Result<T, D> {}
 }

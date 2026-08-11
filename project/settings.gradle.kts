@@ -42,3 +42,5 @@ include(":integrations:towny")
 project(":integrations:towny").name = "odyssey-towny"
 include(":integrations:quests")
 project(":integrations:quests").name = "odyssey-quests"
+include(":integrations:beautyquests")
+project(":integrations:beautyquests").name = "odyssey-beautyquests"

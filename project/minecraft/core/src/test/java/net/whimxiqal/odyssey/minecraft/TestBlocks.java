@@ -15,22 +15,12 @@ public final class TestBlocks {
   static MinecraftBlock air() {
     return new MinecraftBlock() {
       @Override
-      public String typeKey() {
-        return "minecraft:air";
-      }
-
-      @Override
       public boolean isPassable() {
         return true;
       }
 
       @Override
       public boolean isSolidTop() {
-        return false;
-      }
-
-      @Override
-      public boolean isWater() {
         return false;
       }
     };
@@ -48,11 +38,6 @@ public final class TestBlocks {
   static MinecraftBlock solid(double breakTime, double speedFactor) {
     return new MinecraftBlock() {
       @Override
-      public String typeKey() {
-        return "minecraft:stone";
-      }
-
-      @Override
       public boolean isPassable() {
         return false;
       }
@@ -60,11 +45,6 @@ public final class TestBlocks {
       @Override
       public boolean isSolidTop() {
         return true;
-      }
-
-      @Override
-      public boolean isWater() {
-        return false;
       }
 
       @Override
@@ -94,11 +74,6 @@ public final class TestBlocks {
   public static MinecraftBlock slab() {
     return new MinecraftBlock() {
       @Override
-      public String typeKey() {
-        return "minecraft:stone_slab";
-      }
-
-      @Override
       public boolean isPassable() {
         return false;
       }
@@ -114,11 +89,6 @@ public final class TestBlocks {
       }
 
       @Override
-      public boolean isWater() {
-        return false;
-      }
-
-      @Override
       public double breakTimeSeconds() {
         return 1.0;
       }
@@ -127,11 +97,6 @@ public final class TestBlocks {
 
   public static MinecraftBlock water() {
     return new MinecraftBlock() {
-      @Override
-      public String typeKey() {
-        return "minecraft:water";
-      }
-
       @Override
       public boolean isPassable() {
         return false;
@@ -152,11 +117,6 @@ public final class TestBlocks {
   public static MinecraftBlock pressurePlate() {
     return new MinecraftBlock() {
       @Override
-      public String typeKey() {
-        return "minecraft:stone_pressure_plate";
-      }
-
-      @Override
       public boolean isPassable() {
         return true;
       }
@@ -164,11 +124,6 @@ public final class TestBlocks {
       @Override
       public boolean isSolidTop() {
         return true;
-      }
-
-      @Override
-      public boolean isWater() {
-        return false;
       }
 
       @Override
@@ -181,11 +136,6 @@ public final class TestBlocks {
   public static MinecraftBlock closedDoor(boolean opensByHand) {
     return new MinecraftBlock() {
       @Override
-      public String typeKey() {
-        return opensByHand ? "minecraft:oak_door" : "minecraft:iron_door";
-      }
-
-      @Override
       public boolean isPassable() {
         return false;
       }
@@ -196,18 +146,8 @@ public final class TestBlocks {
       }
 
       @Override
-      public boolean isWater() {
-        return false;
-      }
-
-      @Override
       public boolean isDoor() {
         return true;
-      }
-
-      @Override
-      public boolean isOpen() {
-        return false;
       }
 
       @Override

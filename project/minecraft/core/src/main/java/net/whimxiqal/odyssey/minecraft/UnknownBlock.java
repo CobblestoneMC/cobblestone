@@ -15,22 +15,12 @@ public enum UnknownBlock implements MinecraftBlock {
   INSTANCE;
 
   @Override
-  public String typeKey() {
-    return "odyssey:unknown";
-  }
-
-  @Override
   public boolean isPassable() {
     return false;
   }
 
   @Override
   public boolean isSolidTop() {
-    return false;
-  }
-
-  @Override
-  public boolean isWater() {
     return false;
   }
 }

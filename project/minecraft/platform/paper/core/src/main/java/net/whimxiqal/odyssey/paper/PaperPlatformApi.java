@@ -7,7 +7,6 @@
 
 package net.whimxiqal.odyssey.paper;
 
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import net.whimxiqal.odyssey.minecraft.ChunkLoadPolicy;
 import net.whimxiqal.odyssey.minecraft.MinecraftChunk;
@@ -42,21 +41,19 @@ final class PaperPlatformApi implements PlatformApi<Entity> {
   }
 
   @Override
-  public CompletableFuture<Optional<MinecraftChunk>> fetchChunk(
+  public CompletableFuture<MinecraftChunk> fetchChunk(
       int chunkX, int chunkZ, MinecraftWorld world, ChunkLoadPolicy policy) {
     NamespacedKey key = NamespacedKey.fromString(world.key());
     World bukkit = key == null ? null : Bukkit.getWorld(key);
     if (bukkit == null) {
-      return CompletableFuture.completedFuture(Optional.empty());
+      return CompletableFuture.completedFuture(MinecraftChunk.Unknown.INSTANCE);
     }
-    int minY = bukkit.getMinHeight();
-    int maxY = bukkit.getMaxHeight() - 1;
 
     if (policy == ChunkLoadPolicy.LOADED_ONLY) {
       if (!bukkit.isChunkLoaded(chunkX, chunkZ)) {
-        return CompletableFuture.completedFuture(Optional.empty());
+        return CompletableFuture.completedFuture(MinecraftChunk.Unknown.INSTANCE);
       }
-      CompletableFuture<Optional<MinecraftChunk>> future = new CompletableFuture<>();
+      CompletableFuture<MinecraftChunk> future = new CompletableFuture<>();
       Bukkit.getRegionScheduler()
           .execute(
               plugin,
@@ -65,7 +62,7 @@ final class PaperPlatformApi implements PlatformApi<Entity> {
               chunkZ,
               () -> {
                 ChunkSnapshot snapshot = bukkit.getChunkAt(chunkX, chunkZ).getChunkSnapshot();
-                future.complete(Optional.of(new PaperChunk(snapshot, chunkX, chunkZ, minY, maxY)));
+                future.complete(new PaperChunk(snapshot));
               });
       return future;
     }
@@ -75,7 +72,8 @@ final class PaperPlatformApi implements PlatformApi<Entity> {
         .getChunkAtAsync(chunkX, chunkZ, generate)
         .thenApply(
             chunk ->
-                Optional.<MinecraftChunk>of(
-                    new PaperChunk(chunk.getChunkSnapshot(), chunkX, chunkZ, minY, maxY)));
+                chunk == null
+                    ? MinecraftChunk.Unknown.INSTANCE
+                    : new PaperChunk(chunk.getChunkSnapshot()));
   }
 }

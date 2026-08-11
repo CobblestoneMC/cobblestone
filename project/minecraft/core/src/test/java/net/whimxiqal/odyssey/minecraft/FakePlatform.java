@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -21,7 +20,7 @@ import java.util.concurrent.CompletableFuture;
 final class FakePlatform implements PlatformApi<Object> {
 
   private final List<long[]> fetched = new ArrayList<>();
-  private final Map<Long, CompletableFuture<Optional<MinecraftChunk>>> deferred = new HashMap<>();
+  private final Map<Long, CompletableFuture<MinecraftChunk>> deferred = new HashMap<>();
   private boolean immediate = true;
 
   void setImmediate(boolean immediate) {
@@ -33,7 +32,7 @@ final class FakePlatform implements PlatformApi<Object> {
   }
 
   void completeFetch(int chunkX, int chunkZ) {
-    deferred.get(key(chunkX, chunkZ)).complete(Optional.of(new FakeChunk(chunkX, chunkZ)));
+    deferred.get(key(chunkX, chunkZ)).complete(new FakeChunk(chunkX, chunkZ));
   }
 
   @Override
@@ -42,13 +41,13 @@ final class FakePlatform implements PlatformApi<Object> {
   }
 
   @Override
-  public CompletableFuture<Optional<MinecraftChunk>> fetchChunk(
+  public CompletableFuture<MinecraftChunk> fetchChunk(
       int chunkX, int chunkZ, MinecraftWorld world, ChunkLoadPolicy policy) {
     fetched.add(new long[] {chunkX, chunkZ});
     if (immediate) {
-      return CompletableFuture.completedFuture(Optional.of(new FakeChunk(chunkX, chunkZ)));
+      return CompletableFuture.completedFuture(new FakeChunk(chunkX, chunkZ));
     }
-    CompletableFuture<Optional<MinecraftChunk>> future = new CompletableFuture<>();
+    CompletableFuture<MinecraftChunk> future = new CompletableFuture<>();
     deferred.put(key(chunkX, chunkZ), future);
     return future;
   }
@@ -59,26 +58,6 @@ final class FakePlatform implements PlatformApi<Object> {
 
   /** A trivial chunk snapshot whose blocks are all solid. */
   private record FakeChunk(int cx, int cz) implements MinecraftChunk {
-
-    @Override
-    public int chunkX() {
-      return cx;
-    }
-
-    @Override
-    public int chunkZ() {
-      return cz;
-    }
-
-    @Override
-    public int minY() {
-      return -64;
-    }
-
-    @Override
-    public int maxY() {
-      return 320;
-    }
 
     @Override
     public MinecraftBlock block(int localX, int y, int localZ) {

@@ -24,7 +24,4 @@ public enum FailureReason {
 
   /** The search exceeded its wall-clock budget. */
   TIMED_OUT,
-
-  /** An unexpected error occurred during the search. */
-  ERROR
 }

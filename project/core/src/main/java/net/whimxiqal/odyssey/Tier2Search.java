@@ -69,6 +69,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private final int maxCellsVisited;
   private final BooleanSupplier cancelled;
   private final Executor executor;
+  private final long deadlineMillis;
   private final CellState start;
 
   // --- search state; touched only inside pump() (single-flight) ---
@@ -105,7 +106,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       int runningAverageWidth,
       double heuristicWeight,
       BooleanSupplier cancelled,
-      Executor executor) {
+      Executor executor,
+      long deadlineMillis) {
     this.logger = logger;
     this.agent = agent;
     this.domain = virtualPath.domain();
@@ -118,6 +120,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     this.maxCellsVisited = maxCellsVisited;
     this.cancelled = cancelled;
     this.executor = executor;
+    this.deadlineMillis = deadlineMillis;
 
     this.start = new CellState(virtualPath.fromCell(), virtualPath.state());
     Node<T> startNode = getOrCreate(start);
@@ -165,6 +168,11 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       if (cancelled.getAsBoolean()) {
         return; // abandoned; the outer search has already completed with CANCELLED
       }
+      if (deadlineMillis > 0 && System.currentTimeMillis() > deadlineMillis) {
+        logger.debug("Tier2Search(agent:{},target:{}) timed out", agent, target);
+        result.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.TIMED_OUT));
+        return;
+      }
       drainVerdicts();
       if (result.isDone()) {
         return;
@@ -194,7 +202,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
           return; // nothing to expand, but a pending verdict may yet repair; wait
         }
         logger.debug("Tier2Search(agent:{},target:{}) failed: open set is empty", agent, target);
-        result.complete(Tier2Result.unreachable());
+        result.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.UNREACHABLE));
         return;
       }
       Entry entry = open.poll();
@@ -221,7 +229,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
             target,
             expandedCount,
             maxCellsVisited);
-        result.complete(Tier2Result.limitExceeded());
+        result.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.LIMIT_EXCEEDED));
         return;
       }
       expand(node);
@@ -594,7 +602,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
 
   private void finishSolved(CellState goal) {
     logger.debug("Tier2Search(agent:{},target:{}) solved. visited:{}", agent, target, nodes.size());
-    result.complete(Tier2Result.solved(reconstruct(goal), nodes.get(goal).cost));
+    result.complete(new Tier2Result.Solved<>(reconstruct(goal), nodes.get(goal).cost));
   }
 
   private List<Movement<T>> unwrap(List<FutureOr<Collection<Movement<T>>>> results) {

@@ -7,7 +7,6 @@
 
 package net.whimxiqal.odyssey.minecraft;
 
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -32,8 +31,8 @@ public interface PlatformApi<E> {
    * @param chunkZ the chunk Z coordinate
    * @param world the world
    * @param policy the load policy
-   * @return a future of the snapshot, or empty
+   * @return a future of the snapshot, or null
    */
-  CompletableFuture<Optional<MinecraftChunk>> fetchChunk(
+  CompletableFuture<MinecraftChunk> fetchChunk(
       int chunkX, int chunkZ, MinecraftWorld world, ChunkLoadPolicy policy);
 }

@@ -9,6 +9,7 @@ package net.whimxiqal.odyssey;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collection;
@@ -41,15 +42,16 @@ class Tier2SearchTest {
             5,
             1.0,
             () -> false,
-            Runnable::run);
+            Runnable::run,
+            0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
 
     assertTrue(future.isDone(), "an all-immediate solve should complete synchronously");
     Tier2Result<TestStep, TestDomain> result = future.getNow(null);
-    assertTrue(result.solved());
-    assertEquals(3.0, result.cost(), 1e-9);
-    assertEquals(3, result.steps().size());
+    assertInstanceOf(Tier2Result.Solved.class, result);
+    assertEquals(3.0, ((Tier2Result.Solved<TestStep, TestDomain>) result).cost(), 1e-9);
+    assertEquals(3, ((Tier2Result.Solved<TestStep, TestDomain>) result).steps().size());
   }
 
   @Test
@@ -67,7 +69,8 @@ class Tier2SearchTest {
             5,
             1.0,
             () -> false,
-            Runnable::run);
+            Runnable::run,
+            0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
 
@@ -84,9 +87,9 @@ class Tier2SearchTest {
     mode.releaseNext();
     assertTrue(future.isDone());
     Tier2Result<TestStep, TestDomain> result = future.getNow(null);
-    assertTrue(result.solved());
-    assertEquals(2.0, result.cost(), 1e-9);
-    assertEquals(2, result.steps().size());
+    assertInstanceOf(Tier2Result.Solved.class, result);
+    assertEquals(2.0, ((Tier2Result.Solved<TestStep, TestDomain>) result).cost(), 1e-9);
+    assertEquals(2, ((Tier2Result.Solved<TestStep, TestDomain>) result).steps().size());
   }
 
   @Test
@@ -103,11 +106,12 @@ class Tier2SearchTest {
             5,
             1.0,
             () -> false,
-            Runnable::run);
+            Runnable::run,
+            0);
 
     Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
 
-    assertFalse(result.solved());
+    assertInstanceOf(Tier2Result.Failed.class, result);
   }
 
   @Test
@@ -124,13 +128,14 @@ class Tier2SearchTest {
             5,
             1.0,
             () -> false,
-            Runnable::run);
+            Runnable::run,
+            0);
 
     Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
 
-    assertTrue(result.solved());
-    assertEquals(0.0, result.cost(), 1e-9);
-    assertTrue(result.steps().isEmpty());
+    assertInstanceOf(Tier2Result.Solved.class, result);
+    assertEquals(0.0, ((Tier2Result.Solved<TestStep, TestDomain>) result).cost(), 1e-9);
+    assertTrue(((Tier2Result.Solved<TestStep, TestDomain>) result).steps().isEmpty());
   }
 
   @Test
@@ -150,11 +155,12 @@ class Tier2SearchTest {
             5,
             1.0,
             () -> false,
-            Runnable::run);
+            Runnable::run,
+            0);
 
     Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
 
-    assertFalse(result.solved());
+    assertInstanceOf(Tier2Result.Failed.class, result);
   }
 
   @Test
@@ -177,14 +183,15 @@ class Tier2SearchTest {
             5,
             1.0,
             () -> false,
-            Runnable::run);
+            Runnable::run,
+            0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
     assertFalse(future.isDone(), "reached the goal optimistically; awaiting (2,0,0)'s verdict");
 
     gate.complete(true); // (2,0,0) is impassable → wall it off, re-solve → unreachable
     assertTrue(future.isDone());
-    assertFalse(future.getNow(null).solved());
+    assertInstanceOf(Tier2Result.Failed.class, future.getNow(null));
   }
 
   @Test
@@ -209,7 +216,8 @@ class Tier2SearchTest {
             5,
             1.0,
             () -> false,
-            Runnable::run);
+            Runnable::run,
+            0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
     assertFalse(future.isDone(), "reached the goal optimistically through B; awaiting B's verdict");
@@ -217,10 +225,12 @@ class Tier2SearchTest {
     gate.complete(true); // B barred → D re-parents to the C route, G still reached
     assertTrue(future.isDone());
     Tier2Result<TestStep, TestDomain> result = future.getNow(null);
-    assertTrue(result.solved());
+    assertInstanceOf(Tier2Result.Solved.class, result);
     assertEquals(
-        5.0, result.cost(), 1e-9); // A→C (1) → D (3) → G (1); the B route would have been 3
-    assertEquals(3, result.steps().size());
+        5.0,
+        ((Tier2Result.Solved<TestStep, TestDomain>) result).cost(),
+        1e-9); // A→C (1) → D (3) → G (1); the B route would have been 3
+    assertEquals(3, ((Tier2Result.Solved<TestStep, TestDomain>) result).steps().size());
   }
 
   /**
@@ -269,7 +279,8 @@ class Tier2SearchTest {
             5,
             1.0,
             () -> false,
-            Runnable::run);
+            Runnable::run,
+            0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
     assertFalse(
@@ -278,9 +289,9 @@ class Tier2SearchTest {
     gate.complete(true); // B→D barred → drop just that edge, re-parent D through C
     assertTrue(future.isDone());
     Tier2Result<TestStep, TestDomain> result = future.getNow(null);
-    assertTrue(result.solved());
-    assertEquals(5.0, result.cost(), 1e-9);
-    assertEquals(3, result.steps().size());
+    assertInstanceOf(Tier2Result.Solved.class, result);
+    assertEquals(5.0, ((Tier2Result.Solved<TestStep, TestDomain>) result).cost(), 1e-9);
+    assertEquals(3, ((Tier2Result.Solved<TestStep, TestDomain>) result).steps().size());
   }
 
   /**
@@ -336,13 +347,14 @@ class Tier2SearchTest {
             5,
             1.0,
             () -> false,
-            Runnable::run);
+            Runnable::run,
+            0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
     assertFalse(future.isDone(), "parked on the pending restriction verdict");
 
     verdict.complete(true); // resolves the mapped verdict to "not impassable"
     assertTrue(future.isDone());
-    assertTrue(future.getNow(null).solved());
+    assertInstanceOf(Tier2Result.Solved.class, future.getNow(null));
   }
 }

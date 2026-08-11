@@ -268,63 +268,81 @@ final class NavigateCommand {
                 messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
                 return;
               }
-              if (result
-                  instanceof
-                  NavigationResult.Failure<Location, MinecraftStepPayload>(FailureReason reason)) {
-                log.debug(
-                    "navigate {} -> {}: {} in {}ms",
-                    player.getName(),
-                    destinationLabel,
-                    reason,
-                    elapsedMillis);
-                sendFailure(player, locale, messages, reason);
-                return;
-              }
-              Path<Location, MinecraftStepPayload> path =
-                  ((NavigationResult.Success<Location, MinecraftStepPayload>) result).path();
-              log.debug(
-                  "navigate {} -> {}: {} steps, {}s duration, found in {}ms",
-                  player.getName(),
-                  destinationLabel,
-                  path.steps().size(),
-                  path.duration(),
-                  elapsedMillis);
-              // Hand the found route to the shared trip service — the same code path integrations
-              // use. The command only carries the chosen navigator id (appearance comes from
-              // config);
-              // the flag-scoped re-search/guide closures ride along for stray recalculation.
-              NavigatorSettings settings = NavigatorSettings.builder(flags.navigator()).build();
-              tripService
-                  .start(
-                      player,
-                      path,
+              switch (result) {
+                case NavigationResult.Error<Location, MinecraftStepPayload> v -> {
+                  log.error(
+                      "navigate {} -> {}: ERROR in {}ms",
+                      v.throwable(),
+                      player.getName(),
                       destinationLabel,
-                      settings,
-                      liveSearch(
-                          player, destination, flags, platformApi, searches, gate, searchSettings),
-                      guideSearch(player, flags, platformApi),
-                      live)
-                  .whenComplete(
-                      (outcome, tripError) -> {
-                        if (tripError != null
-                            || outcome instanceof PaperTripService.TripOutcome.Failed) {
-                          messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
-                        } else if (outcome
-                            instanceof PaperTripService.TripOutcome.TripLimitReached) {
-                          messages.send(player, locale, OdysseyMessages.NAVIGATE_TRIP_LIMIT);
-                        } else {
-                          // "Route found" carries a hover with the search time and the trip length.
-                          Component started =
-                              messages.render(locale, OdysseyMessages.NAVIGATE_STARTED);
-                          Component stats =
-                              messages.render(
-                                  locale,
-                                  OdysseyMessages.NAVIGATE_STATS,
-                                  elapsedMillis,
-                                  messages.formatDuration(locale, path.duration()));
-                          player.sendMessage(started.hoverEvent(HoverEvent.showText(stats)));
-                        }
-                      });
+                      elapsedMillis);
+                  messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
+                }
+                case NavigationResult.Failure<Location, MinecraftStepPayload> v -> {
+                  log.debug(
+                      "navigate {} -> {}: {} in {}ms",
+                      player.getName(),
+                      destinationLabel,
+                      v.reason(),
+                      elapsedMillis);
+                  sendFailure(player, locale, messages, v.reason());
+                }
+                case NavigationResult.Success<Location, MinecraftStepPayload> v -> {
+                  Path<Location, MinecraftStepPayload> path =
+                      ((NavigationResult.Success<Location, MinecraftStepPayload>) result).path();
+                  log.debug(
+                      "navigate {} -> {}: {} steps, {}s duration, found in {}ms",
+                      player.getName(),
+                      destinationLabel,
+                      path.steps().size(),
+                      path.duration(),
+                      elapsedMillis);
+                  // Hand the found route to the shared trip service — the same code path
+                  // integrations
+                  // use. The command only carries the chosen navigator id (appearance comes from
+                  // config);
+                  // the flag-scoped re-search/guide closures ride along for stray recalculation.
+                  NavigatorSettings settings = NavigatorSettings.builder(flags.navigator()).build();
+                  tripService
+                      .start(
+                          player,
+                          path,
+                          destinationLabel,
+                          settings,
+                          liveSearch(
+                              player,
+                              destination,
+                              flags,
+                              platformApi,
+                              searches,
+                              gate,
+                              searchSettings),
+                          guideSearch(player, flags, platformApi),
+                          live)
+                      .whenComplete(
+                          (outcome, tripError) -> {
+                            if (tripError != null
+                                || outcome instanceof PaperTripService.TripOutcome.Failed) {
+                              messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
+                            } else if (outcome
+                                instanceof PaperTripService.TripOutcome.TripLimitReached) {
+                              messages.send(player, locale, OdysseyMessages.NAVIGATE_TRIP_LIMIT);
+                            } else {
+                              // "Route found" carries a hover with the search time and the trip
+                              // length.
+                              Component started =
+                                  messages.render(locale, OdysseyMessages.NAVIGATE_STARTED);
+                              Component stats =
+                                  messages.render(
+                                      locale,
+                                      OdysseyMessages.NAVIGATE_STATS,
+                                      elapsedMillis,
+                                      messages.formatDuration(locale, path.duration()));
+                              player.sendMessage(started.hoverEvent(HoverEvent.showText(stats)));
+                            }
+                          });
+                }
+              }
             });
   }
 
@@ -345,18 +363,7 @@ final class NavigateCommand {
                   flags.excludedWorlds(),
                   flags.excludedDimensions()))
           .future()
-          .handle(
-              (result, error) -> {
-                if (error == null
-                    && result
-                        instanceof
-                        NavigationResult.Success<Location, MinecraftStepPayload>(
-                            Path<Location, MinecraftStepPayload> path)
-                    && !path.steps().isEmpty()) {
-                  return Optional.of(path);
-                }
-                return Optional.<Path<Location, MinecraftStepPayload>>empty();
-              });
+          .handle(NavigateCommand::convertUpdateResult);
     };
   }
 
@@ -392,15 +399,7 @@ final class NavigateCommand {
               (result, error) -> {
                 searches.untrack(uuid, handle);
                 gate.end(uuid);
-                if (error == null
-                    && result
-                        instanceof
-                        NavigationResult.Success<Location, MinecraftStepPayload>(
-                            Path<Location, MinecraftStepPayload> path)
-                    && !path.steps().isEmpty()) {
-                  return Optional.of(path);
-                }
-                return Optional.<Path<Location, MinecraftStepPayload>>empty();
+                return convertUpdateResult(result, error);
               });
     };
   }
@@ -412,7 +411,7 @@ final class NavigateCommand {
     }
     String remaining = builder.getRemaining();
     List<String> tokens = tokenizeKeepingTrailing(remaining);
-    String last = tokens.isEmpty() ? "" : tokens.get(tokens.size() - 1);
+    String last = tokens.isEmpty() ? "" : tokens.getLast();
     String previous =
         tokens.size() >= 2 ? tokens.get(tokens.size() - 2).toLowerCase(Locale.ROOT) : "";
     SuggestionsBuilder offset =
@@ -508,7 +507,6 @@ final class NavigateCommand {
           messages.send(player, locale, OdysseyMessages.NAVIGATE_NO_ROUTE);
       case LIMIT_EXCEEDED -> messages.send(player, locale, OdysseyMessages.NAVIGATE_LIMIT_EXCEEDED);
       case TIMED_OUT -> messages.send(player, locale, OdysseyMessages.NAVIGATE_TIMED_OUT);
-      case ERROR -> messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
       case CANCELLED -> {
         /* silent: the player asked for it */
       }
@@ -558,5 +556,18 @@ final class NavigateCommand {
 
   private static Locale localeOf(CommandSender sender, Messages messages) {
     return sender instanceof Player player ? player.locale() : messages.defaultLocale();
+  }
+
+  private static Optional<Path<Location, MinecraftStepPayload>> convertUpdateResult(
+      NavigationResult<Location, MinecraftStepPayload> result, Throwable error) {
+    if (error == null
+        && result
+            instanceof
+            NavigationResult.Success<Location, MinecraftStepPayload>(
+                Path<Location, MinecraftStepPayload> path)
+        && !path.steps().isEmpty()) {
+      return Optional.of(path);
+    }
+    return Optional.<Path<Location, MinecraftStepPayload>>empty();
   }
 }

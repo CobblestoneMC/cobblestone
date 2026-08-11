@@ -19,7 +19,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import net.whimxiqal.odyssey.Position;
 import net.whimxiqal.odyssey.api.Path;
-import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.MinecraftScheduler;
 import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 import net.whimxiqal.odyssey.minecraft.ScheduledTaskHandle;
@@ -196,18 +195,7 @@ class TripManagerTest {
     @Override
     public CompletableFuture<Optional<Path<Object, MinecraftStepPayload>>> search() {
       calls++;
-      Path<Object, MinecraftStepPayload> path =
-          new Path<Object, MinecraftStepPayload>() {
-            @Override
-            public Object origin() {
-              return null;
-            }
-
-            @Override
-            public List<Step<Object, MinecraftStepPayload>> steps() {
-              return List.of();
-            }
-          }; // steps(): empty; cost/duration default 0
+      Path<Object, MinecraftStepPayload> path = new Path<>(null, List.of());
       return CompletableFuture.completedFuture(Optional.of(path));
     }
   }

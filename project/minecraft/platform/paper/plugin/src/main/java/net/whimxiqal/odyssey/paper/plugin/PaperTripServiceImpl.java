@@ -88,33 +88,38 @@ public final class PaperTripServiceImpl implements PaperTripService {
               searches.untrack(uuid, handle);
               gate.end(uuid);
               if (error != null) {
-                outcome.complete(new TripOutcome.Failed(FailureReason.ERROR));
+                outcome.complete(new TripOutcome.Error(error));
                 return;
               }
-              if (result
-                  instanceof
-                  NavigationResult.Failure<Location, MinecraftStepPayload>(FailureReason reason)) {
-                outcome.complete(new TripOutcome.Failed(reason));
-                return;
+              switch (result) {
+                case NavigationResult.Error<Location, MinecraftStepPayload> v -> {
+                  outcome.complete(new TripOutcome.Error(v.throwable()));
+                }
+                case NavigationResult.Failure<Location, MinecraftStepPayload> v -> {
+                  outcome.complete(new TripOutcome.Failed(v.reason()));
+                  return;
+                }
+                case NavigationResult.Success<Location, MinecraftStepPayload> v -> {
+                  Path<Location, MinecraftStepPayload> path =
+                      ((NavigationResult.Success<Location, MinecraftStepPayload>) result).path();
+                  // A trip to a fixed location:
+                  // no periodic re-plan, but recalc-on-stray and a guideline back.
+                  start(
+                          player,
+                          path,
+                          label != null ? label : describe(destination),
+                          settings,
+                          liveSearch(player, destination),
+                          guideSearch(player),
+                          false)
+                      .whenComplete(
+                          (tripOutcome, tripError) ->
+                              outcome.complete(
+                                  tripError != null
+                                      ? new TripOutcome.Error(tripError)
+                                      : tripOutcome));
+                }
               }
-              Path<Location, MinecraftStepPayload> path =
-                  ((NavigationResult.Success<Location, MinecraftStepPayload>) result).path();
-              // A trip to a fixed location: no periodic re-plan, but recalc-on-stray and a guide
-              // line back.
-              start(
-                      player,
-                      path,
-                      label != null ? label : describe(destination),
-                      settings,
-                      liveSearch(player, destination),
-                      guideSearch(player),
-                      false)
-                  .whenComplete(
-                      (tripOutcome, tripError) ->
-                          outcome.complete(
-                              tripError != null
-                                  ? new TripOutcome.Failed(FailureReason.ERROR)
-                                  : tripOutcome));
             });
     return outcome;
   }
@@ -148,9 +153,10 @@ public final class PaperTripServiceImpl implements PaperTripService {
       GuideSearch<Location> guideSearch,
       boolean live) {
     CompletableFuture<TripOutcome> outcome = new CompletableFuture<>();
-    Location origin = path.steps().isEmpty() ? null : path.steps().get(0).position();
+    Location origin = path.steps().isEmpty() ? null : path.steps().getFirst().position();
     if (origin == null || origin.getWorld() == null) {
-      outcome.complete(new TripOutcome.Failed(FailureReason.ERROR));
+      outcome.complete(
+          new TripOutcome.Error(new IllegalArgumentException("origin and world may not be null")));
       return outcome;
     }
     PaperNavigatorFactory factory =

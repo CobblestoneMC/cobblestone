@@ -24,7 +24,7 @@ public record MinecraftStepPayload(MinecraftStepType stepType, MinecraftInstruct
    * @return the payload
    */
   public static MinecraftStepPayload of(MinecraftStepType stepType) {
-    return new MinecraftStepPayload(stepType, new MinecraftInstruction.None());
+    return new MinecraftStepPayload(stepType, MinecraftInstruction.None.INSTANCE);
   }
 
   /**

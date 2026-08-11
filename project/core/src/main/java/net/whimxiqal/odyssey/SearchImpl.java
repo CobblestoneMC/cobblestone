@@ -137,7 +137,8 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
               settings.runningAverageWidth(),
               settings.heuristicWeight(),
               cancelled::get,
-              executor);
+              executor,
+              deadlineMillis);
       VirtualPath<T, D> virtualPath = edge.virtualPath();
       tier2
           .solve()
@@ -147,23 +148,26 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
                   return;
                 }
                 if (error != null) {
-                  finish(new NavigationResult.Failure<>(FailureReason.ERROR));
+                  finish(new NavigationResult.Error<>(error));
                   return;
                 }
-                if (result.solved()) {
-                  virtualPath.solve(result.steps(), result.cost());
-                } else {
-                  if (result.outcome() == Tier2Result.Outcome.LIMIT_EXCEEDED) {
-                    limitHit = true;
+                switch (result) {
+                  case Tier2Result.Failed<T, D> v -> {
+                    if (v.outcome() == Tier2Result.FailureOutcome.LIMIT_EXCEEDED) {
+                      limitHit = true;
+                    }
+                    virtualPath.markInfeasible();
                   }
-                  virtualPath.markInfeasible();
+                  case Tier2Result.Solved<T, D> v -> {
+                    virtualPath.solve(v.steps(), v.cost());
+                  }
                 }
                 graphPath = null; // re-plan with the now-known edge cost
                 step();
               },
               executor);
     } catch (Throwable throwable) {
-      finish(new NavigationResult.Failure<>(FailureReason.ERROR));
+      finish(new NavigationResult.Error<>(throwable));
     }
   }
 
@@ -193,7 +197,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
                 transition.payload()));
       }
     }
-    return new PathImpl<>(origin, steps);
+    return new Path<>(origin, steps);
   }
 
   private void finish(NavigationResult<Position<D>, T> result) {

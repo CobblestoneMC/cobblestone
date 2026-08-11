@@ -18,7 +18,9 @@ package net.whimxiqal.odyssey.minecraft.api;
 public sealed interface MinecraftInstruction
     permits MinecraftInstruction.None, MinecraftInstruction.CommandInstruction {
 
-  record None() implements MinecraftInstruction {}
+  enum None implements MinecraftInstruction {
+    INSTANCE
+  }
 
   /**
    * Instructs the player to run a command (e.g. {@code /home}) to traverse a transition.

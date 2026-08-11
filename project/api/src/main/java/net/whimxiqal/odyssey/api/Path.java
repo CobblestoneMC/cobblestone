@@ -23,23 +23,18 @@ import java.util.List;
  * @param <P> the position type
  * @param <T> the payload type
  */
-public interface Path<P, T> {
+public record Path<P, T>(P origin, List<Step<P, T>> steps) {
 
-  P origin();
-
-  /**
-   * Returns the ordered steps of this path, origin first.
-   *
-   * @return the steps (non-empty)
-   */
-  List<Step<P, T>> steps();
+  public Path {
+    steps = List.copyOf(steps);
+  }
 
   /**
    * Returns the total algorithm cost of the path in seconds, summed from its steps.
    *
    * @return the total cost
    */
-  default double cost() {
+  public double cost() {
     double total = 0.0;
     for (Step<P, T> step : steps()) {
       total += step.cost();
@@ -52,7 +47,7 @@ public interface Path<P, T> {
    *
    * @return the total duration
    */
-  default double duration() {
+  public double duration() {
     double total = 0.0;
     for (Step<P, T> step : steps()) {
       total += step.time();

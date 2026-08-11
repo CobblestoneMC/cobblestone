@@ -7,15 +7,10 @@
 
 package net.whimxiqal.odyssey.paper;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import net.whimxiqal.odyssey.Position;
-import net.whimxiqal.odyssey.api.FailureReason;
 import net.whimxiqal.odyssey.api.NavigationResult;
-import net.whimxiqal.odyssey.api.Path;
 import net.whimxiqal.odyssey.api.SearchHandle;
-import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import org.bukkit.Location;
@@ -44,7 +39,7 @@ final class PaperSearchHandle implements SearchHandle<Location, MinecraftStepPay
     handleFuture.whenComplete(
         (handle, error) -> {
           if (error != null || handle == null) {
-            future.complete(new NavigationResult.Failure<>(FailureReason.ERROR));
+            future.complete(new NavigationResult.Error<>(error));
             return;
           }
           inner = handle;
@@ -56,35 +51,12 @@ final class PaperSearchHandle implements SearchHandle<Location, MinecraftStepPay
               .whenComplete(
                   (result, err) -> {
                     if (err != null || result == null) {
-                      future.complete(new NavigationResult.Failure<>(FailureReason.ERROR));
+                      future.complete(new NavigationResult.Error<>(err));
                     } else {
-                      future.complete(map(result));
+                      future.complete(result.map(PaperConversions::location));
                     }
                   });
         });
-  }
-
-  private static NavigationResult<Location, MinecraftStepPayload> map(
-      NavigationResult<Position<MinecraftWorld>, MinecraftStepPayload> result) {
-    if (result
-        instanceof
-        NavigationResult.Success<Position<MinecraftWorld>, MinecraftStepPayload>(
-            Path<Position<MinecraftWorld>, MinecraftStepPayload> path)) {
-      List<Step<Location, MinecraftStepPayload>> steps = new ArrayList<>();
-      for (Step<Position<MinecraftWorld>, MinecraftStepPayload> step : path.steps()) {
-        steps.add(
-            new Step<>(
-                PaperConversions.location(step.position()),
-                step.cost(),
-                step.time(),
-                step.payload()));
-      }
-      return new NavigationResult.Success<>(
-          new PaperPath(PaperConversions.location(path.origin()), steps));
-    }
-    NavigationResult.Failure<Position<MinecraftWorld>, MinecraftStepPayload> failure =
-        (NavigationResult.Failure<Position<MinecraftWorld>, MinecraftStepPayload>) result;
-    return new NavigationResult.Failure<>(failure.reason());
   }
 
   @Override

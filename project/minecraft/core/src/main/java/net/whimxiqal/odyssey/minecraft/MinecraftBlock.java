@@ -20,14 +20,6 @@ package net.whimxiqal.odyssey.minecraft;
 public interface MinecraftBlock {
 
   /**
-   * Returns the vanilla namespaced id of this block (e.g. {@code "minecraft:soul_sand"}), or a
-   * platform-specific id for modded blocks.
-   *
-   * @return the namespaced type id
-   */
-  String typeKey();
-
-  /**
    * Returns whether a body can freely occupy this block (air, tall grass, …). Water/lava are not
    * "passable" in this sense (handled by swim/danger); doors and partial blocks are not passable to
    * general modes (handled by specialist modes / step-up).
@@ -76,7 +68,9 @@ public interface MinecraftBlock {
   }
 
   /** whether this block is water. */
-  boolean isWater();
+  default boolean isWater() {
+    return false;
+  }
 
   /** whether this block is lava. */
   default boolean isLava() {

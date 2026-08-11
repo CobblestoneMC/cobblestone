@@ -61,11 +61,6 @@ final class PaperBlock implements MinecraftBlock {
   }
 
   @Override
-  public String typeKey() {
-    return material.getKey().asString();
-  }
-
-  @Override
   public boolean isPassable() {
     return material.isAir() || (!material.isSolid() && !isWater() && !isLava());
   }
