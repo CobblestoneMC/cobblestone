@@ -38,3 +38,5 @@ project(":examples:paper-warps").name = "example-warps"
 // Real integration plugins live under integrations/ — each connects one third-party plugin to Odyssey.
 include(":integrations:essentials")
 project(":integrations:essentials").name = "odyssey-essentials"
+include(":integrations:towny")
+project(":integrations:towny").name = "odyssey-towny"

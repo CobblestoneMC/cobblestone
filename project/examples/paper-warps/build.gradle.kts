@@ -29,6 +29,7 @@ dependencies {
     // Odyssey's transition-provider API. compileOnly: the classes are inside the Odyssey plugin jar at
     // runtime, so we must not bundle our own copy (that would split the type identity across loaders).
     compileOnly(project(":minecraft:platform:paper:paper-api"))
+    compileOnly(project(":minecraft:platform:paper:paper-plugin-api"))
     // The server API (Bukkit/Paper), also provided at runtime.
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
 }

@@ -8,13 +8,14 @@
 package net.whimxiqal.odyssey.paper.api;
 
 import java.util.concurrent.CompletableFuture;
+
 import org.bukkit.Location;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
 
 /**
  * Decides whether Odyssey may route a player through mining a given block. Returned from
- * {@link OdysseySearchModifier#computeBreakChecker} and invoked for each block the mining mode
+ * {@link PaperOdysseySearchModifier#computeBreakChecker} and invoked for each block the mining mode
  * considers breaking. When several modifiers are registered, a block is breakable only if all of them
  * permit it.
  *
@@ -39,4 +40,5 @@ public interface PaperBreakChecker {
    * @return a future of {@code true} if breaking is permitted
    */
   CompletableFuture<Boolean> breakable(Player player, Location location, BlockData block);
+
 }

@@ -14,10 +14,8 @@ import java.util.Locale;
 import java.util.function.Supplier;
 import net.whimxiqal.odyssey.api.SearchSettings;
 import net.whimxiqal.odyssey.paper.PaperOdysseyApiImpl;
-import net.whimxiqal.odyssey.paper.api.OdysseySearchModifier;
 import net.whimxiqal.odyssey.paper.api.PaperOdysseyApi;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperNavigatorFactory;
+import net.whimxiqal.odyssey.paper.plugin.api.Odyssey;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
 import net.whimxiqal.odyssey.plugin.config.ConfigManager;
 import net.whimxiqal.odyssey.plugin.data.DataStore;
@@ -72,10 +70,9 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
     getServer().getServicesManager()
         .register(PaperOdysseyApi.class, this.platformApi, this, ServicePriority.Normal);
 
-    // Waypoints are surfaced to searches like any third-party provider: a Bukkit service Odyssey
-    // discovers via the ServicesManager.
-    getServer().getServicesManager().register(PaperDestinationProvider.class,
-        new OdysseyDestinationProvider(dataStore.waypoints()), this, ServicePriority.Normal);
+    // Waypoints are surfaced to searches like any third-party provider — via the same registration
+    // helper an integration would use.
+    Odyssey.register(this, new OdysseyDestinationProvider(dataStore.waypoints()));
 
     Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
     Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), logger);
@@ -84,14 +81,11 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
     // registered as a service so it is discovered like any third-party navigator.
     this.tripManager = new TripManager<>(platformApi.scheduler(),
         config.get(keys.tripsMaxActivePerPlayer));
-    getServer().getServicesManager().register(PaperNavigatorFactory.class,
-        new PaperTrailNavigatorFactory(config, keys, messages),
-        this, ServicePriority.Normal);
+    Odyssey.register(this, new PaperTrailNavigatorFactory(config, keys, messages));
 
     // Discovered vanilla portals are surfaced to searches as an internal transition provider, and
     // learned from player teleports by the portal listener.
-    getServer().getServicesManager().register(OdysseySearchModifier.class,
-        new PortalTransitionProvider(dataStore.portalTransitions()), this, ServicePriority.Normal);
+    Odyssey.register(this, new PortalTransitionProvider(dataStore.portalTransitions()));
     getServer().getPluginManager().registerEvents(
         new PortalListener(dataStore.portalTransitions(), platformApi.scheduler(), logger,
             () -> config.get(keys.portalsCostSeconds), () -> config.get(keys.portalsDiscovery)), this);

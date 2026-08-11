@@ -9,6 +9,7 @@ package net.whimxiqal.odyssey.paper.api;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+
 import org.bukkit.entity.Player;
 
 /**
@@ -35,7 +36,7 @@ import org.bukkit.entity.Player;
  * the main thread; they answer with a {@link CompletableFuture} so an async lookup (e.g. a database
  * query) never blocks — and an already-completed future keeps the search on its fast path.
  */
-public interface OdysseySearchModifier {
+public interface PaperOdysseySearchModifier {
 
   /**
    * Computes the extra transitions available to the given player for one search.

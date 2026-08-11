@@ -1,0 +1,14 @@
+name: OdysseyTowny
+version: '0.1.0-SNAPSHOT'
+description: Odyssey integration for Towny — navigate to towns/plots/outposts, route through spawns, respect build protection.
+author: whimxiqal
+website: https://github.com/whimxiqal/Odyssey
+main: net.whimxiqal.odyssey.integration.towny.OdysseyTownyPlugin
+api-version: '1.21'
+folia-supported: false
+dependencies:
+  server:
+    odyssey:
+      load: BEFORE
+    Towny:
+      load: BEFORE

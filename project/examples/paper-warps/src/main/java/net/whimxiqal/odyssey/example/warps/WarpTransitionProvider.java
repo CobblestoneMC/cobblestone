@@ -13,9 +13,8 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.paper.api.BoxWorldRegion;
-import net.whimxiqal.odyssey.paper.api.OdysseySearchModifier;
+import net.whimxiqal.odyssey.paper.api.PaperOdysseySearchModifier;
 import net.whimxiqal.odyssey.paper.api.PaperTransition;
-import net.whimxiqal.odyssey.paper.api.WholeWorldRegion;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -35,7 +34,7 @@ import org.bukkit.entity.Player;
  * {@link #computeTransitions(Player)} per search. (A modifier can also constrain mining or passage;
  * this example only adds routes and leaves those at their permissive defaults.)
  */
-final class WarpTransitionProvider implements OdysseySearchModifier {
+final class WarpTransitionProvider implements PaperOdysseySearchModifier {
 
   private final WarpStore store;
 
@@ -52,16 +51,14 @@ final class WarpTransitionProvider implements OdysseySearchModifier {
   }
 
   private void addWarps(Player player, List<PaperTransition> result) {
-    // /warp works from anywhere, so the origin is the player's whole current world: the search start
-    // is always inside it, which is what makes Odyssey prompt the command immediately.
-    WholeWorldRegion origin = new WholeWorldRegion(Worlds.keyOf(player.getLocation()));
     for (Warp warp : store.warps()) {
       World world = Worlds.byKey(warp.world());
       if (world == null) {
         continue; // warp's world unloaded; skip until it is back
       }
-      result.add(PaperTransition.of(origin, warp.toLocation(world), warp.cost(),
-          MinecraftStepPayload.command("/warp " + warp.name())));
+      // /warp works from anywhere: a wormhole from the player's whole current world, so the search
+      // can prompt "/warp <name>" immediately.
+      result.add(PaperTransition.command(player, warp.toLocation(world), warp.cost(), "/warp " + warp.name()));
     }
   }
 

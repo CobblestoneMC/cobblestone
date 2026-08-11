@@ -28,7 +28,6 @@ dependencies {
     // Odyssey's published API — provided at runtime by the Odyssey plugin, so compileOnly only.
     compileOnly(project(":minecraft:platform:paper:paper-api"))
     compileOnly(project(":minecraft:platform:paper:paper-plugin-api"))
-    compileOnly(project(":minecraft:plugin:plugin-core"))
     // The server API (Bukkit/Paper) and EssentialsX, both provided at runtime. EssentialsX is fetched
     // without its transitive deps so its bundled server API can't clash with paper-api above.
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")

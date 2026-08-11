@@ -16,7 +16,6 @@ import net.whimxiqal.odyssey.minecraft.api.*;
 import net.whimxiqal.odyssey.paper.api.BoxWorldRegion;
 import net.whimxiqal.odyssey.api.Destination;
 import net.whimxiqal.odyssey.api.SearchHandle;
-import net.whimxiqal.odyssey.api.Step;
 import net.whimxiqal.odyssey.minecraft.ChunkProvider;
 import net.whimxiqal.odyssey.minecraft.ChunkProviderSettings;
 import net.whimxiqal.odyssey.minecraft.MinecraftMode;
@@ -24,7 +23,7 @@ import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
 import net.whimxiqal.odyssey.minecraft.modes.MinecraftModes;
 import net.whimxiqal.odyssey.minecraft.BreakChecker;
-import net.whimxiqal.odyssey.paper.api.OdysseySearchModifier;
+import net.whimxiqal.odyssey.paper.api.PaperOdysseySearchModifier;
 import net.whimxiqal.odyssey.paper.api.PaperBreakChecker;
 import net.whimxiqal.odyssey.paper.api.PaperOdysseyApi;
 import net.whimxiqal.odyssey.paper.api.PaperPassChecker;
@@ -147,8 +146,8 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
     Position<MinecraftWorld> originPosition = new Position<>(
         PaperConversions.cell(origin), wrap(origin.getWorld()));
     // One snapshot of the registered modifiers drives all three influences on this search.
-    List<OdysseySearchModifier> modifiers = Bukkit.getServicesManager()
-        .getRegistrations(OdysseySearchModifier.class).stream()
+    List<PaperOdysseySearchModifier> modifiers = Bukkit.getServicesManager()
+        .getRegistrations(PaperOdysseySearchModifier.class).stream()
         .map(RegisteredServiceProvider::getProvider).toList();
     BreakChecker<OdysseyPlayer> breakChecker = buildBreakChecker(modifiers, player);
     List<Restriction<OdysseyPlayer, MinecraftWorld>> restrictions = buildRestrictions(modifiers, player);
@@ -164,13 +163,13 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
   }
 
   private CompletableFuture<List<Transition<MinecraftStepPayload, MinecraftWorld>>>
-  gatherTransitions(List<OdysseySearchModifier> modifiers, Player player,
+  gatherTransitions(List<PaperOdysseySearchModifier> modifiers, Player player,
                     Set<String> excludedWorlds, Set<String> excludedDimensions) {
     if (modifiers.isEmpty()) {
       return CompletableFuture.completedFuture(List.of());
     }
     List<CompletableFuture<List<PaperTransition>>> futures = new ArrayList<>();
-    for (OdysseySearchModifier modifier : modifiers) {
+    for (PaperOdysseySearchModifier modifier : modifiers) {
       futures.add(modifier.computeTransitions(player));
     }
     return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).thenApply(ignored -> {
@@ -192,9 +191,9 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
 
   /** Composes every modifier's break checker into one; a block is breakable only if all permit it. */
   private BreakChecker<OdysseyPlayer> buildBreakChecker(
-      List<OdysseySearchModifier> modifiers, Player player) {
+      List<PaperOdysseySearchModifier> modifiers, Player player) {
     List<PaperBreakChecker> checkers = new ArrayList<>();
-    for (OdysseySearchModifier modifier : modifiers) {
+    for (PaperOdysseySearchModifier modifier : modifiers) {
       PaperBreakChecker checker = modifier.computeBreakChecker(player);
       if (checker != PaperBreakChecker.ALLOW) {
         checkers.add(checker);
@@ -222,9 +221,9 @@ public final class PaperOdysseyApiImpl implements PaperOdysseyApi, WorldWrapper 
 
   /** One composite passability restriction; a cell is impassable if any modifier bars entry. */
   private List<Restriction<OdysseyPlayer, MinecraftWorld>> buildRestrictions(
-      List<OdysseySearchModifier> modifiers, Player player) {
+      List<PaperOdysseySearchModifier> modifiers, Player player) {
     List<PaperPassChecker> checkers = new ArrayList<>();
-    for (OdysseySearchModifier modifier : modifiers) {
+    for (PaperOdysseySearchModifier modifier : modifiers) {
       PaperPassChecker checker = modifier.computePassChecker(player);
       if (checker != PaperPassChecker.ALLOW) {
         checkers.add(checker);

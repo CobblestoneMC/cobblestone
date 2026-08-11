@@ -31,6 +31,16 @@ public final class WholeWorldRegion implements WorldRegion<World, Vector3i> {
     this.worldKey = worldKey;
   }
 
+  /**
+   * A region spanning the given world.
+   *
+   * @param world the world
+   * @return the region
+   */
+  public static WholeWorldRegion of(World world) {
+    return new WholeWorldRegion(world.getKey().asString());
+  }
+
   @Override
   public World world() {
     NamespacedKey key = NamespacedKey.fromString(worldKey);

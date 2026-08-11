@@ -7,10 +7,21 @@
 
 package net.whimxiqal.odyssey.paper.plugin.api;
 
-import net.whimxiqal.odyssey.plugin.api.DestinationProvider;
+import net.whimxiqal.odyssey.plugin.api.DestinationTree;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.joml.Vector3i;
 
-public interface PaperDestinationProvider extends DestinationProvider<World, Vector3i, Player> {
+import java.util.Collection;
+
+public interface PaperDestinationProvider {
+
+  /**
+   * Builds the destination tree visible to the given player.
+   *
+   * @param player the player requesting navigation
+   * @return the (lazily-evaluated) tree
+   */
+  Collection<DestinationTree<World, Vector3i>> provide(Player player);
+
 }

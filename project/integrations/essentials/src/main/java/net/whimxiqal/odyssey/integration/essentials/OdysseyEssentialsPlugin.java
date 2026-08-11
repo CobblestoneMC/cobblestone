@@ -9,10 +9,8 @@ package net.whimxiqal.odyssey.integration.essentials;
 
 import com.earth2me.essentials.spawn.IEssentialsSpawn;
 import net.ess3.api.IEssentials;
-import net.whimxiqal.odyssey.paper.api.OdysseySearchModifier;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
+import net.whimxiqal.odyssey.paper.plugin.api.Odyssey;
 import org.bukkit.plugin.Plugin;
-import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -36,17 +34,10 @@ public final class OdysseyEssentialsPlugin extends JavaPlugin {
 
     Essentials essentials = new Essentials(essentialsApi, spawnApi);
 
-    getServer().getServicesManager().register(PaperDestinationProvider.class,
-        new EssentialsDestinationProvider(essentials), this, ServicePriority.Normal);
-    getServer().getServicesManager().register(OdysseySearchModifier.class,
-        new EssentialsTransitionProvider(essentials), this, ServicePriority.Normal);
+    Odyssey.register(this, new EssentialsDestinationProvider(essentials));
+    Odyssey.register(this, new EssentialsTransitionProvider(essentials));
 
     getLogger().info("OdysseyEssentials enabled"
         + (spawnApi == null ? " (EssentialsSpawn absent; /spawn not offered)." : "."));
-  }
-
-  @Override
-  public void onDisable() {
-    getServer().getServicesManager().unregisterAll(this);
   }
 }

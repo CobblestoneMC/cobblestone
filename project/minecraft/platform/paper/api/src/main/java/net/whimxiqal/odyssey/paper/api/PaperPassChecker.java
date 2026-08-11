@@ -13,7 +13,7 @@ import org.bukkit.entity.Player;
 
 /**
  * Decides whether a player may enter a given cell at all. Returned from
- * {@link OdysseySearchModifier#computePassChecker} and invoked for each cell the search proposes;
+ * {@link PaperOdysseySearchModifier#computePassChecker} and invoked for each cell the search proposes;
  * a cell the player may not enter is dropped from the route. When several modifiers are registered,
  * a cell is passable only if all of them permit it.
  *
