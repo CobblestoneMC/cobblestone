@@ -29,7 +29,7 @@ import net.whimxiqal.odyssey.FutureOr;
  */
 public final class ChunkProvider {
 
-  private final PlatformApi platform;
+  private final PlatformApi<?> platform;
   private final ChunkProviderSettings settings;
   private final LongSupplier clock;
 
@@ -44,11 +44,11 @@ public final class ChunkProvider {
    * @param platform the platform to fetch snapshots from
    * @param settings the cache tunables
    */
-  public ChunkProvider(PlatformApi platform, ChunkProviderSettings settings) {
+  public ChunkProvider(PlatformApi<?> platform, ChunkProviderSettings settings) {
     this(platform, settings, System::currentTimeMillis);
   }
 
-  ChunkProvider(PlatformApi platform, ChunkProviderSettings settings, LongSupplier clock) {
+  ChunkProvider(PlatformApi<?> platform, ChunkProviderSettings settings, LongSupplier clock) {
     this.platform = platform;
     this.settings = settings;
     this.clock = clock;
