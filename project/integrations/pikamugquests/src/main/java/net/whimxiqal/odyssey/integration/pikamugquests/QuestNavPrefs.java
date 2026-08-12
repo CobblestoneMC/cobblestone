@@ -5,7 +5,7 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package net.whimxiqal.odyssey.integration.quests;
+package net.whimxiqal.odyssey.integration.pikamugquests;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,14 +18,13 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
 /**
- * Resolves OdysseyQuests' per-quest navigation preferences from the plugin config: whether a quest
- * auto-navigates, and the {@link NavigatorSettings} (navigator id + trail particles/colors) to
- * guide it with. Each field falls back from a per-quest override ({@code quests.<id>.<field>}) to
- * the global default, so an admin styles everything once and tweaks individual quests as needed.
+ * Resolves OdysseyPikamugQuests' per-quest navigation preferences from the plugin config: whether a
+ * quest auto-navigates, and the {@link NavigatorSettings} (navigator id + trail particles/colors)
+ * to guide it with. Each field falls back from a per-quest override ({@code quests.<id>.<field>})
+ * to the global default, so an admin styles everything once and tweaks individual quests as needed.
  *
- * <p>The config is read live (through the plugin's {@link FileConfiguration}), so a {@code
- * /odysseyquests reload} — or Bukkit's own reload — takes effect on the next quest update without a
- * restart.
+ * <p>The config is read live (through the plugin's {@link FileConfiguration}), so a reload takes
+ * effect on the next quest update without a restart.
  */
 final class QuestNavPrefs {
 

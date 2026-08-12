@@ -5,7 +5,7 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package net.whimxiqal.odyssey.integration.quests;
+package net.whimxiqal.odyssey.integration.pikamugquests;
 
 import java.util.LinkedList;
 import me.pikamug.quests.player.Quester;

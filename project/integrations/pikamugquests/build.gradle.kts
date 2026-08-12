@@ -1,8 +1,8 @@
-// odyssey-quests — connects PikaMug's Quests to Odyssey. When a quest's compass target updates for a
-// player, it starts (or replaces) a guided Odyssey trip to that objective; it also surfaces each
-// active quest's current locatable objective as a `/navigate quest <name>` destination. A thin,
-// un-shaded jar: it compiles against Odyssey's published API and the Quests API, both provided at
-// runtime.
+// odyssey-pikamugquests — connects PikaMug's Quests to Odyssey. When a quest's compass target updates
+// for a player, it starts (or replaces) a guided Odyssey trip to that objective; it also surfaces
+// each active quest's current locatable objective as a `/navigate pikamugquests quest <name>`
+// destination. A thin, un-shaded jar: it compiles against Odyssey's published API and the Quests API,
+// both provided at runtime.
 
 plugins {
     id("odyssey.java-conventions")

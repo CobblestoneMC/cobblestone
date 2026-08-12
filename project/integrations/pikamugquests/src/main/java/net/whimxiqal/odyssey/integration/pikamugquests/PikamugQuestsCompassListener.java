@@ -5,7 +5,7 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package net.whimxiqal.odyssey.integration.quests;
+package net.whimxiqal.odyssey.integration.pikamugquests;
 
 import java.util.Map;
 import java.util.UUID;
@@ -31,14 +31,14 @@ import org.bukkit.event.Listener;
  * and the async trip service). A per-player, per-quest dedupe skips re-searching when the target
  * block has not actually moved since the last trip we started.
  */
-final class QuestsCompassListener implements Listener {
+final class PikamugQuestsCompassListener implements Listener {
 
   private final QuestNavPrefs prefs;
   // uuid|questId -> the block-cell of the last target we navigated to; avoids redundant
   // re-searches.
   private final Map<String, String> lastTarget = new ConcurrentHashMap<>();
 
-  QuestsCompassListener(QuestNavPrefs prefs) {
+  PikamugQuestsCompassListener(QuestNavPrefs prefs) {
     this.prefs = prefs;
   }
 

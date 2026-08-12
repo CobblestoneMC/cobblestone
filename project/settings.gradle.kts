@@ -40,7 +40,11 @@ include(":integrations:essentials")
 project(":integrations:essentials").name = "odyssey-essentials"
 include(":integrations:towny")
 project(":integrations:towny").name = "odyssey-towny"
-include(":integrations:quests")
-project(":integrations:quests").name = "odyssey-quests"
+include(":integrations:pikamugquests")
+project(":integrations:pikamugquests").name = "odyssey-pikamugquests"
 include(":integrations:beautyquests")
 project(":integrations:beautyquests").name = "odyssey-beautyquests"
+include(":integrations:betonquest")
+project(":integrations:betonquest").name = "odyssey-betonquest"
+include(":integrations:bishopquests")
+project(":integrations:bishopquests").name = "odyssey-bishopquests"

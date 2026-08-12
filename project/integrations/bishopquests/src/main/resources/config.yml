@@ -1,0 +1,35 @@
+# OdysseyBishopQuests — guide players to their LMBishop Quests objectives.
+#
+# When a player tracks a quest (the quest's tracking arrow/compass), OdysseyBishopQuests can start a
+# guided Odyssey trip to that quest's current "position" objective (a `position` task — go to set
+# co-ordinates). Each started quest with such an objective is also offered as a
+# `/navigate quests quest <name>` destination.
+
+# Whether to automatically start a trip when a player tracks a quest. Individual quests can override
+# below.
+auto-navigate: true
+
+# The navigator (display style) to guide quest trips with. "trail" is Odyssey's built-in particle
+# trail; particles/colors below only apply to it.
+navigator: trail
+
+# The particle types the trail is drawn with (only DUST is colored). Bukkit Particle names.
+particles:
+  - DUST
+  - GLOW
+
+# The colors DUST particles are randomly drawn in, as RRGGBB hex.
+colors:
+  - FFD54F
+  - 4FC3F7
+
+# Per-quest overrides, keyed by the quest's id (its file name in the quests folder). Any field left
+# out falls back to the global setting above.
+#
+# quests:
+#   citizen1:
+#     enabled: false          # never auto-navigate this quest
+#   dungeon:
+#     colors:
+#       - E57373
+quests: {}

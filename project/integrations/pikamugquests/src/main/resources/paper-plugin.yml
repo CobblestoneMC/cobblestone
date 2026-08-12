@@ -1,9 +1,9 @@
-name: OdysseyQuests
+name: OdysseyPikamugQuests
 version: '0.1.0-SNAPSHOT'
-description: Odyssey integration for Quests — guide players to their quest objectives.
+description: Odyssey integration for PikaMug Quests — guide players to their quest objectives.
 author: whimxiqal
 website: https://github.com/whimxiqal/Odyssey
-main: net.whimxiqal.odyssey.integration.quests.OdysseyQuestsPlugin
+main: net.whimxiqal.odyssey.integration.pikamugquests.OdysseyPikamugQuestsPlugin
 api-version: '1.21'
 folia-supported: false
 dependencies:

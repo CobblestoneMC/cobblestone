@@ -29,10 +29,17 @@ tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.addAll(listOf("-Xlint:all", "-Xlint:-processing"))
 }
 
+// Most modules use the project MIT header; a module may override it (e.g. a GPL integration that
+// links a GPL plugin) by dropping its own `license-header.txt` in the module root.
+val moduleLicenseHeader = file("license-header.txt")
+val licenseHeader =
+    if (moduleLicenseHeader.exists()) moduleLicenseHeader
+    else rootProject.file("gradle/license-header.txt")
+
 spotless {
     java {
         target("src/**/*.java")
-        licenseHeaderFile(rootProject.file("gradle/license-header.txt"))
+        licenseHeaderFile(licenseHeader)
         googleJavaFormat()
         forbidWildcardImports()
     }

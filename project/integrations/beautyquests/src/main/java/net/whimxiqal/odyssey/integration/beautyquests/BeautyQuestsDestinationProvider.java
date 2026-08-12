@@ -24,15 +24,18 @@ import org.bukkit.entity.Player;
 import org.joml.Vector3i;
 
 /**
- * Surfaces the player's started quests as navigation targets: {@code quest → <name>}, one leaf per
- * started quest whose current stage has a precise location. Navigating to one is gated by Odyssey's
- * {@code odyssey.navigate.quest.*} permission (default-allow). The target is snapshotted when the
- * tree is built (on the main thread, as {@code getLocated} requires); advancing a stage is picked
- * up the next time destinations are resolved.
+ * Surfaces the player's started quests as navigation targets: {@code beautyquests → quest →
+ * <name>}, one leaf per started quest whose current stage has a precise location. The plugin-unique
+ * {@code beautyquests} root keeps these from colliding with other integrations' trees; Odyssey's
+ * resolver still lets a player type just the quest name when it's unambiguous. Navigating is gated
+ * by Odyssey's {@code odyssey.navigate.beautyquests.quest.*} permission (default-allow). The target
+ * is snapshotted when the tree is built (on the main thread, as {@code getLocated} requires);
+ * advancing a stage is picked up the next time destinations are resolved.
  */
 final class BeautyQuestsDestinationProvider implements PaperDestinationProvider {
 
-  static final String TREE_KEY = "quest";
+  static final String TREE_KEY = "beautyquests";
+  static final String QUEST_KEY = "quest";
 
   @Override
   public Collection<DestinationTree<World, Vector3i>> provide(Player player) {
@@ -40,7 +43,7 @@ final class BeautyQuestsDestinationProvider implements PaperDestinationProvider 
     if (account == null) {
       return List.of();
     }
-    PaperDestinationTree root = PaperDestinationTree.node(TREE_KEY);
+    PaperDestinationTree quests = PaperDestinationTree.node(QUEST_KEY);
     boolean any = false;
     for (Quest quest : QuestsAPI.getAPI().getQuestsManager().getQuestsStarted(account)) {
       Location target = QuestTargets.current(account, quest);
@@ -48,10 +51,10 @@ final class BeautyQuestsDestinationProvider implements PaperDestinationProvider 
         continue; // current stage has no precise location — nothing to walk to
       }
       String label = label(quest);
-      root.leaf(slug(label), PaperDestination.at(target, label));
+      quests.leaf(slug(label), PaperDestination.at(target, label));
       any = true;
     }
-    return any ? List.of(root.build()) : List.of();
+    return any ? List.of(PaperDestinationTree.node(TREE_KEY).subtree(quests).build()) : List.of();
   }
 
   /** A player-facing quest label: its name, or a stable fallback from its id. */

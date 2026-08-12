@@ -5,7 +5,7 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package net.whimxiqal.odyssey.integration.quests;
+package net.whimxiqal.odyssey.integration.pikamugquests;
 
 import java.util.Collection;
 import java.util.List;
@@ -22,19 +22,22 @@ import org.bukkit.entity.Player;
 import org.joml.Vector3i;
 
 /**
- * Surfaces the player's active quests as navigation targets: {@code quest → <name>}, one leaf per
- * current quest whose current stage has a locatable objective (a reach-location or kill-within
- * region). Navigating to one is gated by Odyssey's {@code odyssey.navigate.quest.*} permission
- * (default-allow). Targets re-resolve on query, so advancing a stage is reflected without a
- * restart.
+ * Surfaces the player's active quests as navigation targets: {@code quests → quest →
+ * <name>}, one leaf per current quest whose current stage has a locatable objective (a
+ * reach-location or kill-within region). The plugin-unique {@code quests} root keeps these
+ * from colliding with other integrations' trees; Odyssey's resolver still lets a player type just
+ * the quest name when it's unambiguous. Navigating is gated by Odyssey's {@code
+ * odyssey.navigate.pikamugquests.quest.*} permission (default-allow). Targets re-resolve on query,
+ * so advancing a stage is reflected without a restart.
  */
-final class QuestsDestinationProvider implements PaperDestinationProvider {
+final class PikamugQuestsDestinationProvider implements PaperDestinationProvider {
 
-  static final String TREE_KEY = "quest";
+  static final String TREE_KEY = "quests";
+  static final String QUEST_KEY = "quest";
 
   private final Quests quests;
 
-  QuestsDestinationProvider(Quests quests) {
+  PikamugQuestsDestinationProvider(Quests quests) {
     this.quests = quests;
   }
 
@@ -44,21 +47,23 @@ final class QuestsDestinationProvider implements PaperDestinationProvider {
     if (quester == null) {
       return List.of();
     }
-    PaperDestinationTree root = PaperDestinationTree.node(TREE_KEY);
+    PaperDestinationTree questNode = PaperDestinationTree.node(QUEST_KEY);
     boolean any = false;
     for (Quest quest : quester.getCurrentQuests().keySet()) {
       if (QuestTargets.current(quester, quest) == null) {
         continue; // no locatable objective in the current stage — nothing to walk to
       }
       String label = quest.getName();
-      root.leaf(
+      questNode.leaf(
           slug(label),
           () ->
               PaperDestination.at(
                   QuestTargets.current(quests.getQuester(player.getUniqueId()), quest), label));
       any = true;
     }
-    return any ? List.of(root.build()) : List.of();
+    return any
+        ? List.of(PaperDestinationTree.node(TREE_KEY).subtree(questNode).build())
+        : List.of();
   }
 
   /**

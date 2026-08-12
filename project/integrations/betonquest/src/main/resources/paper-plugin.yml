@@ -1,0 +1,14 @@
+name: OdysseyBetonQuest
+version: '0.1.0-SNAPSHOT'
+description: Odyssey integration for BetonQuest — guide players to their quest compass targets.
+author: whimxiqal
+website: https://github.com/whimxiqal/Odyssey
+main: net.whimxiqal.odyssey.integration.betonquest.OdysseyBetonQuestPlugin
+api-version: '1.21'
+folia-supported: false
+dependencies:
+  server:
+    odyssey:
+      load: BEFORE
+    BetonQuest:
+      load: BEFORE
