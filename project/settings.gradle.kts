@@ -57,9 +57,11 @@ include(":integrations:beautyquests")
 project(":integrations:beautyquests").name = "odyssey-beautyquests"
 include(":integrations:betonquest")
 project(":integrations:betonquest").name = "odyssey-betonquest"
-include(":integrations:bishopquests")
-project(":integrations:bishopquests").name = "odyssey-bishopquests"
+// disabled until proper jar file is available
+//include(":integrations:bishopquests")
+//project(":integrations:bishopquests").name = "odyssey-bishopquests"
 // A Typewriter extension (Kotlin), not a Bukkit plugin — built with Typewriter's own module-plugin.
-// disabled until module-plugin upgrades to 2.2.0 for JVM 25 Kotlin support
-//include(":integrations:typewriter")
-//project(":integrations:typewriter").name = "odyssey-typewriter"
+include(":integrations:typewriter")
+project(":integrations:typewriter").name = "odyssey-typewriter"
+include(":integrations:citizens")
+project(":integrations:citizens").name = "odyssey-citizens"

@@ -71,6 +71,9 @@ final class NavigateCommand {
   private static final String PERMISSION_NAVIGATOR_PREFIX = "odyssey.navigator.";
   private static final Set<String> VALUE_FLAGS =
       Set.of("-navigator", "-no-world", "-no-dimension", "-no-mode");
+  // Above this many destination matches, tab-completion offers nothing — the player must type more
+  // to narrow down. Keeps huge destination sets from flooding completion.
+  private static final int MAX_DESTINATION_SUGGESTIONS = 16;
   // A tiny, greedy search for the off-trail "guide" path: bounded and heavily weighted so it's
   // cheap.
   private static final SearchSettings GUIDE_SETTINGS =
@@ -428,12 +431,16 @@ final class NavigateCommand {
     } else if (last.startsWith("-")) {
       flagNames().stream().filter(flag -> flag.startsWith(last)).forEach(offset::suggest);
     } else {
-      DestinationResolver.suggest(
+      List<String> suggestions =
+          DestinationResolver.suggest(
               destinationRoots(player),
               destinationTokens(tokens),
               player::hasPermission,
-              canNavigate(player))
-          .forEach(offset::suggest);
+              canNavigate(player));
+      // Only offer completions once the candidate set is small; otherwise the player narrows first.
+      if (suggestions.size() <= MAX_DESTINATION_SUGGESTIONS) {
+        suggestions.forEach(offset::suggest);
+      }
     }
     return offset.buildFuture();
   }

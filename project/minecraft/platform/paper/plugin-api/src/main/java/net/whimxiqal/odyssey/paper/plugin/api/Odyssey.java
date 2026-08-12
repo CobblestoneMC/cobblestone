@@ -20,8 +20,8 @@ import org.bukkit.plugin.ServicePriority;
  *
  * <pre>{@code
  * public void onEnable() {
- *   Odyssey.register(this, new MyDestinationProvider());
- *   Odyssey.register(this, new MySearchModifier());
+ *   Odyssey.register(this, new MyDestinationService());
+ *   Odyssey.register(this, new MySearchModificationService());
  * }
  * }</pre>
  *

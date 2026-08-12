@@ -46,7 +46,7 @@ class NavigatePlayerActionEntry(
 ) : ActionEntry {
 
     override fun ActionTrigger.execute() {
-        val position = target.get(player, context) ?: return
+        val position = target.get(player, context)
         val location = runCatching { position.toBukkitLocation() }.getOrNull() ?: return
         // The entry name is the trip's stable label, so re-triggering this entry (a moving objective)
         // replaces the player's previous trip from it rather than stacking a new one.

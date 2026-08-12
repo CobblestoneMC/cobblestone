@@ -8,8 +8,8 @@
 // requires Odyssey and makes its API classes reachable at runtime.
 
 plugins {
-    kotlin("jvm") version "2.2.10"
-    id("com.typewritermc.module-plugin") version "2.2.0"
+    kotlin("jvm") version "2.3.20"
+    id("com.typewritermc.module-plugin") version "2.1.0"
 }
 
 group = "net.whimxiqal.odyssey"
@@ -51,12 +51,9 @@ typewriter {
 }
 
 kotlin {
-    // Use a JDK 25 toolchain so we can read Odyssey's paper-plugin-api (Java 25 bytecode). Kotlin
-    // 2.2.10 caps its output at target 24, so pin the Java task to 24 too for a consistent target;
-    // 24 bytecode runs fine on the Java 25 JVM the server uses for Odyssey.
     jvmToolchain(25)
 }
 
 tasks.withType<JavaCompile>().configureEach {
-    options.release = 24
+    options.release = 25
 }
