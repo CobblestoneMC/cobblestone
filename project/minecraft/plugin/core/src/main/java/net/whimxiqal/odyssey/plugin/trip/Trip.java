@@ -27,7 +27,6 @@ public final class Trip<E, P extends TripAgent<E>, L> {
   private final P player;
   private final int id;
   private final String destination;
-  private final String navigatorId;
   private final Navigator<L> navigator;
   private final MinecraftScheduler<E> scheduler;
   private final long periodTicks;
@@ -44,7 +43,6 @@ public final class Trip<E, P extends TripAgent<E>, L> {
       P player,
       int id,
       String destination,
-      String navigatorId,
       Navigator<L> navigator,
       MinecraftScheduler<E> scheduler,
       long periodTicks,
@@ -56,7 +54,6 @@ public final class Trip<E, P extends TripAgent<E>, L> {
     this.player = player;
     this.id = id;
     this.destination = destination;
-    this.navigatorId = navigatorId;
     this.navigator = navigator;
     this.scheduler = scheduler;
     this.periodTicks = periodTicks;
@@ -200,15 +197,6 @@ public final class Trip<E, P extends TripAgent<E>, L> {
    */
   public double remainingSeconds() {
     return navigator.remainingSeconds();
-  }
-
-  /**
-   * Returns the id of the navigator (display strategy) driving this trip.
-   *
-   * @return the navigator id
-   */
-  public String navigatorId() {
-    return navigatorId;
   }
 
   /**

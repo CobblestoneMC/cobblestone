@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.paper.api.BoxWorldRegion;
-import net.whimxiqal.odyssey.paper.api.PaperOdysseySearchModifier;
+import net.whimxiqal.odyssey.paper.api.PaperSearchModificationService;
 import net.whimxiqal.odyssey.paper.api.PaperTransition;
 import net.whimxiqal.odyssey.plugin.data.PortalTransition;
 import net.whimxiqal.odyssey.plugin.data.PortalTransitionDao;
@@ -23,11 +23,11 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 /**
- * The internal {@link PaperOdysseySearchModifier} that surfaces Odyssey's discovered portal links
- * to searches. Registered as a Bukkit service like any third-party modifier; it reads the persisted
- * transitions on demand, skipping any whose worlds are currently unloaded.
+ * The internal {@link PaperSearchModificationService} that surfaces Odyssey's discovered portal
+ * links to searches. Registered as a Bukkit service like any third-party modifier; it reads the
+ * persisted transitions on demand, skipping any whose worlds are currently unloaded.
  */
-public final class PortalTransitionProvider implements PaperOdysseySearchModifier {
+public final class PortalSearchModificationService implements PaperSearchModificationService {
 
   private static final MinecraftStepPayload PORTAL_PAYLOAD = MinecraftStepPayload.portal();
 
@@ -38,7 +38,7 @@ public final class PortalTransitionProvider implements PaperOdysseySearchModifie
    *
    * @param portals the portal-transition DAO to read from
    */
-  public PortalTransitionProvider(PortalTransitionDao portals) {
+  public PortalSearchModificationService(PortalTransitionDao portals) {
     this.portals = portals;
   }
 

@@ -7,6 +7,7 @@
 
 package net.whimxiqal.odyssey.paper.plugin;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -19,14 +20,17 @@ import org.bukkit.Location;
 
 /**
  * Tracks each player's in-flight searches so they can be cancelled on {@code /odyssey cancel} or
- * logout. A search removes itself when its future completes.
+ * logout. A search removes itself when its future completes. Also counts search starts over a
+ * trailing hour for the "searches per hour" metric.
  */
 final class SearchRegistry {
 
   private final Map<UUID, Set<SearchHandle<Location, MinecraftStepPayload>>> byPlayer =
       new ConcurrentHashMap<>();
+  private final SlidingWindowCounter searchRate = new SlidingWindowCounter(Duration.ofHours(1));
 
   void track(UUID player, SearchHandle<Location, MinecraftStepPayload> handle) {
+    searchRate.record();
     byPlayer.computeIfAbsent(player, key -> ConcurrentHashMap.newKeySet()).add(handle);
   }
 
@@ -47,6 +51,16 @@ final class SearchRegistry {
    */
   int active() {
     return byPlayer.values().stream().mapToInt(Set::size).sum();
+  }
+
+  /**
+   * Returns how many searches were started in the trailing hour — i.e. the searches-per-hour rate
+   * (an integer, since the window is exactly an hour). Live-trip re-searches count.
+   *
+   * @return the number of searches started in the last hour
+   */
+  int searchesLastHour() {
+    return searchRate.count();
   }
 
   /**

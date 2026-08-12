@@ -7,6 +7,7 @@
 
 package net.whimxiqal.odyssey.paper.plugin;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -21,6 +22,7 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftSearchSettings;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.paper.PaperNavigationServiceImpl;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperNavigatorFactory;
+import net.whimxiqal.odyssey.paper.plugin.api.PaperNavigatorService;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperTripService;
 import net.whimxiqal.odyssey.paper.plugin.api.TrailNavigatorSettings;
 import net.whimxiqal.odyssey.plugin.api.Navigator;
@@ -176,7 +178,6 @@ public final class PaperTripServiceImpl implements PaperTripService {
               Optional<Trip<Entity, PaperTripAgent, Location>> trip =
                   trips.start(
                       new PaperTripAgent(player),
-                      factory.key(),
                       navigator,
                       label,
                       liveSearch,
@@ -247,15 +248,15 @@ public final class PaperTripServiceImpl implements PaperTripService {
 
   private static PaperNavigatorFactory navigatorFactory(String id) {
     PaperNavigatorFactory fallback = null;
-    for (RegisteredServiceProvider<PaperNavigatorFactory> registration :
-        Bukkit.getServicesManager().getRegistrations(PaperNavigatorFactory.class)) {
-      PaperNavigatorFactory factory = registration.getProvider();
-      if (factory.key().equals(id)) {
+    for (RegisteredServiceProvider<PaperNavigatorService> registration :
+        Bukkit.getServicesManager().getRegistrations(PaperNavigatorService.class)) {
+      PaperNavigatorService service = registration.getProvider();
+      Map<String, PaperNavigatorFactory> factories = service.compute();
+      PaperNavigatorFactory factory = factories.get(id);
+      if (factory != null) {
         return factory;
       }
-      if (factory.key().equals(TrailNavigatorSettings.NAVIGATOR_ID)) {
-        fallback = factory; // an unknown navigator id falls back to the built-in trail
-      }
+      fallback = factories.get(TrailNavigatorSettings.NAVIGATOR_ID);
     }
     return fallback;
   }

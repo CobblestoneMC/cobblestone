@@ -36,7 +36,7 @@ public final class OdysseyBishopQuestsPlugin extends JavaPlugin {
     saveDefaultConfig();
     QuestNavPrefs prefs = new QuestNavPrefs(getConfig());
 
-    Odyssey.register(this, new BishopQuestsDestinationProvider(quests));
+    Odyssey.register(this, new BishopQuestsDestinationService(quests));
     getServer()
         .getPluginManager()
         .registerEvents(new BishopQuestsTrackListener(quests, prefs), this);

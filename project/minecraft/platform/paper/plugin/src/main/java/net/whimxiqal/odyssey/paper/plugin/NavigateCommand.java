@@ -36,8 +36,9 @@ import net.whimxiqal.odyssey.api.SearchSettings;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftSearchSettings;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.paper.PaperNavigationServiceImpl;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
+import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationService;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperNavigatorFactory;
+import net.whimxiqal.odyssey.paper.plugin.api.PaperNavigatorService;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperTripService;
 import net.whimxiqal.odyssey.plugin.api.DestinationTree;
 import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
@@ -448,18 +449,19 @@ final class NavigateCommand {
 
   private static List<DestinationTree<World, Vector3i>> destinationRoots(Player player) {
     List<DestinationTree<World, Vector3i>> roots = new ArrayList<>();
-    for (RegisteredServiceProvider<PaperDestinationProvider> registration :
-        Bukkit.getServicesManager().getRegistrations(PaperDestinationProvider.class)) {
+    for (RegisteredServiceProvider<PaperDestinationService> registration :
+        Bukkit.getServicesManager().getRegistrations(PaperDestinationService.class)) {
       roots.addAll(registration.getProvider().provide(player));
     }
     return roots;
   }
 
   private static PaperNavigatorFactory navigatorFactory(String id) {
-    for (RegisteredServiceProvider<PaperNavigatorFactory> registration :
-        Bukkit.getServicesManager().getRegistrations(PaperNavigatorFactory.class)) {
-      if (registration.getProvider().key().equals(id)) {
-        return registration.getProvider();
+    for (RegisteredServiceProvider<PaperNavigatorService> registration :
+        Bukkit.getServicesManager().getRegistrations(PaperNavigatorService.class)) {
+      PaperNavigatorFactory factory = registration.getProvider().compute().get(id);
+      if (factory != null) {
+        return factory;
       }
     }
     return null;
@@ -467,9 +469,9 @@ final class NavigateCommand {
 
   private static List<String> navigatorIds() {
     List<String> ids = new ArrayList<>();
-    for (RegisteredServiceProvider<PaperNavigatorFactory> registration :
-        Bukkit.getServicesManager().getRegistrations(PaperNavigatorFactory.class)) {
-      ids.add(registration.getProvider().key());
+    for (RegisteredServiceProvider<PaperNavigatorService> registration :
+        Bukkit.getServicesManager().getRegistrations(PaperNavigatorService.class)) {
+      ids.addAll(registration.getProvider().compute().keySet());
     }
     return ids;
   }

@@ -48,7 +48,6 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
    * Starts a trip, unless the player is already at their trip limit.
    *
    * @param player the guided player's id
-   * @param navigatorId the navigator (display strategy) id
    * @param navigator the navigator to drive
    * @param destination the destination label (for the listing and same-destination replacement)
    * @param liveSearch the re-search behavior (used for both live loops and stray recalculation);
@@ -60,7 +59,6 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
    */
   public synchronized Optional<Trip<E, P, L>> start(
       P player,
-      String navigatorId,
       Navigator<L> navigator,
       String destination,
       LiveSearch<L> liveSearch,
@@ -76,7 +74,6 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
             player,
             nextId(active),
             destination,
-            navigatorId,
             navigator,
             scheduler,
             TICK_PERIOD,

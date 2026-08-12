@@ -38,7 +38,7 @@ public final class OdysseyBetonQuestPlugin extends JavaPlugin {
     saveDefaultConfig();
     QuestNavPrefs prefs = new QuestNavPrefs(getConfig());
 
-    Odyssey.register(this, new BetonQuestDestinationProvider(api));
+    Odyssey.register(this, new BetonQuestDestinationService(api));
     getServer().getPluginManager().registerEvents(new BetonQuestCompassListener(api, prefs), this);
 
     getLogger().info("OdysseyBetonQuest enabled.");

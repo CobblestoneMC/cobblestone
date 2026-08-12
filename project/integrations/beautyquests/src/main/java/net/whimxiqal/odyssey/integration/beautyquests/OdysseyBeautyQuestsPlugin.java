@@ -29,7 +29,7 @@ public final class OdysseyBeautyQuestsPlugin extends JavaPlugin {
     saveDefaultConfig();
     QuestNavPrefs prefs = new QuestNavPrefs(getConfig());
 
-    Odyssey.register(this, new BeautyQuestsDestinationProvider());
+    Odyssey.register(this, new BeautyQuestsDestinationService());
     getServer().getPluginManager().registerEvents(new BeautyQuestsStageListener(prefs), this);
 
     getLogger().info("OdysseyBeautyQuests enabled.");

@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import net.whimxiqal.odyssey.paper.api.PaperBreakChecker;
-import net.whimxiqal.odyssey.paper.api.PaperOdysseySearchModifier;
+import net.whimxiqal.odyssey.paper.api.PaperSearchModificationService;
 import net.whimxiqal.odyssey.paper.api.PaperTransition;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -40,7 +40,7 @@ import org.bukkit.plugin.Plugin;
  * the player may dig a block, so mining routes avoid protected land. That call touches Towny's
  * caches, so it is hopped to the main thread and its result delivered through the future.
  */
-final class TownyModifier implements PaperOdysseySearchModifier {
+final class TownySearchModificationService implements PaperSearchModificationService {
 
   private static final double TELEPORT_COST_SECONDS = 3.0;
 
@@ -55,7 +55,7 @@ final class TownyModifier implements PaperOdysseySearchModifier {
 
   private final Plugin plugin;
 
-  TownyModifier(Plugin plugin) {
+  TownySearchModificationService(Plugin plugin) {
     this.plugin = plugin;
   }
 

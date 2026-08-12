@@ -74,7 +74,7 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
 
     // Waypoints are surfaced to searches like any third-party provider — via the same registration
     // helper an integration would use.
-    Odyssey.register(this, new OdysseyDestinationProvider(dataStore.waypoints()));
+    Odyssey.register(this, new OdysseyDestinationService(dataStore.waypoints()));
 
     Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
     Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), logger);
@@ -84,11 +84,13 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
     // registered as a service so it is discovered like any third-party navigator.
     this.tripManager =
         new TripManager<>(platformApi.scheduler(), config.get(keys.tripsMaxActivePerPlayer));
-    Odyssey.register(this, new PaperTrailNavigatorFactory(config, keys, messages));
+    Odyssey.register(
+        this,
+        new PaperTrailNavigatorService(new PaperTrailNavigatorFactory(config, keys, messages)));
 
     // Discovered vanilla portals are surfaced to searches as an internal transition provider, and
     // learned from player teleports by the portal listener.
-    Odyssey.register(this, new PortalTransitionProvider(dataStore.portalTransitions()));
+    Odyssey.register(this, new PortalSearchModificationService(dataStore.portalTransitions()));
     getServer()
         .getPluginManager()
         .registerEvents(
@@ -168,7 +170,6 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
           new OdysseyMetrics(
               this,
               config.get(keys.dataBackend).name().toLowerCase(Locale.ROOT),
-              config.get(keys.portalsDiscovery),
               tripManager,
               searchRegistry);
     }

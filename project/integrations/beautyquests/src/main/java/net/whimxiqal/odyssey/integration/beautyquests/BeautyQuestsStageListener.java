@@ -57,7 +57,7 @@ final class BeautyQuestsStageListener implements Listener {
             player,
             target,
             settings,
-            BeautyQuestsDestinationProvider.label(quest),
+            BeautyQuestsDestinationService.label(quest),
             reason -> {
               // No route (or the search failed): nothing to do; the next stage will try again.
             });

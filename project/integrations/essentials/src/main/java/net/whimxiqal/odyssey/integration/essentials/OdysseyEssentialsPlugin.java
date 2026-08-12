@@ -34,8 +34,8 @@ public final class OdysseyEssentialsPlugin extends JavaPlugin {
 
     Essentials essentials = new Essentials(essentialsApi, spawnApi);
 
-    Odyssey.register(this, new EssentialsDestinationProvider(essentials));
-    Odyssey.register(this, new EssentialsTransitionProvider(essentials));
+    Odyssey.register(this, new EssentialsDestinationService(essentials));
+    Odyssey.register(this, new EssentialsSearchModificationService(essentials));
 
     getLogger()
         .info(

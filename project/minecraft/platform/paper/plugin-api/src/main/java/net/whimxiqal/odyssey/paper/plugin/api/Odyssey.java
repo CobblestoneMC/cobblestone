@@ -9,7 +9,7 @@ package net.whimxiqal.odyssey.paper.plugin.api;
 
 import java.util.Objects;
 import net.whimxiqal.odyssey.paper.api.PaperNavigationService;
-import net.whimxiqal.odyssey.paper.api.PaperOdysseySearchModifier;
+import net.whimxiqal.odyssey.paper.api.PaperSearchModificationService;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.ServicePriority;
@@ -59,30 +59,30 @@ public final class Odyssey {
    * Registers a search modifier (transitions, breakability, passability).
    *
    * @param plugin the registering plugin
-   * @param modifier the modifier to register
+   * @param service the service to register
    */
-  public static void register(Plugin plugin, PaperOdysseySearchModifier modifier) {
-    register(plugin, PaperOdysseySearchModifier.class, modifier);
+  public static void register(Plugin plugin, PaperSearchModificationService service) {
+    register(plugin, PaperSearchModificationService.class, service);
   }
 
   /**
    * Registers a destination provider (targets shown in {@code /navigate}).
    *
    * @param plugin the registering plugin
-   * @param provider the provider to register
+   * @param service the service to register
    */
-  public static void register(Plugin plugin, PaperDestinationProvider provider) {
-    register(plugin, PaperDestinationProvider.class, provider);
+  public static void register(Plugin plugin, PaperDestinationService service) {
+    register(plugin, PaperDestinationService.class, service);
   }
 
   /**
    * Registers a navigator factory (a display strategy for guided trips).
    *
    * @param plugin the registering plugin
-   * @param factory the factory to register
+   * @param service the service to register
    */
-  public static void register(Plugin plugin, PaperNavigatorFactory factory) {
-    register(plugin, PaperNavigatorFactory.class, factory);
+  public static void register(Plugin plugin, PaperNavigatorService service) {
+    register(plugin, PaperNavigatorService.class, service);
   }
 
   private static <T> void register(Plugin plugin, Class<T> type, T service) {

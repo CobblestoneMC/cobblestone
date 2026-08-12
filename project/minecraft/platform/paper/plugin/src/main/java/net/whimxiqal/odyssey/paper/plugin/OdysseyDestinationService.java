@@ -18,7 +18,7 @@ import net.whimxiqal.odyssey.api.Destination;
 import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
 import net.whimxiqal.odyssey.paper.api.SingleCellWorldRegion;
 import net.whimxiqal.odyssey.paper.api.WholeWorldRegion;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
+import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationService;
 import net.whimxiqal.odyssey.plugin.api.DestinationTree;
 import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
 import net.whimxiqal.odyssey.plugin.data.Waypoint;
@@ -32,14 +32,14 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.joml.Vector3i;
 
-public class OdysseyDestinationProvider implements PaperDestinationProvider {
+public class OdysseyDestinationService implements PaperDestinationService {
   public static final String PLAYER_TREE_KEY = "player";
   public static final String WORLD_TREE_KEY = "world";
   public static final String WAYPOINT_TREE_KEY = "waypoint";
 
   private final WaypointDao waypoints;
 
-  public OdysseyDestinationProvider(WaypointDao waypoints) {
+  public OdysseyDestinationService(WaypointDao waypoints) {
     this.waypoints = waypoints;
   }
 

@@ -18,8 +18,8 @@ import org.joml.Vector3i;
 /**
  * A {@link PlatformTransition} with Paper's region and position types already bound — a Bukkit
  * {@link Location} destination and a {@link WorldRegion} over Bukkit {@link World}s. Integrations
- * return these from {@link PaperOdysseySearchModifier#computeTransitions}, so they never have to
- * spell out (or echo) the full generic signature. Build one with {@link #of}.
+ * return these from {@link PaperSearchModificationService#computeTransitions}, so they never have
+ * to spell out (or echo) the full generic signature. Build one with {@link #of}.
  */
 public interface PaperTransition
     extends PlatformTransition<WorldRegion<World, Vector3i>, Location> {

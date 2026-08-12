@@ -37,7 +37,7 @@ import org.bukkit.entity.Player;
  * off the main thread; they answer with a {@link CompletableFuture} so an async lookup (e.g. a
  * database query) never blocks — and an already-completed future keeps the search on its fast path.
  */
-public interface PaperOdysseySearchModifier {
+public interface PaperSearchModificationService {
 
   /**
    * Computes the extra transitions available to the given player for one search.

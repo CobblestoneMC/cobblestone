@@ -14,7 +14,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestination;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
+import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationService;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationTree;
 import net.whimxiqal.odyssey.plugin.api.DestinationTree;
 import org.bukkit.Location;
@@ -30,14 +30,14 @@ import org.joml.Vector3i;
  * is gated by Odyssey's {@code odyssey.navigate.quests.quest.*} permission (default-allow). The
  * target is snapshotted when the tree is built (on the main thread, as quest progress requires).
  */
-final class BishopQuestsDestinationProvider implements PaperDestinationProvider {
+final class BishopQuestsDestinationService implements PaperDestinationService {
 
   static final String TREE_KEY = "quests";
   static final String QUEST_KEY = "quest";
 
   private final Quests quests;
 
-  BishopQuestsDestinationProvider(Quests quests) {
+  BishopQuestsDestinationService(Quests quests) {
     this.quests = quests;
   }
 

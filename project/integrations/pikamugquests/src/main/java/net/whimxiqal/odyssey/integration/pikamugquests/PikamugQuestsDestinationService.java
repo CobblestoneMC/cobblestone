@@ -14,7 +14,7 @@ import me.pikamug.quests.Quests;
 import me.pikamug.quests.player.Quester;
 import me.pikamug.quests.quests.Quest;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestination;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
+import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationService;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationTree;
 import net.whimxiqal.odyssey.plugin.api.DestinationTree;
 import org.bukkit.World;
@@ -22,22 +22,22 @@ import org.bukkit.entity.Player;
 import org.joml.Vector3i;
 
 /**
- * Surfaces the player's active quests as navigation targets: {@code quests → quest →
- * <name>}, one leaf per current quest whose current stage has a locatable objective (a
- * reach-location or kill-within region). The plugin-unique {@code quests} root keeps these
- * from colliding with other integrations' trees; Odyssey's resolver still lets a player type just
- * the quest name when it's unambiguous. Navigating is gated by Odyssey's {@code
- * odyssey.navigate.pikamugquests.quest.*} permission (default-allow). Targets re-resolve on query,
- * so advancing a stage is reflected without a restart.
+ * Surfaces the player's active quests as navigation targets: {@code quests → quest → <name>}, one
+ * leaf per current quest whose current stage has a locatable objective (a reach-location or
+ * kill-within region). The plugin-unique {@code quests} root keeps these from colliding with other
+ * integrations' trees; Odyssey's resolver still lets a player type just the quest name when it's
+ * unambiguous. Navigating is gated by Odyssey's {@code odyssey.navigate.pikamugquests.quest.*}
+ * permission (default-allow). Targets re-resolve on query, so advancing a stage is reflected
+ * without a restart.
  */
-final class PikamugQuestsDestinationProvider implements PaperDestinationProvider {
+final class PikamugQuestsDestinationService implements PaperDestinationService {
 
   static final String TREE_KEY = "quests";
   static final String QUEST_KEY = "quest";
 
   private final Quests quests;
 
-  PikamugQuestsDestinationProvider(Quests quests) {
+  PikamugQuestsDestinationService(Quests quests) {
     this.quests = quests;
   }
 

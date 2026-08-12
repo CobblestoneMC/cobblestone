@@ -14,7 +14,7 @@ import org.bukkit.entity.Player;
 
 /**
  * Decides whether Odyssey may route a player through mining a given block. Returned from {@link
- * PaperOdysseySearchModifier#computeBreakChecker} and invoked for each block the mining mode
+ * PaperSearchModificationService#computeBreakChecker} and invoked for each block the mining mode
  * considers breaking. When several modifiers are registered, a block is breakable only if all of
  * them permit it.
  *

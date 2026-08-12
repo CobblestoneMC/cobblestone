@@ -36,17 +36,11 @@ class TripManagerTest {
     TestTripAgent player = new TestTripAgent(UUID.randomUUID());
 
     assertTrue(
-        manager
-            .start(player, "trail", new FakeNavigator(), "dest", null, null, false, 0L)
-            .isPresent());
+        manager.start(player, new FakeNavigator(), "dest", null, null, false, 0L).isPresent());
     assertTrue(
-        manager
-            .start(player, "trail", new FakeNavigator(), "dest", null, null, false, 0L)
-            .isPresent());
+        manager.start(player, new FakeNavigator(), "dest", null, null, false, 0L).isPresent());
     assertTrue(
-        manager
-            .start(player, "trail", new FakeNavigator(), "dest", null, null, false, 0L)
-            .isEmpty(),
+        manager.start(player, new FakeNavigator(), "dest", null, null, false, 0L).isEmpty(),
         "over limit");
     assertEquals(2, manager.trips(player.uuid()).size());
   }
@@ -59,7 +53,7 @@ class TripManagerTest {
     FakeNavigator navigator = new FakeNavigator();
     navigator.completeAfter = 2;
 
-    manager.start(player, "trail", navigator, "dest", null, null, false, 0L);
+    manager.start(player, navigator, "dest", null, null, false, 0L);
     assertTrue(navigator.started);
 
     scheduler.tickAll(); // 1st tick: not complete → tick()
@@ -84,7 +78,7 @@ class TripManagerTest {
     FakeNavigator navigator = new FakeNavigator();
     FakeLiveSearch live = new FakeLiveSearch();
 
-    manager.start(player, "trail", navigator, "dest", live, null, true, 100L);
+    manager.start(player, navigator, "dest", live, null, true, 100L);
     assertEquals(1, scheduler.delayedCount(), "first re-search scheduled");
 
     scheduler.runDelayedOnce(); // re-search → search completes → hot-swap → reschedule
@@ -105,13 +99,9 @@ class TripManagerTest {
     TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 3);
     TestTripAgent player = new TestTripAgent(UUID.randomUUID());
     Trip<Object, TestTripAgent, Object> first =
-        manager
-            .start(player, "trail", new FakeNavigator(), "home", null, null, false, 0L)
-            .orElseThrow();
+        manager.start(player, new FakeNavigator(), "home", null, null, false, 0L).orElseThrow();
     Trip<Object, TestTripAgent, Object> second =
-        manager
-            .start(player, "trail", new FakeNavigator(), "caves", null, null, false, 0L)
-            .orElseThrow();
+        manager.start(player, new FakeNavigator(), "caves", null, null, false, 0L).orElseThrow();
     assertEquals(1, first.id());
     assertEquals(2, second.id());
 
@@ -121,9 +111,7 @@ class TripManagerTest {
 
     // id 1 is free again and is reused for the next trip
     Trip<Object, TestTripAgent, Object> third =
-        manager
-            .start(player, "trail", new FakeNavigator(), "home", null, null, false, 0L)
-            .orElseThrow();
+        manager.start(player, new FakeNavigator(), "home", null, null, false, 0L).orElseThrow();
     assertEquals(1, third.id());
 
     assertEquals(
@@ -139,8 +127,8 @@ class TripManagerTest {
     TestTripAgent player = new TestTripAgent(UUID.randomUUID());
     FakeNavigator first = new FakeNavigator();
     FakeNavigator second = new FakeNavigator();
-    manager.start(player, "trail", first, "dest", null, null, false, 0L);
-    manager.start(player, "trail", second, "dest", null, null, false, 0L);
+    manager.start(player, first, "dest", null, null, false, 0L);
+    manager.start(player, second, "dest", null, null, false, 0L);
 
     manager.stopAll(player.uuid());
 

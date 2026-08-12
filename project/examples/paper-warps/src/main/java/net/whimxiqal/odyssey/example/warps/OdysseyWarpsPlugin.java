@@ -31,7 +31,7 @@ public final class OdysseyWarpsPlugin extends JavaPlugin {
     Selections selections = new Selections();
 
     // The single hook into navigation.
-    Odyssey.register(this, new WarpTransitionProvider(store));
+    Odyssey.register(this, new WarpSearchModificationService(store));
 
     // The wand (portal box selection) and the auto-teleport-on-entry behaviour.
     getServer().getPluginManager().registerEvents(new WarpListeners(this, store, selections), this);

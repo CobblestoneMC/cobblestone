@@ -10,7 +10,7 @@ package net.whimxiqal.odyssey.integration.essentials;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import net.whimxiqal.odyssey.paper.api.PaperOdysseySearchModifier;
+import net.whimxiqal.odyssey.paper.api.PaperSearchModificationService;
 import net.whimxiqal.odyssey.paper.api.PaperTransition;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -24,7 +24,7 @@ import org.bukkit.entity.Player;
  * <p>A teleport is only offered if the player actually has permission to run it — checked here, per
  * search, so revoking {@code essentials.home} immediately removes it as a routing option.
  */
-final class EssentialsTransitionProvider implements PaperOdysseySearchModifier {
+final class EssentialsSearchModificationService implements PaperSearchModificationService {
 
   // Teleport commands are ~instant; a small non-zero cost keeps the search from over-preferring
   // them.
@@ -32,7 +32,7 @@ final class EssentialsTransitionProvider implements PaperOdysseySearchModifier {
 
   private final Essentials essentials;
 
-  EssentialsTransitionProvider(Essentials essentials) {
+  EssentialsSearchModificationService(Essentials essentials) {
     this.essentials = essentials;
   }
 

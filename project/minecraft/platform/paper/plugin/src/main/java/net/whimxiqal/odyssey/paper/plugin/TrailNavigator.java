@@ -415,13 +415,19 @@ final class TrailNavigator implements Navigator<Location> {
       double x2,
       double y2,
       double z2) {
-    Location dot =
-        new Location(
-            world,
-            x1 == x2 ? x1 : random.nextDouble(x1, x2),
-            y1 == y2 ? y1 : random.nextDouble(y1, y2),
-            z1 == z2 ? z1 : random.nextDouble(z1, z2));
-    renderTrailParticle(random, dot);
+    int count = (int) density;
+    if (random.nextDouble() < density - count) {
+      count++;
+    }
+    for (int p = 0; p < count; p++) {
+      Location dot =
+          new Location(
+              world,
+              x1 == x2 ? x1 : random.nextDouble(x1, x2),
+              y1 == y2 ? y1 : random.nextDouble(y1, y2),
+              z1 == z2 ? z1 : random.nextDouble(z1, z2));
+      renderTrailParticle(random, dot);
+    }
   }
 
   private void renderGuide(Vec3 playerVec, World playerWorld, ThreadLocalRandom random) {

@@ -32,7 +32,7 @@ public final class OdysseyPikamugQuestsPlugin extends JavaPlugin {
     saveDefaultConfig();
     QuestNavPrefs prefs = new QuestNavPrefs(getConfig());
 
-    Odyssey.register(this, new PikamugQuestsDestinationProvider(quests));
+    Odyssey.register(this, new PikamugQuestsDestinationService(quests));
     getServer().getPluginManager().registerEvents(new PikamugQuestsCompassListener(prefs), this);
 
     getLogger().info("OdysseyPikamugQuests enabled.");

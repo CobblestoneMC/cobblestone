@@ -77,7 +77,11 @@ abstract class AbstractMinecraftMode<A extends MinecraftAgent> implements Minecr
   protected static Movement<MinecraftStepPayload> move(
       Cell cell, double cost, MinecraftStepType type, TraversalState state) {
     return new Movement<>(
-        cell, cost, cost, new MinecraftStepPayload(type, MinecraftInstruction.None.INSTANCE), state);
+        cell,
+        cost,
+        cost,
+        new MinecraftStepPayload(type, MinecraftInstruction.None.INSTANCE),
+        state);
   }
 
   /**

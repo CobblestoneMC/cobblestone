@@ -24,8 +24,8 @@ public final class OdysseyTownyPlugin extends JavaPlugin {
       getServer().getPluginManager().disablePlugin(this);
       return;
     }
-    Odyssey.register(this, new TownyDestinationProvider());
-    Odyssey.register(this, new TownyModifier(this));
+    Odyssey.register(this, new TownyDestinationService());
+    Odyssey.register(this, new TownySearchModificationService(this));
     getLogger().info("OdysseyTowny enabled.");
   }
 }

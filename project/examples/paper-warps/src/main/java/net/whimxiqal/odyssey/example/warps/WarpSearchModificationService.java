@@ -13,7 +13,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.paper.api.BoxWorldRegion;
-import net.whimxiqal.odyssey.paper.api.PaperOdysseySearchModifier;
+import net.whimxiqal.odyssey.paper.api.PaperSearchModificationService;
 import net.whimxiqal.odyssey.paper.api.PaperTransition;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -36,11 +36,11 @@ import org.bukkit.entity.Player;
  * #computeTransitions(Player)} per search. (A modifier can also constrain mining or passage; this
  * example only adds routes and leaves those at their permissive defaults.)
  */
-final class WarpTransitionProvider implements PaperOdysseySearchModifier {
+final class WarpSearchModificationService implements PaperSearchModificationService {
 
   private final WarpStore store;
 
-  WarpTransitionProvider(WarpStore store) {
+  WarpSearchModificationService(WarpStore store) {
     this.store = store;
   }
 

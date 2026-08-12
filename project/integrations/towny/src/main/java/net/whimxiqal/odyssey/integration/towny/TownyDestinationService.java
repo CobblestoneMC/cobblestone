@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestination;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
+import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationService;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationTree;
 import net.whimxiqal.odyssey.plugin.api.DestinationTree;
 import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
@@ -44,7 +44,7 @@ import org.joml.Vector3i;
  * (default-allow), not by whether the player may teleport there. Regions are read from Towny
  * lazily, on the search-initiating thread.
  */
-final class TownyDestinationProvider implements PaperDestinationProvider {
+final class TownyDestinationService implements PaperDestinationService {
 
   static final String TREE_KEY = "towny";
 

@@ -28,6 +28,7 @@ import net.whimxiqal.odyssey.FutureOr;
  */
 public final class ChunkProvider {
 
+  public static final int CHUNK_PREFETCH_MARGIN = 32;
   private final PlatformApi<?> platform;
   private final ChunkProviderSettings settings;
   private final LongSupplier clock;
@@ -76,38 +77,47 @@ public final class ChunkProvider {
     ChunkKey key = new ChunkKey(world.key(), chunkX, chunkZ);
     synchronized (lock) {
       Cached cached = cache.get(key);
-      if (cached != null && !isStale(cached)) {
+
+      // trigger read-ahead around this cell if we have not seen this block requested
+      // or if we have only requested it because it was part of another prefetch
+      if (cached == null) {
         triggerReadAhead(cell, world);
-        return FutureOr.of(cached.chunk().block(cell.x() & 15, cell.y(), cell.z() & 15));
+      } else {
+        if (cached.prefetched) {
+          triggerReadAhead(cell, world);
+        }
+        if (isStale(cached)) {
+          cache.remove(key);
+        } else {
+          cached.directlyAccessed();
+          return FutureOr.of(cached.chunk.block(cell.x() & 15, cell.y(), cell.z() & 15));
+        }
       }
-      if (cached != null) {
-        cache.remove(key);
-      }
-      CompletableFuture<MinecraftChunk> fetch = fetchLocked(key, chunkX, chunkZ, world);
+      CompletableFuture<MinecraftChunk> fetch = fetchLocked(key, world, false);
       return FutureOr.ofFuture(
           fetch.thenApply(snapshot -> snapshot.block(cell.x() & 15, cell.y(), cell.z() & 15)));
     }
   }
 
   private boolean isStale(Cached cached) {
-    return clock.getAsLong() - cached.cachedAt() > settings.stalenessMillis();
+    return clock.getAsLong() - cached.cachedAt > settings.stalenessMillis();
   }
 
   private CompletableFuture<MinecraftChunk> fetchLocked(
-      ChunkKey key, int chunkX, int chunkZ, MinecraftWorld world) {
+      ChunkKey key, MinecraftWorld world, boolean prefetch) {
     CompletableFuture<MinecraftChunk> pending = inFlight.get(key);
     if (pending != null) {
       return pending;
     }
     CompletableFuture<MinecraftChunk> fetch =
-        platform.fetchChunk(chunkX, chunkZ, world, settings.loadPolicy());
+        platform.fetchChunk(key.chunkX, key.chunkZ, world, settings.loadPolicy());
     inFlight.put(key, fetch);
     fetch.whenComplete(
         (snapshot, error) -> {
           synchronized (lock) {
             inFlight.remove(key);
             if (error == null && snapshot != null) {
-              cache.put(key, new Cached(snapshot, clock.getAsLong()));
+              cache.put(key, new Cached(snapshot, clock.getAsLong(), prefetch));
             }
           }
         });
@@ -115,34 +125,42 @@ public final class ChunkProvider {
   }
 
   private void triggerReadAhead(Cell cell, MinecraftWorld world) {
-    int margin = settings.readAheadMargin();
-    if (margin <= 0) {
-      return;
-    }
-    int localX = cell.x() & 15;
-    int localZ = cell.z() & 15;
-    int chunkX = cell.x() >> 4;
-    int chunkZ = cell.z() >> 4;
-    if (localX < margin) {
-      prefetch(chunkX - 1, chunkZ, world);
-    } else if (localX >= 16 - margin) {
-      prefetch(chunkX + 1, chunkZ, world);
-    }
-    if (localZ < margin) {
-      prefetch(chunkX, chunkZ - 1, world);
-    } else if (localZ >= 16 - margin) {
-      prefetch(chunkX, chunkZ + 1, world);
+    int minChunkX = (cell.x() - CHUNK_PREFETCH_MARGIN) >> 4;
+    int maxChunkX = (cell.x() + CHUNK_PREFETCH_MARGIN) >> 4;
+    int minChunkZ = (cell.z() - CHUNK_PREFETCH_MARGIN) >> 4;
+    int maxChunkZ = (cell.z() + CHUNK_PREFETCH_MARGIN) >> 4;
+    for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+      for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
+        if (cx == 0 && cz == 0) {
+          continue;
+        }
+        prefetch(cx, cz, world);
+      }
     }
   }
 
   private void prefetch(int chunkX, int chunkZ, MinecraftWorld world) {
     ChunkKey key = new ChunkKey(world.key(), chunkX, chunkZ);
     if (!cache.containsKey(key) && !inFlight.containsKey(key)) {
-      fetchLocked(key, chunkX, chunkZ, world);
+      fetchLocked(key, world, true);
     }
   }
 
   private record ChunkKey(String worldKey, int chunkX, int chunkZ) {}
 
-  private record Cached(MinecraftChunk chunk, long cachedAt) {}
+  private static class Cached {
+    final MinecraftChunk chunk;
+    final long cachedAt;
+    private boolean prefetched;
+
+    private Cached(MinecraftChunk chunk, long cachedAt, boolean prefetched) {
+      this.chunk = chunk;
+      this.cachedAt = cachedAt;
+      this.prefetched = prefetched;
+    }
+
+    void directlyAccessed() {
+      prefetched = false;
+    }
+  }
 }

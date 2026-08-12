@@ -32,9 +32,6 @@ import org.bukkit.entity.Player;
  */
 public final class PaperTrailNavigatorFactory implements PaperNavigatorFactory {
 
-  /** The navigator id, matched by {@code /navigate -navigator trail}. */
-  public static final String KEY = "trail";
-
   private final ConfigManager config;
   private final ConfigKeys keys;
   private final Messages messages;
@@ -50,11 +47,6 @@ public final class PaperTrailNavigatorFactory implements PaperNavigatorFactory {
     this.config = config;
     this.keys = keys;
     this.messages = messages;
-  }
-
-  @Override
-  public String key() {
-    return KEY;
   }
 
   @Override

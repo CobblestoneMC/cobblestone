@@ -15,7 +15,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestination;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
+import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationService;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationTree;
 import net.whimxiqal.odyssey.plugin.api.DestinationTree;
 import org.bukkit.Location;
@@ -32,7 +32,7 @@ import org.joml.Vector3i;
  * is snapshotted when the tree is built (on the main thread, as {@code getLocated} requires);
  * advancing a stage is picked up the next time destinations are resolved.
  */
-final class BeautyQuestsDestinationProvider implements PaperDestinationProvider {
+final class BeautyQuestsDestinationService implements PaperDestinationService {
 
   static final String TREE_KEY = "beautyquests";
   static final String QUEST_KEY = "quest";

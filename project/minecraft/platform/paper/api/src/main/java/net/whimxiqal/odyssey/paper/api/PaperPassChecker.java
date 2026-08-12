@@ -13,9 +13,9 @@ import org.bukkit.entity.Player;
 
 /**
  * Decides whether a player may enter a given cell at all. Returned from {@link
- * PaperOdysseySearchModifier#computePassChecker} and invoked for each cell the search proposes; a
- * cell the player may not enter is dropped from the route. When several modifiers are registered, a
- * cell is passable only if all of them permit it.
+ * PaperSearchModificationService#computePassChecker} and invoked for each cell the search proposes;
+ * a cell the player may not enter is dropped from the route. When several modifiers are registered,
+ * a cell is passable only if all of them permit it.
  *
  * <p>Answer with a {@link CompletableFuture} so a region/permission lookup may be asynchronous
  * (e.g. a donor-only area backed by a database); return {@link CompletableFuture#completedFuture}

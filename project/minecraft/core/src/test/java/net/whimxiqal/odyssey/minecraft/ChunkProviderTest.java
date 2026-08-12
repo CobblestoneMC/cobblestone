@@ -25,14 +25,14 @@ class ChunkProviderTest {
     return new ChunkProvider(platform, settings, clock::get);
   }
 
-  private static ChunkProviderSettings settings(int margin, long staleness) {
-    return new ChunkProviderSettings(1024, staleness, margin, ChunkLoadPolicy.LOAD_FROM_DISK);
+  private static ChunkProviderSettings settings(long staleness) {
+    return new ChunkProviderSettings(1024, staleness, ChunkLoadPolicy.LOAD_FROM_DISK);
   }
 
   @Test
   void secondBlockInCachedChunkIsImmediate() {
     FakePlatform platform = new FakePlatform();
-    ChunkProvider cp = provider(platform, settings(0, 10_000));
+    ChunkProvider cp = provider(platform, settings(10_000));
 
     FutureOr<MinecraftBlock> first = cp.block(new Cell(5, 64, 5), world);
     assertFalse(first.isImmediate(), "a miss is served as pending");
@@ -47,7 +47,7 @@ class ChunkProviderTest {
   void concurrentMissesForOneChunkFetchOnlyOnce() {
     FakePlatform platform = new FakePlatform();
     platform.setImmediate(false);
-    ChunkProvider cp = provider(platform, settings(0, 10_000));
+    ChunkProvider cp = provider(platform, settings(10_000));
 
     FutureOr<MinecraftBlock> a = cp.block(new Cell(5, 64, 5), world);
     FutureOr<MinecraftBlock> b = cp.block(new Cell(6, 64, 6), world);
@@ -63,7 +63,7 @@ class ChunkProviderTest {
   @Test
   void staleChunksAreRefetched() {
     FakePlatform platform = new FakePlatform();
-    ChunkProvider cp = provider(platform, settings(0, 5_000));
+    ChunkProvider cp = provider(platform, settings(5_000));
 
     cp.block(new Cell(5, 64, 5), world).future().join();
     assertEquals(1, platform.fetchCount(0, 0));
@@ -74,15 +74,19 @@ class ChunkProviderTest {
   }
 
   @Test
-  void readAheadPrefetchesTheAdjacentChunkOnBorderHit() {
+  void readAheadPrefetchesTheAdjacentChunks() {
     FakePlatform platform = new FakePlatform();
-    ChunkProvider cp = provider(platform, settings(4, 10_000));
+    ChunkProvider cp = provider(platform, settings(10_000));
 
-    cp.block(new Cell(0, 64, 0), world).future().join(); // miss: fetches chunk (0,0) only
-    assertEquals(0, platform.fetchCount(-1, 0));
-
-    cp.block(new Cell(0, 64, 0), world); // hit near the -x/-z border → prefetch neighbors
+    cp.block(new Cell(0, 64, 0), world).future().join();
+    assertEquals(1, platform.fetchCount(-1, -1));
     assertEquals(1, platform.fetchCount(-1, 0));
+    assertEquals(1, platform.fetchCount(-1, 1));
     assertEquals(1, platform.fetchCount(0, -1));
+    assertEquals(1, platform.fetchCount(0, 0));
+    assertEquals(1, platform.fetchCount(0, 1));
+    assertEquals(1, platform.fetchCount(1, -1));
+    assertEquals(1, platform.fetchCount(1, 0));
+    assertEquals(1, platform.fetchCount(1, 1));
   }
 }

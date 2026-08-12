@@ -13,7 +13,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.joml.Vector3i;
 
-public interface PaperDestinationProvider {
+public interface PaperDestinationService {
 
   /**
    * Builds the destination tree visible to the given player.

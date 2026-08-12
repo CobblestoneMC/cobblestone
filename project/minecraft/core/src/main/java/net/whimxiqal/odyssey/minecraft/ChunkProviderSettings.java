@@ -18,10 +18,10 @@ package net.whimxiqal.odyssey.minecraft;
  * @param loadPolicy how aggressively to materialize missing chunks
  */
 public record ChunkProviderSettings(
-    int maxCachedChunks, long stalenessMillis, int readAheadMargin, ChunkLoadPolicy loadPolicy) {
+    int maxCachedChunks, long stalenessMillis, ChunkLoadPolicy loadPolicy) {
 
   /** Returns settings with sensible defaults. */
   public static ChunkProviderSettings defaults() {
-    return new ChunkProviderSettings(1024, 10_000L, 4, ChunkLoadPolicy.LOAD_FROM_DISK);
+    return new ChunkProviderSettings(1024, 10_000L, ChunkLoadPolicy.LOAD_FROM_DISK);
   }
 }

@@ -10,7 +10,7 @@ package net.whimxiqal.odyssey.integration.essentials;
 import java.util.Collection;
 import java.util.List;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestination;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
+import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationService;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationTree;
 import net.whimxiqal.odyssey.plugin.api.DestinationTree;
 import org.bukkit.World;
@@ -25,7 +25,7 @@ import org.joml.Vector3i;
  * revoked (the teleport transition still requires the Essentials permission). Destinations
  * re-resolve on query, so moving a home or the spawn is reflected without a restart.
  */
-final class EssentialsDestinationProvider implements PaperDestinationProvider {
+final class EssentialsDestinationService implements PaperDestinationService {
 
   static final String TREE_KEY = "essentials";
   static final String HOME_KEY = "home";
@@ -33,7 +33,7 @@ final class EssentialsDestinationProvider implements PaperDestinationProvider {
 
   private final Essentials essentials;
 
-  EssentialsDestinationProvider(Essentials essentials) {
+  EssentialsDestinationService(Essentials essentials) {
     this.essentials = essentials;
   }
 

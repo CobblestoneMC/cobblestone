@@ -1,3 +1,14 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+        // The Typewriter module-plugin (for the odyssey-typewriter extension). The 2.1.x line (for
+        // engine 0.9) currently lives on the beta channel.
+        maven("https://maven.typewritermc.com/releases")
+        maven("https://maven.typewritermc.com/beta")
+    }
+}
+
 rootProject.name = "odyssey"
 
 // All subprojects live flat under project/ and are named exactly as in design/01-modules-and-build.md.
@@ -48,3 +59,7 @@ include(":integrations:betonquest")
 project(":integrations:betonquest").name = "odyssey-betonquest"
 include(":integrations:bishopquests")
 project(":integrations:bishopquests").name = "odyssey-bishopquests"
+// A Typewriter extension (Kotlin), not a Bukkit plugin — built with Typewriter's own module-plugin.
+// disabled until module-plugin upgrades to 2.2.0 for JVM 25 Kotlin support
+//include(":integrations:typewriter")
+//project(":integrations:typewriter").name = "odyssey-typewriter"

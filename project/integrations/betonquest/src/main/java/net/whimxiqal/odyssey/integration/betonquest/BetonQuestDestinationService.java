@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestination;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationProvider;
+import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationService;
 import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationTree;
 import net.whimxiqal.odyssey.plugin.api.DestinationTree;
 import org.betonquest.betonquest.api.BetonQuestApi;
@@ -35,14 +35,14 @@ import org.joml.Vector3i;
  * odyssey.navigate.betonquest.compass.*} permission (default-allow). Targets are snapshotted when
  * the tree is built (on the main thread, as compass-location resolution requires).
  */
-final class BetonQuestDestinationProvider implements PaperDestinationProvider {
+final class BetonQuestDestinationService implements PaperDestinationService {
 
   static final String TREE_KEY = "betonquest";
   static final String COMPASS_KEY = "compass";
 
   private final BetonQuestApi api;
 
-  BetonQuestDestinationProvider(BetonQuestApi api) {
+  BetonQuestDestinationService(BetonQuestApi api) {
     this.api = api;
   }
 
