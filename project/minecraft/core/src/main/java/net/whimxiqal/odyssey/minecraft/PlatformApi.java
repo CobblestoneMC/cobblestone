@@ -31,8 +31,9 @@ public interface PlatformApi<E> {
    * @param chunkZ the chunk Z coordinate
    * @param world the world
    * @param policy the load policy
+   * @param urgent the urgency of the request
    * @return a future of the snapshot, or null
    */
   CompletableFuture<MinecraftChunk> fetchChunk(
-      int chunkX, int chunkZ, MinecraftWorld world, ChunkLoadPolicy policy);
+      int chunkX, int chunkZ, MinecraftWorld world, ChunkLoadPolicy policy, boolean urgent);
 }

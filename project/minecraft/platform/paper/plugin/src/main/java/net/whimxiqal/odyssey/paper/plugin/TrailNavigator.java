@@ -175,22 +175,22 @@ final class TrailNavigator implements Navigator<Location> {
       // index.
       foremost =
           Math.min(TrailProgress.advance(points, origin, foremost, playerVec), steps.size() - 1);
-      // Shortcut: if the player is standing exactly on a later step within the buffer (e.g. they
-      // cut
-      // a curve the projection didn't credit), jump the trail forward to it. Standing on step i
-      // means
-      // the player has reached point i + 1.
-      Integer atBlock =
-          stepByBlock.get(
-              new BlockKey(
-                  playerLocation.getBlockX(),
-                  playerLocation.getBlockY(),
-                  playerLocation.getBlockZ()));
-      if (atBlock != null) {
-        int reached = Math.min(atBlock + 1, steps.size() - 1);
-        if (reached > foremost && reached <= foremost + bufferCells) {
-          foremost = reached;
-        }
+    }
+    // Shortcut: if the player is standing exactly on a later step within the buffer (e.g. they
+    // cut
+    // a curve the projection didn't credit), jump the trail forward to it. Standing on step i
+    // means
+    // the player has reached point i + 1.
+    Integer atBlock =
+        stepByBlock.get(
+            new BlockKey(
+                playerLocation.getBlockX(),
+                playerLocation.getBlockY(),
+                playerLocation.getBlockZ()));
+    if (atBlock != null) {
+      int reached = Math.min(atBlock + 1, steps.size() - 1);
+      if (reached > foremost && reached <= foremost + bufferCells) {
+        foremost = reached;
       }
     }
 
@@ -307,9 +307,6 @@ final class TrailNavigator implements Navigator<Location> {
   }
 
   private boolean reachedGoal(Vec3 playerVec, World playerWorld) {
-    if (foremost < points.size() - 1) {
-      return false; // not yet on the final step
-    }
     Vec3 goal = points.getLast();
     return sameWorld(playerWorld, steps.getLast().position())
         && playerVec.minus(goal).lengthSquared() <= COMPLETION_RADIUS_SQUARED;
@@ -357,7 +354,15 @@ final class TrailNavigator implements Navigator<Location> {
       }
       Vec3 center = points.get(i);
       MinecraftStepPayload payload = steps.get(i).payload();
-      renderBlock(playerWorld, location.toVector(), center, playerVec, payload, random);
+      boolean highlight = false;
+      if (i == steps.size() - 1) {
+        // the end should be highlighted
+        highlight = true;
+      } else if (i + 1 < end && steps.get(i + 1).payload().stepType().isAction()) {
+        // if the next step is an action, highlight this step
+        highlight = true;
+      }
+      renderBlock(playerWorld, location.toVector(), center, playerVec, payload, highlight, random);
     }
   }
 
@@ -367,11 +372,12 @@ final class TrailNavigator implements Navigator<Location> {
       Vec3 center,
       Vec3 playerVec,
       MinecraftStepPayload payload,
+      boolean highlight,
       ThreadLocalRandom random) {
     if (playerVec.minus(center).lengthSquared() < NEAR_BUFFER_SQUARED) {
       return; // keep the player's immediate view clear
     }
-    scatter(world, center, random);
+    scatter(world, center, highlight, random);
 
     if (payload != null && payload.stepType() == MinecraftStepType.MINE) {
       Block block =
@@ -435,41 +441,23 @@ final class TrailNavigator implements Navigator<Location> {
       return;
     }
     // Prefer the real short guide path (computed by the trip) if we have one for this world.
-    if (guidePoints != null
-        && guideWorld != null
-        && guideWorld.equals(playerWorld.getKey().asString())) {
-      for (int i = 0; i < guidePoints.size(); i++) {
-        Vec3 point = guidePoints.get(i);
-        MinecraftStepPayload payload = guideSteps.get(i).payload();
-        renderBlock(
-            playerWorld,
-            new Vector(point.x(), point.y(), point.z()),
-            point,
-            playerVec,
-            payload,
-            random);
-      }
+    if (guidePoints == null
+        || guideWorld == null
+        || guideWorld.equals(playerWorld.getKey().asString())) {
+      // No fallback while the guide search is pending/failed
       return;
     }
-    // Fallback while the guide search is pending/failed: a straight column toward the path.
-    Vec3 target = projectedTarget(playerVec);
-    Vec3 delta = target.minus(playerVec);
-    double distance = Math.sqrt(delta.lengthSquared());
-    if (distance <= NEAR_BUFFER) {
-      return; // on or beside the path: nothing to draw
-    }
-    int dots = (int) (distance / GUIDE_LINE_SPACING);
-    for (int i = 1; i <= dots; i++) {
-      double t = i / (double) dots;
-      Vec3 point =
-          new Vec3(
-              playerVec.x() + delta.x() * t,
-              playerVec.y() + delta.y() * t,
-              playerVec.z() + delta.z() * t);
-      if (playerVec.minus(point).lengthSquared() < NEAR_BUFFER_SQUARED) {
-        continue;
-      }
-      scatter(playerWorld, point, random);
+    for (int i = 0; i < guidePoints.size(); i++) {
+      Vec3 point = guidePoints.get(i);
+      MinecraftStepPayload payload = guideSteps.get(i).payload();
+      renderBlock(
+          playerWorld,
+          new Vector(point.x(), point.y(), point.z()),
+          point,
+          playerVec,
+          payload,
+          false,
+          random);
     }
   }
 
@@ -477,9 +465,13 @@ final class TrailNavigator implements Navigator<Location> {
    * Spawns ~{@code density} Gaussian-scattered particles around a center, each a random configured
    * type (DUST takes a random palette color). A fractional density is probabilistic (0.7 → 70%).
    */
-  private void scatter(World world, Vec3 center, ThreadLocalRandom random) {
-    int count = (int) density;
-    if (random.nextDouble() < density - count) {
+  private void scatter(World world, Vec3 center, boolean highlight, ThreadLocalRandom random) {
+    double modifiedDensity = density;
+    if (highlight) {
+      modifiedDensity *= 2;
+    }
+    int count = (int) modifiedDensity;
+    if (random.nextDouble() < modifiedDensity - count) {
       count++;
     }
     for (int p = 0; p < count; p++) {

@@ -15,13 +15,13 @@ package net.whimxiqal.odyssey.minecraft.modes;
 final class MovementCosts {
 
   /** Seconds to walk one block on flat ground. */
-  static final double WALK = 0.25;
+  static final double WALK = 0.20;
 
   /** Seconds to swim one block. */
-  static final double SWIM = 0.40;
+  static final double SWIM = 0.30;
 
   /** Seconds to fly one block. */
-  static final double FLY = 0.10;
+  static final double FLY = 0.08;
 
   /** Seconds to climb one block (ladder/scaffolding/vine). */
   static final double CLIMB = 0.40;
@@ -31,9 +31,6 @@ final class MovementCosts {
 
   /** Seconds to travel one block on horseback. */
   static final double HORSE = 0.12;
-
-  /** Extra seconds added when a walk step requires a jump up one block. */
-  static final double JUMP_EXTRA = 0.30;
 
   /** Seconds to open a door and pass through it. */
   static final double OPEN_DOOR = 0.50;

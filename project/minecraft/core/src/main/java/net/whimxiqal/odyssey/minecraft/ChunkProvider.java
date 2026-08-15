@@ -110,7 +110,7 @@ public final class ChunkProvider {
       return pending;
     }
     CompletableFuture<MinecraftChunk> fetch =
-        platform.fetchChunk(key.chunkX, key.chunkZ, world, settings.loadPolicy());
+        platform.fetchChunk(key.chunkX, key.chunkZ, world, settings.loadPolicy(), !prefetch);
     inFlight.put(key, fetch);
     fetch.whenComplete(
         (snapshot, error) -> {

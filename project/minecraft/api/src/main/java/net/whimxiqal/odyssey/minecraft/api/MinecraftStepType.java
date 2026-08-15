@@ -24,13 +24,26 @@ public enum MinecraftStepType {
   BOAT,
   HORSE,
 
-  // discrete actions
-  OPEN_DOOR,
-  PLACE_BOAT,
-  MOUNT_HORSE,
-  TELEPORT,
+  OPEN_DOOR(true),
+  PLACE_BOAT(true),
+  MOUNT_HORSE(true),
+  TELEPORT(true),
 
   // reserved (unimplemented in v1)
   ELYTRA,
-  RIDE_MINECART
+  RIDE_MINECART;
+
+  final boolean action;
+
+  public boolean isAction() {
+    return action;
+  }
+
+  MinecraftStepType() {
+    this.action = false;
+  }
+
+  MinecraftStepType(boolean action) {
+    this.action = action;
+  }
 }

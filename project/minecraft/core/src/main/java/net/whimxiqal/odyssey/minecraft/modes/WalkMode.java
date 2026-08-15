@@ -15,6 +15,7 @@ import net.whimxiqal.odyssey.Cell;
 import net.whimxiqal.odyssey.Movement;
 import net.whimxiqal.odyssey.api.TraversalState;
 import net.whimxiqal.odyssey.minecraft.MinecraftAgent;
+import net.whimxiqal.odyssey.minecraft.MinecraftBlock;
 import net.whimxiqal.odyssey.minecraft.MinecraftKeys;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
@@ -57,7 +58,7 @@ final class WalkMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
         if (diagonal && Geometry.cornerBlocked(view, from, dx, dz)) {
           continue;
         }
-        double factor = Math.max(view.at(level, 0, -1, 0).speedFactor(), 0.1);
+        double factor = view.at(level, 0, -1, 0).speedFactor();
         double cost = MovementCosts.WALK / factor * (diagonal ? MovementCosts.DIAGONAL : 1.0);
         moves.add(move(level, cost, MinecraftStepType.WALK, state));
       } else if (!diagonal) {
@@ -76,14 +77,21 @@ final class WalkMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
       List<Movement<MinecraftStepPayload>> moves) {
     Cell up = from.plus(dx, 1, dz);
     if (Geometry.standable(view, up) && view.at(from, 0, 2, 0).isPassable()) {
-      boolean half = view.at(from.plus(dx, 0, dz)).isHalfHeight();
-      double cost = MovementCosts.WALK + (half ? 0.0 : MovementCosts.JUMP_EXTRA);
+      MinecraftBlock floor = view.at(from.plus(dx, 0, dz));
+      boolean half = floor.isHalfHeight();
+      double cost = MovementCosts.WALK / floor.speedFactor();
       moves.add(move(up, cost, half ? MinecraftStepType.WALK : MinecraftStepType.JUMP, state));
-      return;
-    }
-    Cell down = from.plus(dx, -1, dz);
-    if (Geometry.standable(view, down)) {
-      moves.add(move(down, MovementCosts.WALK, MinecraftStepType.WALK, state));
+    } else {
+      Cell down = from.plus(dx, -1, dz);
+      if (Geometry.standable(view, down)) {
+        double factor = view.at(down, 0, -1, 0).speedFactor();
+        moves.add(
+            move(
+                down,
+                MovementCosts.WALK / factor * MovementCosts.DIAGONAL,
+                MinecraftStepType.WALK,
+                state));
+      }
     }
   }
 }

@@ -57,9 +57,9 @@ import org.joml.Vector3i;
 
 public final class PaperNavigationServiceImpl implements PaperNavigationService, WorldWrapper {
 
-  // The true global-minimum per-block cost (flying, MovementCosts.FLY = 0.10). Used as the
+  // The true global-minimum per-block cost (flying, MovementCosts.FLY = 0.08). Used as the
   // admissible Tier-1 bound and the running-average's cold-start estimate.
-  private static final double CHEAPEST_COST_PER_BLOCK = 0.10;
+  private static final double CHEAPEST_COST_PER_BLOCK = 0.08;
 
   private final OdysseyLogger logger;
   private final PaperScheduler scheduler;

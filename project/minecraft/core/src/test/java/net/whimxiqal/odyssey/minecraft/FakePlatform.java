@@ -42,7 +42,7 @@ final class FakePlatform implements PlatformApi<Object> {
 
   @Override
   public CompletableFuture<MinecraftChunk> fetchChunk(
-      int chunkX, int chunkZ, MinecraftWorld world, ChunkLoadPolicy policy) {
+      int chunkX, int chunkZ, MinecraftWorld world, ChunkLoadPolicy policy, boolean urgent) {
     fetched.add(new long[] {chunkX, chunkZ});
     if (immediate) {
       return CompletableFuture.completedFuture(new FakeChunk(chunkX, chunkZ));

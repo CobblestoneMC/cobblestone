@@ -45,6 +45,10 @@ final class MineMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
 
   private static final int[][] HORIZONTAL = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 
+  private static final int[][] ALL = {
+    {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, 1, 0}, {0, -1, 0}
+  };
+
   private final BreakChecker<A> breakChecker; // nullable: null = no integration constrains mining
 
   MineMode() {
@@ -62,7 +66,7 @@ final class MineMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
 
   @Override
   protected Set<Cell> requiredCells(Cell from) {
-    return Neighborhood.box(from, 1, -2, 2);
+    return Neighborhood.box(from, 1, -2, 3);
   }
 
   @Override
@@ -73,6 +77,24 @@ final class MineMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
       Cell dest = from.plus(dir[0], 0, dir[1]);
       Movement<MinecraftStepPayload> move =
           mineMove(agent, world, state, view, dest, MovementCosts.WALK, dest, dest.plus(0, 1, 0));
+      if (move != null) {
+        moves.add(move);
+      }
+    }
+    // mine up a step
+    for (int[] dir : HORIZONTAL) {
+      Cell dest = from.plus(dir[0], 1, dir[1]);
+      Movement<MinecraftStepPayload> move =
+          mineMove(
+              agent,
+              world,
+              state,
+              view,
+              dest,
+              MovementCosts.WALK * MovementCosts.DIAGONAL,
+              from.plus(0, 2, 0),
+              dest,
+              dest.plus(0, 1, 0));
       if (move != null) {
         moves.add(move);
       }
@@ -109,6 +131,19 @@ final class MineMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
       if (block.isPassable()) {
         continue;
       }
+
+      boolean uncoversLava = false;
+      for (int[] dir : ALL) {
+        MinecraftBlock maybeLava = view.at(cell.plus(dir[0], dir[1], dir[2]));
+        if (maybeLava.isLava()) {
+          uncoversLava = true;
+          break;
+        }
+      }
+      if (uncoversLava) {
+        return null;
+      }
+
       double time = block.breakTimeSeconds();
       if (!Double.isFinite(time) || !agent.canBreak(cell)) {
         return null; // unbreakable or off-limits — settled synchronously

@@ -25,8 +25,7 @@ public final class MinecraftModes {
   private MinecraftModes() {}
 
   /**
-   * Builds the modes available to {@code player} with no mining constraint (breaking is permitted
-   * everywhere the agent's own {@link OdysseyPlayer#canBreak} allows).
+   * Builds the modes available to {@code player} with no mining constraint.
    *
    * @param player the player being navigated
    * @param excluded step types to leave out

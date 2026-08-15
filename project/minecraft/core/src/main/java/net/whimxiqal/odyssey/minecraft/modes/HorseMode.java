@@ -60,12 +60,7 @@ final class HorseMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A>
       } else if (!diagonal) {
         Cell up = from.plus(dx, 1, dz);
         if (Geometry.standable(view, up) && view.at(from, 0, 2, 0).isPassable()) {
-          moves.add(
-              move(
-                  up,
-                  MovementCosts.HORSE + MovementCosts.JUMP_EXTRA,
-                  MinecraftStepType.HORSE,
-                  state));
+          moves.add(move(up, MovementCosts.HORSE, MinecraftStepType.HORSE, state));
         }
       }
     }

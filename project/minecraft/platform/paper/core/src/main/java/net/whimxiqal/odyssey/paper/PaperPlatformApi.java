@@ -42,7 +42,7 @@ final class PaperPlatformApi implements PlatformApi<Entity> {
 
   @Override
   public CompletableFuture<MinecraftChunk> fetchChunk(
-      int chunkX, int chunkZ, MinecraftWorld world, ChunkLoadPolicy policy) {
+      int chunkX, int chunkZ, MinecraftWorld world, ChunkLoadPolicy policy, boolean urgent) {
     NamespacedKey key = NamespacedKey.fromString(world.key());
     World bukkit = key == null ? null : Bukkit.getWorld(key);
     if (bukkit == null) {
@@ -69,7 +69,7 @@ final class PaperPlatformApi implements PlatformApi<Entity> {
 
     boolean generate = policy == ChunkLoadPolicy.GENERATE;
     return bukkit
-        .getChunkAtAsync(chunkX, chunkZ, generate)
+        .getChunkAtAsync(chunkX, chunkZ, generate, urgent)
         .thenApply(
             chunk ->
                 chunk == null

@@ -90,7 +90,7 @@ navigators:
   # The default "trail" navigator: a flowing ribbon of dust particles along the path.
   trail:
     # How many cells of the path ahead of the player to render at a time.
-    buffer_cells: 100
+    buffer_cells: 256
     # Particle types (Bukkit Particle names) used for the trail; one is picked at random per
     # particle. "DUST" is colored by the palette below; other types (e.g. GLOW, END_ROD) are drawn
     # as-is. Particles that need extra data beyond a color are not supported.
