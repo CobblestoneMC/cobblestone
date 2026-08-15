@@ -18,13 +18,13 @@ import net.whimxiqal.odyssey.api.Destination;
 import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
 import net.whimxiqal.odyssey.paper.api.SingleCellWorldRegion;
 import net.whimxiqal.odyssey.paper.api.WholeWorldRegion;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationService;
-import net.whimxiqal.odyssey.plugin.api.DestinationTree;
+import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
 import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
+import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
 import net.whimxiqal.odyssey.plugin.data.Waypoint;
 import net.whimxiqal.odyssey.plugin.data.WaypointDao;
-import net.whimxiqal.odyssey.plugin.destination.SimpleDestinationTree;
 import net.whimxiqal.odyssey.plugin.destination.SimpleMinecraftDestination;
+import net.whimxiqal.odyssey.plugin.destination.SimplePlatformDestinationTree;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
@@ -32,7 +32,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.joml.Vector3i;
 
-public class OdysseyDestinationService implements PaperDestinationService {
+public class OdysseyDestinationService implements DestinationService {
   public static final String PLAYER_TREE_KEY = "player";
   public static final String WORLD_TREE_KEY = "world";
   public static final String WAYPOINT_TREE_KEY = "waypoint";
@@ -44,14 +44,14 @@ public class OdysseyDestinationService implements PaperDestinationService {
   }
 
   @Override
-  public Collection<DestinationTree<World, Vector3i>> provide(Player player) {
+  public Collection<PlatformDestinationTree<World, Vector3i>> provide(Player player) {
     return List.of(
         providePlayerDestinationTree(player),
         provideWorldDestinationTree(player),
         provideWaypointDestinationTree(player));
   }
 
-  private DestinationTree<World, Vector3i> providePlayerDestinationTree(Player player) {
+  private PlatformDestinationTree<World, Vector3i> providePlayerDestinationTree(Player player) {
     UUID self = player.getUniqueId();
     Map<String, Supplier<MinecraftDestination<World, Vector3i>>> leaves = new LinkedHashMap<>();
     for (Player other : Bukkit.getOnlinePlayers()) {
@@ -76,10 +76,10 @@ public class OdysseyDestinationService implements PaperDestinationService {
                 destination, Component.text(name), List.of(), true);
           });
     }
-    return new SimpleDestinationTree<>(PLAYER_TREE_KEY, false, Map.of(), leaves);
+    return new SimplePlatformDestinationTree<>(PLAYER_TREE_KEY, false, Map.of(), leaves);
   }
 
-  private DestinationTree<World, Vector3i> provideWorldDestinationTree(Player player) {
+  private PlatformDestinationTree<World, Vector3i> provideWorldDestinationTree(Player player) {
     String currentKey = player.getWorld().getKey().asString();
     Map<String, Supplier<MinecraftDestination<World, Vector3i>>> leaves = new LinkedHashMap<>();
     for (World world : Bukkit.getWorlds()) {
@@ -96,10 +96,10 @@ public class OdysseyDestinationService implements PaperDestinationService {
             return new SimpleMinecraftDestination<>(destination, Component.text(name), List.of());
           });
     }
-    return new SimpleDestinationTree<>(WORLD_TREE_KEY, false, Map.of(), leaves);
+    return new SimplePlatformDestinationTree<>(WORLD_TREE_KEY, false, Map.of(), leaves);
   }
 
-  private DestinationTree<World, Vector3i> provideWaypointDestinationTree(Player player) {
+  private PlatformDestinationTree<World, Vector3i> provideWaypointDestinationTree(Player player) {
     Map<String, Supplier<MinecraftDestination<World, Vector3i>>> leaves = new LinkedHashMap<>();
     // Global first, then personal so a player's own waypoint shadows a global of the same name.
     for (Waypoint waypoint : waypoints.global()) {
@@ -108,7 +108,7 @@ public class OdysseyDestinationService implements PaperDestinationService {
     for (Waypoint waypoint : waypoints.ownedBy(player.getUniqueId())) {
       leaves.put(waypoint.name(), () -> toDestination(waypoint));
     }
-    return new SimpleDestinationTree<>(WAYPOINT_TREE_KEY, false, Map.of(), leaves);
+    return new SimplePlatformDestinationTree<>(WAYPOINT_TREE_KEY, false, Map.of(), leaves);
   }
 
   private static MinecraftDestination<World, Vector3i> toDestination(Waypoint waypoint) {

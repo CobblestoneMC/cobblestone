@@ -11,12 +11,12 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.Predicate;
-import net.whimxiqal.odyssey.plugin.api.DestinationTree;
 import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
+import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
 
 /**
  * Turns the arguments a player typed into a concrete {@link MinecraftDestination}, traversing the
- * {@link DestinationTree}s gathered from every registered provider and applying <b>name
+ * {@link PlatformDestinationTree}s gathered from every registered provider and applying <b>name
  * promotion</b>: a level whose node is not {@code strict} may be omitted, so {@code /nav home}
  * resolves when only one provider offers {@code home}, while an ambiguous name forces the fuller
  * path ({@code /nav essentials home}). Strict levels can never be omitted. The same traversal
@@ -76,7 +76,7 @@ public final class DestinationResolver {
    * @return the resolution
    */
   public static <W, V> Resolution<W, V> resolve(
-      List<? extends DestinationTree<W, V>> roots,
+      List<? extends PlatformDestinationTree<W, V>> roots,
       List<String> args,
       Predicate<String> hasPermission) {
     return resolve(roots, args, hasPermission, address -> true);
@@ -96,7 +96,7 @@ public final class DestinationResolver {
    * @return the resolution
    */
   public static <W, V> Resolution<W, V> resolve(
-      List<? extends DestinationTree<W, V>> roots,
+      List<? extends PlatformDestinationTree<W, V>> roots,
       List<String> args,
       Predicate<String> hasPermission,
       Predicate<List<String>> canNavigate) {
@@ -128,7 +128,7 @@ public final class DestinationResolver {
    * @return the distinct candidate tokens, in first-seen order
    */
   public static <W, V> List<String> suggest(
-      List<? extends DestinationTree<W, V>> roots,
+      List<? extends PlatformDestinationTree<W, V>> roots,
       List<String> args,
       Predicate<String> hasPermission) {
     return suggest(roots, args, hasPermission, address -> true);
@@ -146,7 +146,7 @@ public final class DestinationResolver {
    * @return the distinct candidate tokens, in first-seen order
    */
   public static <W, V> List<String> suggest(
-      List<? extends DestinationTree<W, V>> roots,
+      List<? extends PlatformDestinationTree<W, V>> roots,
       List<String> args,
       Predicate<String> hasPermission,
       Predicate<List<String>> canNavigate) {
@@ -169,18 +169,18 @@ public final class DestinationResolver {
   }
 
   private static <W, V> List<Address<W, V>> addresses(
-      List<? extends DestinationTree<W, V>> roots,
+      List<? extends PlatformDestinationTree<W, V>> roots,
       Predicate<String> hasPermission,
       Predicate<List<String>> canNavigate) {
     List<Address<W, V>> out = new ArrayList<>();
-    for (DestinationTree<W, V> root : roots) {
+    for (PlatformDestinationTree<W, V> root : roots) {
       collect(root, new ArrayList<>(), new ArrayList<>(), out, hasPermission, canNavigate);
     }
     return out;
   }
 
   private static <W, V> void collect(
-      DestinationTree<W, V> node,
+      PlatformDestinationTree<W, V> node,
       List<String> keyTrail,
       List<Boolean> strictTrail,
       List<Address<W, V>> out,

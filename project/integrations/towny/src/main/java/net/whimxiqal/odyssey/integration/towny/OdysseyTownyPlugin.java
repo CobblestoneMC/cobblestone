@@ -7,7 +7,8 @@
 
 package net.whimxiqal.odyssey.integration.towny;
 
-import net.whimxiqal.odyssey.paper.plugin.api.Odyssey;
+import net.whimxiqal.odyssey.paper.api.OdysseyCoreAPI;
+import net.whimxiqal.odyssey.paper.plugin.api.OdysseyPluginAPI;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -24,8 +25,8 @@ public final class OdysseyTownyPlugin extends JavaPlugin {
       getServer().getPluginManager().disablePlugin(this);
       return;
     }
-    Odyssey.register(this, new TownyDestinationService());
-    Odyssey.register(this, new TownySearchModificationService(this));
+    OdysseyPluginAPI.registrar().registerDestinations(this, new TownyDestinationService());
+    OdysseyCoreAPI.registrar().register(this, new TownySearchModificationService(this));
     getLogger().info("OdysseyTowny enabled.");
   }
 }

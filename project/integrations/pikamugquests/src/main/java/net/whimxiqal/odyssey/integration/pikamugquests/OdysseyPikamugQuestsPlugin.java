@@ -8,7 +8,7 @@
 package net.whimxiqal.odyssey.integration.pikamugquests;
 
 import me.pikamug.quests.Quests;
-import net.whimxiqal.odyssey.paper.plugin.api.Odyssey;
+import net.whimxiqal.odyssey.paper.plugin.api.OdysseyPluginAPI;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -32,7 +32,8 @@ public final class OdysseyPikamugQuestsPlugin extends JavaPlugin {
     saveDefaultConfig();
     QuestNavPrefs prefs = new QuestNavPrefs(getConfig());
 
-    Odyssey.register(this, new PikamugQuestsDestinationService(quests));
+    OdysseyPluginAPI.registrar()
+        .registerDestinations(this, new PikamugQuestsDestinationService(quests));
     getServer().getPluginManager().registerEvents(new PikamugQuestsCompassListener(prefs), this);
 
     getLogger().info("OdysseyPikamugQuests enabled.");

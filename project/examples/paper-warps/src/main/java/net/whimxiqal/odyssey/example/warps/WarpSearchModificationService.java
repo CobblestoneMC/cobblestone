@@ -13,8 +13,8 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.paper.api.BoxWorldRegion;
-import net.whimxiqal.odyssey.paper.api.PaperSearchModificationService;
-import net.whimxiqal.odyssey.paper.api.PaperTransition;
+import net.whimxiqal.odyssey.paper.api.SearchModificationService;
+import net.whimxiqal.odyssey.paper.api.Transition;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -36,7 +36,7 @@ import org.bukkit.entity.Player;
  * #computeTransitions(Player)} per search. (A modifier can also constrain mining or passage; this
  * example only adds routes and leaves those at their permissive defaults.)
  */
-final class WarpSearchModificationService implements PaperSearchModificationService {
+final class WarpSearchModificationService implements SearchModificationService {
 
   private final WarpStore store;
 
@@ -45,14 +45,14 @@ final class WarpSearchModificationService implements PaperSearchModificationServ
   }
 
   @Override
-  public CompletableFuture<List<PaperTransition>> computeTransitions(Player player) {
-    List<PaperTransition> result = new ArrayList<>();
+  public CompletableFuture<List<Transition>> computeTransitions(Player player) {
+    List<Transition> result = new ArrayList<>();
     addWarps(player, result);
     addPortals(result);
     return CompletableFuture.completedFuture(result);
   }
 
-  private void addWarps(Player player, List<PaperTransition> result) {
+  private void addWarps(Player player, List<Transition> result) {
     for (Warp warp : store.warps()) {
       World world = Worlds.byKey(warp.world());
       if (world == null) {
@@ -61,12 +61,11 @@ final class WarpSearchModificationService implements PaperSearchModificationServ
       // /warp works from anywhere: a wormhole from the player's whole current world, so the search
       // can prompt "/warp <name>" immediately.
       result.add(
-          PaperTransition.command(
-              player, warp.toLocation(world), warp.cost(), "/warp " + warp.name()));
+          Transition.command(player, warp.toLocation(world), warp.cost(), "/warp " + warp.name()));
     }
   }
 
-  private void addPortals(List<PaperTransition> result) {
+  private void addPortals(List<Transition> result) {
     for (Portal portal : store.portals()) {
       Optional<Destination> destination = store.getDestination(portal.destination());
       if (destination.isEmpty()) {
@@ -82,7 +81,7 @@ final class WarpSearchModificationService implements PaperSearchModificationServ
               new Location(portalWorld, portal.minX(), portal.minY(), portal.minZ()),
               new Location(portalWorld, portal.maxX(), portal.maxY(), portal.maxZ()));
       Location dest = destination.get().toLocation(destWorld);
-      result.add(PaperTransition.of(origin, dest, portal.cost(), MinecraftStepPayload.portal()));
+      result.add(Transition.of(origin, dest, portal.cost(), MinecraftStepPayload.portal()));
     }
   }
 }

@@ -7,7 +7,7 @@
 
 package net.whimxiqal.odyssey.integration.citizens;
 
-import net.whimxiqal.odyssey.paper.plugin.api.Odyssey;
+import net.whimxiqal.odyssey.paper.plugin.api.OdysseyPluginAPI;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -25,7 +25,7 @@ public final class OdysseyCitizensPlugin extends JavaPlugin {
       return;
     }
 
-    Odyssey.register(this, new CitizensDestinationService());
+    OdysseyPluginAPI.registrar().registerDestinations(this, new CitizensDestinationService());
 
     getLogger().info("OdysseyCitizens enabled.");
   }

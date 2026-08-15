@@ -30,6 +30,7 @@ import net.whimxiqal.odyssey.plugin.data.Waypoint;
 import net.whimxiqal.odyssey.plugin.data.WaypointDao;
 import net.whimxiqal.odyssey.plugin.message.Messages;
 import net.whimxiqal.odyssey.plugin.message.OdysseyMessages;
+import net.whimxiqal.odyssey.plugin.search.SearchRegistry;
 import net.whimxiqal.odyssey.plugin.trip.Trip;
 import net.whimxiqal.odyssey.plugin.trip.TripManager;
 import org.bukkit.Location;
@@ -69,7 +70,7 @@ final class OdysseyCommand {
       WaypointDao waypoints,
       PortalTransitionDao portals,
       TripManager<Entity, PaperTripAgent, Location> trips,
-      SearchRegistry searches) {
+      SearchRegistry<Location> searches) {
     return Commands.literal("odyssey")
         .executes(ctx -> showHelp(ctx.getSource().getSender(), messages))
         .then(
@@ -235,7 +236,7 @@ final class OdysseyCommand {
       CommandSender sender,
       Messages messages,
       TripManager<Entity, PaperTripAgent, Location> trips,
-      SearchRegistry searches) {
+      SearchRegistry<Location> searches) {
     Locale locale = localeOf(sender, messages);
     if (!(sender instanceof Player player)) {
       messages.send(sender, locale, OdysseyMessages.PLAYERS_ONLY);

@@ -25,10 +25,8 @@ import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.Position;
 import net.whimxiqal.odyssey.Restriction;
 import net.whimxiqal.odyssey.SingleDestination;
-import net.whimxiqal.odyssey.Transition;
 import net.whimxiqal.odyssey.api.Destination;
 import net.whimxiqal.odyssey.api.SearchHandle;
-import net.whimxiqal.odyssey.minecraft.BreakChecker;
 import net.whimxiqal.odyssey.minecraft.ChunkProvider;
 import net.whimxiqal.odyssey.minecraft.ChunkProviderSettings;
 import net.whimxiqal.odyssey.minecraft.MinecraftMode;
@@ -38,12 +36,14 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftSearchSettings;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
 import net.whimxiqal.odyssey.minecraft.modes.MinecraftModes;
+import net.whimxiqal.odyssey.minecraft.registry.OwnedRegistry;
 import net.whimxiqal.odyssey.paper.api.BoxWorldRegion;
-import net.whimxiqal.odyssey.paper.api.PaperBreakChecker;
-import net.whimxiqal.odyssey.paper.api.PaperNavigationService;
-import net.whimxiqal.odyssey.paper.api.PaperPassChecker;
-import net.whimxiqal.odyssey.paper.api.PaperSearchModificationService;
-import net.whimxiqal.odyssey.paper.api.PaperTransition;
+import net.whimxiqal.odyssey.paper.api.BreakChecker;
+import net.whimxiqal.odyssey.paper.api.NavigationService;
+import net.whimxiqal.odyssey.paper.api.PassChecker;
+import net.whimxiqal.odyssey.paper.api.SearchModificationRegistrar;
+import net.whimxiqal.odyssey.paper.api.SearchModificationService;
+import net.whimxiqal.odyssey.paper.api.Transition;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
@@ -52,10 +52,10 @@ import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
-import org.bukkit.plugin.RegisteredServiceProvider;
 import org.joml.Vector3i;
 
-public final class PaperNavigationServiceImpl implements PaperNavigationService, WorldWrapper {
+public final class PaperNavigationServiceImpl
+    implements NavigationService, SearchModificationRegistrar, WorldWrapper {
 
   // The true global-minimum per-block cost (flying, MovementCosts.FLY = 0.08). Used as the
   // admissible Tier-1 bound and the running-average's cold-start estimate.
@@ -67,6 +67,7 @@ public final class PaperNavigationServiceImpl implements PaperNavigationService,
   private final OdysseyApi core;
   private final HeuristicStrategy heuristic;
   private final Map<String, MinecraftWorld> worldCache = new ConcurrentHashMap<>();
+  private final OwnedRegistry<SearchModificationService> searchModifiers = new OwnedRegistry<>();
 
   /**
    * Creates the API for a plugin.
@@ -147,6 +148,21 @@ public final class PaperNavigationServiceImpl implements PaperNavigationService,
     scheduler.shutdown();
   }
 
+  @Override
+  public void register(Plugin owner, SearchModificationService service) {
+    searchModifiers.register(owner.getName(), service);
+  }
+
+  /**
+   * Drops every search modifier a departing owner registered (called when that plugin disables).
+   *
+   * @param owner the departing owner's name
+   * @return how many modifiers were removed
+   */
+  public int purgeOwner(String owner) {
+    return searchModifiers.purge(owner);
+  }
+
   private SearchHandle<Location, MinecraftStepPayload> search(
       Player player,
       Destination<DomainRegion<MinecraftWorld>> destination,
@@ -156,11 +172,9 @@ public final class PaperNavigationServiceImpl implements PaperNavigationService,
     Position<MinecraftWorld> originPosition =
         new Position<>(PaperConversions.cell(origin), wrap(origin.getWorld()));
     // One snapshot of the registered modifiers drives all three influences on this search.
-    List<PaperSearchModificationService> modifiers =
-        Bukkit.getServicesManager().getRegistrations(PaperSearchModificationService.class).stream()
-            .map(RegisteredServiceProvider::getProvider)
-            .toList();
-    BreakChecker<OdysseyPlayer> breakChecker = buildBreakChecker(modifiers, player);
+    List<SearchModificationService> modifiers = searchModifiers.values();
+    net.whimxiqal.odyssey.minecraft.BreakChecker<OdysseyPlayer> breakChecker =
+        buildBreakChecker(modifiers, player);
     List<Restriction<OdysseyPlayer, MinecraftWorld>> restrictions =
         buildRestrictions(modifiers, player);
     List<MinecraftMode<OdysseyPlayer>> modes =
@@ -185,25 +199,27 @@ public final class PaperNavigationServiceImpl implements PaperNavigationService,
     return new PaperSearchHandle(handleFuture);
   }
 
-  private CompletableFuture<List<Transition<MinecraftStepPayload, MinecraftWorld>>>
+  private CompletableFuture<
+          List<net.whimxiqal.odyssey.Transition<MinecraftStepPayload, MinecraftWorld>>>
       gatherTransitions(
-          List<PaperSearchModificationService> modifiers,
+          List<SearchModificationService> modifiers,
           Player player,
           Set<String> excludedWorlds,
           Set<String> excludedDimensions) {
     if (modifiers.isEmpty()) {
       return CompletableFuture.completedFuture(List.of());
     }
-    List<CompletableFuture<List<PaperTransition>>> futures = new ArrayList<>();
-    for (PaperSearchModificationService modifier : modifiers) {
+    List<CompletableFuture<List<Transition>>> futures = new ArrayList<>();
+    for (SearchModificationService modifier : modifiers) {
       futures.add(modifier.computeTransitions(player));
     }
     return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0]))
         .thenApply(
             ignored -> {
-              List<Transition<MinecraftStepPayload, MinecraftWorld>> all = new ArrayList<>();
-              for (CompletableFuture<List<PaperTransition>> future : futures) {
-                for (PaperTransition transition : future.join()) {
+              List<net.whimxiqal.odyssey.Transition<MinecraftStepPayload, MinecraftWorld>> all =
+                  new ArrayList<>();
+              for (CompletableFuture<List<Transition>> future : futures) {
+                for (Transition transition : future.join()) {
                   PaperTransitionAdapter wrapped = new PaperTransitionAdapter(transition, this);
                   // A world is reachable only through a transition, so excluding a world/dimension
                   // means
@@ -222,12 +238,12 @@ public final class PaperNavigationServiceImpl implements PaperNavigationService,
   /**
    * Composes every modifier's break checker into one; a block is breakable only if all permit it.
    */
-  private BreakChecker<OdysseyPlayer> buildBreakChecker(
-      List<PaperSearchModificationService> modifiers, Player player) {
-    List<PaperBreakChecker> checkers = new ArrayList<>();
-    for (PaperSearchModificationService modifier : modifiers) {
-      PaperBreakChecker checker = modifier.computeBreakChecker(player);
-      if (checker != PaperBreakChecker.ALLOW) {
+  private net.whimxiqal.odyssey.minecraft.BreakChecker<OdysseyPlayer> buildBreakChecker(
+      List<SearchModificationService> modifiers, Player player) {
+    List<BreakChecker> checkers = new ArrayList<>();
+    for (SearchModificationService modifier : modifiers) {
+      BreakChecker checker = modifier.computeBreakChecker(player);
+      if (checker != BreakChecker.ALLOW) {
         checkers.add(checker);
       }
     }
@@ -244,7 +260,7 @@ public final class PaperNavigationServiceImpl implements PaperNavigationService,
       Location location = new Location(bukkitWorld, cell.x(), cell.y(), cell.z());
       BlockData data = block instanceof PaperBlock paperBlock ? paperBlock.data() : null;
       List<CompletableFuture<Boolean>> results = new ArrayList<>(checkers.size());
-      for (PaperBreakChecker checker : checkers) {
+      for (BreakChecker checker : checkers) {
         results.add(checker.breakable(online, location, data));
       }
       return allTrue(results);
@@ -253,11 +269,11 @@ public final class PaperNavigationServiceImpl implements PaperNavigationService,
 
   /** One composite passability restriction; a cell is impassable if any modifier bars entry. */
   private List<Restriction<OdysseyPlayer, MinecraftWorld>> buildRestrictions(
-      List<PaperSearchModificationService> modifiers, Player player) {
-    List<PaperPassChecker> checkers = new ArrayList<>();
-    for (PaperSearchModificationService modifier : modifiers) {
-      PaperPassChecker checker = modifier.computePassChecker(player);
-      if (checker != PaperPassChecker.ALLOW) {
+      List<SearchModificationService> modifiers, Player player) {
+    List<PassChecker> checkers = new ArrayList<>();
+    for (SearchModificationService modifier : modifiers) {
+      PassChecker checker = modifier.computePassChecker(player);
+      if (checker != PassChecker.ALLOW) {
         checkers.add(checker);
       }
     }
@@ -274,7 +290,7 @@ public final class PaperNavigationServiceImpl implements PaperNavigationService,
           }
           Location location = new Location(bukkitWorld, cell.x(), cell.y(), cell.z());
           List<CompletableFuture<Boolean>> results = new ArrayList<>(checkers.size());
-          for (PaperPassChecker checker : checkers) {
+          for (PassChecker checker : checkers) {
             results.add(checker.passable(online, location));
           }
           return FutureOr.from(anyFalse(results));

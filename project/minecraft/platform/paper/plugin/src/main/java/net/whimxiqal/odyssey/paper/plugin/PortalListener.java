@@ -65,11 +65,6 @@ final class PortalListener implements Listener {
   }
 
   @EventHandler(priority = EventPriority.MONITOR)
-  public void onPortal(PlayerPortalEvent event) {
-    record(event.getCause(), event.getFrom(), event.getTo());
-  }
-
-  @EventHandler(priority = EventPriority.MONITOR)
   public void onTeleport(PlayerTeleportEvent event) {
     record(event.getCause(), event.getFrom(), event.getTo());
   }

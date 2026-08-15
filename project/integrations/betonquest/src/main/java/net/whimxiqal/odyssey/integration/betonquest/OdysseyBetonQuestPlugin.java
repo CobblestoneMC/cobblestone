@@ -11,7 +11,7 @@
 package net.whimxiqal.odyssey.integration.betonquest;
 
 import java.util.Optional;
-import net.whimxiqal.odyssey.paper.plugin.api.Odyssey;
+import net.whimxiqal.odyssey.paper.plugin.api.OdysseyPluginAPI;
 import org.betonquest.betonquest.api.BetonQuestApi;
 import org.betonquest.betonquest.api.BetonQuestApiService;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -38,7 +38,7 @@ public final class OdysseyBetonQuestPlugin extends JavaPlugin {
     saveDefaultConfig();
     QuestNavPrefs prefs = new QuestNavPrefs(getConfig());
 
-    Odyssey.register(this, new BetonQuestDestinationService(api));
+    OdysseyPluginAPI.registrar().registerDestinations(this, new BetonQuestDestinationService(api));
     getServer().getPluginManager().registerEvents(new BetonQuestCompassListener(api, prefs), this);
 
     getLogger().info("OdysseyBetonQuest enabled.");

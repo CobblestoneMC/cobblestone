@@ -9,7 +9,7 @@ package net.whimxiqal.odyssey.integration.beautyquests;
 
 import fr.skytasul.quests.api.events.PlayerSetStageEvent;
 import fr.skytasul.quests.api.quests.Quest;
-import net.whimxiqal.odyssey.paper.plugin.api.Odyssey;
+import net.whimxiqal.odyssey.paper.plugin.api.OdysseyPluginAPI;
 import net.whimxiqal.odyssey.plugin.api.NavigatorSettings;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -52,7 +52,7 @@ final class BeautyQuestsStageListener implements Listener {
     }
     NavigatorSettings settings = prefs.settings(questId);
     // The quest name is the trip's stable label, so the next stage replaces this leg.
-    Odyssey.tripService()
+    OdysseyPluginAPI.tripService()
         .navigate(
             player,
             target,

@@ -14,10 +14,10 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestination;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationService;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationTree;
-import net.whimxiqal.odyssey.plugin.api.DestinationTree;
+import net.whimxiqal.odyssey.paper.plugin.api.Destination;
+import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
+import net.whimxiqal.odyssey.paper.plugin.api.DestinationTree;
+import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
 import org.betonquest.betonquest.api.BetonQuestApi;
 import org.betonquest.betonquest.api.compass.QuestCompass;
 import org.betonquest.betonquest.api.identifier.CompassIdentifier;
@@ -35,7 +35,7 @@ import org.joml.Vector3i;
  * odyssey.navigate.betonquest.compass.*} permission (default-allow). Targets are snapshotted when
  * the tree is built (on the main thread, as compass-location resolution requires).
  */
-final class BetonQuestDestinationService implements PaperDestinationService {
+final class BetonQuestDestinationService implements DestinationService {
 
   static final String TREE_KEY = "betonquest";
   static final String COMPASS_KEY = "compass";
@@ -47,13 +47,13 @@ final class BetonQuestDestinationService implements PaperDestinationService {
   }
 
   @Override
-  public Collection<DestinationTree<World, Vector3i>> provide(Player player) {
+  public Collection<PlatformDestinationTree<World, Vector3i>> provide(Player player) {
     OnlineProfile profile = api.profiles().getProfile(player);
     if (profile == null) {
       return List.of();
     }
     Map<CompassIdentifier, QuestCompass> compasses = api.compasses().forProfile(profile);
-    PaperDestinationTree compass = PaperDestinationTree.node(COMPASS_KEY);
+    DestinationTree compass = DestinationTree.node(COMPASS_KEY);
     boolean any = false;
     for (Map.Entry<CompassIdentifier, QuestCompass> entry : compasses.entrySet()) {
       Location target = CompassTargets.locationOf(entry.getValue(), profile);
@@ -61,10 +61,10 @@ final class BetonQuestDestinationService implements PaperDestinationService {
         continue; // location couldn't be resolved — nothing to walk to
       }
       String name = entry.getKey().get();
-      compass.leaf(slug(name), PaperDestination.at(target, name));
+      compass.leaf(slug(name), Destination.at(target, name));
       any = true;
     }
-    return any ? List.of(PaperDestinationTree.node(TREE_KEY).subtree(compass).build()) : List.of();
+    return any ? List.of(DestinationTree.node(TREE_KEY).subtree(compass).build()) : List.of();
   }
 
   /**

@@ -12,6 +12,9 @@ dependencies {
     // Adventure by the server, SnakeYAML by the paper-plugin loader (MavenLibraryResolver).
     compileOnly(libs.adventure.api)
     compileOnly(libs.snakeyaml)
+    // bStats' platform-neutral chart types (org.bstats.charts.*), for the shared metrics chart set.
+    // The platform plugin bundles + relocates the full bStats (bstats-bukkit / bstats-sponge).
+    compileOnly(libs.bstats.base)
     // JDBC drivers are runtime-downloaded by the platform plugin in production; here they only back
     // the DataStore contract test, which runs against both embedded engines.
     testImplementation(libs.sqlite.jdbc)

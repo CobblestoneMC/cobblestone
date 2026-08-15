@@ -9,7 +9,7 @@ package net.whimxiqal.odyssey.example.warps;
 
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.io.File;
-import net.whimxiqal.odyssey.paper.plugin.api.Odyssey;
+import net.whimxiqal.odyssey.paper.api.OdysseyCoreAPI;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -17,9 +17,9 @@ import org.bukkit.plugin.java.JavaPlugin;
  * warps and auto-teleport portal pads — and registers a search modifier so Odyssey routes players
  * through both, prompting the command for warps and walking them into pads for portals.
  *
- * <p>The whole hook into navigation is one {@link Odyssey#register} call; Odyssey handles
- * discovery, pathfinding, and rendering. The listeners and commands here are ordinary Bukkit
- * plumbing.
+ * <p>The whole hook into navigation is one {@code OdysseyCore.registrar().register(…)} call;
+ * Odyssey handles discovery, pathfinding, and rendering. The listeners and commands here are
+ * ordinary Bukkit plumbing.
  */
 public final class OdysseyWarpsPlugin extends JavaPlugin {
 
@@ -31,7 +31,7 @@ public final class OdysseyWarpsPlugin extends JavaPlugin {
     Selections selections = new Selections();
 
     // The single hook into navigation.
-    Odyssey.register(this, new WarpSearchModificationService(store));
+    OdysseyCoreAPI.registrar().register(this, new WarpSearchModificationService(store));
 
     // The wand (portal box selection) and the auto-teleport-on-entry behaviour.
     getServer().getPluginManager().registerEvents(new WarpListeners(this, store, selections), this);

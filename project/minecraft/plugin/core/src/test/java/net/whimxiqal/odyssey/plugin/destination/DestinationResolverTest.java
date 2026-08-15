@@ -19,8 +19,8 @@ import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import net.whimxiqal.odyssey.api.Destination;
 import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
-import net.whimxiqal.odyssey.plugin.api.DestinationTree;
 import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
+import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
 import net.whimxiqal.odyssey.plugin.destination.DestinationResolver.Ambiguous;
 import net.whimxiqal.odyssey.plugin.destination.DestinationResolver.NotFound;
 import net.whimxiqal.odyssey.plugin.destination.DestinationResolver.Resolution;
@@ -38,18 +38,19 @@ class DestinationResolverTest {
     return new SimpleMinecraftDestination<>(destination, Component.text("x"), List.of(permissions));
   }
 
-  private static DestinationTree<String, Integer> leafTree(
+  private static PlatformDestinationTree<String, Integer> leafTree(
       String key, boolean strict, String... leafKeys) {
     Map<String, Supplier<MinecraftDestination<String, Integer>>> leaves = new LinkedHashMap<>();
     for (String leafKey : leafKeys) {
       leaves.put(leafKey, DestinationResolverTest::dest);
     }
-    return new SimpleDestinationTree<>(key, strict, Map.of(), leaves);
+    return new SimplePlatformDestinationTree<>(key, strict, Map.of(), leaves);
   }
 
   @Test
   void resolvesExactAndPromotedPaths() {
-    List<DestinationTree<String, Integer>> roots = List.of(leafTree("waypoint", false, "home"));
+    List<PlatformDestinationTree<String, Integer>> roots =
+        List.of(leafTree("waypoint", false, "home"));
 
     assertInstanceOf(
         Resolved.class, DestinationResolver.resolve(roots, List.of("waypoint", "home"), ALL));
@@ -61,7 +62,7 @@ class DestinationResolverTest {
 
   @Test
   void ambiguousPromotionForcesFullerPath() {
-    List<DestinationTree<String, Integer>> roots =
+    List<PlatformDestinationTree<String, Integer>> roots =
         List.of(leafTree("waypoint", false, "home"), leafTree("essentials", false, "home"));
 
     Resolution<String, Integer> ambiguous =
@@ -76,7 +77,8 @@ class DestinationResolverTest {
 
   @Test
   void strictLevelCannotBeOmitted() {
-    List<DestinationTree<String, Integer>> roots = List.of(leafTree("towny", true, "spawn"));
+    List<PlatformDestinationTree<String, Integer>> roots =
+        List.of(leafTree("towny", true, "spawn"));
 
     assertInstanceOf(NotFound.class, DestinationResolver.resolve(roots, List.of("spawn"), ALL));
     assertInstanceOf(
@@ -87,8 +89,8 @@ class DestinationResolverTest {
   void permissionGatedDestinationsAreHidden() {
     Map<String, Supplier<MinecraftDestination<String, Integer>>> leaves = new LinkedHashMap<>();
     leaves.put("vault", () -> dest("odyssey.dest.vault"));
-    List<DestinationTree<String, Integer>> roots =
-        List.of(new SimpleDestinationTree<>("secret", false, Map.of(), leaves));
+    List<PlatformDestinationTree<String, Integer>> roots =
+        List.of(new SimplePlatformDestinationTree<>("secret", false, Map.of(), leaves));
 
     assertInstanceOf(
         NotFound.class, DestinationResolver.resolve(roots, List.of("vault"), permission -> false));
@@ -99,7 +101,7 @@ class DestinationResolverTest {
 
   @Test
   void navigationGateHidesDeniedAddresses() {
-    List<DestinationTree<String, Integer>> roots =
+    List<PlatformDestinationTree<String, Integer>> roots =
         List.of(leafTree("essentials", false, "home", "bed"));
     Predicate<List<String>> gate = address -> !address.equals(List.of("essentials", "home"));
 
@@ -116,7 +118,7 @@ class DestinationResolverTest {
 
   @Test
   void suggestsPromotedNamesAndProviderKeys() {
-    List<DestinationTree<String, Integer>> roots =
+    List<PlatformDestinationTree<String, Integer>> roots =
         List.of(leafTree("waypoint", false, "home", "camp"), leafTree("essentials", false, "bed"));
 
     List<String> top = DestinationResolver.suggest(roots, List.of(), ALL);

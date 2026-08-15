@@ -10,7 +10,7 @@
  */
 package net.whimxiqal.odyssey.integration.betonquest;
 
-import net.whimxiqal.odyssey.paper.plugin.api.Odyssey;
+import net.whimxiqal.odyssey.paper.plugin.api.OdysseyPluginAPI;
 import net.whimxiqal.odyssey.plugin.api.NavigatorSettings;
 import org.betonquest.betonquest.api.BetonQuestApi;
 import org.betonquest.betonquest.api.bukkit.event.QuestCompassTargetChangeEvent;
@@ -64,7 +64,7 @@ final class BetonQuestCompassListener implements Listener {
     NavigatorSettings settings = prefs.settings(name);
     // A stable label so re-pointing the compass replaces the previous compass trip.
     String label = name == null ? DEFAULT_LABEL : name;
-    Odyssey.tripService()
+    OdysseyPluginAPI.tripService()
         .navigate(
             player,
             target,

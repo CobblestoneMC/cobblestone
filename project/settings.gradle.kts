@@ -34,12 +34,12 @@ include(":minecraft:platform:paper:plugin-api")
 project(":minecraft:platform:paper:plugin-api").name = "paper-plugin-api"
 include(":minecraft:platform:paper:plugin")
 project(":minecraft:platform:paper:plugin").name = "paper-plugin"
-include(":minecraft:platform:sponge-16:api")
-project(":minecraft:platform:sponge-16:api").name = "sponge-16-api"
-include(":minecraft:platform:sponge-16:core")
-project(":minecraft:platform:sponge-16:core").name = "sponge-16-core"
-include(":minecraft:platform:sponge-16:plugin")
-project(":minecraft:platform:sponge-16:plugin").name = "sponge-16-plugin"
+include(":minecraft:platform:sponge-12:api")
+project(":minecraft:platform:sponge-12:api").name = "sponge-12-api"
+include(":minecraft:platform:sponge-12:core")
+project(":minecraft:platform:sponge-12:core").name = "sponge-12-core"
+include(":minecraft:platform:sponge-12:plugin")
+project(":minecraft:platform:sponge-12:plugin").name = "sponge-12-plugin"
 
 // Example integration plugins live under examples/ — self-contained, third-party-style plugins that
 // depend only on Odyssey's published API to demonstrate extending navigation (design/08).

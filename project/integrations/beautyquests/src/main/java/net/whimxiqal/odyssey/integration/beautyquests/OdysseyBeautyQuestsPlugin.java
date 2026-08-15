@@ -7,7 +7,7 @@
 
 package net.whimxiqal.odyssey.integration.beautyquests;
 
-import net.whimxiqal.odyssey.paper.plugin.api.Odyssey;
+import net.whimxiqal.odyssey.paper.plugin.api.OdysseyPluginAPI;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -29,7 +29,7 @@ public final class OdysseyBeautyQuestsPlugin extends JavaPlugin {
     saveDefaultConfig();
     QuestNavPrefs prefs = new QuestNavPrefs(getConfig());
 
-    Odyssey.register(this, new BeautyQuestsDestinationService());
+    OdysseyPluginAPI.registrar().registerDestinations(this, new BeautyQuestsDestinationService());
     getServer().getPluginManager().registerEvents(new BeautyQuestsStageListener(prefs), this);
 
     getLogger().info("OdysseyBeautyQuests enabled.");

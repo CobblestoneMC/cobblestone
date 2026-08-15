@@ -10,8 +10,8 @@ package net.whimxiqal.odyssey.integration.essentials;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import net.whimxiqal.odyssey.paper.api.PaperSearchModificationService;
-import net.whimxiqal.odyssey.paper.api.PaperTransition;
+import net.whimxiqal.odyssey.paper.api.SearchModificationService;
+import net.whimxiqal.odyssey.paper.api.Transition;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
@@ -24,7 +24,7 @@ import org.bukkit.entity.Player;
  * <p>A teleport is only offered if the player actually has permission to run it — checked here, per
  * search, so revoking {@code essentials.home} immediately removes it as a routing option.
  */
-final class EssentialsSearchModificationService implements PaperSearchModificationService {
+final class EssentialsSearchModificationService implements SearchModificationService {
 
   // Teleport commands are ~instant; a small non-zero cost keeps the search from over-preferring
   // them.
@@ -37,8 +37,8 @@ final class EssentialsSearchModificationService implements PaperSearchModificati
   }
 
   @Override
-  public CompletableFuture<List<PaperTransition>> computeTransitions(Player player) {
-    List<PaperTransition> result = new ArrayList<>();
+  public CompletableFuture<List<Transition>> computeTransitions(Player player) {
+    List<Transition> result = new ArrayList<>();
     if (player.hasPermission(Essentials.HOME_PERMISSION)) {
       for (String home : essentials.homes(player)) {
         addTeleport(result, player, essentials.home(player, home), "/home " + home);
@@ -51,12 +51,12 @@ final class EssentialsSearchModificationService implements PaperSearchModificati
   }
 
   private static void addTeleport(
-      List<PaperTransition> result, Player player, Location destination, String command) {
+      List<Transition> result, Player player, Location destination, String command) {
     if (destination == null) {
       return; // gone, or its world is unloaded
     }
     // /home and /spawn work from anywhere: a wormhole from the player's whole current world, so the
     // search can prompt the command immediately.
-    result.add(PaperTransition.command(player, destination, TELEPORT_COST_SECONDS, command));
+    result.add(Transition.command(player, destination, TELEPORT_COST_SECONDS, command));
   }
 }

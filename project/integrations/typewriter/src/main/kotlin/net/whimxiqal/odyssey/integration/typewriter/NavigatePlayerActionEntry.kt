@@ -19,7 +19,7 @@ import com.typewritermc.engine.paper.entry.entries.ActionTrigger
 import com.typewritermc.engine.paper.entry.entries.ConstVar
 import com.typewritermc.engine.paper.entry.entries.Var
 import com.typewritermc.engine.paper.utils.toBukkitLocation
-import net.whimxiqal.odyssey.paper.plugin.api.Odyssey
+import net.whimxiqal.odyssey.paper.plugin.api.OdysseyPluginAPI
 import net.whimxiqal.odyssey.plugin.api.NavigatorSettings
 
 @Entry(
@@ -51,8 +51,9 @@ class NavigatePlayerActionEntry(
         // The entry name is the trip's stable label, so re-triggering this entry (a moving objective)
         // replaces the player's previous trip from it rather than stacking a new one.
         val label = name.ifBlank { "typewriter" }
-        Odyssey.tripService().navigate(player, location, NavigatorSettings.defaults(), label) { _ ->
-          // No route (or the search failed): nothing to do; the flow can retry.
-        }
+        OdysseyPluginAPI.tripService()
+            .navigate(player, location, NavigatorSettings.defaults(), label) { _ ->
+                // No route (or the search failed): nothing to do; the flow can retry.
+            }
     }
 }

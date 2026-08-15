@@ -12,10 +12,10 @@ import java.util.List;
 import java.util.Locale;
 import net.citizensnpcs.api.CitizensAPI;
 import net.citizensnpcs.api.npc.NPC;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestination;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationService;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationTree;
-import net.whimxiqal.odyssey.plugin.api.DestinationTree;
+import net.whimxiqal.odyssey.paper.plugin.api.Destination;
+import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
+import net.whimxiqal.odyssey.paper.plugin.api.DestinationTree;
+import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.joml.Vector3i;
@@ -29,14 +29,14 @@ import org.joml.Vector3i;
  * is re-read (by id) when the destination is resolved, so it reflects where the NPC currently
  * stands.
  */
-final class CitizensDestinationService implements PaperDestinationService {
+final class CitizensDestinationService implements DestinationService {
 
   static final String TREE_KEY = "citizens";
   static final String NPC_KEY = "npc";
 
   @Override
-  public Collection<DestinationTree<World, Vector3i>> provide(Player player) {
-    PaperDestinationTree npcNode = PaperDestinationTree.node(NPC_KEY);
+  public Collection<PlatformDestinationTree<World, Vector3i>> provide(Player player) {
+    DestinationTree npcNode = DestinationTree.node(NPC_KEY);
     boolean any = false;
     for (NPC npc : CitizensAPI.getNPCRegistry().sorted()) {
       int id = npc.getId();
@@ -46,11 +46,11 @@ final class CitizensDestinationService implements PaperDestinationService {
           key(npc),
           () -> {
             NPC current = CitizensAPI.getNPCRegistry().getById(id);
-            return PaperDestination.at(current == null ? null : current.getStoredLocation(), label);
+            return Destination.at(current == null ? null : current.getStoredLocation(), label);
           });
       any = true;
     }
-    return any ? List.of(PaperDestinationTree.node(TREE_KEY).subtree(npcNode).build()) : List.of();
+    return any ? List.of(DestinationTree.node(TREE_KEY).subtree(npcNode).build()) : List.of();
   }
 
   /** The command token for an NPC: its slugged name plus id, unique across same-named NPCs. */

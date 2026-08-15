@@ -9,7 +9,8 @@ package net.whimxiqal.odyssey.integration.essentials;
 
 import com.earth2me.essentials.spawn.IEssentialsSpawn;
 import net.ess3.api.IEssentials;
-import net.whimxiqal.odyssey.paper.plugin.api.Odyssey;
+import net.whimxiqal.odyssey.paper.api.OdysseyCoreAPI;
+import net.whimxiqal.odyssey.paper.plugin.api.OdysseyPluginAPI;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -34,8 +35,9 @@ public final class OdysseyEssentialsPlugin extends JavaPlugin {
 
     Essentials essentials = new Essentials(essentialsApi, spawnApi);
 
-    Odyssey.register(this, new EssentialsDestinationService(essentials));
-    Odyssey.register(this, new EssentialsSearchModificationService(essentials));
+    OdysseyPluginAPI.registrar()
+        .registerDestinations(this, new EssentialsDestinationService(essentials));
+    OdysseyCoreAPI.registrar().register(this, new EssentialsSearchModificationService(essentials));
 
     getLogger()
         .info(

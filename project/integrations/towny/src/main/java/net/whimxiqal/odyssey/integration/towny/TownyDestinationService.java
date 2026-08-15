@@ -16,11 +16,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestination;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationService;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationTree;
-import net.whimxiqal.odyssey.plugin.api.DestinationTree;
+import net.whimxiqal.odyssey.paper.plugin.api.Destination;
+import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
+import net.whimxiqal.odyssey.paper.plugin.api.DestinationTree;
 import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
+import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -44,13 +44,13 @@ import org.joml.Vector3i;
  * (default-allow), not by whether the player may teleport there. Regions are read from Towny
  * lazily, on the search-initiating thread.
  */
-final class TownyDestinationService implements PaperDestinationService {
+final class TownyDestinationService implements DestinationService {
 
   static final String TREE_KEY = "towny";
 
   @Override
-  public Collection<DestinationTree<World, Vector3i>> provide(Player player) {
-    PaperDestinationTree towns = PaperDestinationTree.node("town").strict();
+  public Collection<PlatformDestinationTree<World, Vector3i>> provide(Player player) {
+    DestinationTree towns = DestinationTree.node("town").strict();
     for (Town town : TownyAPI.getInstance().getTowns()) {
       String name = town.getName();
       // The whole town is a leaf; its home/outpost/type/plot are a sub-tree — same key, both roles.
@@ -58,7 +58,7 @@ final class TownyDestinationService implements PaperDestinationService {
       towns.subtree(name, () -> townDetail(name, town));
     }
 
-    PaperDestinationTree root = PaperDestinationTree.node(TREE_KEY).subtree(towns);
+    DestinationTree root = DestinationTree.node(TREE_KEY).subtree(towns);
     Town own = ownTown(player);
     if (own != null) {
       root.subtree("resident", () -> townDetail("resident", own));
@@ -67,30 +67,30 @@ final class TownyDestinationService implements PaperDestinationService {
     return List.of(root.build());
   }
 
-  private static DestinationTree<World, Vector3i> townDetail(String key, Town town) {
-    return PaperDestinationTree.node(key)
+  private static PlatformDestinationTree<World, Vector3i> townDetail(String key, Town town) {
+    return DestinationTree.node(key)
         .strict()
-        .leaf("home", () -> PaperDestination.at(town.getSpawnOrNull(), "home"))
+        .leaf("home", () -> Destination.at(town.getSpawnOrNull(), "home"))
         .subtree("outpost", () -> outposts(town))
         .subtree("type", () -> plots(town, "type", TownBlock::getTypeName))
         .subtree("plot", () -> plots(town, "plot", TownBlock::getName))
         .build();
   }
 
-  private static DestinationTree<World, Vector3i> outposts(Town town) {
-    PaperDestinationTree tree = PaperDestinationTree.node("outpost").strict();
+  private static PlatformDestinationTree<World, Vector3i> outposts(Town town) {
+    DestinationTree tree = DestinationTree.node("outpost").strict();
     List<Location> spawns = town.getAllOutpostSpawns();
     for (int i = 0; i < spawns.size(); i++) {
       Location spawn = spawns.get(i);
-      tree.leaf(Integer.toString(i + 1), () -> PaperDestination.at(spawn, "outpost"));
+      tree.leaf(Integer.toString(i + 1), () -> Destination.at(spawn, "outpost"));
     }
     return tree.build();
   }
 
   /** A sub-tree keyed by a plot attribute (type or name); each leaf unions the matching plots. */
-  private static DestinationTree<World, Vector3i> plots(
+  private static PlatformDestinationTree<World, Vector3i> plots(
       Town town, String nodeKey, java.util.function.Function<TownBlock, String> attribute) {
-    PaperDestinationTree tree = PaperDestinationTree.node(nodeKey).strict();
+    DestinationTree tree = DestinationTree.node(nodeKey).strict();
     Set<String> keys = new LinkedHashSet<>();
     for (TownBlock townBlock : town.getTownBlocks()) {
       String value = attribute.apply(townBlock);
@@ -102,7 +102,7 @@ final class TownyDestinationService implements PaperDestinationService {
       tree.leaf(
           key,
           () ->
-              PaperDestination.regions(
+              Destination.regions(
                   () ->
                       TownyRegions.plots(
                           town, block -> key.equalsIgnoreCase(attribute.apply(block))),
@@ -112,7 +112,7 @@ final class TownyDestinationService implements PaperDestinationService {
   }
 
   private static MinecraftDestination<World, Vector3i> wholeTown(Town town) {
-    return PaperDestination.regions(() -> TownyRegions.plots(town, block -> true), town.getName());
+    return Destination.regions(() -> TownyRegions.plots(town, block -> true), town.getName());
   }
 
   private static Town ownTown(Player player) {

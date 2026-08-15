@@ -36,27 +36,26 @@ import net.whimxiqal.odyssey.api.SearchSettings;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftSearchSettings;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.paper.PaperNavigationServiceImpl;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationService;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperNavigatorFactory;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperNavigatorService;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperTripService;
-import net.whimxiqal.odyssey.plugin.api.DestinationTree;
+import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
+import net.whimxiqal.odyssey.paper.plugin.api.NavigatorFactory;
 import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
 import net.whimxiqal.odyssey.plugin.api.NavigatorSettings;
+import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
+import net.whimxiqal.odyssey.plugin.api.TripOutcome;
 import net.whimxiqal.odyssey.plugin.command.FlagParser;
 import net.whimxiqal.odyssey.plugin.command.NavigationFlags;
 import net.whimxiqal.odyssey.plugin.destination.DestinationResolver;
 import net.whimxiqal.odyssey.plugin.destination.NavigationPermissions;
 import net.whimxiqal.odyssey.plugin.message.Messages;
 import net.whimxiqal.odyssey.plugin.message.OdysseyMessages;
+import net.whimxiqal.odyssey.plugin.search.SearchGate;
+import net.whimxiqal.odyssey.plugin.search.SearchRegistry;
 import net.whimxiqal.odyssey.plugin.trip.GuideSearch;
 import net.whimxiqal.odyssey.plugin.trip.LiveSearch;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.plugin.RegisteredServiceProvider;
 import org.joml.Vector3i;
 
 /**
@@ -88,7 +87,8 @@ final class NavigateCommand {
   static LiteralCommandNode<CommandSourceStack> build(
       PaperNavigationServiceImpl platformApi,
       PaperTripServiceImpl tripService,
-      SearchRegistry searches,
+      PaperIntegrationRegistry integrations,
+      SearchRegistry<Location> searches,
       SearchGate gate,
       Supplier<SearchSettings> searchSettings,
       OdysseyLogger log,
@@ -102,13 +102,16 @@ final class NavigateCommand {
         .then(Commands.literal("?").executes(ctx -> navHelp(ctx.getSource().getSender(), messages)))
         .then(
             Commands.argument("args", StringArgumentType.greedyString())
-                .suggests(NavigateCommand::suggest)
+                .suggests(
+                    (suggestCtx, suggestBuilder) ->
+                        suggest(suggestCtx, suggestBuilder, integrations))
                 .executes(
                     ctx ->
                         run(
                             ctx,
                             platformApi,
                             tripService,
+                            integrations,
                             searches,
                             gate,
                             searchSettings,
@@ -143,7 +146,8 @@ final class NavigateCommand {
       CommandContext<CommandSourceStack> ctx,
       PaperNavigationServiceImpl platformApi,
       PaperTripServiceImpl tripService,
-      SearchRegistry searches,
+      PaperIntegrationRegistry integrations,
+      SearchRegistry<Location> searches,
       SearchGate gate,
       Supplier<SearchSettings> searchSettings,
       OdysseyLogger log,
@@ -169,7 +173,7 @@ final class NavigateCommand {
       messages.send(player, locale, OdysseyMessages.NO_PERMISSION);
       return Command.SINGLE_SUCCESS;
     }
-    PaperNavigatorFactory factory = navigatorFactory(flags.navigator());
+    NavigatorFactory factory = navigatorFactory(integrations, flags.navigator());
     if (factory == null) {
       messages.send(player, locale, OdysseyMessages.NAVIGATE_UNKNOWN_NAVIGATOR, flags.navigator());
       return Command.SINGLE_SUCCESS;
@@ -177,7 +181,7 @@ final class NavigateCommand {
 
     DestinationResolver.Resolution<World, Vector3i> resolution =
         DestinationResolver.resolve(
-            destinationRoots(player),
+            destinationRoots(integrations, player),
             parsed.destination(),
             player::hasPermission,
             canNavigate(player));
@@ -236,7 +240,7 @@ final class NavigateCommand {
       boolean live,
       PaperNavigationServiceImpl platformApi,
       PaperTripServiceImpl tripService,
-      SearchRegistry searches,
+      SearchRegistry<Location> searches,
       SearchGate gate,
       Supplier<SearchSettings> searchSettings,
       OdysseyLogger log,
@@ -325,11 +329,9 @@ final class NavigateCommand {
                           live)
                       .whenComplete(
                           (outcome, tripError) -> {
-                            if (tripError != null
-                                || outcome instanceof PaperTripService.TripOutcome.Failed) {
+                            if (tripError != null || outcome instanceof TripOutcome.Failed) {
                               messages.send(player, locale, OdysseyMessages.NAVIGATE_ERROR);
-                            } else if (outcome
-                                instanceof PaperTripService.TripOutcome.TripLimitReached) {
+                            } else if (outcome instanceof TripOutcome.TripLimitReached) {
                               messages.send(player, locale, OdysseyMessages.NAVIGATE_TRIP_LIMIT);
                             } else {
                               // "Route found" carries a hover with the search time and the trip
@@ -379,7 +381,7 @@ final class NavigateCommand {
       MinecraftDestination<World, Vector3i> destination,
       NavigationFlags flags,
       PaperNavigationServiceImpl platformApi,
-      SearchRegistry searches,
+      SearchRegistry<Location> searches,
       SearchGate gate,
       Supplier<SearchSettings> searchSettings) {
     UUID uuid = player.getUniqueId();
@@ -409,7 +411,9 @@ final class NavigateCommand {
   }
 
   private static CompletableFuture<Suggestions> suggest(
-      CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+      CommandContext<CommandSourceStack> ctx,
+      SuggestionsBuilder builder,
+      PaperIntegrationRegistry integrations) {
     if (!(ctx.getSource().getSender() instanceof Player player)) {
       return builder.buildFuture();
     }
@@ -422,7 +426,9 @@ final class NavigateCommand {
         builder.createOffset(builder.getStart() + remaining.length() - last.length());
 
     if (previous.equals("-navigator")) {
-      navigatorIds().stream().filter(id -> id.startsWith(last)).forEach(offset::suggest);
+      navigatorIds(integrations).stream()
+          .filter(id -> id.startsWith(last))
+          .forEach(offset::suggest);
     } else if (previous.equals("-no-mode")) {
       FlagParser.modeWords().stream()
           .filter(word -> word.startsWith(last))
@@ -433,7 +439,7 @@ final class NavigateCommand {
     } else {
       List<String> suggestions =
           DestinationResolver.suggest(
-              destinationRoots(player),
+              destinationRoots(integrations, player),
               destinationTokens(tokens),
               player::hasPermission,
               canNavigate(player));
@@ -454,33 +460,22 @@ final class NavigateCommand {
         NavigationPermissions.allowed(address, player::isPermissionSet, player::hasPermission);
   }
 
-  private static List<DestinationTree<World, Vector3i>> destinationRoots(Player player) {
-    List<DestinationTree<World, Vector3i>> roots = new ArrayList<>();
-    for (RegisteredServiceProvider<PaperDestinationService> registration :
-        Bukkit.getServicesManager().getRegistrations(PaperDestinationService.class)) {
-      roots.addAll(registration.getProvider().provide(player));
+  private static List<PlatformDestinationTree<World, Vector3i>> destinationRoots(
+      PaperIntegrationRegistry integrations, Player player) {
+    List<PlatformDestinationTree<World, Vector3i>> roots = new ArrayList<>();
+    for (DestinationService provider : integrations.destinationProviders()) {
+      roots.addAll(provider.provide(player));
     }
     return roots;
   }
 
-  private static PaperNavigatorFactory navigatorFactory(String id) {
-    for (RegisteredServiceProvider<PaperNavigatorService> registration :
-        Bukkit.getServicesManager().getRegistrations(PaperNavigatorService.class)) {
-      PaperNavigatorFactory factory = registration.getProvider().compute().get(id);
-      if (factory != null) {
-        return factory;
-      }
-    }
-    return null;
+  private static NavigatorFactory navigatorFactory(
+      PaperIntegrationRegistry integrations, String id) {
+    return integrations.navigator(id);
   }
 
-  private static List<String> navigatorIds() {
-    List<String> ids = new ArrayList<>();
-    for (RegisteredServiceProvider<PaperNavigatorService> registration :
-        Bukkit.getServicesManager().getRegistrations(PaperNavigatorService.class)) {
-      ids.addAll(registration.getProvider().compute().keySet());
-    }
-    return ids;
+  private static List<String> navigatorIds(PaperIntegrationRegistry integrations) {
+    return integrations.navigatorIds();
   }
 
   private static List<String> flagNames() {

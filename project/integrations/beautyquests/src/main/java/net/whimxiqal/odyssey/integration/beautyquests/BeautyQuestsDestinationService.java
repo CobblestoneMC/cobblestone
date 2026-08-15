@@ -14,10 +14,10 @@ import fr.skytasul.quests.api.quests.Quest;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestination;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationService;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationTree;
-import net.whimxiqal.odyssey.plugin.api.DestinationTree;
+import net.whimxiqal.odyssey.paper.plugin.api.Destination;
+import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
+import net.whimxiqal.odyssey.paper.plugin.api.DestinationTree;
+import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -32,18 +32,18 @@ import org.joml.Vector3i;
  * is snapshotted when the tree is built (on the main thread, as {@code getLocated} requires);
  * advancing a stage is picked up the next time destinations are resolved.
  */
-final class BeautyQuestsDestinationService implements PaperDestinationService {
+final class BeautyQuestsDestinationService implements DestinationService {
 
   static final String TREE_KEY = "beautyquests";
   static final String QUEST_KEY = "quest";
 
   @Override
-  public Collection<DestinationTree<World, Vector3i>> provide(Player player) {
+  public Collection<PlatformDestinationTree<World, Vector3i>> provide(Player player) {
     PlayerAccount account = PlayersManager.getPlayerAccount(player);
     if (account == null) {
       return List.of();
     }
-    PaperDestinationTree quests = PaperDestinationTree.node(QUEST_KEY);
+    DestinationTree quests = DestinationTree.node(QUEST_KEY);
     boolean any = false;
     for (Quest quest : QuestsAPI.getAPI().getQuestsManager().getQuestsStarted(account)) {
       Location target = QuestTargets.current(account, quest);
@@ -51,10 +51,10 @@ final class BeautyQuestsDestinationService implements PaperDestinationService {
         continue; // current stage has no precise location — nothing to walk to
       }
       String label = label(quest);
-      quests.leaf(slug(label), PaperDestination.at(target, label));
+      quests.leaf(slug(label), Destination.at(target, label));
       any = true;
     }
-    return any ? List.of(PaperDestinationTree.node(TREE_KEY).subtree(quests).build()) : List.of();
+    return any ? List.of(DestinationTree.node(TREE_KEY).subtree(quests).build()) : List.of();
   }
 
   /** A player-facing quest label: its name, or a stable fallback from its id. */

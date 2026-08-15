@@ -12,7 +12,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import me.pikamug.quests.events.quest.BukkitQuestUpdateCompassEvent;
 import me.pikamug.quests.quests.Quest;
-import net.whimxiqal.odyssey.paper.plugin.api.Odyssey;
+import net.whimxiqal.odyssey.paper.plugin.api.OdysseyPluginAPI;
 import net.whimxiqal.odyssey.plugin.api.NavigatorSettings;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -66,7 +66,7 @@ final class PikamugQuestsCompassListener implements Listener {
     }
     NavigatorSettings settings = prefs.settings(quest.getId());
     // The quest name is the trip's stable label, so the next objective replaces this leg.
-    Odyssey.tripService()
+    OdysseyPluginAPI.tripService()
         .navigate(
             player,
             target,

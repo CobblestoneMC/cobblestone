@@ -7,28 +7,21 @@
 
 package net.whimxiqal.odyssey.paper.plugin;
 
+import net.whimxiqal.odyssey.plugin.metrics.MetricsCharts;
+import net.whimxiqal.odyssey.plugin.search.SearchRegistry;
 import net.whimxiqal.odyssey.plugin.trip.TripManager;
 import org.bstats.bukkit.Metrics;
-import org.bstats.charts.SimplePie;
-import org.bstats.charts.SingleLineChart;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
- * Anonymous usage metrics via bStats (shaded + relocated, design/10). Reports the storage backend
- * (categorical) plus live gauges: active trips, currently-active searches, and searches started in
- * the trailing hour (the searches-per-hour rate — an integer, since bStats charts are
- * integer-only). The active-searches gauge is retained mostly for a future Prometheus/Grafana
- * export where a raw instantaneous count is useful. bStats is opt-out via {@code
+ * Anonymous usage metrics via bStats (shaded + relocated, design/10). Builds the Bukkit {@link
+ * Metrics} object and hands its {@code addCustomChart} to the shared {@link MetricsCharts}, which
+ * defines the chart set both platforms report. bStats is opt-out via {@code
  * plugins/bStats/config.yml} and Odyssey's own {@code metrics.enabled}.
- *
- * <p>{@link #BSTATS_PLUGIN_ID} is Odyssey's registered bStats service id; a non-positive value
- * keeps metrics off (a guard for local forks that have not registered their own).
  */
 final class OdysseyMetrics {
-
-  private static final int BSTATS_PLUGIN_ID = 33218;
 
   private final Metrics metrics;
 
@@ -36,17 +29,19 @@ final class OdysseyMetrics {
       JavaPlugin plugin,
       String backend,
       TripManager<Entity, PaperTripAgent, Location> trips,
-      SearchRegistry searches) {
-    if (BSTATS_PLUGIN_ID <= 0) {
+      SearchRegistry<Location> searches) {
+    if (MetricsCharts.BSTATS_PLUGIN_ID <= 0) {
       plugin.getLogger().info("bStats metrics not started: no bStats plugin id is configured yet.");
       this.metrics = null;
       return;
     }
-    this.metrics = new Metrics(plugin, BSTATS_PLUGIN_ID);
-    metrics.addCustomChart(new SimplePie("data_backend", () -> backend));
-    metrics.addCustomChart(new SingleLineChart("active_trips", trips::activeCount));
-    metrics.addCustomChart(new SingleLineChart("active_searches", searches::active));
-    metrics.addCustomChart(new SingleLineChart("searches_per_hour", searches::searchesLastHour));
+    this.metrics = new Metrics(plugin, MetricsCharts.BSTATS_PLUGIN_ID);
+    MetricsCharts.register(
+        metrics::addCustomChart,
+        backend,
+        trips::activeCount,
+        searches::active,
+        searches::searchesLastHour);
   }
 
   /** Stops metrics reporting; call on plugin disable. */

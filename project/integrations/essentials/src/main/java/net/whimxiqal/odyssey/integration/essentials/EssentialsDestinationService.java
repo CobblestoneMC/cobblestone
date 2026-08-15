@@ -9,10 +9,10 @@ package net.whimxiqal.odyssey.integration.essentials;
 
 import java.util.Collection;
 import java.util.List;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestination;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationService;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationTree;
-import net.whimxiqal.odyssey.plugin.api.DestinationTree;
+import net.whimxiqal.odyssey.paper.plugin.api.Destination;
+import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
+import net.whimxiqal.odyssey.paper.plugin.api.DestinationTree;
+import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.joml.Vector3i;
@@ -25,7 +25,7 @@ import org.joml.Vector3i;
  * revoked (the teleport transition still requires the Essentials permission). Destinations
  * re-resolve on query, so moving a home or the spawn is reflected without a restart.
  */
-final class EssentialsDestinationService implements PaperDestinationService {
+final class EssentialsDestinationService implements DestinationService {
 
   static final String TREE_KEY = "essentials";
   static final String HOME_KEY = "home";
@@ -38,14 +38,14 @@ final class EssentialsDestinationService implements PaperDestinationService {
   }
 
   @Override
-  public Collection<DestinationTree<World, Vector3i>> provide(Player player) {
-    PaperDestinationTree homes = PaperDestinationTree.node(HOME_KEY).strict();
+  public Collection<PlatformDestinationTree<World, Vector3i>> provide(Player player) {
+    DestinationTree homes = DestinationTree.node(HOME_KEY).strict();
     for (String home : essentials.homes(player)) {
-      homes.leaf(home, () -> PaperDestination.at(essentials.home(player, home), home));
+      homes.leaf(home, () -> Destination.at(essentials.home(player, home), home));
     }
-    PaperDestinationTree root = PaperDestinationTree.node(TREE_KEY).subtree(homes);
+    DestinationTree root = DestinationTree.node(TREE_KEY).subtree(homes);
     if (essentials.hasSpawn()) {
-      root.leaf(SPAWN_KEY, () -> PaperDestination.at(essentials.spawn(player), "spawn"));
+      root.leaf(SPAWN_KEY, () -> Destination.at(essentials.spawn(player), "spawn"));
     }
     return List.of(root.build());
   }

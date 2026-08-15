@@ -13,10 +13,10 @@ import java.util.Locale;
 import me.pikamug.quests.Quests;
 import me.pikamug.quests.player.Quester;
 import me.pikamug.quests.quests.Quest;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestination;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationService;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationTree;
-import net.whimxiqal.odyssey.plugin.api.DestinationTree;
+import net.whimxiqal.odyssey.paper.plugin.api.Destination;
+import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
+import net.whimxiqal.odyssey.paper.plugin.api.DestinationTree;
+import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.joml.Vector3i;
@@ -30,7 +30,7 @@ import org.joml.Vector3i;
  * permission (default-allow). Targets re-resolve on query, so advancing a stage is reflected
  * without a restart.
  */
-final class PikamugQuestsDestinationService implements PaperDestinationService {
+final class PikamugQuestsDestinationService implements DestinationService {
 
   static final String TREE_KEY = "quests";
   static final String QUEST_KEY = "quest";
@@ -42,12 +42,12 @@ final class PikamugQuestsDestinationService implements PaperDestinationService {
   }
 
   @Override
-  public Collection<DestinationTree<World, Vector3i>> provide(Player player) {
+  public Collection<PlatformDestinationTree<World, Vector3i>> provide(Player player) {
     Quester quester = quests.getQuester(player.getUniqueId());
     if (quester == null) {
       return List.of();
     }
-    PaperDestinationTree questNode = PaperDestinationTree.node(QUEST_KEY);
+    DestinationTree questNode = DestinationTree.node(QUEST_KEY);
     boolean any = false;
     for (Quest quest : quester.getCurrentQuests().keySet()) {
       if (QuestTargets.current(quester, quest) == null) {
@@ -57,13 +57,11 @@ final class PikamugQuestsDestinationService implements PaperDestinationService {
       questNode.leaf(
           slug(label),
           () ->
-              PaperDestination.at(
+              Destination.at(
                   QuestTargets.current(quests.getQuester(player.getUniqueId()), quest), label));
       any = true;
     }
-    return any
-        ? List.of(PaperDestinationTree.node(TREE_KEY).subtree(questNode).build())
-        : List.of();
+    return any ? List.of(DestinationTree.node(TREE_KEY).subtree(questNode).build()) : List.of();
   }
 
   /**

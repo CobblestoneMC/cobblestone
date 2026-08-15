@@ -18,9 +18,9 @@ import com.palmergames.bukkit.towny.utils.PlayerCacheUtil;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import net.whimxiqal.odyssey.paper.api.PaperBreakChecker;
-import net.whimxiqal.odyssey.paper.api.PaperSearchModificationService;
-import net.whimxiqal.odyssey.paper.api.PaperTransition;
+import net.whimxiqal.odyssey.paper.api.BreakChecker;
+import net.whimxiqal.odyssey.paper.api.SearchModificationService;
+import net.whimxiqal.odyssey.paper.api.Transition;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -40,7 +40,7 @@ import org.bukkit.plugin.Plugin;
  * the player may dig a block, so mining routes avoid protected land. That call touches Towny's
  * caches, so it is hopped to the main thread and its result delivered through the future.
  */
-final class TownySearchModificationService implements PaperSearchModificationService {
+final class TownySearchModificationService implements SearchModificationService {
 
   private static final double TELEPORT_COST_SECONDS = 3.0;
 
@@ -60,8 +60,8 @@ final class TownySearchModificationService implements PaperSearchModificationSer
   }
 
   @Override
-  public CompletableFuture<List<PaperTransition>> computeTransitions(Player player) {
-    List<PaperTransition> result = new ArrayList<>();
+  public CompletableFuture<List<Transition>> computeTransitions(Player player) {
+    List<Transition> result = new ArrayList<>();
     TownyAPI api = TownyAPI.getInstance();
     Resident resident = api.getResident(player);
     Town ownTown = resident == null ? null : api.getResidentTownOrNull(resident);
@@ -131,12 +131,12 @@ final class TownySearchModificationService implements PaperSearchModificationSer
     }
   }
 
-  private static PaperTransition command(Player player, Location destination, String command) {
-    return PaperTransition.command(player, destination, TELEPORT_COST_SECONDS, command);
+  private static Transition command(Player player, Location destination, String command) {
+    return Transition.command(player, destination, TELEPORT_COST_SECONDS, command);
   }
 
   @Override
-  public PaperBreakChecker computeBreakChecker(Player player) {
+  public BreakChecker computeBreakChecker(Player player) {
     return (breaker, location, block) -> {
       CompletableFuture<Boolean> future = new CompletableFuture<>();
       // getCachePermission touches Towny's caches / Bukkit; evaluate it on the main thread.

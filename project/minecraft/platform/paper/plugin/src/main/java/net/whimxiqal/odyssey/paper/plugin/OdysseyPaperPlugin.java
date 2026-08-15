@@ -14,15 +14,19 @@ import java.util.Locale;
 import java.util.function.Supplier;
 import net.whimxiqal.odyssey.api.SearchSettings;
 import net.whimxiqal.odyssey.paper.PaperNavigationServiceImpl;
-import net.whimxiqal.odyssey.paper.api.PaperNavigationService;
-import net.whimxiqal.odyssey.paper.plugin.api.Odyssey;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperTripService;
+import net.whimxiqal.odyssey.paper.api.NavigationService;
+import net.whimxiqal.odyssey.paper.api.SearchModificationRegistrar;
+import net.whimxiqal.odyssey.paper.plugin.api.IntegrationRegistrar;
+import net.whimxiqal.odyssey.paper.plugin.api.TrailNavigatorSettings;
+import net.whimxiqal.odyssey.paper.plugin.api.TripService;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
 import net.whimxiqal.odyssey.plugin.config.ConfigManager;
 import net.whimxiqal.odyssey.plugin.data.DataStore;
 import net.whimxiqal.odyssey.plugin.data.DataStoreException;
 import net.whimxiqal.odyssey.plugin.data.DataStores;
 import net.whimxiqal.odyssey.plugin.message.Messages;
+import net.whimxiqal.odyssey.plugin.search.SearchGate;
+import net.whimxiqal.odyssey.plugin.search.SearchRegistry;
 import net.whimxiqal.odyssey.plugin.trip.TripManager;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
@@ -33,9 +37,9 @@ import org.bukkit.plugin.java.JavaPlugin;
  * The Odyssey Paper/Folia plugin entry point.
  *
  * <p>Phase 6a bootstrap: load config, build the message pipeline, construct the plugin-owned
- * transition registry and the native platform API, register the single {@link
- * PaperNavigationService} service, and wire the {@code /odyssey} command. Data store, listeners,
- * waypoints, trips, portal discovery, and the {@code /navigate} tree arrive in Phases 6b/6c.
+ * transition registry and the native platform API, register the single {@link NavigationService}
+ * service, and wire the {@code /odyssey} command. Data store, listeners, waypoints, trips, portal
+ * discovery, and the {@code /navigate} tree arrive in Phases 6b/6c.
  */
 public final class OdysseyPaperPlugin extends JavaPlugin {
 
@@ -43,7 +47,7 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
   private DataStore dataStore;
   private TripManager<Entity, PaperTripAgent, Location> tripManager;
   private OdysseyMetrics metrics;
-  private final SearchRegistry searchRegistry = new SearchRegistry();
+  private final SearchRegistry<Location> searchRegistry = new SearchRegistry<>();
 
   @Override
   public void onEnable() {
@@ -68,13 +72,25 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
     // The transition registry is owned by the plugin; the platform API only reads from / registers
     // into it (design/05). Both are reachable to other plugins via the registered plugin API.
     this.platformApi = new PaperNavigationServiceImpl(this, logger);
+    PaperIntegrationRegistry integrationRegistry = new PaperIntegrationRegistry();
     getServer()
         .getServicesManager()
-        .register(PaperNavigationService.class, this.platformApi, this, ServicePriority.Normal);
+        .register(NavigationService.class, this.platformApi, this, ServicePriority.Normal);
+    // The navigation impl is also the search-modification registrar; the integration registry is
+    // the
+    // destination/navigator registrar. Both are the single service each layer's facade looks up.
+    getServer()
+        .getServicesManager()
+        .register(
+            SearchModificationRegistrar.class, this.platformApi, this, ServicePriority.Normal);
+    getServer()
+        .getServicesManager()
+        .register(IntegrationRegistrar.class, integrationRegistry, this, ServicePriority.Normal);
 
     // Waypoints are surfaced to searches like any third-party provider — via the same registration
     // helper an integration would use.
-    Odyssey.register(this, new OdysseyDestinationService(dataStore.waypoints()));
+    integrationRegistry.registerDestinations(
+        this, new OdysseyDestinationService(dataStore.waypoints()));
 
     Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
     Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), logger);
@@ -84,13 +100,14 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
     // registered as a service so it is discovered like any third-party navigator.
     this.tripManager =
         new TripManager<>(platformApi.scheduler(), config.get(keys.tripsMaxActivePerPlayer));
-    Odyssey.register(
+    integrationRegistry.registerNavigator(
         this,
-        new PaperTrailNavigatorService(new PaperTrailNavigatorFactory(config, keys, messages)));
+        TrailNavigatorSettings.NAVIGATOR_ID,
+        new PaperTrailNavigatorFactory(config, keys, messages));
 
     // Discovered vanilla portals are surfaced to searches as an internal transition provider, and
     // learned from player teleports by the portal listener.
-    Odyssey.register(this, new PortalSearchModificationService(dataStore.portalTransitions()));
+    platformApi.register(this, new PortalSearchModificationService(dataStore.portalTransitions()));
     getServer()
         .getPluginManager()
         .registerEvents(
@@ -105,6 +122,10 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
     getServer()
         .getPluginManager()
         .registerEvents(new OdysseyListener(tripManager, searchRegistry), this);
+    // When another plugin disables, drop everything it registered into our registries.
+    getServer()
+        .getPluginManager()
+        .registerEvents(new IntegrationLifecycleListener(platformApi, integrationRegistry), this);
 
     SearchGate searchGate = new SearchGate(config.get(keys.searchMaxConcurrentPerPlayer));
     long liveIntervalMillis = config.get(keys.tripsLiveIntervalTicks) * 50L; // 50 ms per tick
@@ -123,6 +144,7 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
     PaperTripServiceImpl tripService =
         new PaperTripServiceImpl(
             platformApi,
+            integrationRegistry,
             tripManager,
             searchRegistry,
             searchGate,
@@ -130,7 +152,7 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
             liveIntervalMillis);
     getServer()
         .getServicesManager()
-        .register(PaperTripService.class, tripService, this, ServicePriority.Normal);
+        .register(TripService.class, tripService, this, ServicePriority.Normal);
 
     getLifecycleManager()
         .registerEventHandler(
@@ -156,6 +178,7 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
                       NavigateCommand.build(
                           platformApi,
                           tripService,
+                          integrationRegistry,
                           searchRegistry,
                           searchGate,
                           searchSettings,
