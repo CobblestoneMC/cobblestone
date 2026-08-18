@@ -21,6 +21,9 @@ public final class MinecraftKeys {
   /** Whether the agent's inventory boat has been placed/consumed. */
   public static final TraversalKey<Boolean> BOAT_CONSUMED = new TraversalKey<>("boat_consumed");
 
+  /** How many ender pearls the agent has thrown so far this route (caps at the inventory count). */
+  public static final TraversalKey<Integer> PEARLS_USED = new TraversalKey<>("pearls_used");
+
   private MinecraftKeys() {}
 
   /** A rideable vehicle carried in the traversal state. */

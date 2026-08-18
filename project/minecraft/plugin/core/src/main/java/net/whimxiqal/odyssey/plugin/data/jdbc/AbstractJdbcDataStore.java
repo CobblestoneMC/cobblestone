@@ -21,6 +21,9 @@ import java.util.List;
 import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.plugin.data.DataStore;
 import net.whimxiqal.odyssey.plugin.data.DataStoreException;
+import net.whimxiqal.odyssey.plugin.data.GatewayDao;
+import net.whimxiqal.odyssey.plugin.data.PortalCacheDao;
+import net.whimxiqal.odyssey.plugin.data.PortalLinkDao;
 import net.whimxiqal.odyssey.plugin.data.PortalTransitionDao;
 import net.whimxiqal.odyssey.plugin.data.WaypointDao;
 
@@ -45,6 +48,9 @@ public abstract class AbstractJdbcDataStore implements DataStore {
   private Connection connection;
   private WaypointDao waypointDao;
   private PortalTransitionDao portalTransitionDao;
+  private PortalCacheDao portalCacheDao;
+  private PortalLinkDao portalLinkDao;
+  private GatewayDao gatewayDao;
 
   /**
    * Creates a store.
@@ -111,6 +117,9 @@ public abstract class AbstractJdbcDataStore implements DataStore {
       migrate();
       this.waypointDao = new JdbcWaypointDao(this);
       this.portalTransitionDao = new JdbcPortalTransitionDao(this);
+      this.portalCacheDao = new JdbcPortalCacheDao(this);
+      this.portalLinkDao = new JdbcPortalLinkDao(this);
+      this.gatewayDao = new JdbcGatewayDao(this);
     } catch (ClassNotFoundException | SQLException e) {
       throw new DataStoreException("failed to open data store (" + url + ")", e);
     }
@@ -130,6 +139,30 @@ public abstract class AbstractJdbcDataStore implements DataStore {
       throw new IllegalStateException("DataStore.init() has not been called");
     }
     return portalTransitionDao;
+  }
+
+  @Override
+  public PortalCacheDao netherPortals() {
+    if (portalCacheDao == null) {
+      throw new IllegalStateException("DataStore.init() has not been called");
+    }
+    return portalCacheDao;
+  }
+
+  @Override
+  public PortalLinkDao netherPortalLinks() {
+    if (portalLinkDao == null) {
+      throw new IllegalStateException("DataStore.init() has not been called");
+    }
+    return portalLinkDao;
+  }
+
+  @Override
+  public GatewayDao gateways() {
+    if (gatewayDao == null) {
+      throw new IllegalStateException("DataStore.init() has not been called");
+    }
+    return gatewayDao;
   }
 
   @Override

@@ -87,6 +87,20 @@ public final class ConfigKeys {
   /** The traversal cost, in seconds, assigned to a discovered portal transition. Mutable. */
   public final ConfigKey<Double> portalsCostSeconds;
 
+  /**
+   * Whether to snap a nether portal ENTRY to the source block's centre, so which destination portal
+   * you reach is deterministic per block (it otherwise depends on your exact sub-block position).
+   * Changes which portal you link to, so it is off by default; strongly recommended for accurate
+   * navigation. Mutable.
+   */
+  public final ConfigKey<Boolean> portalsNormalizeEntry;
+
+  /**
+   * Whether to snap a nether portal EXIT to the destination portal's centre at ground level. Only
+   * changes where within the (same) destination portal you land, so it is on by default. Mutable.
+   */
+  public final ConfigKey<Boolean> portalsNormalizeExit;
+
   /** Whether anonymous bStats metrics are reported. Requires a restart. */
   public final ConfigKey<Boolean> metricsEnabled;
 
@@ -137,6 +151,10 @@ public final class ConfigKeys {
     this.trailDensity = manager.register("navigators.trail.density", 0.7, Codec.ofDouble(), true);
     this.portalsDiscovery = manager.register("portals.discovery", true, Codec.ofBoolean(), true);
     this.portalsCostSeconds = manager.register("portals.cost_seconds", 5.0, Codec.ofDouble(), true);
+    this.portalsNormalizeEntry =
+        manager.register("portals.normalize_entry", false, Codec.ofBoolean(), true);
+    this.portalsNormalizeExit =
+        manager.register("portals.normalize_exit", true, Codec.ofBoolean(), true);
     this.metricsEnabled = manager.register("metrics.enabled", true, Codec.ofBoolean(), false);
   }
 }

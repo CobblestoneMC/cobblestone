@@ -45,7 +45,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
   private final HeuristicStrategy heuristic;
   private final A agent;
   private final Position<D> origin;
-  private final List<? extends Mode<A, T, D>> modes;
+  private final ModesProvider<A, T, D> modes;
   private final List<? extends Restriction<A, D>> restrictions;
   private final SearchSettings settings;
   private final Tier1Graph<T, D> tier1;
@@ -66,7 +66,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
       A agent,
       Position<D> origin,
       Destination<DomainRegion<D>> destination,
-      List<? extends Mode<A, T, D>> modes,
+      ModesProvider<A, T, D> modes,
       List<? extends Transition<T, D>> transitions,
       List<? extends Restriction<A, D>> restrictions,
       SearchSettings settings) {
@@ -76,7 +76,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
     this.heuristic = heuristic;
     this.agent = agent;
     this.origin = origin;
-    this.modes = List.copyOf(modes);
+    this.modes = modes;
     this.restrictions = List.copyOf(restrictions);
     this.settings = settings;
     this.tier1 = new Tier1Graph<>(origin, transitions, destination.regions(), heuristic);
@@ -130,7 +130,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
               logger,
               agent,
               edge.virtualPath(),
-              modes,
+              modes.modesFor(edge.virtualPath().targetRegion()),
               restrictions,
               heuristic,
               settings.maxCellsVisited(),

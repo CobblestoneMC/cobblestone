@@ -19,7 +19,20 @@ final class Geometry {
 
   /** Whether a body fits in {@code cell} — the cell and the cell above it are both passable. */
   static boolean bodyFits(BlockView view, Cell cell) {
-    return view.at(cell).isPassable() && view.at(cell, 0, 1, 0).isPassable();
+    return bodyFits(view, cell, 2);
+  }
+
+  /**
+   * Whether a {@code height}-tall body fits at {@code cell} (every cell in the column is passable).
+   * A flying body can be modelled as 1 tall to slip through a 1-block hole (an end gateway).
+   */
+  static boolean bodyFits(BlockView view, Cell cell, int height) {
+    for (int dy = 0; dy < height; dy++) {
+      if (!view.at(cell, 0, dy, 0).isPassable()) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /** Whether a body can stand in {@code cell}: it fits and the block below has a solid top. */

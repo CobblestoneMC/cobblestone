@@ -5,4 +5,6 @@ plugins {
 
 dependencies {
     api(project(":api"))
+    // Nullability annotations (@Nullable): compile-time hints only, not shipped/transitive.
+    compileOnly("org.jetbrains:annotations:24.0.1")
 }

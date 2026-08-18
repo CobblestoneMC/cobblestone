@@ -24,6 +24,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 import net.whimxiqal.odyssey.api.TraversalState;
 
 /**
@@ -85,6 +86,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   // true = impassable, false = passable, absent = unknown (or unchecked).
   private final Map<Cell, Boolean> passability = new HashMap<>();
   private final Set<Cell> inFlight = new HashSet<>();
+  // Memoized edge-restriction verdicts, so an edge's supplier is invoked at most once.
+  private final Map<EdgeRef, FutureOr<Boolean>> edgeVerdicts = new HashMap<>();
   private final ConcurrentLinkedQueue<Verdict> mailbox = new ConcurrentLinkedQueue<>();
   private final ConcurrentLinkedQueue<EdgeRef> edgeMailbox = new ConcurrentLinkedQueue<>();
   private final AtomicInteger pendingChecks = new AtomicInteger();
@@ -210,6 +213,17 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       if (node == null || node.closed || entry.currentCost() != node.cost) {
         continue; // stale duplicate (superseded, or dropped/raised by a repair)
       }
+      // Verify this node's incoming best edge now that we are committing to expand toward it.
+      // Optimistic: a pending verdict does not block — we expand anyway and repair if it later
+      // resolves barred; only an immediately-known bar drops the edge here.
+      if (node.bestParent != null && node.bestEdge.restricted() != null) {
+        FutureOr<Boolean> verdict =
+            checkEdge(node.bestParent, node.key, node.bestEdge.restricted());
+        if (verdict.isImmediate() && Boolean.TRUE.equals(verdict.value())) {
+          removeEdge(node.bestParent, node.key); // barred — drop, repair, and re-poll
+          continue;
+        }
+      }
       node.closed = true;
       if (node.bestParent != null) {
         heuristic.observe(node.bestEdge.cost(), node.bestParent.cell().distance(node.key.cell()));
@@ -281,22 +295,11 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
           continue; // resolved immediately as impassable
         }
       }
-      // A mode-scoped edge restriction (mining breakability) resolved as barred is dropped
-      // outright.
-      CompletableFuture<Boolean> restricted = movement.restricted();
-      if (restricted != null
-          && restricted.isDone()
-          && !restricted.isCompletedExceptionally()
-          && Boolean.TRUE.equals(restricted.getNow(Boolean.FALSE))) {
-        continue;
-      }
       CellState key = new CellState(cell, movement.state());
       Node<T> neighbor = getOrCreate(key);
       neighbor.parents.put(parentKey, movement); // retained candidate parent
-      if (restricted != null && !restricted.isDone()) {
-        watchEdge(
-            parentKey, key, restricted); // pending: expand optimistically, drop the edge if barred
-      }
+      // A mode-scoped edge restriction (mining breakability, pearl ballistics) is checked lazily —
+      // when this node is popped, not here — so its supplier fires only for edges we commit to.
       // Use the parent's current g: a repair may have raised it while these modes were pending.
       double tentative = parent.cost + movement.cost();
       if (tentative < neighbor.cost) {
@@ -383,19 +386,34 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   }
 
   /**
-   * Watches a pending mode-scoped edge restriction; if it resolves barred, that edge is dropped.
+   * Invokes an edge's restriction supplier once (memoized), firing its check. On a <i>pending</i>
+   * verdict that later resolves barred, the edge is queued for removal; an <i>immediate</i> barred
+   * verdict is left for the caller to act on (via {@link #removeEdge}). Returns the verdict so the
+   * caller can inspect the immediate case.
    */
-  private void watchEdge(
-      CellState parentKey, CellState childKey, CompletableFuture<Boolean> restricted) {
-    pendingChecks.incrementAndGet();
-    restricted.whenComplete(
-        (value, error) -> {
-          if (error == null && Boolean.TRUE.equals(value)) {
-            edgeMailbox.add(new EdgeRef(parentKey, childKey));
-          }
-          pendingChecks.decrementAndGet();
-          wake();
-        });
+  private FutureOr<Boolean> checkEdge(
+      CellState parentKey, CellState childKey, Supplier<FutureOr<Boolean>> restricted) {
+    EdgeRef ref = new EdgeRef(parentKey, childKey);
+    FutureOr<Boolean> cached = edgeVerdicts.get(ref);
+    if (cached != null) {
+      return cached;
+    }
+    FutureOr<Boolean> verdict = restricted.get();
+    edgeVerdicts.put(ref, verdict);
+    if (!verdict.isImmediate()) {
+      pendingChecks.incrementAndGet();
+      verdict
+          .future()
+          .whenComplete(
+              (value, error) -> {
+                if (error == null && Boolean.TRUE.equals(value)) {
+                  edgeMailbox.add(ref);
+                }
+                pendingChecks.decrementAndGet();
+                wake();
+              });
+    }
+    return verdict;
   }
 
   /** Combined verdict over all restrictions: impassable if any bars the cell. */
@@ -585,19 +603,21 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       if (node.bestParent == null) {
         return true; // reached the start
       }
-      if (!edgeConfirmed(node.bestEdge.restricted())) {
-        return false; // the edge's breakability check is still pending (or came back barred)
+      Supplier<FutureOr<Boolean>> restricted = node.bestEdge.restricted();
+      if (restricted != null) {
+        // Drive the check here too: a best edge re-parented onto the path by a repair may never
+        // have been popped, so pathConfirmed is the fallback that fires it.
+        FutureOr<Boolean> verdict = checkEdge(node.bestParent, cursor, restricted);
+        if (!verdict.isImmediate()) {
+          return false; // the edge check is pending; its verdict will wake us
+        }
+        if (Boolean.TRUE.equals(verdict.value())) {
+          removeEdge(node.bestParent, cursor); // barred — drop and repair; not confirmed
+          return false;
+        }
       }
       cursor = node.bestParent;
     }
-  }
-
-  /** An edge is confirmed once its restriction future is absent or resolved as not-barred. */
-  private static boolean edgeConfirmed(CompletableFuture<Boolean> restricted) {
-    return restricted == null
-        || (restricted.isDone()
-            && (restricted.isCompletedExceptionally()
-                || !Boolean.TRUE.equals(restricted.getNow(Boolean.FALSE))));
   }
 
   private void finishSolved(CellState goal) {

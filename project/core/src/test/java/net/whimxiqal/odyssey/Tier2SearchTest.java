@@ -317,7 +317,13 @@ class Tier2SearchTest {
       } else if (from.equals(new Cell(1, 0, 0))) {
         moves =
             List.of(
-                new Movement<>(new Cell(2, 0, 0), 1.0, 1.0, TestStep.MOVE, state, bdRestricted));
+                new Movement<>(
+                    new Cell(2, 0, 0),
+                    1.0,
+                    1.0,
+                    TestStep.MOVE,
+                    state,
+                    () -> FutureOr.from(bdRestricted)));
       } else if (from.equals(new Cell(1, 1, 0))) {
         moves = List.of(new Movement<>(new Cell(2, 0, 0), 3.0, 3.0, TestStep.MOVE, state));
       } else if (from.equals(new Cell(2, 0, 0))) {

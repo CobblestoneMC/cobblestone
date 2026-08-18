@@ -12,6 +12,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import net.whimxiqal.odyssey.Cell;
 import net.whimxiqal.odyssey.FutureOr;
 import net.whimxiqal.odyssey.Movement;
@@ -23,6 +24,7 @@ import net.whimxiqal.odyssey.minecraft.MinecraftKeys;
 import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Tunnelling through breakable blocks — mining a cardinal neighbor or the block directly below.
@@ -125,7 +127,7 @@ final class MineMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
       return null; // nothing to stand on after mining
     }
     double breakTime = 0.0;
-    List<CompletableFuture<Boolean>> checks = null;
+    List<CheckTarget> targets = null;
     for (Cell cell : breakCells) {
       MinecraftBlock block = view.at(cell);
       if (block.isPassable()) {
@@ -150,23 +152,46 @@ final class MineMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
       }
       breakTime += time;
       if (breakChecker != null) {
-        if (checks == null) {
-          checks = new ArrayList<>(breakCells.length);
+        if (targets == null) {
+          targets = new ArrayList<>(breakCells.length);
         }
-        checks.add(breakChecker.breakable(agent, cell, world, block));
+        targets.add(new CheckTarget(cell, block));
       }
     }
-    return move(dest, breakTime + moveCost, MinecraftStepType.MINE, state, restricted(checks));
+    return move(
+        dest,
+        breakTime + moveCost,
+        MinecraftStepType.MINE,
+        state,
+        restricted(agent, world, targets));
   }
 
   /**
-   * Combines the per-block breakability checks into a single "is this edge restricted" future:
-   * {@code true} if any block may not be broken. {@code null} when there is nothing to check.
+   * A lazy supplier of the edge's combined breakability verdict: invoked only when the search pops
+   * the edge, so the integration's per-block checks fire just for edges actually considered. The
+   * verdict is {@code true} (restricted) if any of the cells may not be broken. {@code null} when
+   * there is nothing to check.
    */
-  private static CompletableFuture<Boolean> restricted(List<CompletableFuture<Boolean>> breakable) {
-    if (breakable == null || breakable.isEmpty()) {
+  @Nullable
+  private Supplier<FutureOr<Boolean>> restricted(
+      A agent, MinecraftWorld world, @Nullable List<CheckTarget> targets) {
+    if (targets == null || targets.isEmpty()) {
       return null;
     }
+    List<CheckTarget> snapshot = targets;
+    return () -> {
+      List<CompletableFuture<Boolean>> checks = new ArrayList<>(snapshot.size());
+      for (CheckTarget target : snapshot) {
+        checks.add(breakChecker.breakable(agent, target.cell(), world, target.block()));
+      }
+      return FutureOr.from(combine(checks));
+    };
+  }
+
+  /**
+   * Combines per-block breakability into one verdict: {@code true} if any block may not be broken.
+   */
+  private static CompletableFuture<Boolean> combine(List<CompletableFuture<Boolean>> breakable) {
     if (breakable.size() == 1) {
       return breakable.get(0).thenApply(allowed -> !allowed);
     }
@@ -181,4 +206,7 @@ final class MineMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
               return false;
             });
   }
+
+  /** A block that must be cleared, captured so its breakability check can fire lazily at pop. */
+  private record CheckTarget(Cell cell, MinecraftBlock block) {}
 }

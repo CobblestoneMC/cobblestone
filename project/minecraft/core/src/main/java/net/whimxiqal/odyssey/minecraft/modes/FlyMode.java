@@ -20,13 +20,22 @@ import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 
 /**
- * Free 3D flight (creative / allow-flight). Moves to any of the 26 neighbors where a body fits,
- * with no footing requirement; cost scales with euclidean distance. Included in the mode list only
- * when the agent can fly, so this class need not re-check that.
+ * Free 3D flight (creative / allow-flight, or elytra gliding). Moves to any of the 26 neighbors
+ * where a body fits, with no footing requirement; cost scales with euclidean distance. Included in
+ * the mode list only when the agent can fly, so this class need not re-check that.
+ *
+ * <p>{@code maxHeight} is the vertical clearance a body needs: 2 for a walking-height flyer, 1 for
+ * an elytra glider modelled thin enough to slip through a 1-block hole (an end gateway).
  *
  * @param <A> the agent type
  */
 final class FlyMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> {
+
+  private final int maxHeight;
+
+  FlyMode(int maxHeight) {
+    this.maxHeight = maxHeight;
+  }
 
   @Override
   protected boolean applies(A agent, TraversalState state) {
@@ -49,7 +58,7 @@ final class FlyMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> {
             continue;
           }
           Cell target = from.plus(dx, dy, dz);
-          if (!Geometry.bodyFits(view, target)) {
+          if (!Geometry.bodyFits(view, target, maxHeight)) {
             continue;
           }
           if (dx != 0 && dz != 0 && Geometry.diagonalBlocked(view, from, dx, dy, dz)) {

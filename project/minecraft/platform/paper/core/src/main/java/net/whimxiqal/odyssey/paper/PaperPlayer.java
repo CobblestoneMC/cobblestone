@@ -15,6 +15,7 @@ import net.whimxiqal.odyssey.Position;
 import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.entity.Boat;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -53,6 +54,24 @@ final class PaperPlayer implements OdysseyPlayer {
   @Override
   public boolean canFly() {
     return player().map(Player::getAllowFlight).orElse(false);
+  }
+
+  @Override
+  public boolean canGlide() {
+    final Optional<Player> player = player();
+    if (player.isEmpty()) {
+      return false;
+    }
+    ItemStack chest = player.get().getInventory().getChestplate();
+    if (chest == null || chest.getType() != Material.ELYTRA) {
+      return false;
+    }
+    for (ItemStack item : player.get().getInventory().getContents()) {
+      if (item != null && item.getType() == Material.FIREWORK_ROCKET) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @Override

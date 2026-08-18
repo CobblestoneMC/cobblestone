@@ -58,6 +58,11 @@ public final class TestPlayer implements OdysseyPlayer {
   }
 
   @Override
+  public boolean canGlide() {
+    return false;
+  }
+
+  @Override
   public boolean hasBoatInInventory() {
     return hasBoat;
   }

@@ -39,7 +39,8 @@ public interface OdysseyApi {
    * @param agent the navigating agent
    * @param origin the starting position
    * @param destination the goal
-   * @param modes the transportation modes available to the agent
+   * @param modes provides the transportation modes available to the agent for a leg (given its
+   *     target region, for goal-aware modes)
    * @param transitions the transitions (portals, teleports, mounts, …) available to the agent
    * @param restrictions the passability restrictions barring the agent from certain cells
    * @param settings the search limits and knobs
@@ -54,7 +55,7 @@ public interface OdysseyApi {
       A agent,
       Position<D> origin,
       Destination<DomainRegion<D>> destination,
-      List<? extends Mode<A, T, D>> modes,
+      ModesProvider<A, T, D> modes,
       List<? extends Transition<T, D>> transitions,
       List<? extends Restriction<A, D>> restrictions,
       HeuristicStrategy heuristic,

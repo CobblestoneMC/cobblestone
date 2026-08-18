@@ -83,7 +83,9 @@ class MineModeTest {
         TestModes.from(mode, TestPlayer.walker(), world, new Cell(0, 1, 0)).get(new Cell(1, 1, 0));
     assertNotNull(tunnel, "the move is emitted optimistically");
     assertNotNull(tunnel.restricted(), "and carries a breakability check");
-    assertTrue(tunnel.restricted().join(), "which resolves as restricted (feet block barred)");
+    assertTrue(
+        tunnel.restricted().get().toFuture().join(),
+        "which resolves as restricted (feet block barred)");
   }
 
   @Test

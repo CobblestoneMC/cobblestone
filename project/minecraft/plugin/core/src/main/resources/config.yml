@@ -79,6 +79,14 @@ portals:
   discovery: true
   # The time cost, in seconds, of traversing a discovered portal.
   cost_seconds: 5.0
+  # Snap a nether portal ENTRY to the source block's centre, so which destination portal you reach
+  # depends only on the block you enter (vanilla links by exact sub-block position, which Odyssey
+  # cannot route to precisely). STRONGLY RECOMMENDED for accurate navigation — off by default only
+  # because it can change which portal an established route links to.
+  normalize_entry: false
+  # Snap a nether portal EXIT to the destination portal's centre at ground level. Only affects where
+  # within the (same) destination portal you land, so it is safe to leave on.
+  normalize_exit: true
 
 # Anonymous usage metrics via bStats (https://bstats.org). Aggregate, non-identifying counts only.
 # You can also opt out globally in plugins/bStats/config.yml. (requires restart)

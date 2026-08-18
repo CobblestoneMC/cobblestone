@@ -20,6 +20,7 @@ import net.whimxiqal.odyssey.DomainRegion;
 import net.whimxiqal.odyssey.FutureOr;
 import net.whimxiqal.odyssey.HeuristicStrategy;
 import net.whimxiqal.odyssey.Heuristics;
+import net.whimxiqal.odyssey.ModesProvider;
 import net.whimxiqal.odyssey.OdysseyApi;
 import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.Position;
@@ -29,7 +30,6 @@ import net.whimxiqal.odyssey.api.Destination;
 import net.whimxiqal.odyssey.api.SearchHandle;
 import net.whimxiqal.odyssey.minecraft.ChunkProvider;
 import net.whimxiqal.odyssey.minecraft.ChunkProviderSettings;
-import net.whimxiqal.odyssey.minecraft.MinecraftMode;
 import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftSearchSettings;
@@ -46,11 +46,13 @@ import net.whimxiqal.odyssey.paper.api.SearchModificationService;
 import net.whimxiqal.odyssey.paper.api.Transition;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.joml.Vector3i;
 
@@ -177,8 +179,11 @@ public final class PaperNavigationServiceImpl
         buildBreakChecker(modifiers, player);
     List<Restriction<OdysseyPlayer, MinecraftWorld>> restrictions =
         buildRestrictions(modifiers, player);
-    List<MinecraftMode<OdysseyPlayer>> modes =
-        MinecraftModes.forPlayer(agent, settings.excludedModes(), breakChecker);
+    // Read the pearl count now, on the calling (server) thread; the provider closes over it and is
+    // invoked per leg on worker threads, where it must not touch the Bukkit player.
+    ModesProvider<OdysseyPlayer, MinecraftStepPayload, MinecraftWorld> modes =
+        MinecraftModes.providerFor(
+            agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
         gatherTransitions(
@@ -296,6 +301,17 @@ public final class PaperNavigationServiceImpl
           return FutureOr.from(anyFalse(results));
         };
     return List.of(restriction);
+  }
+
+  /** Counts the ender pearls in the player's inventory (read on the server thread). */
+  private static int countEnderPearls(Player player) {
+    int count = 0;
+    for (ItemStack item : player.getInventory().getContents()) {
+      if (item != null && item.getType() == Material.ENDER_PEARL) {
+        count += item.getAmount();
+      }
+    }
+    return count;
   }
 
   private static World bukkitWorld(String key) {

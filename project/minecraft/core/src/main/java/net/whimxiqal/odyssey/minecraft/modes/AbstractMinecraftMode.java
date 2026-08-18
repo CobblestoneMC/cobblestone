@@ -93,7 +93,7 @@ abstract class AbstractMinecraftMode<A extends MinecraftAgent> implements Minecr
       double cost,
       MinecraftStepType type,
       TraversalState state,
-      java.util.concurrent.CompletableFuture<Boolean> restricted) {
+      java.util.function.Supplier<FutureOr<Boolean>> restricted) {
     return new Movement<>(
         cell,
         cost,

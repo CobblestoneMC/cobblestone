@@ -34,11 +34,32 @@ public interface DataStore {
   WaypointDao waypoints();
 
   /**
-   * Returns the portal-transition DAO.
+   * Returns the portal-transition DAO (end portals: region → point).
    *
    * @return the portal-transition DAO
    */
   PortalTransitionDao portalTransitions();
+
+  /**
+   * Returns the nether-portal cache DAO.
+   *
+   * @return the nether-portal cache DAO
+   */
+  PortalCacheDao netherPortals();
+
+  /**
+   * Returns the nether-portal link (destination partition) DAO.
+   *
+   * @return the nether-portal link DAO
+   */
+  PortalLinkDao netherPortalLinks();
+
+  /**
+   * Returns the end-gateway DAO.
+   *
+   * @return the end-gateway DAO
+   */
+  GatewayDao gateways();
 
   /**
    * Closes the store and releases its resources. Idempotent; safe to call even if {@link #init()}

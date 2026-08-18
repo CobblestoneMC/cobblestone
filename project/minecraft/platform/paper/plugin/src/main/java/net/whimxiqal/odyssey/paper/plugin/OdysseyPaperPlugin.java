@@ -107,16 +107,30 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
 
     // Discovered vanilla portals are surfaced to searches as an internal transition provider, and
     // learned from player teleports by the portal listener.
-    platformApi.register(this, new PortalSearchModificationService(dataStore.portalTransitions()));
+    platformApi.register(
+        this,
+        new PortalSearchModificationService(
+            dataStore.portalTransitions(), dataStore.netherPortalLinks(), dataStore.gateways()));
     getServer()
         .getPluginManager()
         .registerEvents(
             new PortalListener(
                 dataStore.portalTransitions(),
+                dataStore.netherPortals(),
+                dataStore.netherPortalLinks(),
+                dataStore.gateways(),
                 platformApi.scheduler(),
                 logger,
                 () -> config.get(keys.portalsCostSeconds),
                 () -> config.get(keys.portalsDiscovery)),
+            this);
+    // Optional determinism so block-granular routing is exact (entry off, exit on by default).
+    getServer()
+        .getPluginManager()
+        .registerEvents(
+            new PortalNormalizationListener(
+                () -> config.get(keys.portalsNormalizeEntry),
+                () -> config.get(keys.portalsNormalizeExit)),
             this);
 
     getServer()

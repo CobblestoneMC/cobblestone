@@ -41,6 +41,15 @@ public interface OdysseyPlayer extends MinecraftAgent {
   boolean canFly();
 
   /**
+   * Returns whether the player can glide with an elytra right now — an elytra equipped and at least
+   * one firework rocket to sustain it. Used to model thin (1-block-tall) flight for reaching an end
+   * gateway.
+   *
+   * @return {@code true} if the player can elytra-glide
+   */
+  boolean canGlide();
+
+  /**
    * Returns whether the player has a boat available to place.
    *
    * @return {@code true} if a boat is in the inventory

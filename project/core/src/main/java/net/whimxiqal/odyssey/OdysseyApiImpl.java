@@ -30,7 +30,7 @@ public final class OdysseyApiImpl implements OdysseyApi {
       A agent,
       Position<D> origin,
       Destination<DomainRegion<D>> destination,
-      List<? extends Mode<A, T, D>> modes,
+      ModesProvider<A, T, D> modes,
       List<? extends Transition<T, D>> transitions,
       List<? extends Restriction<A, D>> restrictions,
       HeuristicStrategy heuristic,

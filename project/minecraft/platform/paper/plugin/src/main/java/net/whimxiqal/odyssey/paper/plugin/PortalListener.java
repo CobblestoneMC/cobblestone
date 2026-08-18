@@ -7,57 +7,69 @@
 
 package net.whimxiqal.odyssey.paper.plugin;
 
-import java.util.EnumSet;
-import java.util.Set;
+import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.DoubleSupplier;
 import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.minecraft.MinecraftScheduler;
+import net.whimxiqal.odyssey.plugin.data.GatewayDao;
+import net.whimxiqal.odyssey.plugin.data.GatewayTransition;
+import net.whimxiqal.odyssey.plugin.data.NetherPortalPartitioner;
+import net.whimxiqal.odyssey.plugin.data.PortalCacheDao;
+import net.whimxiqal.odyssey.plugin.data.PortalLink;
+import net.whimxiqal.odyssey.plugin.data.PortalLinkDao;
+import net.whimxiqal.odyssey.plugin.data.PortalRegion;
 import net.whimxiqal.odyssey.plugin.data.PortalTransition;
 import net.whimxiqal.odyssey.plugin.data.PortalTransitionDao;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.World;
-import org.bukkit.block.Block;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
-import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
 
 /**
- * Discovers vanilla portal links empirically: no API reveals where a portal leads, so when a player
- * teleports through one this captures the entry portal (as a bounding box) and the arrival point,
- * and persists a one-way {@link PortalTransition}. The reverse direction is only learned when a
- * player travels back. Persisting is idempotent, so re-walking a known portal is a no-op.
+ * Discovers vanilla portal links empirically (no API reveals where a portal leads), reading the
+ * <i>resolved</i> {@link PlayerTeleportEvent} at MONITOR (so any normalization has already run).
  *
- * <p>Both {@link PlayerPortalEvent} and {@link PlayerTeleportEvent} are handled for coverage: the
- * former can arrive with an unresolved {@code getTo()} (skipped), the latter carries the real
- * arrival. (Some server forks currently fail to fire either for portals — an upstream issue.)
+ * <ul>
+ *   <li><b>Nether</b> portals link ambiguously — which destination portal you reach depends on
+ *       which block you enter. So a nether teleport upserts both portals into the cache and
+ *       recomputes the source portal's destination <b>partition</b> ({@link PortalLink}s), which
+ *       <i>updates</i> rather than appending duplicate rows.
+ *   <li><b>End</b> portals are unambiguous (one frame → the fixed End platform), so they stay a
+ *       simple region → point {@link PortalTransition}.
+ *   <li><b>End gateways</b> link one block → one exit point, so a teleport caches the resolved exit
+ *       keyed by the gateway block, updating it if the destination has since drifted.
+ * </ul>
+ *
+ * <p>Block reads happen on the server thread (in the event); persistence and the partition math run
+ * off-thread.
  */
 final class PortalListener implements Listener {
 
-  private static final Set<Material> PORTAL_BLOCKS =
-      EnumSet.of(Material.NETHER_PORTAL, Material.END_PORTAL, Material.END_GATEWAY);
-  private static final Set<TeleportCause> PORTAL_CAUSES =
-      EnumSet.of(TeleportCause.NETHER_PORTAL, TeleportCause.END_PORTAL, TeleportCause.END_GATEWAY);
-  private static final int SEED_RADIUS = 2; // where to look for the entry portal block near `from`
-  private static final int MAX_EXPAND = 64; // cap the outward scan (nether portals top out at ~23)
-
-  private final PortalTransitionDao portals;
+  private final PortalTransitionDao endPortals;
+  private final PortalCacheDao netherCache;
+  private final PortalLinkDao netherLinks;
+  private final GatewayDao gateways;
   private final MinecraftScheduler<?> scheduler;
   private final OdysseyLogger logger;
   private final DoubleSupplier cost;
   private final BooleanSupplier enabled;
 
   PortalListener(
-      PortalTransitionDao portals,
+      PortalTransitionDao endPortals,
+      PortalCacheDao netherCache,
+      PortalLinkDao netherLinks,
+      GatewayDao gateways,
       MinecraftScheduler<?> scheduler,
       OdysseyLogger logger,
       DoubleSupplier cost,
       BooleanSupplier enabled) {
-    this.portals = portals;
+    this.endPortals = endPortals;
+    this.netherCache = netherCache;
+    this.netherLinks = netherLinks;
+    this.gateways = gateways;
     this.scheduler = scheduler;
     this.logger = logger;
     this.cost = cost;
@@ -66,102 +78,82 @@ final class PortalListener implements Listener {
 
   @EventHandler(priority = EventPriority.MONITOR)
   public void onTeleport(PlayerTeleportEvent event) {
-    record(event.getCause(), event.getFrom(), event.getTo());
-  }
-
-  private void record(TeleportCause cause, Location from, Location to) {
-    if (!enabled.getAsBoolean() || !PORTAL_CAUSES.contains(cause)) {
+    if (!enabled.getAsBoolean()) {
       return;
     }
+    Location from = event.getFrom();
+    Location to = event.getTo();
     if (from.getWorld() == null || to == null || to.getWorld() == null) {
-      return; // arrival not resolved on this event; another handler / direction will catch it
+      return; // arrival not resolved on this event
     }
-    int[] box = scanPortalBox(from);
+    switch (event.getCause()) {
+      case NETHER_PORTAL -> recordNether(from, to);
+      case END_PORTAL -> recordEnd(from, to);
+      case END_GATEWAY -> recordGateway(from, to);
+      default -> {
+        // not a learned portal teleport
+      }
+    }
+  }
+
+  /** Upserts both portals into the cache and replaces the source portal's destination partition. */
+  private void recordNether(Location from, Location to) {
+    PortalRegion source = PaperPortals.scanPortal(from, Material.NETHER_PORTAL);
+    PortalRegion dest = PaperPortals.scanPortal(to, Material.NETHER_PORTAL);
+    double factor = from.getWorld().getCoordinateScale() / to.getWorld().getCoordinateScale();
+    double linkCost = cost.getAsDouble();
+    logger.debug(
+        "Discovered nether portal link {} -> {}", from.getWorld().getKey(), to.getWorld().getKey());
+    scheduler.runAsync(
+        () -> {
+          netherCache.upsert(source);
+          netherCache.upsert(dest);
+          List<PortalRegion> candidates = netherCache.inWorld(dest.world());
+          List<PortalLink> links =
+              NetherPortalPartitioner.partition(source, candidates, factor, linkCost);
+          netherLinks.replaceForSource(source, links);
+        });
+  }
+
+  /** Records an unambiguous end-portal link as a region → point transition (idempotent). */
+  private void recordEnd(Location from, Location to) {
+    PortalRegion box = PaperPortals.scanPortal(from, Material.END_PORTAL);
     PortalTransition transition =
         new PortalTransition(
-            from.getWorld().getKey().asString(),
-            box[0],
-            box[1],
-            box[2],
-            box[3],
-            box[4],
-            box[5],
+            box.world(),
+            box.minX(),
+            box.minY(),
+            box.minZ(),
+            box.maxX(),
+            box.maxY(),
+            box.maxZ(),
             to.getWorld().getKey().asString(),
             to.getBlockX(),
             to.getBlockY(),
             to.getBlockZ(),
             cost.getAsDouble());
-    logger.debug(
-        "Discovered portal {} -> {}:{},{},{}",
-        from.getWorld().getKey(),
-        to.getWorld().getKey(),
-        to.getBlockX(),
-        to.getBlockY(),
-        to.getBlockZ());
-    // Persist off the server thread; the block reads above already happened on it.
-    scheduler.runAsync(() -> portals.add(transition));
+    scheduler.runAsync(() -> endPortals.add(transition));
   }
 
   /**
-   * Returns {@code {minX, minY, minZ, maxX, maxY, maxZ}} of the entry portal: it seeds on the
-   * portal block the player was in and expands outward in every axis while that <i>same</i>
-   * material continues, so a large nether portal is captured in full. Falls back to a single cell
-   * at {@code from} if no portal block is found nearby.
+   * Caches an end-gateway's exit, keyed by the gateway block. A gateway's exit <i>is</i> readable
+   * from its block entity, but caching what a teleport actually resolved to avoids scanning every
+   * gateway block at search time; a later teleport through the same block updates the exit if it
+   * has since changed.
    */
-  private static int[] scanPortalBox(Location from) {
-    World world = from.getWorld();
-    Block seed = findPortalBlock(world, from.getBlockX(), from.getBlockY(), from.getBlockZ());
-    if (seed == null) {
-      int x = from.getBlockX();
-      int y = from.getBlockY();
-      int z = from.getBlockZ();
-      return new int[] {x, y, z, x, y, z};
-    }
-    Material material = seed.getType();
-    int sx = seed.getX();
-    int sy = seed.getY();
-    int sz = seed.getZ();
-    return new int[] {
-      expand(world, material, sx, sy, sz, -1, 0, 0),
-      expand(world, material, sx, sy, sz, 0, -1, 0),
-      expand(world, material, sx, sy, sz, 0, 0, -1),
-      expand(world, material, sx, sy, sz, 1, 0, 0),
-      expand(world, material, sx, sy, sz, 0, 1, 0),
-      expand(world, material, sx, sy, sz, 0, 0, 1)
-    };
-  }
-
-  /** The nearest portal block within {@link #SEED_RADIUS} of the given block, or {@code null}. */
-  private static Block findPortalBlock(World world, int x, int y, int z) {
-    for (int dy = -SEED_RADIUS; dy <= SEED_RADIUS; dy++) {
-      for (int dx = -SEED_RADIUS; dx <= SEED_RADIUS; dx++) {
-        for (int dz = -SEED_RADIUS; dz <= SEED_RADIUS; dz++) {
-          Block block = world.getBlockAt(x + dx, y + dy, z + dz);
-          if (PORTAL_BLOCKS.contains(block.getType())) {
-            return block;
-          }
-        }
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Walks from the seed along one direction while the material continues; returns the moving coord.
-   */
-  private static int expand(
-      World world, Material material, int sx, int sy, int sz, int dx, int dy, int dz) {
-    int cx = sx;
-    int cy = sy;
-    int cz = sz;
-    for (int steps = 0; steps < MAX_EXPAND; steps++) {
-      if (world.getBlockAt(cx + dx, cy + dy, cz + dz).getType() != material) {
-        break;
-      }
-      cx += dx;
-      cy += dy;
-      cz += dz;
-    }
-    return dx != 0 ? cx : dy != 0 ? cy : cz;
+  private void recordGateway(Location from, Location to) {
+    PortalRegion box = PaperPortals.scanPortal(from, Material.END_GATEWAY);
+    GatewayTransition gateway =
+        new GatewayTransition(
+            box.world(),
+            box.minX(),
+            box.minY(),
+            box.minZ(),
+            to.getWorld().getKey().asString(),
+            to.getBlockX(),
+            to.getBlockY(),
+            to.getBlockZ(),
+            cost.getAsDouble());
+    scheduler.runAsync(() -> gateways.upsert(gateway));
   }
 }

@@ -10,9 +10,12 @@ package net.whimxiqal.odyssey.minecraft.modes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import net.whimxiqal.odyssey.ModesProvider;
 import net.whimxiqal.odyssey.minecraft.BreakChecker;
 import net.whimxiqal.odyssey.minecraft.MinecraftMode;
+import net.whimxiqal.odyssey.minecraft.MinecraftWorld;
 import net.whimxiqal.odyssey.minecraft.OdysseyPlayer;
+import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepType;
 
 /**
@@ -70,13 +73,47 @@ public final class MinecraftModes {
     if (!excluded.contains(MinecraftStepType.HORSE)) {
       modes.add(new HorseMode<>());
     }
-    if (!excluded.contains(MinecraftStepType.FLY) && player.canFly()) {
-      modes.add(new FlyMode<>());
+    if (!excluded.contains(MinecraftStepType.FLY)) {
+      // Full flight fits a normal 2-tall body; an elytra glider is modelled 1 tall so it can slip
+      // through a 1-block hole (an end gateway).
+      if (player.canFly()) {
+        modes.add(new FlyMode<>(2));
+      } else if (player.canGlide()) {
+        modes.add(new FlyMode<>(1));
+      }
     }
     if (!excluded.contains(MinecraftStepType.BOAT) && player.hasBoatInInventory()
         || player.isInBoat()) {
       modes.add(new BoatMode<>());
     }
     return modes;
+  }
+
+  /**
+   * Builds a {@link ModesProvider} for a search: the player's usual modes plus — when the player
+   * carries ender pearls — a goal-aware {@link EnderPearlMode} injected with each leg's target, so
+   * a floating target (an end gateway) can be reached by throwing a pearl.
+   *
+   * @param player the player being navigated
+   * @param excluded step types to leave out
+   * @param breakChecker the mining breakability constraint, or {@code null}
+   * @param enderPearls how many ender pearls the player holds (read on the server thread
+   *     beforehand)
+   * @return the modes provider
+   */
+  public static ModesProvider<OdysseyPlayer, MinecraftStepPayload, MinecraftWorld> providerFor(
+      OdysseyPlayer player,
+      Set<MinecraftStepType> excluded,
+      BreakChecker<OdysseyPlayer> breakChecker,
+      int enderPearls) {
+    List<MinecraftMode<OdysseyPlayer>> base = forPlayer(player, excluded, breakChecker);
+    if (enderPearls <= 0) {
+      return ModesProvider.of(base);
+    }
+    return target -> {
+      List<MinecraftMode<OdysseyPlayer>> withPearl = new ArrayList<>(base);
+      withPearl.add(new EnderPearlMode<>(target, enderPearls));
+      return withPearl;
+    };
   }
 }
