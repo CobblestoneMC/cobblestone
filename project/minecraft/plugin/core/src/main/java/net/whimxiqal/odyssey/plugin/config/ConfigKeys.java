@@ -91,15 +91,16 @@ public final class ConfigKeys {
   public final ConfigKey<Double> portalsCostSeconds;
 
   /**
-   * Whether to snap a nether portal ENTRY to the source block's centre, so which destination portal
-   * you reach is deterministic per block (it otherwise depends on your exact sub-block position).
-   * Changes which portal you link to, so it is off by default; strongly recommended for accurate
-   * navigation. Mutable.
+   * Whether to snap a nether portal ENTRY to the source portal's center, so one source portal
+   * always reaches the same destination portal (vanilla otherwise picks the destination from your
+   * exact entry sub-block, which Odyssey cannot route to precisely). On by default: Odyssey's
+   * single source&nbsp;&rarr;&nbsp;destination link relies on it, and for the usual
+   * one-portal-per-side setup it lands where vanilla would anyway. Mutable.
    */
   public final ConfigKey<Boolean> portalsNormalizeEntry;
 
   /**
-   * Whether to snap a nether portal EXIT to the destination portal's centre at ground level. Only
+   * Whether to snap a nether portal EXIT to the destination portal's center at ground level. Only
    * changes where within the (same) destination portal you land, so it is on by default. Mutable.
    */
   public final ConfigKey<Boolean> portalsNormalizeExit;
@@ -158,7 +159,7 @@ public final class ConfigKeys {
     this.portalsDiscovery = manager.register("portals.discovery", true, Codec.ofBoolean(), true);
     this.portalsCostSeconds = manager.register("portals.cost_seconds", 5.0, Codec.ofDouble(), true);
     this.portalsNormalizeEntry =
-        manager.register("portals.normalize_entry", false, Codec.ofBoolean(), true);
+        manager.register("portals.normalize_entry", true, Codec.ofBoolean(), true);
     this.portalsNormalizeExit =
         manager.register("portals.normalize_exit", true, Codec.ofBoolean(), true);
     this.metricsEnabled = manager.register("metrics.enabled", true, Codec.ofBoolean(), false);

@@ -98,9 +98,8 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
   }
 
   @Override
-  protected void spawnTrailParticle(
-      double x, double y, double z, double vx, double vy, double vz) {
-  spawnParticle(particles, x, y, z, vx, vy, vz);
+  protected void spawnTrailParticle(double x, double y, double z, double vx, double vy, double vz) {
+    spawnParticle(particles, x, y, z, vx, vy, vz);
   }
 
   @Override
@@ -108,7 +107,8 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
     spawnParticle(highlightParticles, x, y, z, 0, 0, 0);
   }
 
-  private void spawnParticle(List<Particle> particles, double x, double y, double z, double vx, double vy, double vz) {
+  private void spawnParticle(
+      List<Particle> particles, double x, double y, double z, double vx, double vy, double vz) {
     if (particles.isEmpty()) {
       return;
     }

@@ -79,12 +79,13 @@ portals:
   discovery: true
   # The time cost, in seconds, of traversing a discovered portal.
   cost_seconds: 5.0
-  # Snap a nether portal ENTRY to the source block's centre, so which destination portal you reach
-  # depends only on the block you enter (vanilla links by exact sub-block position, which Odyssey
-  # cannot route to precisely). STRONGLY RECOMMENDED for accurate navigation — off by default only
-  # because it can change which portal an established route links to.
-  normalize_entry: false
-  # Snap a nether portal EXIT to the destination portal's centre at ground level. Only affects where
+  # Snap a nether portal ENTRY to the source portal's center, so one source portal always reaches the
+  # same destination portal no matter which block you step through (vanilla picks the destination
+  # from your exact sub-block position, which Odyssey cannot route to precisely). On by default:
+  # Odyssey's single source -> destination link relies on it, and for the usual one-portal-per-side
+  # setup it lands where vanilla would anyway.
+  normalize_entry: true
+  # Snap a nether portal EXIT to the destination portal's center at ground level. Only affects where
   # within the (same) destination portal you land, so it is safe to leave on.
   normalize_exit: true
 
@@ -105,10 +106,12 @@ navigators:
     particles:
       - "SCRAPE"
       - "WAX_OFF"
+    highlight_particles:
+      - "END_ROD"
     # Dust colors as hex RRGGBB; one is picked at random for each DUST particle (no blending).
     colors:
-#      - "55FFFF"
-#      - "BF00FF"
+#     - "55FFFF"
+#     - "BF00FF"
     # Average particles per cell each tick, scattered with a Gaussian falloff for column width. May
     # be fractional: 0.7 means each block has a 70% chance of one particle per tick — a way to thin
     # the trail without lowering the tick rate.

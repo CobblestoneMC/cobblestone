@@ -7,22 +7,20 @@
 
 package net.whimxiqal.odyssey.paper.plugin;
 
-import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.DoubleSupplier;
 import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.minecraft.MinecraftScheduler;
+import net.whimxiqal.odyssey.plugin.data.EndReturnPortal;
+import net.whimxiqal.odyssey.plugin.data.EndReturnPortalDao;
 import net.whimxiqal.odyssey.plugin.data.GatewayDao;
 import net.whimxiqal.odyssey.plugin.data.GatewayTransition;
-import net.whimxiqal.odyssey.plugin.data.NetherPortalPartitioner;
-import net.whimxiqal.odyssey.plugin.data.PortalCacheDao;
-import net.whimxiqal.odyssey.plugin.data.PortalLink;
-import net.whimxiqal.odyssey.plugin.data.PortalLinkDao;
 import net.whimxiqal.odyssey.plugin.data.PortalRegion;
 import net.whimxiqal.odyssey.plugin.data.PortalTransition;
 import net.whimxiqal.odyssey.plugin.data.PortalTransitionDao;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -33,24 +31,24 @@ import org.bukkit.event.player.PlayerTeleportEvent;
  * <i>resolved</i> {@link PlayerTeleportEvent} at MONITOR (so any normalization has already run).
  *
  * <ul>
- *   <li><b>Nether</b> portals link ambiguously — which destination portal you reach depends on
- *       which block you enter. So a nether teleport upserts both portals into the cache and
- *       recomputes the source portal's destination <b>partition</b> ({@link PortalLink}s), which
- *       <i>updates</i> rather than appending duplicate rows.
- *   <li><b>End</b> portals are unambiguous (one frame → the fixed End platform), so they stay a
- *       simple region → point {@link PortalTransition}.
- *   <li><b>End gateways</b> link one block → one exit point, so a teleport caches the resolved exit
- *       keyed by the gateway block, updating it if the destination has since drifted.
+ *   <li><b>Nether</b> and the <b>overworld&nbsp;&rarr;&nbsp;End</b> portal are region&nbsp;&rarr;
+ *       point links, upserted by their source portal so re-walking a re-linked portal updates the
+ *       arrival rather than adding a duplicate. Nether determinism (one source portal always
+ *       reaches one destination) is provided by entry normalization; see {@link
+ *       PortalNormalizationListener}.
+ *   <li><b>End&nbsp;&rarr;&nbsp;overworld</b> (the End exit portal) teleports each player to their
+ *       own respawn point, so only the portal region is cached; the destination is resolved
+ *       per-player at search time.
+ *   <li><b>End gateways</b> cache the resolved exit keyed by the gateway block, updating it if the
+ *       destination has since drifted.
  * </ul>
  *
- * <p>Block reads happen on the server thread (in the event); persistence and the partition math run
- * off-thread.
+ * <p>Block reads happen on the server thread (in the event); persistence runs off-thread.
  */
 final class PortalListener implements Listener {
 
-  private final PortalTransitionDao endPortals;
-  private final PortalCacheDao netherCache;
-  private final PortalLinkDao netherLinks;
+  private final PortalTransitionDao portals;
+  private final EndReturnPortalDao endReturns;
   private final GatewayDao gateways;
   private final MinecraftScheduler<?> scheduler;
   private final OdysseyLogger logger;
@@ -58,17 +56,15 @@ final class PortalListener implements Listener {
   private final BooleanSupplier enabled;
 
   PortalListener(
-      PortalTransitionDao endPortals,
-      PortalCacheDao netherCache,
-      PortalLinkDao netherLinks,
+      PortalTransitionDao portals,
+      EndReturnPortalDao endReturns,
       GatewayDao gateways,
       MinecraftScheduler<?> scheduler,
       OdysseyLogger logger,
       DoubleSupplier cost,
       BooleanSupplier enabled) {
-    this.endPortals = endPortals;
-    this.netherCache = netherCache;
-    this.netherLinks = netherLinks;
+    this.portals = portals;
+    this.endReturns = endReturns;
     this.gateways = gateways;
     this.scheduler = scheduler;
     this.logger = logger;
@@ -96,50 +92,41 @@ final class PortalListener implements Listener {
     }
   }
 
-  /** Upserts both portals into the cache and replaces the source portal's destination partition. */
+  /** Upserts a source portal &rarr; destination-portal-center link, keyed by the source portal. */
   private void recordNether(Location from, Location to) {
     PortalRegion source = PaperPortals.scanPortal(from, Material.NETHER_PORTAL);
     PortalRegion dest = PaperPortals.scanPortal(to, Material.NETHER_PORTAL);
-    double factor = from.getWorld().getCoordinateScale() / to.getWorld().getCoordinateScale();
-    double linkCost = cost.getAsDouble();
     logger.debug(
         "Discovered nether portal link {} -> {}", from.getWorld().getKey(), to.getWorld().getKey());
-    scheduler.runAsync(
-        () -> {
-          netherCache.upsert(source);
-          netherCache.upsert(dest);
-          List<PortalRegion> candidates = netherCache.inWorld(dest.world());
-          List<PortalLink> links =
-              NetherPortalPartitioner.partition(source, candidates, factor, linkCost);
-          netherLinks.replaceForSource(source, links);
-        });
-  }
-
-  /** Records an unambiguous end-portal link as a region → point transition (idempotent). */
-  private void recordEnd(Location from, Location to) {
-    PortalRegion box = PaperPortals.scanPortal(from, Material.END_PORTAL);
-    PortalTransition transition =
-        new PortalTransition(
-            box.world(),
-            box.minX(),
-            box.minY(),
-            box.minZ(),
-            box.maxX(),
-            box.maxY(),
-            box.maxZ(),
-            to.getWorld().getKey().asString(),
-            to.getBlockX(),
-            to.getBlockY(),
-            to.getBlockZ(),
-            cost.getAsDouble());
-    scheduler.runAsync(() -> endPortals.add(transition));
+    PortalTransition transition = transitionTo(source, dest.world(), centerPoint(dest));
+    scheduler.runAsync(() -> portals.upsert(transition));
   }
 
   /**
-   * Caches an end-gateway's exit, keyed by the gateway block. A gateway's exit <i>is</i> readable
-   * from its block entity, but caching what a teleport actually resolved to avoids scanning every
-   * gateway block at search time; a later teleport through the same block updates the exit if it
-   * has since changed.
+   * Records an End portal. The overworld&nbsp;&rarr;&nbsp;End direction is an unambiguous region
+   * &rarr; point link; the End&nbsp;&rarr;&nbsp;overworld direction (per-player respawn) caches
+   * only the portal region.
+   */
+  private void recordEnd(Location from, Location to) {
+    if (from.getWorld().getEnvironment() == World.Environment.THE_END) {
+      PortalRegion region = PaperPortals.scanPortal(from, Material.END_PORTAL);
+      EndReturnPortal portal = new EndReturnPortal(region, cost.getAsDouble());
+      scheduler.runAsync(() -> endReturns.upsert(portal));
+      return;
+    }
+    PortalRegion source = PaperPortals.scanPortal(from, Material.END_PORTAL);
+    PortalTransition transition =
+        transitionTo(
+            source,
+            to.getWorld().getKey().asString(),
+            new int[] {to.getBlockX(), to.getBlockY(), to.getBlockZ()});
+    scheduler.runAsync(() -> portals.upsert(transition));
+  }
+
+  /**
+   * Caches an end-gateway's exit, keyed by the gateway block. Caching what a teleport actually
+   * resolved to avoids scanning every gateway block at search time; a later teleport through the
+   * same block updates the exit if it has since changed.
    */
   private void recordGateway(Location from, Location to) {
     PortalRegion box = PaperPortals.scanPortal(from, Material.END_GATEWAY);
@@ -155,5 +142,29 @@ final class PortalListener implements Listener {
             to.getBlockZ(),
             cost.getAsDouble());
     scheduler.runAsync(() -> gateways.upsert(gateway));
+  }
+
+  /** Builds a region &rarr; point transition from a source region to an arrival block. */
+  private PortalTransition transitionTo(PortalRegion source, String toWorld, int[] to) {
+    return new PortalTransition(
+        source.world(),
+        source.minX(),
+        source.minY(),
+        source.minZ(),
+        source.maxX(),
+        source.maxY(),
+        source.maxZ(),
+        toWorld,
+        to[0],
+        to[1],
+        to[2],
+        cost.getAsDouble());
+  }
+
+  /** The destination portal's horizontal center at ground level, as a block coordinate. */
+  private static int[] centerPoint(PortalRegion portal) {
+    return new int[] {
+      (int) Math.floor(portal.centerX()), portal.groundY(), (int) Math.floor(portal.centerZ())
+    };
   }
 }

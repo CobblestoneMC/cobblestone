@@ -103,7 +103,7 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   /** The key of the player's current world, or {@code null} if unresolved. */
   protected abstract String playerWorldKey();
 
-  /** The block-centred render point (raised toward body height) for a step location. */
+  /** The block-centerd render point (raised toward body height) for a step location. */
   protected abstract Vec3 renderPoint(L location);
 
   /** The key of a step location's world, or {@code null} if unresolved. */
@@ -352,7 +352,6 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
       renderBlock(
           i == 0 ? origin : points.get(i - 1),
           points.get(i),
-          velocity(points, i),
           playerVec,
           payload,
           highlight,
@@ -363,7 +362,6 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   private void renderBlock(
       Vec3 from,
       Vec3 to,
-      Vec3 velocity,
       Vec3 playerVec,
       MinecraftStepPayload payload,
       boolean highlight,
@@ -371,7 +369,7 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     if (playerVec.minus(to).lengthSquared() < NEAR_BUFFER_SQUARED) {
       return; // keep the player's immediate view clear
     }
-    scatter(from, to, velocity, random);
+    scatter(from, to, random);
     if (highlight) {
       highlight(to, random);
     }
@@ -437,7 +435,6 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
       renderBlock(
           i == 0 ? playerVec : guidePoints.get(i - 1),
           guidePoints.get(i),
-          velocity(guidePoints, i),
           playerVec,
           payload,
           false,
@@ -445,20 +442,11 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     }
   }
 
-  private Vec3 velocity(List<Vec3> points, int index) {
-    if (index == points.size() - 1) {
-      return Vec3.ZERO;
-    } else {
-      var direction = points.get(index + 1).minus(points.get(index)).unit();
-      return direction.times(PARTICLE_FLOW_SPEED);
-    }
-  }
-
   /**
    * Spawns ~{@code density} Gaussian-scattered particles around a center. A fractional density is
    * probabilistic (0.7 → 70%).
    */
-  private void scatter(Vec3 from, Vec3 to, Vec3 velocity, ThreadLocalRandom random) {
+  private void scatter(Vec3 from, Vec3 to, ThreadLocalRandom random) {
     var diff = to.minus(from);
     var length = diff.length();
     double floatCount = density * length;
@@ -467,6 +455,7 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
       count++;
     }
     var center = from.plus(diff.times(random.nextDouble()));
+    var velocity = diff.times(1/length).times(PARTICLE_FLOW_SPEED);
     for (int p = 0; p < count; p++) {
       spawnTrailParticle(
           center.x() + random.nextGaussian() * SPREAD_HORIZONTAL,

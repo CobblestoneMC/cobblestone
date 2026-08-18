@@ -10,6 +10,9 @@ junit = "5.12.1"
 adventure = "4.17.0"
 # Paper server API (compileOnly; provided by the server). Also bundles Adventure at runtime.
 paper = "26.1.2.build.+"
+# SpongeAPI (compileOnly; provided by the server). Floor API 12 — one jar serves API 12–17. Also
+# bundles Adventure and Configurate at runtime.
+sponge = "12.0.0"
 # YAML parser for the platform-neutral ConfigManager. Resolved at runtime by the paper-plugin loader
 # (Paper's MavenLibraryResolver), so it stays compileOnly at compile time.
 snakeyaml = "2.3"
@@ -30,6 +33,7 @@ junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 adventure-api = { module = "net.kyori:adventure-api", version.ref = "adventure" }
 paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
+spongeapi = { module = "org.spongepowered:spongeapi", version.ref = "sponge" }
 snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite" }
 h2 = { module = "com.h2database:h2", version.ref = "h2" }

@@ -66,7 +66,7 @@ final class QuestTargets {
         || !(task.getConfigValue("z") instanceof Number z)) {
       return null;
     }
-    // Aim at the block's centre so the trip ends on the target cell, not its corner.
+    // Aim at the block's center so the trip ends on the target cell, not its corner.
     return new Location(world, x.doubleValue() + 0.5, y.doubleValue(), z.doubleValue() + 0.5);
   }
 }

@@ -21,9 +21,8 @@ import java.util.List;
 import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.plugin.data.DataStore;
 import net.whimxiqal.odyssey.plugin.data.DataStoreException;
+import net.whimxiqal.odyssey.plugin.data.EndReturnPortalDao;
 import net.whimxiqal.odyssey.plugin.data.GatewayDao;
-import net.whimxiqal.odyssey.plugin.data.PortalCacheDao;
-import net.whimxiqal.odyssey.plugin.data.PortalLinkDao;
 import net.whimxiqal.odyssey.plugin.data.PortalTransitionDao;
 import net.whimxiqal.odyssey.plugin.data.WaypointDao;
 
@@ -48,8 +47,7 @@ public abstract class AbstractJdbcDataStore implements DataStore {
   private Connection connection;
   private WaypointDao waypointDao;
   private PortalTransitionDao portalTransitionDao;
-  private PortalCacheDao portalCacheDao;
-  private PortalLinkDao portalLinkDao;
+  private EndReturnPortalDao endReturnPortalDao;
   private GatewayDao gatewayDao;
 
   /**
@@ -97,10 +95,19 @@ public abstract class AbstractJdbcDataStore implements DataStore {
     return migrations;
   }
 
-  /** Splits a migration file into its individual (non-empty) statements. */
+  /**
+   * Splits a migration file into its individual (non-empty) statements. {@code --} line comments
+   * are stripped first so a semicolon inside a comment cannot be mistaken for a statement
+   * separator.
+   */
   private static List<String> parseStatements(String sql) {
+    StringBuilder withoutComments = new StringBuilder();
+    for (String line : sql.split("\n", -1)) {
+      int comment = line.indexOf("--");
+      withoutComments.append(comment >= 0 ? line.substring(0, comment) : line).append('\n');
+    }
     List<String> statements = new ArrayList<>();
-    for (String part : sql.split(";")) {
+    for (String part : withoutComments.toString().split(";")) {
       String trimmed = part.strip();
       if (!trimmed.isEmpty()) {
         statements.add(trimmed);
@@ -117,8 +124,7 @@ public abstract class AbstractJdbcDataStore implements DataStore {
       migrate();
       this.waypointDao = new JdbcWaypointDao(this);
       this.portalTransitionDao = new JdbcPortalTransitionDao(this);
-      this.portalCacheDao = new JdbcPortalCacheDao(this);
-      this.portalLinkDao = new JdbcPortalLinkDao(this);
+      this.endReturnPortalDao = new JdbcEndReturnPortalDao(this);
       this.gatewayDao = new JdbcGatewayDao(this);
     } catch (ClassNotFoundException | SQLException e) {
       throw new DataStoreException("failed to open data store (" + url + ")", e);
@@ -142,19 +148,11 @@ public abstract class AbstractJdbcDataStore implements DataStore {
   }
 
   @Override
-  public PortalCacheDao netherPortals() {
-    if (portalCacheDao == null) {
+  public EndReturnPortalDao endReturnPortals() {
+    if (endReturnPortalDao == null) {
       throw new IllegalStateException("DataStore.init() has not been called");
     }
-    return portalCacheDao;
-  }
-
-  @Override
-  public PortalLinkDao netherPortalLinks() {
-    if (portalLinkDao == null) {
-      throw new IllegalStateException("DataStore.init() has not been called");
-    }
-    return portalLinkDao;
+    return endReturnPortalDao;
   }
 
   @Override

@@ -5,23 +5,23 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package net.whimxiqal.odyssey.paper.api;
+package net.whimxiqal.odyssey.sponge12.api;
 
 import java.util.Objects;
 import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
-import org.bukkit.Location;
-import org.bukkit.World;
-import org.joml.Vector3i;
+import org.spongepowered.api.world.server.ServerLocation;
+import org.spongepowered.api.world.server.ServerWorld;
+import org.spongepowered.math.vector.Vector3i;
 
 /**
  * An axis-aligned box of block cells in one world, inclusive of both corners — the region type most
  * transitions use for their origin (a portal frame, a warp pad, a trigger volume). Holds a live
- * {@link World} reference; build it fresh from current worlds rather than caching it across
+ * {@link ServerWorld} reference; build it fresh from current worlds rather than caching it across
  * reloads.
  */
-public final class BoxWorldRegion implements WorldRegion<World, Vector3i> {
+public final class BoxWorldRegion implements WorldRegion<ServerWorld, Vector3i> {
 
-  private final World world;
+  private final ServerWorld world;
   private final int minX;
   private final int minY;
   private final int minZ;
@@ -36,16 +36,14 @@ public final class BoxWorldRegion implements WorldRegion<World, Vector3i> {
    * @param corner2 the opposite corner (must be in the same world)
    * @return the region
    * @throws IllegalArgumentException if the corners are in different worlds
-   * @throws NullPointerException if either location has no world
    */
-  public static BoxWorldRegion of(Location corner1, Location corner2) {
-    World world = Objects.requireNonNull(corner1.getWorld(), "corner1 has no world");
-    Objects.requireNonNull(corner2.getWorld(), "corner2 has no world");
-    if (!world.equals(corner2.getWorld())) {
+  public static BoxWorldRegion of(ServerLocation corner1, ServerLocation corner2) {
+    ServerWorld world = Objects.requireNonNull(corner1.world(), "corner1 has no world");
+    Objects.requireNonNull(corner2.world(), "corner2 has no world");
+    if (!world.key().equals(corner2.world().key())) {
       throw new IllegalArgumentException("Locations must be in the same world");
     }
-    return new BoxWorldRegion(
-        world, corner1.toVector().toVector3i(), corner2.toVector().toVector3i());
+    return new BoxWorldRegion(world, corner1.blockPosition(), corner2.blockPosition());
   }
 
   /**
@@ -53,9 +51,8 @@ public final class BoxWorldRegion implements WorldRegion<World, Vector3i> {
    *
    * @param location the location whose block cell the region covers
    * @return the region
-   * @throws NullPointerException if the location has no world
    */
-  public static BoxWorldRegion of(Location location) {
+  public static BoxWorldRegion of(ServerLocation location) {
     return around(location, 0);
   }
 
@@ -65,22 +62,21 @@ public final class BoxWorldRegion implements WorldRegion<World, Vector3i> {
    * @param center the center location
    * @param radius the number of cells to extend in each direction (0 is a single cell)
    * @return the region
-   * @throws NullPointerException if the location has no world
    * @throws IllegalArgumentException if {@code radius} is negative
    */
-  public static BoxWorldRegion around(Location center, int radius) {
-    World world = Objects.requireNonNull(center.getWorld(), "center has no world");
+  public static BoxWorldRegion around(ServerLocation center, int radius) {
+    ServerWorld world = Objects.requireNonNull(center.world(), "center has no world");
     if (radius < 0) {
       throw new IllegalArgumentException("radius must be >= 0");
     }
-    Vector3i block = center.toVector().toVector3i();
+    Vector3i block = center.blockPosition();
     return new BoxWorldRegion(
         world,
         new Vector3i(block.x() - radius, block.y() - radius, block.z() - radius),
         new Vector3i(block.x() + radius, block.y() + radius, block.z() + radius));
   }
 
-  private BoxWorldRegion(World world, Vector3i corner1, Vector3i corner2) {
+  private BoxWorldRegion(ServerWorld world, Vector3i corner1, Vector3i corner2) {
     this.world = world;
     this.minX = Math.min(corner1.x(), corner2.x());
     this.minY = Math.min(corner1.y(), corner2.y());
@@ -91,7 +87,7 @@ public final class BoxWorldRegion implements WorldRegion<World, Vector3i> {
   }
 
   @Override
-  public World world() {
+  public ServerWorld world() {
     return world;
   }
 
@@ -118,9 +114,8 @@ public final class BoxWorldRegion implements WorldRegion<World, Vector3i> {
 
   @Override
   public String toString() {
-    return "BoxWorldRegion{"
-        + "world="
-        + world
+    return "BoxWorldRegion{world="
+        + world.key().asString()
         + ", ["
         + minX
         + ", "

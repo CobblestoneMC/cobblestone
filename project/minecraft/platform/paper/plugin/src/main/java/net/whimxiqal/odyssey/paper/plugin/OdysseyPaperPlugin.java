@@ -110,14 +110,13 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
     platformApi.register(
         this,
         new PortalSearchModificationService(
-            dataStore.portalTransitions(), dataStore.netherPortalLinks(), dataStore.gateways()));
+            dataStore.portalTransitions(), dataStore.endReturnPortals(), dataStore.gateways()));
     getServer()
         .getPluginManager()
         .registerEvents(
             new PortalListener(
                 dataStore.portalTransitions(),
-                dataStore.netherPortals(),
-                dataStore.netherPortalLinks(),
+                dataStore.endReturnPortals(),
                 dataStore.gateways(),
                 platformApi.scheduler(),
                 logger,

@@ -9,15 +9,15 @@ package net.whimxiqal.odyssey.plugin.data.jdbc;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import net.whimxiqal.odyssey.plugin.data.PortalTransition;
 import net.whimxiqal.odyssey.plugin.data.PortalTransitionDao;
 
 /**
- * A {@link PortalTransitionDao} over the shared JDBC connection. {@link #add} is idempotent — it
- * checks for an identical row first — so re-walking a known portal does not create duplicates.
+ * A {@link PortalTransitionDao} over the shared JDBC connection. {@link #upsert} is keyed by the
+ * source portal anchor (from-world + minimum corner): a known source has its arrival and cost
+ * updated, an unknown source is inserted, so re-walking a portal never creates duplicates.
  */
 final class JdbcPortalTransitionDao implements PortalTransitionDao {
 
@@ -27,9 +27,12 @@ final class JdbcPortalTransitionDao implements PortalTransitionDao {
       "INSERT INTO odyssey_portal_transition (" + COLUMNS + ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
   private static final String SELECT_ALL = "SELECT " + COLUMNS + " FROM odyssey_portal_transition";
   private static final String EXISTS =
-      "SELECT COUNT(*) FROM odyssey_portal_transition WHERE from_world = ? AND min_x = ? AND min_y = ?"
-          + " AND min_z = ? AND max_x = ? AND max_y = ? AND max_z = ? AND to_world = ? AND to_x = ?"
-          + " AND to_y = ? AND to_z = ?";
+      "SELECT COUNT(*) FROM odyssey_portal_transition"
+          + " WHERE from_world = ? AND min_x = ? AND min_y = ? AND min_z = ?";
+  private static final String UPDATE =
+      "UPDATE odyssey_portal_transition SET max_x = ?, max_y = ?, max_z = ?, to_world = ?,"
+          + " to_x = ?, to_y = ?, to_z = ?, cost = ?"
+          + " WHERE from_world = ? AND min_x = ? AND min_y = ? AND min_z = ?";
 
   private final AbstractJdbcDataStore store;
 
@@ -38,22 +41,52 @@ final class JdbcPortalTransitionDao implements PortalTransitionDao {
   }
 
   @Override
-  public void add(PortalTransition transition) {
+  public void upsert(PortalTransition transition) {
     store.inTransaction(
-        "add portal transition",
+        "upsert portal transition",
         connection -> {
-          try (PreparedStatement exists = connection.prepareStatement(EXISTS)) {
-            bindKey(exists, transition);
-            try (ResultSet rows = exists.executeQuery()) {
-              if (rows.next() && rows.getInt(1) > 0) {
-                return null; // already recorded
-              }
+          boolean exists;
+          try (PreparedStatement query = connection.prepareStatement(EXISTS)) {
+            query.setString(1, transition.fromWorld());
+            query.setInt(2, transition.minX());
+            query.setInt(3, transition.minY());
+            query.setInt(4, transition.minZ());
+            try (ResultSet rows = query.executeQuery()) {
+              exists = rows.next() && rows.getInt(1) > 0;
             }
           }
-          try (PreparedStatement insert = connection.prepareStatement(INSERT)) {
-            bindKey(insert, transition);
-            insert.setDouble(12, transition.cost());
-            insert.executeUpdate();
+          if (exists) {
+            try (PreparedStatement update = connection.prepareStatement(UPDATE)) {
+              update.setInt(1, transition.maxX());
+              update.setInt(2, transition.maxY());
+              update.setInt(3, transition.maxZ());
+              update.setString(4, transition.toWorld());
+              update.setInt(5, transition.toX());
+              update.setInt(6, transition.toY());
+              update.setInt(7, transition.toZ());
+              update.setDouble(8, transition.cost());
+              update.setString(9, transition.fromWorld());
+              update.setInt(10, transition.minX());
+              update.setInt(11, transition.minY());
+              update.setInt(12, transition.minZ());
+              update.executeUpdate();
+            }
+          } else {
+            try (PreparedStatement insert = connection.prepareStatement(INSERT)) {
+              insert.setString(1, transition.fromWorld());
+              insert.setInt(2, transition.minX());
+              insert.setInt(3, transition.minY());
+              insert.setInt(4, transition.minZ());
+              insert.setInt(5, transition.maxX());
+              insert.setInt(6, transition.maxY());
+              insert.setInt(7, transition.maxZ());
+              insert.setString(8, transition.toWorld());
+              insert.setInt(9, transition.toX());
+              insert.setInt(10, transition.toY());
+              insert.setInt(11, transition.toZ());
+              insert.setDouble(12, transition.cost());
+              insert.executeUpdate();
+            }
           }
           return null;
         });
@@ -98,21 +131,5 @@ final class JdbcPortalTransitionDao implements PortalTransitionDao {
             return delete.executeUpdate();
           }
         });
-  }
-
-  /** Binds the 11 identity columns (everything but cost) in order, starting at index 1. */
-  private static void bindKey(PreparedStatement statement, PortalTransition transition)
-      throws SQLException {
-    statement.setString(1, transition.fromWorld());
-    statement.setInt(2, transition.minX());
-    statement.setInt(3, transition.minY());
-    statement.setInt(4, transition.minZ());
-    statement.setInt(5, transition.maxX());
-    statement.setInt(6, transition.maxY());
-    statement.setInt(7, transition.maxZ());
-    statement.setString(8, transition.toWorld());
-    statement.setInt(9, transition.toX());
-    statement.setInt(10, transition.toY());
-    statement.setInt(11, transition.toZ());
   }
 }

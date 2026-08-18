@@ -13,11 +13,13 @@ import java.util.List;
 public interface PortalTransitionDao {
 
   /**
-   * Records a portal transition. Idempotent: an identical transition is not stored twice.
+   * Records a portal transition, keyed by its source portal anchor (from-world + minimum corner).
+   * If that source portal is already known, its arrival and cost are updated (a portal can be
+   * re-linked); otherwise a new row is inserted.
    *
    * @param transition the transition to record
    */
-  void add(PortalTransition transition);
+  void upsert(PortalTransition transition);
 
   /**
    * Returns every recorded portal transition.

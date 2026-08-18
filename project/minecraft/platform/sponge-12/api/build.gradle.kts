@@ -4,7 +4,21 @@ plugins {
     id("odyssey.publish-conventions")
 }
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    maven {
+        name = "sponge"
+        url = uri("https://repo.spongepowered.org/repository/maven-public/")
+    }
+}
+
 dependencies {
     api(project(":minecraft:minecraft-api"))
-    // TODO(Phase 7): compileOnly(spongeapi) — provided by the server at runtime.
+    // Provided by the server at runtime; Adventure comes bundled with Sponge.
+    compileOnly(libs.spongeapi)
 }

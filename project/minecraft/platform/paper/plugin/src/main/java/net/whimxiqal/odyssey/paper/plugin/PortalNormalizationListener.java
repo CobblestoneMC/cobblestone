@@ -23,14 +23,14 @@ import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
  * Both halves are config-gated and apply only to nether travel (the End is a fixed destination).
  *
  * <ul>
- *   <li><b>Entry</b> ({@link PlayerPortalEvent}, default off): the event's {@code to} is the portal
- *       <i>search origin</i>, so overriding it with the source block's scaled centre makes which
- *       destination portal you reach deterministic per block. This changes which portal you link
- *       to, hence off by default.
+ *   <li><b>Entry</b> ({@link PlayerPortalEvent}, default on): the event's {@code to} is the portal
+ *       <i>search origin</i>, so overriding it with the <i>source portal's</i> scaled center makes
+ *       one source portal always reach one destination portal, no matter which block the player
+ *       entered — the determinism Odyssey's single region&nbsp;&rarr;&nbsp;point link relies on.
  *   <li><b>Exit</b> (the resolved {@link PlayerTeleportEvent}, default on): snaps the arrival to
- *       the destination portal's centre at ground level — only where within the same portal you
+ *       the destination portal's center at ground level — only where within the same portal you
  *       land, so on by default. Runs at {@link EventPriority#HIGH} so the discovery listener at
- *       MONITOR sees the centred destination.
+ *       MONITOR sees the centerd destination.
  * </ul>
  */
 final class PortalNormalizationListener implements Listener {
@@ -53,9 +53,13 @@ final class PortalNormalizationListener implements Listener {
     if (from.getWorld() == null || to == null || to.getWorld() == null) {
       return;
     }
+    // Scale the SOURCE PORTAL's center (not the player's entry block) so the destination is the
+    // same
+    // regardless of where in the portal the player stepped through.
+    PortalRegion source = PaperPortals.scanPortal(from, Material.NETHER_PORTAL);
     double factor = from.getWorld().getCoordinateScale() / to.getWorld().getCoordinateScale();
-    double x = (from.getBlockX() + 0.5) * factor;
-    double z = (from.getBlockZ() + 0.5) * factor;
+    double x = source.centerX() * factor;
+    double z = source.centerZ() * factor;
     event.setTo(new Location(to.getWorld(), x, to.getY(), z, to.getYaw(), to.getPitch()));
   }
 

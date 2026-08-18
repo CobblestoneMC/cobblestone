@@ -146,37 +146,68 @@ class DataStoreContractTest {
 
   @ParameterizedTest
   @MethodSource("backends")
-  void portalTransitionAddIsIdempotentAndClears(Backend backend, @TempDir Path dir) {
+  void portalTransitionUpsertsBySourceAndClears(Backend backend, @TempDir Path dir) {
     DataStore store = opened(backend, dir);
     try {
       PortalTransition portal =
           new PortalTransition(
               "minecraft:overworld", 10, 60, 10, 11, 62, 10, "minecraft:the_nether", 1, 60, 1, 5.0);
-      store.portalTransitions().add(portal);
-      store.portalTransitions().add(portal); // identical — must not duplicate
+      store.portalTransitions().upsert(portal);
+      store.portalTransitions().upsert(portal); // same source — must not duplicate
       assertEquals(List.of(portal), store.portalTransitions().all());
 
-      // A different arrival is a distinct transition.
+      // A new arrival from the SAME source updates the existing row, not a second one.
+      PortalTransition relinked =
+          new PortalTransition(
+              "minecraft:overworld", 10, 60, 10, 11, 62, 10, "minecraft:the_nether", 2, 60, 2, 5.0);
+      store.portalTransitions().upsert(relinked);
+      assertEquals(List.of(relinked), store.portalTransitions().all());
+
+      // A different source is a distinct row.
       store
           .portalTransitions()
-          .add(
+          .upsert(
               new PortalTransition(
                   "minecraft:overworld",
-                  10,
+                  99,
                   60,
-                  10,
-                  11,
+                  99,
+                  99,
                   62,
-                  10,
+                  99,
                   "minecraft:the_nether",
-                  2,
+                  3,
                   60,
-                  2,
+                  3,
                   5.0));
       assertEquals(2, store.portalTransitions().all().size());
 
       assertEquals(2, store.portalTransitions().clear());
       assertTrue(store.portalTransitions().all().isEmpty());
+    } finally {
+      store.close();
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("backends")
+  void endReturnPortalUpsertsByAnchorAndClears(Backend backend, @TempDir Path dir) {
+    DataStore store = opened(backend, dir);
+    try {
+      EndReturnPortal portal =
+          new EndReturnPortal(new PortalRegion("minecraft:the_end", 0, 60, 0, 2, 62, 2), 5.0);
+      store.endReturnPortals().upsert(portal);
+      store.endReturnPortals().upsert(portal); // same anchor — must not duplicate
+      assertEquals(List.of(portal), store.endReturnPortals().all());
+
+      // Same anchor, updated extent/cost overwrites in place.
+      EndReturnPortal grown =
+          new EndReturnPortal(new PortalRegion("minecraft:the_end", 0, 60, 0, 3, 63, 3), 7.0);
+      store.endReturnPortals().upsert(grown);
+      assertEquals(List.of(grown), store.endReturnPortals().all());
+
+      assertEquals(1, store.endReturnPortals().clear());
+      assertTrue(store.endReturnPortals().all().isEmpty());
     } finally {
       store.close();
     }

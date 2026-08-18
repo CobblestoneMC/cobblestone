@@ -8,13 +8,14 @@
 package net.whimxiqal.odyssey.plugin.data;
 
 /**
- * A persisted, empirically-discovered one-way portal link: entering the entry plane in one world
+ * A persisted, empirically-discovered one-way portal link: entering the source portal in one world
  * teleports the player to an arrival point (usually in another world). No platform API reveals
  * where a portal leads, so Odyssey learns these by watching players teleport and records them here;
  * the reverse direction is only learned when someone travels back (nether linking is asymmetric).
  *
- * <p>The entry is stored as a block-coordinate bounding box (the portal plane); the arrival as a
- * single block coordinate.
+ * <p>The source is stored as a block-coordinate bounding box (the portal frame) and is the row's
+ * identity (from-world + minimum corner); the arrival is a single block coordinate. Re-walking a
+ * portal whose destination changed updates the arrival for that source rather than adding a row.
  *
  * @param fromWorld the entry world's namespaced key
  * @param minX the entry box minimum x

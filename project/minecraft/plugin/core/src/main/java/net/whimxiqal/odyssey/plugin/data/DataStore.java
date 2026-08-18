@@ -41,18 +41,11 @@ public interface DataStore {
   PortalTransitionDao portalTransitions();
 
   /**
-   * Returns the nether-portal cache DAO.
+   * Returns the end-return portal DAO (End exit portals; destination resolved per-player).
    *
-   * @return the nether-portal cache DAO
+   * @return the end-return portal DAO
    */
-  PortalCacheDao netherPortals();
-
-  /**
-   * Returns the nether-portal link (destination partition) DAO.
-   *
-   * @return the nether-portal link DAO
-   */
-  PortalLinkDao netherPortalLinks();
+  EndReturnPortalDao endReturnPortals();
 
   /**
    * Returns the end-gateway DAO.
