@@ -75,6 +75,9 @@ public final class ConfigKeys {
   /** Trail particle types (Bukkit {@code Particle} names); one is chosen at random per particle. */
   public final ConfigKey<List<String>> trailParticles;
 
+  /** Trail particle types (Bukkit {@code Particle} names); one is chosen at random per particle. */
+  public final ConfigKey<List<String>> trailHighlightParticles;
+
   /** Trail dust colors as hex {@code RRGGBB}; one is chosen at random for each dust particle. */
   public final ConfigKey<List<String>> trailColors;
 
@@ -141,7 +144,10 @@ public final class ConfigKeys {
         manager.register("navigators.trail.buffer_cells", 100, Codec.ofInt(), true);
     this.trailParticles =
         manager.register(
-            "navigators.trail.particles", List.of("GLOW", "DUST"), Codec.ofStringList(), true);
+            "navigators.trail.particles", List.of("SCRAPE", "WAX_OFF"), Codec.ofStringList(), true);
+    this.trailHighlightParticles =
+        manager.register(
+            "navigators.trail.highlight_particles", List.of("WAX_ON"), Codec.ofStringList(), true);
     this.trailColors =
         manager.register(
             "navigators.trail.colors",

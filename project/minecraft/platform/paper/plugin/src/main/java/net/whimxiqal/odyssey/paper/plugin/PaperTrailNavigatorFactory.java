@@ -25,10 +25,10 @@ import org.bukkit.Particle;
 import org.bukkit.entity.Player;
 
 /**
- * The built-in {@link NavigatorFactory} (key {@code trail}) that creates {@link TrailNavigator}s.
- * Odyssey registers it as a Bukkit service so it is discovered like any third-party navigator.
- * Appearance (buffer, colors, density) is read from config on each creation, so a reload applies to
- * subsequently started trips.
+ * The built-in {@link NavigatorFactory} (key {@code trail}) that creates {@link
+ * PaperTrailNavigator}s. Odyssey registers it as a Bukkit service so it is discovered like any
+ * third-party navigator. Appearance (buffer, colors, density) is read from config on each creation,
+ * so a reload applies to subsequently started trips.
  */
 public final class PaperTrailNavigatorFactory implements NavigatorFactory {
 
@@ -57,15 +57,20 @@ public final class PaperTrailNavigatorFactory implements NavigatorFactory {
         settings
             .get(TrailNavigatorSettings.PARTICLES)
             .orElseGet(() -> parseParticles(config.get(keys.trailParticles)));
+    List<Particle> highlightParticles =
+        settings
+            .get(TrailNavigatorSettings.HIGHLIGHT_PARTICLES)
+            .orElseGet(() -> parseParticles(config.get(keys.trailHighlightParticles)));
     List<Color> colors =
         settings
             .get(TrailNavigatorSettings.COLORS)
             .orElseGet(() -> parseColors(config.get(keys.trailColors)));
-    return new TrailNavigator(
+    return new PaperTrailNavigator(
         player,
         path,
         config.get(keys.trailBufferCells),
         particles,
+        highlightParticles,
         colors,
         config.get(keys.trailDensity),
         config.get(keys.tripsRecalculateDistance),

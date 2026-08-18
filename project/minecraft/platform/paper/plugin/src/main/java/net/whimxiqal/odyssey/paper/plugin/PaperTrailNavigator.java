@@ -31,26 +31,29 @@ import org.bukkit.entity.Player;
  * to the guided player, and only when the target position is owned by the current region thread
  * (Folia-safe). Verified on a live server; the follow geometry is unit-tested in plugin-core.
  */
-final class TrailNavigator extends AbstractTrailNavigator<Location> {
+final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
 
   private static final float DUST_SIZE = 1.0f;
 
   private final Player player;
   private final List<Particle> particles;
+  private final List<Particle> highlightParticles;
   private final List<Particle.DustOptions> dusts;
 
-  TrailNavigator(
+  PaperTrailNavigator(
       Player player,
       Path<Location, MinecraftStepPayload> path,
       int bufferCells,
       List<Particle> particleTypes,
+      List<Particle> highlightParticleTypes,
       List<Color> palette,
       double density,
       int recalcDistance,
       Messages messages) {
     super(bufferCells, density, recalcDistance, messages, player.locale());
     this.player = player;
-    this.particles = particleTypes.isEmpty() ? List.of(Particle.DUST) : List.copyOf(particleTypes);
+    this.particles = List.copyOf(particleTypes);
+    this.highlightParticles = List.copyOf(highlightParticleTypes);
     List<Color> colors = palette.isEmpty() ? List.of(Color.AQUA) : palette;
     this.dusts = new ArrayList<>(colors.size());
     for (Color color : colors) {
@@ -95,13 +98,26 @@ final class TrailNavigator extends AbstractTrailNavigator<Location> {
   }
 
   @Override
-  protected void spawnTrailParticle(double x, double y, double z) {
+  protected void spawnTrailParticle(
+      double x, double y, double z, double vx, double vy, double vz) {
+  spawnParticle(particles, x, y, z, vx, vy, vz);
+  }
+
+  @Override
+  protected void spawnHighlightParticle(double x, double y, double z) {
+    spawnParticle(highlightParticles, x, y, z, 0, 0, 0);
+  }
+
+  private void spawnParticle(List<Particle> particles, double x, double y, double z, double vx, double vy, double vz) {
+    if (particles.isEmpty()) {
+      return;
+    }
     Location location = new Location(player.getWorld(), x, y, z);
     if (!Bukkit.isOwnedByCurrentRegion(location)) {
       return;
     }
     ThreadLocalRandom random = ThreadLocalRandom.current();
-    Particle particle = particles.get(random.nextInt(particles.size()));
+    final var particle = particles.get(random.nextInt(particles.size()));
     if (particle == Particle.DUST) {
       Particle.DUST
           .builder()
@@ -110,7 +126,7 @@ final class TrailNavigator extends AbstractTrailNavigator<Location> {
           .data(dusts.get(random.nextInt(dusts.size())))
           .spawn();
     } else {
-      particle.builder().location(location).receivers(player).spawn();
+      particle.builder().location(location).receivers(player).offset(vx, vy, vz).count(0).spawn();
     }
   }
 

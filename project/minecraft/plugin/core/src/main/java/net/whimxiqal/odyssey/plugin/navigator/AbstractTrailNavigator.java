@@ -53,6 +53,7 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   private static final int RECALC_COOLDOWN_TICKS = 20; // at most one stray-recalc per second
   private static final int GUIDE_COOLDOWN_TICKS = 20; // re-request the guide path ~1x/second
   private static final double MINE_MARGIN = 0.05; // cage hugs the block to mine
+  private static final double PARTICLE_FLOW_SPEED = 1.0;
 
   /** Identifies a path step by its exact block, for the "player stood on a later step" shortcut. */
   private record BlockKey(int x, int y, int z) {}
@@ -112,7 +113,10 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   protected abstract Audience audience();
 
   /** Spawns one trail particle at a world position, shown to the player, if renderable here. */
-  protected abstract void spawnTrailParticle(double x, double y, double z);
+  protected abstract void spawnTrailParticle(
+      double x, double y, double z, double vx, double vy, double vz);
+
+  protected abstract void spawnHighlightParticle(double x, double y, double z);
 
   /** Whether a solid, renderable block occupies the given block position. */
   protected abstract boolean solidAt(int blockX, int blockY, int blockZ);
@@ -332,8 +336,11 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
       if (!sameWorld(playerWorld, worldKey(step.position()))) {
         continue;
       }
-      Vec3 center = points.get(i);
       MinecraftStepPayload payload = step.payload();
+      if (payload.stepType().isAction()) {
+        // no trail to a cell if we get there by performing an action
+        continue;
+      }
       boolean highlight = false;
       if (i == steps.size() - 1) {
         // the end should be highlighted
@@ -342,25 +349,37 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
         // if the next step is an action, highlight this step
         highlight = true;
       }
-      renderBlock(center, playerVec, payload, highlight, random);
+      renderBlock(
+          i == 0 ? origin : points.get(i - 1),
+          points.get(i),
+          velocity(points, i),
+          playerVec,
+          payload,
+          highlight,
+          random);
     }
   }
 
   private void renderBlock(
-      Vec3 center,
+      Vec3 from,
+      Vec3 to,
+      Vec3 velocity,
       Vec3 playerVec,
       MinecraftStepPayload payload,
       boolean highlight,
       ThreadLocalRandom random) {
-    if (playerVec.minus(center).lengthSquared() < NEAR_BUFFER_SQUARED) {
+    if (playerVec.minus(to).lengthSquared() < NEAR_BUFFER_SQUARED) {
       return; // keep the player's immediate view clear
     }
-    scatter(center, highlight, random);
+    scatter(from, to, velocity, random);
+    if (highlight) {
+      highlight(to, random);
+    }
 
     if (payload != null && payload.stepType() == MinecraftStepType.MINE) {
-      int blockX = (int) Math.floor(center.x());
-      int blockY = (int) Math.floor(center.y());
-      int blockZ = (int) Math.floor(center.z());
+      int blockX = (int) Math.floor(to.x());
+      int blockY = (int) Math.floor(to.y());
+      int blockZ = (int) Math.floor(to.z());
       if (solidAt(blockX, blockY, blockZ)) {
         renderMineMarker(blockX, blockY, blockZ, random);
       }
@@ -398,7 +417,10 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
       spawnTrailParticle(
           x1 == x2 ? x1 : random.nextDouble(x1, x2),
           y1 == y2 ? y1 : random.nextDouble(y1, y2),
-          z1 == z2 ? z1 : random.nextDouble(z1, z2));
+          z1 == z2 ? z1 : random.nextDouble(z1, z2),
+          0,
+          0,
+          0);
     }
   }
 
@@ -406,15 +428,29 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     if (!sameWorld(playerWorld, worldKey(steps.get(foremost).position()))) {
       return;
     }
-    // Prefer the real short guide path (computed by the trip) if we have one for this world.
-    if (guidePoints == null || guideWorld == null || guideWorld.equals(playerWorld)) {
+    if (guidePoints == null || guideWorld == null || !guideWorld.equals(playerWorld)) {
       // No fallback while the guide search is pending/failed
       return;
     }
     for (int i = 0; i < guidePoints.size(); i++) {
-      Vec3 point = guidePoints.get(i);
       MinecraftStepPayload payload = guideSteps.get(i).payload();
-      renderBlock(point, playerVec, payload, false, random);
+      renderBlock(
+          i == 0 ? playerVec : guidePoints.get(i - 1),
+          guidePoints.get(i),
+          velocity(guidePoints, i),
+          playerVec,
+          payload,
+          false,
+          random);
+    }
+  }
+
+  private Vec3 velocity(List<Vec3> points, int index) {
+    if (index == points.size() - 1) {
+      return Vec3.ZERO;
+    } else {
+      var direction = points.get(index + 1).minus(points.get(index)).unit();
+      return direction.times(PARTICLE_FLOW_SPEED);
     }
   }
 
@@ -422,17 +458,33 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
    * Spawns ~{@code density} Gaussian-scattered particles around a center. A fractional density is
    * probabilistic (0.7 → 70%).
    */
-  private void scatter(Vec3 center, boolean highlight, ThreadLocalRandom random) {
-    double modifiedDensity = density;
-    if (highlight) {
-      modifiedDensity *= 2;
+  private void scatter(Vec3 from, Vec3 to, Vec3 velocity, ThreadLocalRandom random) {
+    var diff = to.minus(from);
+    var length = diff.length();
+    double floatCount = density * length;
+    int count = (int) floatCount;
+    if (random.nextDouble() < floatCount - count) {
+      count++;
     }
-    int count = (int) modifiedDensity;
-    if (random.nextDouble() < modifiedDensity - count) {
+    var center = from.plus(diff.times(random.nextDouble()));
+    for (int p = 0; p < count; p++) {
+      spawnTrailParticle(
+          center.x() + random.nextGaussian() * SPREAD_HORIZONTAL,
+          center.y() + random.nextGaussian() * SPREAD_VERTICAL,
+          center.z() + random.nextGaussian() * SPREAD_HORIZONTAL,
+          velocity.x(),
+          velocity.y(),
+          velocity.z());
+    }
+  }
+
+  private void highlight(Vec3 center, ThreadLocalRandom random) {
+    int count = (int) density;
+    if (random.nextDouble() < density - count) {
       count++;
     }
     for (int p = 0; p < count; p++) {
-      spawnTrailParticle(
+      spawnHighlightParticle(
           center.x() + random.nextGaussian() * SPREAD_HORIZONTAL,
           center.y() + random.nextGaussian() * SPREAD_VERTICAL,
           center.z() + random.nextGaussian() * SPREAD_HORIZONTAL);

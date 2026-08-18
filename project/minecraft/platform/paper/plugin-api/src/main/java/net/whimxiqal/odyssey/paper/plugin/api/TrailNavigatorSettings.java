@@ -35,6 +35,13 @@ public final class TrailNavigatorSettings {
   public static final NavigatorSettingKey<List<Particle>> PARTICLES =
       new NavigatorSettingKey<>("trail.particles");
 
+  /**
+   * The particle types the trail randomly draws with in highlighted locations (only {@code DUST} is
+   * colored).
+   */
+  public static final NavigatorSettingKey<List<Particle>> HIGHLIGHT_PARTICLES =
+      new NavigatorSettingKey<>("trail.highlight_particles");
+
   /** The colors {@code DUST} particles are randomly drawn in. */
   public static final NavigatorSettingKey<List<Color>> COLORS =
       new NavigatorSettingKey<>("trail.colors");
@@ -56,6 +63,12 @@ public final class TrailNavigatorSettings {
     /** Sets the particle types the trail draws with. */
     public Builder particles(List<Particle> particles) {
       delegate.set(PARTICLES, List.copyOf(particles));
+      return this;
+    }
+
+    /** Sets the particle types the trail draws with. */
+    public Builder highlightParticles(List<Particle> particles) {
+      delegate.set(HIGHLIGHT_PARTICLES, List.copyOf(particles));
       return this;
     }
 
