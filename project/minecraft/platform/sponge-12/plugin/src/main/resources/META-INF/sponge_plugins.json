@@ -1,0 +1,35 @@
+{
+  "loader": {
+    "name": "java_plain",
+    "version": "1.0"
+  },
+  "license": "MIT",
+  "global": {
+    "version": "1.0.0-SNAPSHOT",
+    "links": {
+      "homepage": "https://github.com/whimxiqal/odyssey"
+    },
+    "contributors": [
+      {
+        "name": "whimxiqal",
+        "description": "Author"
+      }
+    ],
+    "dependencies": [
+      {
+        "id": "spongeapi",
+        "version": "12.0.0",
+        "load-order": "after",
+        "optional": false
+      }
+    ]
+  },
+  "plugins": [
+    {
+      "id": "odyssey",
+      "name": "Odyssey",
+      "description": "A Minecraft navigation plugin.",
+      "entrypoint": "net.whimxiqal.odyssey.sponge12.plugin.OdysseySpongePlugin"
+    }
+  ]
+}

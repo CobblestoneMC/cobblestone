@@ -455,7 +455,7 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
       count++;
     }
     var center = from.plus(diff.times(random.nextDouble()));
-    var velocity = diff.times(1/length).times(PARTICLE_FLOW_SPEED);
+    var velocity = diff.times(1 / length).times(PARTICLE_FLOW_SPEED);
     for (int p = 0; p < count; p++) {
       spawnTrailParticle(
           center.x() + random.nextGaussian() * SPREAD_HORIZONTAL,

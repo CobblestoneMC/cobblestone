@@ -38,6 +38,8 @@ include(":minecraft:platform:sponge-12:api")
 project(":minecraft:platform:sponge-12:api").name = "sponge-12-api"
 include(":minecraft:platform:sponge-12:core")
 project(":minecraft:platform:sponge-12:core").name = "sponge-12-core"
+include(":minecraft:platform:sponge-12:plugin-api")
+project(":minecraft:platform:sponge-12:plugin-api").name = "sponge-12-plugin-api"
 include(":minecraft:platform:sponge-12:plugin")
 project(":minecraft:platform:sponge-12:plugin").name = "sponge-12-plugin"
 
