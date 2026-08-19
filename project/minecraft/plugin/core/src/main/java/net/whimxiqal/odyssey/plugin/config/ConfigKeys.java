@@ -130,8 +130,7 @@ public final class ConfigKeys {
     this.messagesShowPrefix =
         manager.register("messages.show_prefix", true, Codec.ofBoolean(), true);
     this.dataBackend =
-        manager.register(
-            "data.backend", DataBackend.SQLITE, Codec.ofEnum(DataBackend.class), false);
+        manager.register("data.backend", DataBackend.H2, Codec.ofEnum(DataBackend.class), false);
     this.dataFile = manager.register("data.file", "odyssey", Codec.ofString(), false);
     this.tripsMaxActivePerPlayer =
         manager.register("trips.max_active_per_player", 3, Codec.ofInt(), true);

@@ -27,8 +27,10 @@ dependencies {
     implementation(project(":minecraft:plugin:plugin-core"))
     // Bundled at runtime (no Sponge library resolver): YAML config parser + embedded JDBC drivers.
     implementation(libs.snakeyaml)
-    implementation(libs.sqlite.jdbc)
+//    implementation(libs.sqlite.jdbc)
     implementation(libs.h2)
+    // bStats metrics — shaded into the plugin jar and relocated (below), not server-provided.
+    implementation(libs.bstats.sponge)
     // Provided by the server at runtime.
     compileOnly(libs.spongeapi)
     compileOnly(libs.adventure.api)
@@ -41,10 +43,11 @@ tasks.named<Jar>("jar") {
 
 tasks.named<ShadowJar>("shadowJar") {
     archiveClassifier.set("")
-    // Relocate SnakeYAML so our copy never clashes with another plugin's. JDBC drivers are NOT
-    // relocated: they self-register with DriverManager by their real class names (and SQLite loads a
-    // native lib), which relocation would break.
+
     relocate("org.yaml.snakeyaml", "net.whimxiqal.odyssey.libs.snakeyaml")
+    relocate("org.bstats", "net.whimxiqal.odyssey.libs.bstats")
+//    relocate("org.sqlite", "net.whimxiqal.odyssey.libs.sqlite")
+    relocate("org.h2", "net.whimxiqal.odyssey.libs.h2")
 }
 
 tasks.named("build") {

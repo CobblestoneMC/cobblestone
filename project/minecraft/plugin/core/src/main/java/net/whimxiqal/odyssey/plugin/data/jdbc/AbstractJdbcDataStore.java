@@ -61,6 +61,8 @@ public abstract class AbstractJdbcDataStore implements DataStore {
     this.logger = logger;
   }
 
+  abstract String driver();
+
   /**
    * Loads (and thereby registers) this backend's JDBC driver before the first connection. Modern
    * drivers auto-register via {@code ServiceLoader}, but an explicit load is robust when the driver
@@ -126,7 +128,9 @@ public abstract class AbstractJdbcDataStore implements DataStore {
       this.portalTransitionDao = new JdbcPortalTransitionDao(this);
       this.endReturnPortalDao = new JdbcEndReturnPortalDao(this);
       this.gatewayDao = new JdbcGatewayDao(this);
-    } catch (ClassNotFoundException | SQLException e) {
+    } catch (ClassNotFoundException e) {
+      throw new DataStoreException.NoDriver(driver(), e);
+    } catch (SQLException e) {
       throw new DataStoreException("failed to open data store (" + url + ")", e);
     }
   }

@@ -18,7 +18,6 @@ import java.util.UUID;
 import java.util.function.BiFunction;
 import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.plugin.data.jdbc.H2DataStore;
-import net.whimxiqal.odyssey.plugin.data.jdbc.SqliteDataStore;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -42,9 +41,7 @@ class DataStoreContractTest {
   }
 
   static List<Arguments> backends() {
-    return List.of(
-        Arguments.of(new Backend("sqlite", (file, logger) -> new SqliteDataStore(file, logger))),
-        Arguments.of(new Backend("h2", (file, logger) -> new H2DataStore(file, logger))));
+    return List.of(Arguments.of(new Backend("h2", H2DataStore::new)));
   }
 
   private static DataStore opened(Backend backend, Path dir) {

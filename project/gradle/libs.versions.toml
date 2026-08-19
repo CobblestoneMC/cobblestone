@@ -39,6 +39,7 @@ sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite" }
 h2 = { module = "com.h2database:h2", version.ref = "h2" }
 bstats-base = { module = "org.bstats:bstats-base", version.ref = "bstats" }
 bstats-bukkit = { module = "org.bstats:bstats-bukkit", version.ref = "bstats" }
+bstats-sponge = { module = "org.bstats:bstats-sponge", version.ref = "bstats" }
 
 [plugins]
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }

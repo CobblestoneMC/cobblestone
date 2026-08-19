@@ -13,9 +13,6 @@ package net.whimxiqal.odyssey.plugin.data;
  */
 public enum DataBackend {
 
-  /** SQLite — the default: a single file, no server process. */
-  SQLITE,
-
   /** H2 — an alternative embedded engine. */
   H2
 }

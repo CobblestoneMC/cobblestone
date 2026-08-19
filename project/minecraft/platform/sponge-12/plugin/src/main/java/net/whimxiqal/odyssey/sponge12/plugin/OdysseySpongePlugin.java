@@ -11,7 +11,6 @@ import com.google.inject.Inject;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.function.Supplier;
-import net.kyori.adventure.text.Component;
 import net.whimxiqal.odyssey.api.SearchSettings;
 import net.whimxiqal.odyssey.plugin.LogoutCleanup;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
@@ -28,10 +27,10 @@ import net.whimxiqal.odyssey.sponge12.api.OdysseyCoreAPI;
 import net.whimxiqal.odyssey.sponge12.plugin.api.OdysseyPluginAPI;
 import net.whimxiqal.odyssey.sponge12.plugin.api.TrailNavigatorSettings;
 import org.apache.logging.log4j.Logger;
+import org.bstats.sponge.Metrics;
 import org.spongepowered.api.Server;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.command.Command;
-import org.spongepowered.api.command.CommandResult;
 import org.spongepowered.api.config.ConfigDir;
 import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.event.Listener;
@@ -51,8 +50,9 @@ import org.spongepowered.plugin.builtin.jvm.Plugin;
  * navigation service ({@link OdysseyCoreAPI}) and the plugin-layer trip service + integration
  * registry ({@code OdysseyPluginAPI}) — Sponge has no service manager, so both are installed into
  * static accessors. Vanilla portals are discovered from teleports; waypoints and the trail
- * navigator are registered like any integration; {@code /navigate} starts guided trips. Full {@code
- * /odyssey} admin subcommands, destination-tree navigation, and metrics arrive in a later slice.
+ * navigator are registered like any integration; {@code /navigate} (flags, destination resolution,
+ * live re-search) and the {@code /odyssey} admin tree drive guided trips; bStats metrics report
+ * when enabled.
  */
 @Plugin("odyssey")
 public final class OdysseySpongePlugin {
@@ -60,6 +60,7 @@ public final class OdysseySpongePlugin {
   private final PluginContainer container;
   private final Logger logger;
   private final Path configDir;
+  private final Metrics.Factory metricsFactory;
 
   private Log4jOdysseyLogger odysseyLogger;
   private ConfigManager config;
@@ -73,12 +74,17 @@ public final class OdysseySpongePlugin {
   private SearchRegistry<ServerLocation> searchRegistry;
   private SearchGate searchGate;
   private Supplier<SearchSettings> searchSettings;
+  private SpongeMetrics metrics;
 
   @Inject
-  OdysseySpongePlugin(PluginContainer container, @ConfigDir(sharedRoot = false) Path configDir) {
+  OdysseySpongePlugin(
+      PluginContainer container,
+      @ConfigDir(sharedRoot = false) Path configDir,
+      Metrics.Factory metricsFactory) {
     this.container = container;
     this.logger = container.logger();
     this.configDir = configDir;
+    this.metricsFactory = metricsFactory;
   }
 
   /** Loads config, opens the data store, and installs the core navigation services. */
@@ -96,6 +102,11 @@ public final class OdysseySpongePlugin {
     this.dataStore = DataStores.create(config.get(keys.dataBackend), databaseFile, odysseyLogger);
     try {
       dataStore.init();
+    } catch (DataStoreException.NoDriver e) {
+      logger.error(
+          "Odyssey configured to use {} but could not find it on the classpath. Odyssey is disabled.",
+          e.getMissingDriver());
+      return;
     } catch (DataStoreException e) {
       logger.error("Failed to open Odyssey's data store; navigation is disabled.", e);
       return;
@@ -161,51 +172,51 @@ public final class OdysseySpongePlugin {
             liveIntervalMillis);
     OdysseyPluginAPI.install(integrationRegistry, tripService);
 
+    if (config.get(keys.metricsEnabled)) {
+      this.metrics =
+          new SpongeMetrics(
+              metricsFactory,
+              event,
+              config.get(keys.dataBackend).name().toLowerCase(Locale.ROOT),
+              tripManager,
+              searchRegistry);
+    }
+
     logger.info("Odyssey enabled.");
   }
 
   /** Registers the {@code /odyssey} and {@code /navigate} commands. */
   @Listener
   public void onRegisterCommands(RegisterCommandEvent<Command.Parameterized> event) {
-    Command.Parameterized reload =
-        Command.builder()
-            .shortDescription(Component.text("Reload Odyssey's configuration"))
-            .permission("odyssey.admin.reload")
-            .executor(
-                context -> {
-                  config.load();
-                  odysseyLogger.setLevel(config.get(keys.loggingLevel));
-                  context.sendMessage(Component.text("Odyssey configuration reloaded."));
-                  return CommandResult.success();
-                })
-            .build();
-    Command.Parameterized odyssey =
-        Command.builder()
-            .shortDescription(Component.text("Odyssey navigation"))
-            .addChild(reload, "reload")
-            .executor(
-                context -> {
-                  context.sendMessage(
-                      Component.text(
-                          "Odyssey — navigation for MinecraftOnline."
-                              + " Use /navigate <x> <y> <z> | <destination…>."));
-                  return CommandResult.success();
-                })
-            .build();
-    event.register(container, odyssey, "odyssey", "ody");
-    if (tripService != null) {
-      event.register(
-          container,
-          NavigateCommand.build(
-              navigationService,
-              tripService,
-              integrationRegistry,
-              searchRegistry,
-              searchGate,
-              searchSettings),
-          "navigate",
-          "nav");
+    if (tripService == null) {
+      return; // the data store failed to open; navigation is disabled
     }
+    event.register(
+        container,
+        OdysseyCommand.build(
+            config,
+            keys,
+            messages,
+            odysseyLogger,
+            dataStore.waypoints(),
+            dataStore.portalTransitions(),
+            tripManager,
+            searchRegistry),
+        "odyssey",
+        "ody");
+    event.register(
+        container,
+        NavigateCommand.build(
+            navigationService,
+            tripService,
+            integrationRegistry,
+            searchRegistry,
+            searchGate,
+            searchSettings,
+            odysseyLogger,
+            messages),
+        "navigate",
+        "nav");
   }
 
   /** Stops a departing player's trips and in-flight searches. */
@@ -223,6 +234,9 @@ public final class OdysseySpongePlugin {
   /** Tears down: stop the search workers, withdraw the core services, close the data store. */
   @Listener
   public void onStoppingEngine(StoppingEngineEvent<Server> event) {
+    if (metrics != null) {
+      metrics.shutdown();
+    }
     if (tripManager != null) {
       tripManager.stopEverything();
     }

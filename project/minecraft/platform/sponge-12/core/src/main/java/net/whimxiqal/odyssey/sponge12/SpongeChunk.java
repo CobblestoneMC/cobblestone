@@ -10,40 +10,47 @@ package net.whimxiqal.odyssey.sponge12;
 import net.whimxiqal.odyssey.minecraft.MinecraftBlock;
 import net.whimxiqal.odyssey.minecraft.MinecraftChunk;
 import net.whimxiqal.odyssey.minecraft.UnknownBlock;
-import org.spongepowered.api.world.volume.block.BlockVolume;
-import org.spongepowered.math.vector.Vector3i;
+import org.spongepowered.api.block.BlockState;
 
 /**
- * A {@link MinecraftChunk} backed by a Sponge archetype {@link BlockVolume} — an immutable,
- * detached copy of one chunk column taken on the server thread (Sponge has no {@code
- * ChunkSnapshot}, so we copy the region into an archetype volume), safe to read from any thread.
+ * A {@link MinecraftChunk} backed by a plain 16×height×16 array of {@link BlockState}s copied out
+ * of a chunk column on the server thread (Sponge has no {@code ChunkSnapshot}), safe to read from
+ * any thread afterwards.
  *
- * <p>Reads are addressed relative to {@link BlockVolume#min() the volume's own minimum}, so this is
- * correct whether the archetype volume indexes by world coordinates or by a zero-based local space.
- * {@code baseMinY} is the world Y that maps to the volume's minimum Y.
+ * <p>We deliberately do not use {@code ServerWorld#createArchetypeVolume}: it also copies block
+ * entities, biomes and entities we never read, and its entity leg is broken in Sponge 12 (entity
+ * archetypes are offset by half a block and throw {@link IllegalArgumentException} for any entity
+ * standing on the volume's minimum face). A block-state stream avoids all of that.
+ *
+ * <p>Cells never written by the copy stay {@code null} and read back as {@link UnknownBlock} —
+ * impassable — rather than silently as air.
  */
 final class SpongeChunk implements MinecraftChunk {
 
-  private final BlockVolume volume;
-  private final Vector3i min;
-  private final Vector3i max;
-  private final int baseMinY;
+  /** Blocks in {@code y}-major order; see {@link #index(int, int, int)}. */
+  private final BlockState[] states;
 
-  SpongeChunk(BlockVolume volume, int baseMinY) {
-    this.volume = volume;
-    this.min = volume.min();
-    this.max = volume.max();
-    this.baseMinY = baseMinY;
+  private final int minY;
+  private final int height;
+
+  SpongeChunk(BlockState[] states, int minY, int height) {
+    this.states = states;
+    this.minY = minY;
+    this.height = height;
+  }
+
+  /** Index of a local coordinate in {@link #states}; callers must bounds-check first. */
+  static int index(int localX, int localY, int localZ) {
+    return (localY << 8) | (localZ << 4) | localX;
   }
 
   @Override
   public MinecraftBlock block(int localX, int y, int localZ) {
-    int vx = min.x() + localX;
-    int vy = min.y() + (y - baseMinY);
-    int vz = min.z() + localZ;
-    if (vy < min.y() || vy > max.y() || vx > max.x() || vz > max.z()) {
+    int localY = y - minY;
+    if (localX < 0 || localX > 15 || localZ < 0 || localZ > 15 || localY < 0 || localY >= height) {
       return UnknownBlock.INSTANCE;
     }
-    return new SpongeBlock(volume.block(vx, vy, vz));
+    BlockState state = states[SpongeChunk.index(localX, localY, localZ)];
+    return state == null ? UnknownBlock.INSTANCE : new SpongeBlock(state);
   }
 }

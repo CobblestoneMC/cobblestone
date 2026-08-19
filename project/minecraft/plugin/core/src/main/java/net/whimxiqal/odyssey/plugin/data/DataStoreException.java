@@ -25,4 +25,17 @@ public class DataStoreException extends RuntimeException {
   public DataStoreException(String message, Throwable cause) {
     super(message, cause);
   }
+
+  public static class NoDriver extends DataStoreException {
+    String missingDriver;
+
+    public NoDriver(String missingDriver, Throwable cause) {
+      super("Missing driver " + missingDriver, cause);
+      this.missingDriver = missingDriver;
+    }
+
+    public String getMissingDriver() {
+      return missingDriver;
+    }
+  }
 }

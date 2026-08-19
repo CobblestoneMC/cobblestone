@@ -30,6 +30,11 @@ public final class H2DataStore extends AbstractJdbcDataStore {
   }
 
   @Override
+  String driver() {
+    return DRIVER;
+  }
+
+  @Override
   protected void loadDriver() throws ClassNotFoundException {
     Class.forName(DRIVER);
   }

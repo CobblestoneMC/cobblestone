@@ -20,19 +20,20 @@ import net.whimxiqal.odyssey.minecraft.PlatformApi;
 import org.apache.logging.log4j.Logger;
 import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.Sponge;
+import org.spongepowered.api.block.BlockState;
 import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.world.chunk.ChunkEvent;
 import org.spongepowered.api.world.chunk.WorldChunk;
 import org.spongepowered.api.world.server.ServerWorld;
-import org.spongepowered.api.world.volume.archetype.ArchetypeVolume;
+import org.spongepowered.api.world.volume.stream.StreamOptions;
 import org.spongepowered.math.vector.Vector3i;
 import org.spongepowered.plugin.PluginContainer;
 
 /**
- * The Sponge {@link PlatformApi}: resolves worlds by key and snapshots one chunk column into an
- * immutable {@link ArchetypeVolume} (Sponge has no {@code ChunkSnapshot}), taken on the main server
- * thread and then read freely from search worker threads.
+ * The Sponge {@link PlatformApi}: resolves worlds by key and snapshots one chunk column's block
+ * states into a plain array (Sponge has no {@code ChunkSnapshot}), taken on the main server thread
+ * and then read freely from search worker threads.
  *
  * <p><b>Load policy.</b> An already-loaded chunk is copied immediately. Otherwise, unless the
  * policy is {@code LOADED_ONLY}, {@link ServerWorld#loadChunk(int, int, int, boolean) loadChunk} is
@@ -74,8 +75,7 @@ final class SpongePlatformApi implements PlatformApi<Entity> {
     }
     ServerWorld serverWorld = resolved.get();
     CompletableFuture<MinecraftChunk> future = new CompletableFuture<>();
-    // The world must be read on the main server thread; the resulting archetype volume is a
-    // detached
+    // The world must be read on the main server thread; the resulting block array is a detached
     // copy that is safe to read off-thread afterwards.
     scheduler.runGlobal(() -> resolveOnMain(serverWorld, chunkX, chunkZ, policy, future));
     return future;
@@ -145,22 +145,47 @@ final class SpongePlatformApi implements PlatformApi<Entity> {
         });
   }
 
-  /** Snapshots one chunk column into an archetype volume (must run on the main thread). */
+  /** Snapshots one chunk column's block states into an array (must run on the main thread). */
   private MinecraftChunk copy(ServerWorld world, int cx, int cz) {
     int baseX = cx << 4;
     int baseZ = cz << 4;
     int minY = world.min().y();
     int maxY = world.max().y();
+    int height = maxY - minY + 1;
     Vector3i min = new Vector3i(baseX, minY, baseZ);
     Vector3i max = new Vector3i(baseX + 15, maxY, baseZ + 15);
-    ArchetypeVolume volume;
+    BlockState[] states = new BlockState[16 * height * 16];
+    int[] copied = {0};
     try {
-      volume = world.createArchetypeVolume(min, max, min);
+      // Blocks only: block entities, biomes and entities are never read by the search, and the
+      // entity leg of createArchetypeVolume is broken in Sponge 12 (half-block offset, throws for
+      // entities on the volume's minimum face).
+      world
+          .blockStateStream(min, max, StreamOptions.lazily())
+          .forEach(
+              (volume, state, x, y, z) -> {
+                int localX = (int) Math.floor(x) - baseX;
+                int localY = (int) Math.floor(y) - minY;
+                int localZ = (int) Math.floor(z) - baseZ;
+                if (localX < 0
+                    || localX > 15
+                    || localZ < 0
+                    || localZ > 15
+                    || localY < 0
+                    || localY >= height) {
+                  return; // outside the requested column; ignore rather than fail the snapshot
+                }
+                states[SpongeChunk.index(localX, localY, localZ)] = state;
+                copied[0]++;
+              });
     } catch (Exception e) {
       logger.error("Sponge could not copy chunk [{}, {}]", cx, cz, e);
       return MinecraftChunk.Unknown.INSTANCE;
     }
-    return new SpongeChunk(volume, minY);
+    if (copied[0] == 0) {
+      return MinecraftChunk.Unknown.INSTANCE; // nothing streamed: treat the chunk as unavailable
+    }
+    return new SpongeChunk(states, minY, height);
   }
 
   /** Removes one parked future from a key's list; returns whether it was still parked. */

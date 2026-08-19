@@ -10,7 +10,6 @@ package net.whimxiqal.odyssey.plugin.data;
 import java.nio.file.Path;
 import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.plugin.data.jdbc.H2DataStore;
-import net.whimxiqal.odyssey.plugin.data.jdbc.SqliteDataStore;
 
 /** Constructs the configured {@link DataStore}. Platform plugins call this at enable. */
 public final class DataStores {
@@ -27,7 +26,6 @@ public final class DataStores {
    */
   public static DataStore create(DataBackend backend, Path file, OdysseyLogger logger) {
     return switch (backend) {
-      case SQLITE -> new SqliteDataStore(file, logger);
       case H2 -> new H2DataStore(file, logger);
     };
   }
