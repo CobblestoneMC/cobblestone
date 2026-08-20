@@ -8,7 +8,6 @@
 package net.whimxiqal.odyssey.sponge12.plugin;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -43,7 +42,6 @@ import net.whimxiqal.odyssey.plugin.search.SearchRegistry;
 import net.whimxiqal.odyssey.plugin.trip.GuideSearch;
 import net.whimxiqal.odyssey.plugin.trip.LiveSearch;
 import net.whimxiqal.odyssey.sponge12.SpongeNavigationServiceImpl;
-import net.whimxiqal.odyssey.sponge12.api.SingleCellWorldRegion;
 import net.whimxiqal.odyssey.sponge12.plugin.api.DestinationService;
 import org.spongepowered.api.command.Command;
 import org.spongepowered.api.command.CommandCompletion;
@@ -59,12 +57,17 @@ import org.spongepowered.math.vector.Vector3i;
  * The {@code /navigate} (alias {@code /nav}) command: parse flags, resolve the destination through
  * the registered providers, run the search, and — on success — create the chosen navigator and
  * start a guided trip. All the non-Sponge logic lives in platform-neutral plugin-core helpers (flag
- * parsing, destination resolution). {@code <x> <y> <z>} routes to raw coordinates in the current
- * world.
+ * parsing, destination resolution).
  */
 final class NavigateCommand {
 
   static final String PERMISSION_NAVIGATE = "odyssey.navigate";
+  // How many words /navigate accepts. Each word is its own parameter (see #build), so this is a
+  // hard cap: a destination address plus a flag or two fits comfortably.
+  private static final int MAX_WORDS = 8;
+  // One key per word position. Distinct keys, all read back in order, so every word lands in the
+  // same parse context — which is what lets tab-completion see the words typed before the cursor.
+  private static final List<Parameter.Key<String>> WORD_KEYS = wordKeys();
   // Above this many destination matches, tab-completion offers nothing — the player must type more
   // to narrow down. Keeps a huge level the player asked for by name from flooding completion.
   private static final int MAX_DESTINATION_SUGGESTIONS = DestinationResolver.PROMOTION_LIMIT;
@@ -89,16 +92,23 @@ final class NavigateCommand {
       Supplier<SearchSettings> searchSettings,
       OdysseyLogger log,
       Messages messages) {
-    Parameter.Value<String> args =
-        Parameter.remainingJoinedStrings()
-            .key("args")
-            .optional()
-            .completer((context, input) -> complete(context, input, integrations))
-            .build();
-    return Command.builder()
-        .shortDescription(Component.text("Navigate to a location or destination"))
-        .permission(PERMISSION_NAVIGATE)
-        .addParameter(args)
+    // A chain of single-word parameters, NOT one greedy parameter. Sponge translates a greedy or
+    // repeating parameter into nodes that redirect to themselves, and each redirect starts a fresh
+    // parse context — so a completer only ever sees the first word, and cannot tell where in the
+    // destination tree the player is. One node per word keeps the whole line in one context.
+    Command.Builder command =
+        Command.builder()
+            .shortDescription(Component.text("Navigate to a location or destination"))
+            .permission(PERMISSION_NAVIGATE);
+    for (Parameter.Key<String> key : WORD_KEYS) {
+      command.addParameter(
+          Parameter.string()
+              .key(key)
+              .optional()
+              .completer((context, input) -> complete(context, input, integrations))
+              .build());
+    }
+    return command
         .executor(
             context -> {
               Optional<ServerPlayer> player = context.cause().first(ServerPlayer.class);
@@ -107,10 +117,9 @@ final class NavigateCommand {
                     messages.render(messages.defaultLocale(), OdysseyMessages.PLAYERS_ONLY));
                 return CommandResult.success();
               }
-              String raw = context.one(args).orElse("");
               run(
                   player.get(),
-                  raw,
+                  typedWords(context),
                   navigationService,
                   tripService,
                   integrations,
@@ -124,9 +133,27 @@ final class NavigateCommand {
         .build();
   }
 
+  /** The words the player has typed, in order, gathered from the per-word parameters. */
+  private static List<String> typedWords(
+      org.spongepowered.api.command.parameter.CommandContext context) {
+    List<String> words = new ArrayList<>();
+    for (Parameter.Key<String> key : WORD_KEYS) {
+      context.one(key).ifPresent(words::add);
+    }
+    return words;
+  }
+
+  private static List<Parameter.Key<String>> wordKeys() {
+    List<Parameter.Key<String>> keys = new ArrayList<>();
+    for (int i = 1; i <= MAX_WORDS; i++) {
+      keys.add(Parameter.key("arg" + i, String.class));
+    }
+    return List.copyOf(keys);
+  }
+
   private static void run(
       ServerPlayer player,
-      String raw,
+      List<String> tokens,
       SpongeNavigationServiceImpl navigationService,
       SpongeTripServiceImpl tripService,
       SpongeIntegrationRegistry integrations,
@@ -136,7 +163,6 @@ final class NavigateCommand {
       OdysseyLogger log,
       Messages messages) {
     Locale locale = player.locale();
-    List<String> tokens = tokenize(raw);
     if (tokens.isEmpty()) {
       navHelp(player, locale, messages, integrations);
       return;
@@ -157,28 +183,6 @@ final class NavigateCommand {
     }
     if (integrations.navigator(flags.navigator()) == null) {
       messages.send(player, locale, OdysseyMessages.NAVIGATE_UNKNOWN_NAVIGATOR, flags.navigator());
-      return;
-    }
-
-    // A bare "x y z" (no flags) routes to coordinates in the current world.
-    double[] coordinates =
-        parsed.destination().isEmpty() ? null : asCoordinates(parsed.destination());
-    if (coordinates != null) {
-      startSearch(
-          player,
-          locale,
-          coordinateLabel(coordinates),
-          coordinateDestination(player, coordinates),
-          flags,
-          false,
-          navigationService,
-          tripService,
-          integrations,
-          searches,
-          gate,
-          searchSettings,
-          log,
-          messages);
       return;
     }
 
@@ -392,8 +396,6 @@ final class NavigateCommand {
     SpongeCommandHelp.line(
         player, messages, locale, "/navigate <destination…>", "command.navigate.help.destination");
     SpongeCommandHelp.line(
-        player, messages, locale, "/navigate <x> <y> <z>", "command.navigate.help.destination");
-    SpongeCommandHelp.line(
         player, messages, locale, "-navigator <id>", "command.navigate.help.navigator");
     SpongeCommandHelp.line(
         player, messages, locale, "-no-mode <mode>", "command.navigate.help.no_mode");
@@ -424,9 +426,9 @@ final class NavigateCommand {
   }
 
   /**
-   * Tab-completion for the destination arguments. The token being typed is the last one — the empty
-   * token after a trailing space included — and it is passed through to the resolver, which does
-   * the prefix filtering itself.
+   * Tab-completion for the destination arguments. Each word is its own parameter, so {@code input}
+   * is just the word under the cursor — a completion replaces that word alone — and the words
+   * before it are readable from the context.
    */
   private static List<CommandCompletion> complete(
       org.spongepowered.api.command.parameter.CommandContext context,
@@ -436,7 +438,13 @@ final class NavigateCommand {
     if (player.isEmpty()) {
       return List.of();
     }
-    List<String> tokens = FlagParser.tokenizeKeepingTrailing(input);
+    List<String> tokens = typedWords(context);
+    // The word under the cursor has usually been parsed into the context already; it is the same
+    // string, in the last position. Counting it twice would place the player a level too deep.
+    if (!input.isEmpty() && !tokens.isEmpty() && tokens.getLast().equals(input)) {
+      tokens.removeLast();
+    }
+    tokens.add(input); // the (possibly empty) word being typed
     List<String> suggestions =
         DestinationResolver.suggest(
             destinationRoots(integrations, player.get()),
@@ -447,55 +455,11 @@ final class NavigateCommand {
     if (suggestions.size() > MAX_DESTINATION_SUGGESTIONS) {
       return List.of();
     }
-    // A remaining-joined-strings completion replaces the whole argument, so each suggestion carries
-    // back everything already typed — flags included — with only the last token swapped out.
-    String prefix = FlagParser.completionPrefix(input);
     List<CommandCompletion> completions = new ArrayList<>();
     for (String suggestion : suggestions) {
-      completions.add(CommandCompletion.of(prefix + suggestion));
+      completions.add(CommandCompletion.of(suggestion));
     }
     return completions;
-  }
-
-  private static ServerLocation coordinateDestination(ServerPlayer player, double[] xyz) {
-    return ServerLocation.of(player.world(), xyz[0], xyz[1], xyz[2]);
-  }
-
-  private static MinecraftDestination<ServerWorld, Vector3i> destinationOf(
-      ServerLocation location) {
-    return net.whimxiqal.odyssey.sponge12.plugin.api.Destination.at(location, Component.empty());
-  }
-
-  private static void startSearch(
-      ServerPlayer player,
-      Locale locale,
-      String label,
-      ServerLocation location,
-      NavigationFlags flags,
-      boolean live,
-      SpongeNavigationServiceImpl navigationService,
-      SpongeTripServiceImpl tripService,
-      SpongeIntegrationRegistry integrations,
-      SearchRegistry<ServerLocation> searches,
-      SearchGate gate,
-      Supplier<SearchSettings> searchSettings,
-      OdysseyLogger log,
-      Messages messages) {
-    startSearch(
-        player,
-        locale,
-        label,
-        () -> List.of(SingleCellWorldRegion.of(location)),
-        flags,
-        live,
-        navigationService,
-        tripService,
-        integrations,
-        searches,
-        gate,
-        searchSettings,
-        log,
-        messages);
   }
 
   private static void sendFailure(
@@ -527,25 +491,6 @@ final class NavigateCommand {
     }
   }
 
-  private static double[] asCoordinates(List<String> tokens) {
-    if (tokens.size() != 3) {
-      return null;
-    }
-    try {
-      return new double[] {
-        Double.parseDouble(tokens.get(0)),
-        Double.parseDouble(tokens.get(1)),
-        Double.parseDouble(tokens.get(2))
-      };
-    } catch (NumberFormatException notCoordinates) {
-      return null;
-    }
-  }
-
-  private static String coordinateLabel(double[] xyz) {
-    return (int) xyz[0] + ", " + (int) xyz[1] + ", " + (int) xyz[2];
-  }
-
   private static Optional<Path<ServerLocation, MinecraftStepPayload>> convertUpdateResult(
       NavigationResult<ServerLocation, MinecraftStepPayload> result, Throwable error) {
     if (error == null
@@ -565,10 +510,5 @@ final class NavigateCommand {
       joined.add(String.join(" ", address));
     }
     return String.join(", ", joined);
-  }
-
-  private static List<String> tokenize(String raw) {
-    String trimmed = raw.trim();
-    return trimmed.isEmpty() ? List.of() : Arrays.asList(trimmed.split("\\s+"));
   }
 }

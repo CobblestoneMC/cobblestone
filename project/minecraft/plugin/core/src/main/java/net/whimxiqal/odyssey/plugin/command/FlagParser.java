@@ -113,22 +113,6 @@ public final class FlagParser {
   }
 
   /**
-   * Everything typed before the token currently being completed, trailing space included.
-   *
-   * <p>Platforms differ in what a completion replaces. Brigadier can be told to replace just the
-   * last token, but a Sponge {@code remainingJoinedStrings} parameter replaces the whole argument —
-   * offering a bare {@code warp} there would turn {@code mco wa} into {@code warp}. Such a platform
-   * puts this prefix back in front of each suggestion.
-   *
-   * @param raw the raw argument string, exactly as typed
-   * @return the prefix, empty when the first token is still being typed
-   */
-  public static String completionPrefix(String raw) {
-    List<String> tokens = tokenizeKeepingTrailing(raw);
-    return raw.substring(0, raw.length() - tokens.getLast().length());
-  }
-
-  /**
    * Keeps only the positional destination tokens: flags and the values they consume are dropped, so
    * {@code -live mco warp} and {@code mco warp} address the same place.
    *

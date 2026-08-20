@@ -123,17 +123,4 @@ class FlagParserTest {
     Parsed parsed = parsed(tokens.toArray(new String[0]));
     assertEquals(parsed.destination(), FlagParser.destinationTokens(tokens));
   }
-
-  @Test
-  void completionPrefixKeepsEverythingBeforeTheTokenBeingTyped() {
-    // Sponge replaces the whole argument with the completion, so a bare "warp" would turn
-    // "mco wa" into "warp"; the prefix is what puts "mco " back in front of it.
-    assertEquals("", FlagParser.completionPrefix(""));
-    assertEquals("", FlagParser.completionPrefix("mc"));
-    assertEquals("mco ", FlagParser.completionPrefix("mco "));
-    assertEquals("mco ", FlagParser.completionPrefix("mco wa"));
-    assertEquals("mco warp ", FlagParser.completionPrefix("mco warp "));
-    assertEquals("-live mco ", FlagParser.completionPrefix("-live mco wa"));
-    assertEquals("mco  ", FlagParser.completionPrefix("mco  wa"), "odd spacing is preserved");
-  }
 }
