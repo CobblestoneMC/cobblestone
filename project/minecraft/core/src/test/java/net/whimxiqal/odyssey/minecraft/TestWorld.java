@@ -53,7 +53,7 @@ public final class TestWorld implements MinecraftWorld {
   }
 
   @Override
-  public FutureOr<MinecraftBlock> blockAt(Cell cell) {
+  public FutureOr<MinecraftBlock> blockAt(Cell cell, Cell previous) {
     return FutureOr.of(grid.getOrDefault(cell, air));
   }
 

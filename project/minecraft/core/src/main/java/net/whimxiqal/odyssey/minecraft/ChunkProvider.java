@@ -14,6 +14,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.LongSupplier;
 import net.whimxiqal.odyssey.Cell;
 import net.whimxiqal.odyssey.FutureOr;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * A thread-safe, size-bounded (LRU) cache of chunk snapshots, sitting between modes and the
@@ -68,7 +69,7 @@ public final class ChunkProvider {
    * @param world the world
    * @return the block, immediate or pending
    */
-  public FutureOr<MinecraftBlock> block(Cell cell, MinecraftWorld world) {
+  public FutureOr<MinecraftBlock> block(Cell cell, MinecraftWorld world, @Nullable Cell previous) {
     if (cell.y() < world.minY() || cell.y() > world.maxY()) {
       return FutureOr.of(UnknownBlock.INSTANCE);
     }
@@ -116,23 +117,33 @@ public final class ChunkProvider {
         (snapshot, error) -> {
           synchronized (lock) {
             inFlight.remove(key);
-            if (error == null && snapshot != null) {
-              cache.put(key, new Cached(snapshot, clock.getAsLong(), prefetch));
+            if (error != null || snapshot == null) {
+              return;
             }
+            if (prefetch && snapshot == MinecraftChunk.Unknown.INSTANCE) {
+              // A read-ahead that came back unknown is not necessarily a fact about the world: a
+              // platform may decline speculative work it would still do when a search is actually
+              // blocked on the chunk (Sponge yields its chunk-loading budget to urgent fetches).
+              // Caching that would answer the later urgent request from a stale refusal.
+              return;
+            }
+            cache.put(key, new Cached(snapshot, clock.getAsLong(), prefetch));
           }
         });
     return fetch;
   }
 
   private void triggerReadAhead(Cell cell, MinecraftWorld world) {
+    int centerChunkX = cell.x() >> 4;
+    int centerChunkZ = cell.z() >> 4;
     int minChunkX = (cell.x() - CHUNK_PREFETCH_MARGIN) >> 4;
     int maxChunkX = (cell.x() + CHUNK_PREFETCH_MARGIN) >> 4;
     int minChunkZ = (cell.z() - CHUNK_PREFETCH_MARGIN) >> 4;
     int maxChunkZ = (cell.z() + CHUNK_PREFETCH_MARGIN) >> 4;
     for (int cx = minChunkX; cx <= maxChunkX; cx++) {
       for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
-        if (cx == 0 && cz == 0) {
-          continue;
+        if (cx == centerChunkX && cz == centerChunkZ) {
+          continue; // the caller fetches the cell's own chunk itself, as a direct (urgent) fetch
         }
         prefetch(cx, cz, world);
       }

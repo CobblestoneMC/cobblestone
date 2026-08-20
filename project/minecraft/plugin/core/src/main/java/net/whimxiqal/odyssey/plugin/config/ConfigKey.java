@@ -7,12 +7,15 @@
 
 package net.whimxiqal.odyssey.plugin.config;
 
+import java.util.List;
+
 /**
  * A typed handle to a single configuration parameter: its period-delimited, snake_case path (e.g.
- * {@code navigators.trail.particle_type}), default value, decoding {@link Codec}, and whether it
- * can change live on {@link ConfigManager#reload()}.
+ * {@code navigators.trail.particle_type}), default value, decoding {@link Codec}, whether it can
+ * change live on {@link ConfigManager#reload()}, and the documentation emitted for it when the
+ * config template is generated.
  *
- * <p>Obtain one from {@link ConfigManager#register}; read it with {@link ConfigManager#get}.
+ * <p>Obtain one from {@link ConfigManager#key}; read it with {@link ConfigManager#get}.
  *
  * @param <V> the value type
  */
@@ -22,12 +25,22 @@ public final class ConfigKey<V> {
   private final V defaultValue;
   private final Codec<V> codec;
   private final boolean mutable;
+  private final List<String> comment;
+  private final List<V> permitted;
 
-  ConfigKey(String path, V defaultValue, Codec<V> codec, boolean mutable) {
+  ConfigKey(
+      String path,
+      V defaultValue,
+      Codec<V> codec,
+      boolean mutable,
+      List<String> comment,
+      List<V> permitted) {
     this.path = path;
     this.defaultValue = defaultValue;
     this.codec = codec;
     this.mutable = mutable;
+    this.comment = comment;
+    this.permitted = permitted;
   }
 
   /**
@@ -40,7 +53,17 @@ public final class ConfigKey<V> {
   }
 
   /**
-   * Returns the value used when the key is absent or malformed.
+   * Returns the final segment of this key's path — its name within its section.
+   *
+   * @return the leaf name
+   */
+  public String name() {
+    int dot = path.lastIndexOf('.');
+    return dot < 0 ? path : path.substring(dot + 1);
+  }
+
+  /**
+   * Returns the value used when the key is absent, malformed, or not permitted.
    *
    * @return the default value
    */
@@ -65,5 +88,27 @@ public final class ConfigKey<V> {
    */
   public boolean mutable() {
     return mutable;
+  }
+
+  /**
+   * Returns the documentation lines emitted above this key in the generated template, already
+   * wrapped and without the leading {@code #}.
+   *
+   * @return the comment lines (possibly empty)
+   */
+  public List<String> comment() {
+    return comment;
+  }
+
+  /**
+   * Returns the values this platform accepts, or an empty list when unrestricted. A decoded value
+   * outside a non-empty set is rejected with a warning and replaced by the fallback — this is what
+   * makes a config copied from another platform announce itself rather than silently changing
+   * meaning.
+   *
+   * @return the permitted values, or empty for unrestricted
+   */
+  public List<V> permitted() {
+    return permitted;
   }
 }

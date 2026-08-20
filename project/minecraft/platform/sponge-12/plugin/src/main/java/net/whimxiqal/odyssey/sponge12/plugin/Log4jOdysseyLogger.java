@@ -17,7 +17,7 @@ import org.apache.logging.log4j.Logger;
  * threshold; {@code trace}/{@code debug} are emitted at {@code info} with a prefix (only when the
  * threshold allows) so they reach the console regardless of the server's Log4j configuration.
  */
-final class Log4jOdysseyLogger implements OdysseyLogger {
+final class Log4jOdysseyLogger extends OdysseyLogger {
 
   private final Logger logger;
   private volatile LogLevel threshold = LogLevel.INFO;
@@ -42,14 +42,14 @@ final class Log4jOdysseyLogger implements OdysseyLogger {
   @Override
   public void trace(String message, Object... args) {
     if (enabled(LogLevel.TRACE)) {
-      logger.info("[TRACE] " + format(message, args));
+      logger.trace("[TRACE] {}", format(message, args));
     }
   }
 
   @Override
   public void debug(String message, Object... args) {
     if (enabled(LogLevel.DEBUG)) {
-      logger.info("[DEBUG] " + format(message, args));
+      logger.info("[DEBUG] {}", format(message, args));
     }
   }
 
@@ -72,27 +72,5 @@ final class Log4jOdysseyLogger implements OdysseyLogger {
     if (enabled(LogLevel.ERROR)) {
       logger.error(format(message, args), throwable);
     }
-  }
-
-  /** Replaces each {@code {}} in order with the string form of the next argument. */
-  private static String format(String message, Object[] args) {
-    if (args == null || args.length == 0) {
-      return message;
-    }
-    StringBuilder out = new StringBuilder(message.length() + 16);
-    int arg = 0;
-    int i = 0;
-    while (i < message.length()) {
-      if (arg < args.length
-          && i + 1 < message.length()
-          && message.charAt(i) == '{'
-          && message.charAt(i + 1) == '}') {
-        out.append(args[arg++]);
-        i += 2;
-      } else {
-        out.append(message.charAt(i++));
-      }
-    }
-    return out.toString();
   }
 }

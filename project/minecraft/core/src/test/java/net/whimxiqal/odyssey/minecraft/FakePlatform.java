@@ -22,6 +22,12 @@ final class FakePlatform implements PlatformApi<Object> {
   private final List<long[]> fetched = new ArrayList<>();
   private final Map<Long, CompletableFuture<MinecraftChunk>> deferred = new HashMap<>();
   private boolean immediate = true;
+  private boolean refuseReadAhead;
+
+  /** Makes read-ahead fetches come back unknown, the way a platform out of budget would. */
+  void setRefuseReadAhead(boolean refuseReadAhead) {
+    this.refuseReadAhead = refuseReadAhead;
+  }
 
   void setImmediate(boolean immediate) {
     this.immediate = immediate;
@@ -44,6 +50,9 @@ final class FakePlatform implements PlatformApi<Object> {
   public CompletableFuture<MinecraftChunk> fetchChunk(
       int chunkX, int chunkZ, MinecraftWorld world, ChunkLoadPolicy policy, boolean urgent) {
     fetched.add(new long[] {chunkX, chunkZ});
+    if (refuseReadAhead && !urgent) {
+      return CompletableFuture.completedFuture(MinecraftChunk.Unknown.INSTANCE);
+    }
     if (immediate) {
       return CompletableFuture.completedFuture(new FakeChunk(chunkX, chunkZ));
     }

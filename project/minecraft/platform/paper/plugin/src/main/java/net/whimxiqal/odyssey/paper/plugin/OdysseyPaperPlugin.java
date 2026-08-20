@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.Supplier;
 import net.whimxiqal.odyssey.api.SearchSettings;
+import net.whimxiqal.odyssey.minecraft.ChunkProviderSettings;
 import net.whimxiqal.odyssey.paper.PaperNavigationServiceImpl;
 import net.whimxiqal.odyssey.paper.api.NavigationService;
 import net.whimxiqal.odyssey.paper.api.SearchModificationRegistrar;
@@ -54,8 +55,8 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
     JulOdysseyLogger logger = new JulOdysseyLogger(getLogger());
 
     Path configFile = getDataFolder().toPath().resolve("config.yml");
-    ConfigManager config = new ConfigManager(configFile, "config.yml", logger);
-    ConfigKeys keys = new ConfigKeys(config);
+    ConfigManager config = new ConfigManager(configFile, logger);
+    ConfigKeys keys = new ConfigKeys(config, PaperConfigKeys.platform());
     config.load();
     logger.setLevel(config.get(keys.loggingLevel));
 
@@ -71,7 +72,9 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
 
     // The transition registry is owned by the plugin; the platform API only reads from / registers
     // into it (design/05). Both are reachable to other plugins via the registered plugin API.
-    this.platformApi = new PaperNavigationServiceImpl(this, logger);
+    this.platformApi =
+        new PaperNavigationServiceImpl(
+            this, logger, ChunkProviderSettings.defaults(config.get(keys.chunksPolicy)));
     PaperIntegrationRegistry integrationRegistry = new PaperIntegrationRegistry();
     getServer()
         .getServicesManager()

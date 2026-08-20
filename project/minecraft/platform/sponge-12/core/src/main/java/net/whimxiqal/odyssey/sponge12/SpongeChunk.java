@@ -20,7 +20,8 @@ import org.spongepowered.api.block.BlockState;
  * <p>We deliberately do not use {@code ServerWorld#createArchetypeVolume}: it also copies block
  * entities, biomes and entities we never read, and its entity leg is broken in Sponge 12 (entity
  * archetypes are offset by half a block and throw {@link IllegalArgumentException} for any entity
- * standing on the volume's minimum face). A block-state stream avoids all of that.
+ * standing on the volume's minimum face). Nor do we use {@code blockStateStream}, whose per-block
+ * key materialization and double lookup cost far more than reading the column directly.
  *
  * <p>Cells never written by the copy stay {@code null} and read back as {@link UnknownBlock} —
  * impassable — rather than silently as air.

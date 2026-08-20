@@ -18,10 +18,7 @@ sponge = "12.0.0"
 snakeyaml = "2.3"
 # GradleUp shadow — bundles only our own net.whimxiqal.odyssey.* modules into the shipped plugin jar.
 shadow = "9.0.0"
-# JDBC drivers for the embedded DataStore backends. Not shaded: the platform plugin downloads the
-# configured backend's driver at runtime (MavenLibraryResolver). Here they are test-only, exercising
-# the JDBC DataStore contract on both engines.
-sqlite = "3.46.1.3"
+# JDBC drivers for the embedded DataStore backends.
 h2 = "2.2.224"
 # bStats — anonymous usage metrics. Shaded into the plugin jar and relocated (design/10) so it never
 # clashes with another plugin's copy.
@@ -35,7 +32,6 @@ adventure-api = { module = "net.kyori:adventure-api", version.ref = "adventure" 
 paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
 spongeapi = { module = "org.spongepowered:spongeapi", version.ref = "sponge" }
 snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
-sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite" }
 h2 = { module = "com.h2database:h2", version.ref = "h2" }
 bstats-base = { module = "org.bstats:bstats-base", version.ref = "bstats" }
 bstats-bukkit = { module = "org.bstats:bstats-bukkit", version.ref = "bstats" }

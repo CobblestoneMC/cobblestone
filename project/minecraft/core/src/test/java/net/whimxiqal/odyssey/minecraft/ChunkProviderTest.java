@@ -9,6 +9,7 @@ package net.whimxiqal.odyssey.minecraft;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.atomic.AtomicLong;
@@ -26,7 +27,7 @@ class ChunkProviderTest {
   }
 
   private static ChunkProviderSettings settings(long staleness) {
-    return new ChunkProviderSettings(1024, staleness, ChunkLoadPolicy.LOAD_FROM_DISK);
+    return new ChunkProviderSettings(1024, staleness, ChunkLoadPolicy.ALLOW_LOAD);
   }
 
   @Test
@@ -88,5 +89,24 @@ class ChunkProviderTest {
     assertEquals(1, platform.fetchCount(1, -1));
     assertEquals(1, platform.fetchCount(1, 0));
     assertEquals(1, platform.fetchCount(1, 1));
+  }
+
+  @Test
+  void doesNotCacheUnknownFromReadAhead() {
+    FakePlatform platform = new FakePlatform();
+    platform.setRefuseReadAhead(true);
+    ChunkProvider provider = provider(platform, settings(10_000L));
+
+    // Reading one cell drags its neighbours in as read-ahead, and those come back unknown.
+    provider.block(new Cell(0, 64, 0), world).future().join();
+    int neighbourX = ChunkProvider.CHUNK_PREFETCH_MARGIN >> 4;
+
+    // A later urgent read of a refused neighbour must go back to the platform rather than be
+    // answered from the refusal, which was only ever a statement about the read-ahead budget.
+    int before = platform.fetchCount(neighbourX, 0);
+    FutureOr<MinecraftBlock> block = provider.block(new Cell(neighbourX << 4, 64, 0), world);
+    assertTrue(
+        platform.fetchCount(neighbourX, 0) > before, "refused read-ahead must not be cached");
+    assertNotNull(block);
   }
 }

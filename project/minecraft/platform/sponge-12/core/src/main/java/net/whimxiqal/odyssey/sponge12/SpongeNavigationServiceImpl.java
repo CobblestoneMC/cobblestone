@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.IntSupplier;
 import net.whimxiqal.odyssey.CellRegion;
 import net.whimxiqal.odyssey.DomainRegion;
 import net.whimxiqal.odyssey.FutureOr;
@@ -73,6 +74,7 @@ public final class SpongeNavigationServiceImpl
 
   private final OdysseyLogger logger;
   private final SpongeScheduler scheduler;
+  private final SpongePlatformApi platform;
   private final ChunkProvider chunkProvider;
   private final OdysseyApi core;
   private final HeuristicStrategy heuristic;
@@ -84,15 +86,25 @@ public final class SpongeNavigationServiceImpl
    *
    * @param plugin the owning plugin container
    * @param logger the logger for diagnostics
+   * @param chunkSettings how chunks are fetched and cached (the load policy comes from config)
+   * @param maxChunkLoadRequests how many chunk loading tickets may be held at once
    */
-  public SpongeNavigationServiceImpl(PluginContainer plugin, OdysseyLogger logger) {
+  public SpongeNavigationServiceImpl(
+      PluginContainer plugin,
+      OdysseyLogger logger,
+      ChunkProviderSettings chunkSettings,
+      IntSupplier maxChunkLoadRequests) {
     this.logger = logger;
     int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
     this.scheduler = new SpongeScheduler(plugin, workerThreads);
-    SpongePlatformApi platform = new SpongePlatformApi(plugin, scheduler);
-    this.chunkProvider = new ChunkProvider(platform, ChunkProviderSettings.defaults());
+    this.platform = new SpongePlatformApi(scheduler, logger, maxChunkLoadRequests);
+    this.chunkProvider = new ChunkProvider(platform, chunkSettings);
     this.core = OdysseyApi.load();
     this.heuristic = Heuristics.runningAverage(CHEAPEST_COST_PER_BLOCK);
+  }
+
+  public void registerListeners(PluginContainer plugin) {
+    this.platform.registerListeners(plugin);
   }
 
   @Override
@@ -182,6 +194,7 @@ public final class SpongeNavigationServiceImpl
       ServerPlayer player,
       Destination<DomainRegion<MinecraftWorld>> destination,
       MinecraftSearchSettings settings) {
+    logger.debug("Search triggered for player {} to destination {}", player.name(), destination);
     OdysseyPlayer agent = new SpongePlayer(player);
     ServerLocation origin = player.serverLocation();
     Position<MinecraftWorld> originPosition =

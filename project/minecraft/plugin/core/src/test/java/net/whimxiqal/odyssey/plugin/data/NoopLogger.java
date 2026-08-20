@@ -10,7 +10,7 @@ package net.whimxiqal.odyssey.plugin.data;
 import net.whimxiqal.odyssey.OdysseyLogger;
 
 /** A logger that swallows everything; keeps DataStore tests quiet. */
-final class NoopLogger implements OdysseyLogger {
+final class NoopLogger extends OdysseyLogger {
 
   @Override
   public void trace(String message, Object... args) {}

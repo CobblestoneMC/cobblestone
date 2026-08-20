@@ -67,7 +67,7 @@ final class PaperPlatformApi implements PlatformApi<Entity> {
       return future;
     }
 
-    boolean generate = policy == ChunkLoadPolicy.GENERATE;
+    boolean generate = policy == ChunkLoadPolicy.ALLOW_LOAD_AND_GENERATE;
     return bukkit
         .getChunkAtAsync(chunkX, chunkZ, generate, urgent)
         .thenApply(

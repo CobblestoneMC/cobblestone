@@ -76,12 +76,13 @@ public final class PaperNavigationServiceImpl
    *
    * @param plugin the owning plugin
    */
-  public PaperNavigationServiceImpl(Plugin plugin, OdysseyLogger logger) {
+  public PaperNavigationServiceImpl(
+      Plugin plugin, OdysseyLogger logger, ChunkProviderSettings chunkSettings) {
     this.logger = logger;
     int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
     this.scheduler = new PaperScheduler(plugin, workerThreads);
     PaperPlatformApi platform = new PaperPlatformApi(plugin, scheduler);
-    this.chunkProvider = new ChunkProvider(platform, ChunkProviderSettings.defaults());
+    this.chunkProvider = new ChunkProvider(platform, chunkSettings);
     this.core = OdysseyApi.load();
     this.heuristic = Heuristics.runningAverage(CHEAPEST_COST_PER_BLOCK);
   }

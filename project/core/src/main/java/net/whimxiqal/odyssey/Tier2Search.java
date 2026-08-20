@@ -10,6 +10,7 @@ package net.whimxiqal.odyssey;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -77,7 +78,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private final Map<CellState, Node<T>> nodes = new HashMap<>();
   private final Map<Cell, Set<CellState>> byCell = new HashMap<>();
   private final PriorityQueue<Entry> open =
-      new PriorityQueue<>((a, b) -> Double.compare(a.estimatedTotalCost(), b.estimatedTotalCost()));
+      new PriorityQueue<>(Comparator.comparingDouble(Entry::estimatedTotalCost));
   private int expandedCount;
   private PendingModes<T> pendingModes;
   private CellState pendingGoal; // an optimistically-reached goal awaiting path confirmation
@@ -97,6 +98,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private final AtomicBoolean signalled = new AtomicBoolean();
 
   private final CompletableFuture<Tier2Result<T, D>> result = new CompletableFuture<>();
+  private final Stopwatch activeStopwatch = new Stopwatch();
+  private long parkTimestamp = System.currentTimeMillis();
 
   Tier2Search(
       OdysseyLogger logger,
@@ -111,7 +114,10 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       BooleanSupplier cancelled,
       Executor executor,
       long deadlineMillis) {
-    this.logger = logger;
+    this.logger =
+        new ScopedOdysseyLogger(
+            logger,
+            "DomainLocal[" + virtualPath.fromCell() + " to " + virtualPath.targetRegion() + "]");
     this.agent = agent;
     this.domain = virtualPath.domain();
     this.target = virtualPath.targetRegion();
@@ -138,6 +144,10 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     return result;
   }
 
+  private String stats() {
+    return "activeTime:" + activeStopwatch.elapsed() + "ms, " + "visited:" + nodes.size();
+  }
+
   /** Signals that there is work and schedules a single {@link #pump()} run if one is not active. */
   private void wake() {
     signalled.set(true);
@@ -151,7 +161,13 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       // Consume signals: each pass runs the loop until it hits a wait; re-run while new work
       // arrived.
       while (signalled.compareAndSet(true, false)) {
+        logger.trace("Woke up after {}ms", System.currentTimeMillis() - parkTimestamp);
+        activeStopwatch.resume();
+
         loop();
+
+        activeStopwatch.pause();
+        parkTimestamp = System.currentTimeMillis();
         if (result.isDone()) {
           return;
         }
@@ -172,7 +188,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         return; // abandoned; the outer search has already completed with CANCELLED
       }
       if (deadlineMillis > 0 && System.currentTimeMillis() > deadlineMillis) {
-        logger.debug("Tier2Search(agent:{},target:{}) timed out", agent, target);
+        logger.debug("Timed out; {}", stats());
         result.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.TIMED_OUT));
         return;
       }
@@ -204,7 +220,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         if (pendingChecks.get() > 0) {
           return; // nothing to expand, but a pending verdict may yet repair; wait
         }
-        logger.debug("Tier2Search(agent:{},target:{}) failed: open set is empty", agent, target);
+        logger.debug("Failed: open set is empty; {}", stats());
         result.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.UNREACHABLE));
         return;
       }
@@ -237,12 +253,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         continue;
       }
       if (expandedCount++ > maxCellsVisited) {
-        logger.debug(
-            "Tier2Search(agent:{},target:{}) visited cells ({}) > max ({})",
-            agent,
-            target,
-            expandedCount,
-            maxCellsVisited);
+        logger.debug("Visited cells ({}) > max ({}); {}", expandedCount, maxCellsVisited, stats());
         result.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.LIMIT_EXCEEDED));
         return;
       }
@@ -491,11 +502,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     if (affected.isEmpty()) {
       return;
     }
-    logger.trace(
-        "Tier2Search(agent:{},target:{}) repairing {} node(s) after a wall",
-        agent,
-        target,
-        affected.size());
+    logger.trace("Repairing {} node(s) after a wall", agent, target, affected.size());
 
     // Invalidate the subtree, seed each node from its surviving external parents, and index the
     // internal (affected→affected) edges for the mini-Dijkstra.
@@ -621,7 +628,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   }
 
   private void finishSolved(CellState goal) {
-    logger.debug("Tier2Search(agent:{},target:{}) solved. visited:{}", agent, target, nodes.size());
+    logger.debug("Solved; {}", stats());
     result.complete(new Tier2Result.Solved<>(reconstruct(goal), nodes.get(goal).cost));
   }
 

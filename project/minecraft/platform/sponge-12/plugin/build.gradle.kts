@@ -27,7 +27,6 @@ dependencies {
     implementation(project(":minecraft:plugin:plugin-core"))
     // Bundled at runtime (no Sponge library resolver): YAML config parser + embedded JDBC drivers.
     implementation(libs.snakeyaml)
-//    implementation(libs.sqlite.jdbc)
     implementation(libs.h2)
     // bStats metrics — shaded into the plugin jar and relocated (below), not server-provided.
     implementation(libs.bstats.sponge)

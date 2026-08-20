@@ -13,6 +13,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.whimxiqal.odyssey.api.Destination;
 import net.whimxiqal.odyssey.api.FailureReason;
 import net.whimxiqal.odyssey.api.NavigationResult;
@@ -38,6 +39,10 @@ import net.whimxiqal.odyssey.api.Step;
  */
 final class SearchImpl<A extends Agent, T, D extends Domain>
     implements SearchHandle<Position<D>, T> {
+
+  // for logging
+  private static final AtomicInteger SEARCH_ID_COUNTER = new AtomicInteger(0);
+  private final int searchId = SEARCH_ID_COUNTER.incrementAndGet();
 
   private final OdysseyLogger logger;
   private final Scheduler scheduler;
@@ -70,7 +75,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
       List<? extends Transition<T, D>> transitions,
       List<? extends Restriction<A, D>> restrictions,
       SearchSettings settings) {
-    this.logger = logger;
+    this.logger = new ScopedOdysseyLogger(logger, "search[" + searchId + "]");
     this.scheduler = scheduler;
     this.executor = scheduler.asyncExecutor();
     this.heuristic = heuristic;
@@ -81,9 +86,12 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
     this.settings = settings;
     this.tier1 = new Tier1Graph<>(origin, transitions, destination.regions(), heuristic);
     this.deadlineMillis = System.currentTimeMillis() + settings.maxWallClockMillis();
+
+    this.logger.debug("Constructed for agent {} and destination {}", agent, destination);
   }
 
   void start() {
+    logger.debug("Executing async start");
     scheduler.runAsync(this::step);
   }
 
@@ -107,6 +115,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
       finish(new NavigationResult.Failure<>(FailureReason.TIMED_OUT));
       return;
     }
+    logger.debug("Executing step on thread", Thread.currentThread().getName());
     try {
       if (graphPath == null) {
         Optional<GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>>> found =
@@ -122,6 +131,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
       }
       Tier1Edge<T, D> edge = firstUnsolvedEdge(graphPath);
       if (edge == null) {
+        logger.debug("Found all graph edges solved");
         finish(new NavigationResult.Success<>(buildPath(graphPath)));
         return;
       }
@@ -140,6 +150,10 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
               executor,
               deadlineMillis);
       VirtualPath<T, D> virtualPath = edge.virtualPath();
+      logger.debug(
+          "Starting domain-local search from {} to {}",
+          edge.virtualPath().fromCell(),
+          edge.virtualPath().targetRegion());
       tier2
           .solve()
           .whenCompleteAsync(

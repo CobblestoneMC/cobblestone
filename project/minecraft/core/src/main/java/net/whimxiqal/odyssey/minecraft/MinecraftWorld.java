@@ -10,6 +10,7 @@ package net.whimxiqal.odyssey.minecraft;
 import net.whimxiqal.odyssey.Cell;
 import net.whimxiqal.odyssey.Domain;
 import net.whimxiqal.odyssey.FutureOr;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * A Minecraft world — the single concrete {@link Domain} type for the Minecraft embedder.
@@ -40,10 +41,11 @@ public interface MinecraftWorld extends Domain {
    * Returns the block at {@code cell}, possibly pending on a chunk fetch. An unavailable cell
    * (chunk not loaded under the configured policy) resolves to an impassable "unknown" block.
    *
-   * @param cell the cell
+   * @param cell  the cell
+   * @param previous an optional previous cell to inform us of directional movement to read-ahead IO
    * @return the block, immediate or pending
    */
-  FutureOr<MinecraftBlock> blockAt(Cell cell);
+  FutureOr<MinecraftBlock> blockAt(Cell cell, @Nullable Cell previous);
 
   /** The vanilla dimension kinds, plus a catch-all for custom/modded dimensions. */
   enum Environment {

@@ -7,7 +7,7 @@
 
 package net.whimxiqal.odyssey;
 
-public class TestOdysseyLogger implements OdysseyLogger {
+public class TestOdysseyLogger extends OdysseyLogger {
   @Override
   public void trace(String message, Object... args) {}
 

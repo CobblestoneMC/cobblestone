@@ -22,6 +22,21 @@ public record ChunkProviderSettings(
 
   /** Returns settings with sensible defaults. */
   public static ChunkProviderSettings defaults() {
-    return new ChunkProviderSettings(1024, 10_000L, ChunkLoadPolicy.LOAD_FROM_DISK);
+    return defaults(ChunkLoadPolicy.ALLOW_LOAD);
+  }
+
+  /**
+   * Returns settings with sensible cache defaults and the given load policy.
+   *
+   * <p>The cache tunables are deliberately not configurable: the caching model is due to change
+   * (fixed-height columns and time-based staleness give way to smaller cubes evicted on block
+   * change), and settings admins tune now would not survive it. The load policy is different — it
+   * decides how much work Odyssey may ask the server for, so it is theirs to set.
+   *
+   * @param loadPolicy how aggressively to materialize missing chunks
+   * @return the settings
+   */
+  public static ChunkProviderSettings defaults(ChunkLoadPolicy loadPolicy) {
+    return new ChunkProviderSettings(1024, 10_000L, loadPolicy);
   }
 }

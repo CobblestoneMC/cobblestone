@@ -21,7 +21,7 @@ import net.whimxiqal.odyssey.OdysseyLogger;
  * FINER}, so {@code trace}/{@code debug} are emitted at {@code INFO} with a prefix (only when the
  * threshold allows) to guarantee they reach the console during debugging.
  */
-final class JulOdysseyLogger implements OdysseyLogger {
+final class JulOdysseyLogger extends OdysseyLogger {
 
   private final Logger logger;
   private volatile LogLevel threshold = LogLevel.INFO;
@@ -76,27 +76,5 @@ final class JulOdysseyLogger implements OdysseyLogger {
     if (enabled(LogLevel.ERROR)) {
       logger.log(Level.SEVERE, format(message, args), throwable);
     }
-  }
-
-  /** Replaces each {@code {}} in order with the string form of the next argument. */
-  private static String format(String message, Object[] args) {
-    if (args == null || args.length == 0) {
-      return message;
-    }
-    StringBuilder out = new StringBuilder(message.length() + 16);
-    int arg = 0;
-    int i = 0;
-    while (i < message.length()) {
-      if (arg < args.length
-          && i + 1 < message.length()
-          && message.charAt(i) == '{'
-          && message.charAt(i + 1) == '}') {
-        out.append(String.valueOf(args[arg++]));
-        i += 2;
-      } else {
-        out.append(message.charAt(i++));
-      }
-    }
-    return out.toString();
   }
 }

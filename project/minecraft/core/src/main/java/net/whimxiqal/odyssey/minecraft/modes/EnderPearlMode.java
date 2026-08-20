@@ -96,7 +96,7 @@ final class EnderPearlMode<A extends MinecraftAgent> extends AbstractMinecraftMo
     return () -> {
       List<FutureOr<Boolean>> passable = new ArrayList<>(path.size());
       for (Cell cell : path) {
-        passable.add(world.blockAt(cell).map(MinecraftBlock::isPassable));
+        passable.add(world.blockAt(cell, null).map(MinecraftBlock::isPassable));
       }
       // restricted (true) if any cell along the throw is not passable.
       return FutureOr.all(passable).map(list -> list.contains(Boolean.FALSE));

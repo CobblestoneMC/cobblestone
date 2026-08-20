@@ -36,7 +36,7 @@ abstract class AbstractMinecraftMode<A extends MinecraftAgent> implements Minecr
     if (!applies(agent, state)) {
       return FutureOr.of(List.of());
     }
-    return BlockLookup.fetch(world, requiredCells(from))
+    return BlockLookup.fetch(world, requiredCells(from), from)
         .flatMap(view -> movements(agent, from, world, state, view));
   }
 

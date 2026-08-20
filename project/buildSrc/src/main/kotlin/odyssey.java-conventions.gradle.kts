@@ -54,3 +54,8 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
+
+tasks.register("formatAndBuild") {
+    description = "Run spotlessApply and then build"
+    dependsOn("spotlessApply", "build")
+}

@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.function.Supplier;
 import net.whimxiqal.odyssey.api.SearchSettings;
+import net.whimxiqal.odyssey.minecraft.ChunkProviderSettings;
 import net.whimxiqal.odyssey.plugin.LogoutCleanup;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
 import net.whimxiqal.odyssey.plugin.config.ConfigManager;
@@ -65,6 +66,7 @@ public final class OdysseySpongePlugin {
   private Log4jOdysseyLogger odysseyLogger;
   private ConfigManager config;
   private ConfigKeys keys;
+  private SpongeConfigKeys spongeKeys;
   private DataStore dataStore;
   private SpongeNavigationServiceImpl navigationService;
   private Messages messages;
@@ -93,8 +95,9 @@ public final class OdysseySpongePlugin {
     this.odysseyLogger = new Log4jOdysseyLogger(logger);
 
     Path configFile = configDir.resolve("config.yml");
-    this.config = new ConfigManager(configFile, "config.yml", odysseyLogger);
-    this.keys = new ConfigKeys(config);
+    this.config = new ConfigManager(configFile, odysseyLogger);
+    this.keys = new ConfigKeys(config, SpongeConfigKeys.platform());
+    this.spongeKeys = new SpongeConfigKeys(config);
     config.load();
     odysseyLogger.setLevel(config.get(keys.loggingLevel));
 
@@ -112,7 +115,13 @@ public final class OdysseySpongePlugin {
       return;
     }
 
-    this.navigationService = new SpongeNavigationServiceImpl(container, odysseyLogger);
+    this.navigationService =
+        new SpongeNavigationServiceImpl(
+            container,
+            odysseyLogger,
+            ChunkProviderSettings.defaults(config.get(keys.chunksPolicy)),
+            () -> config.get(spongeKeys.chunksMaxLoadRequests));
+    this.navigationService.registerListeners(container);
     OdysseyCoreAPI.install(navigationService, navigationService);
 
     // Discovered vanilla portals are surfaced to searches as an internal modifier, and learned from

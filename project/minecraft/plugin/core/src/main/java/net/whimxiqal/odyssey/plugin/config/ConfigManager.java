@@ -8,7 +8,6 @@
 package net.whimxiqal.odyssey.plugin.config;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -18,59 +17,73 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import net.whimxiqal.odyssey.OdysseyLogger;
 import org.yaml.snakeyaml.Yaml;
 
 /**
- * The platform-neutral configuration store. Register all typed {@link ConfigKey}s up front, call
- * {@link #load()} once at startup, then {@link #get(ConfigKey)} anywhere. {@link #reload()}
- * re-reads the file: mutable keys update live; immutable keys that changed emit a warning and keep
- * their old value (they take effect only on restart).
+ * The platform-neutral configuration store. Register all typed {@link ConfigKey}s up front via
+ * {@link #key}, call {@link #load()} once at startup, then {@link #get(ConfigKey)} anywhere. {@link
+ * #reload()} re-reads the file: mutable keys update live; immutable keys that changed emit a
+ * warning and keep their old value (they take effect only on restart).
  *
- * <p>Values are parsed from a YAML file on disk. On first run the bundled default resource is
- * copied to that path so admins get the fully-commented template.
+ * <p>Values are parsed from a YAML file on disk. On first run the file is <em>generated</em> from
+ * the registry — defaults, prose, and permitted values all come from the registrations, so the
+ * documented file and the running values cannot drift, and each platform emits exactly the keys it
+ * supports.
  */
 public final class ConfigManager {
 
   private final Path file;
-  private final String defaultResource;
   private final OdysseyLogger logger;
   private final Map<String, ConfigKey<?>> keys = new LinkedHashMap<>();
+  private final Map<String, List<String>> sectionComments = new LinkedHashMap<>();
   private final Map<String, Object> values = new ConcurrentHashMap<>();
+  private List<String> header = List.of();
 
   /**
    * Creates a config manager.
    *
-   * @param file the on-disk YAML file (created from the default resource if absent)
-   * @param defaultResource the classpath resource holding the default file (e.g. {@code
-   *     config.yml})
+   * @param file the on-disk YAML file (generated from the registry if absent)
    * @param logger the logger for load/reload diagnostics (developer-facing, not localized)
    */
-  public ConfigManager(Path file, String defaultResource, OdysseyLogger logger) {
+  public ConfigManager(Path file, OdysseyLogger logger) {
     this.file = file;
-    this.defaultResource = defaultResource;
     this.logger = logger;
   }
 
   /**
-   * Registers a typed parameter. Must be called before {@link #load()}.
+   * Sets the banner comment for the top of the generated file.
+   *
+   * @param text the banner prose; each line becomes one comment line
+   */
+  public void header(String text) {
+    this.header = lines(text);
+  }
+
+  /**
+   * Documents an intermediate section of the generated file (e.g. {@code search.algorithm}).
+   *
+   * @param path the period-delimited section path
+   * @param text the section prose; each line becomes one comment line
+   */
+  public void section(String path, String text) {
+    sectionComments.put(path, lines(text));
+  }
+
+  /**
+   * Starts registering a typed parameter. Finish with {@link Builder#register()}. All registration
+   * must happen before {@link #load()}.
    *
    * @param path the period-delimited, snake_case path
    * @param def the default value
    * @param codec the decoder for the raw YAML node
-   * @param mutable whether the key updates live on reload
    * @param <V> the value type
-   * @return the registered key
+   * @return a builder for the key's documentation and mutability
    */
-  public <V> ConfigKey<V> register(String path, V def, Codec<V> codec, boolean mutable) {
-    if (keys.containsKey(path)) {
-      throw new IllegalStateException("duplicate config key: " + path);
-    }
-    ConfigKey<V> key = new ConfigKey<>(path, def, codec, mutable);
-    keys.put(path, key);
-    values.put(path, def);
-    return key;
+  public <V> Builder<V> key(String path, V def, Codec<V> codec) {
+    return new Builder<>(this, path, def, codec);
   }
 
   /**
@@ -89,8 +102,8 @@ public final class ConfigManager {
   }
 
   /**
-   * Loads the file for the first time, copying the bundled default in if the file is absent, then
-   * resolving every registered key.
+   * Loads the file for the first time, generating it from the registry if absent, then resolving
+   * every registered key.
    */
   public void load() {
     ensureFile();
@@ -98,6 +111,7 @@ public final class ConfigManager {
     for (ConfigKey<?> key : keys.values()) {
       loadKey(key, root);
     }
+    warnUnknownKeys(root);
   }
 
   private <V> void loadKey(ConfigKey<V> key, Map<String, Object> root) {
@@ -119,6 +133,7 @@ public final class ConfigManager {
         restartRequired.add(key.path());
       }
     }
+    warnUnknownKeys(root);
     return List.copyOf(restartRequired);
   }
 
@@ -142,19 +157,61 @@ public final class ConfigManager {
 
   /**
    * Resolves a single key from a parsed root map, falling back to {@code fallback} when the node is
-   * absent or fails to decode.
+   * absent, fails to decode, or names a value this platform does not support.
    */
   private <V> V resolve(ConfigKey<V> key, Map<String, Object> root, V fallback) {
     Object raw = lookup(root, key.path());
     if (raw == null) {
       return fallback;
     }
+    V decoded;
     try {
-      return key.codec().decode(raw);
+      decoded = key.codec().decode(raw);
     } catch (RuntimeException e) {
       logger.warn(
           "Config key '{}' is malformed ({}); using '{}'.", key.path(), e.getMessage(), fallback);
       return fallback;
+    }
+    if (!key.permitted().isEmpty() && !key.permitted().contains(decoded)) {
+      // Usually a config copied from another platform: a real value, just not one this platform
+      // can honor. Say so rather than quietly substituting something that means something else.
+      logger.warn(
+          "Config key '{}' is set to '{}', which this platform does not support (supported: {});"
+              + " using '{}'.",
+          key.path(),
+          raw,
+          key.permitted(),
+          fallback);
+      return fallback;
+    }
+    return decoded;
+  }
+
+  /** Warns about leaf entries in the file that match no registered key. */
+  private void warnUnknownKeys(Map<String, Object> root) {
+    List<String> unknown = new ArrayList<>();
+    collectLeaves(root, "", unknown);
+    unknown.removeIf(keys::containsKey);
+    if (unknown.isEmpty()) {
+      return;
+    }
+    logger.warn(
+        "Config file '{}' has {} setting(s) Odyssey does not recognize (ignored): {}. They may"
+            + " belong to another platform, or to a version that renamed them.",
+        file,
+        unknown.size(),
+        String.join(", ", new TreeSet<>(unknown)));
+  }
+
+  private static void collectLeaves(Map<?, ?> node, String prefix, List<String> out) {
+    for (Map.Entry<?, ?> entry : node.entrySet()) {
+      String path =
+          prefix.isEmpty() ? String.valueOf(entry.getKey()) : prefix + '.' + entry.getKey();
+      if (entry.getValue() instanceof Map<?, ?> child) {
+        collectLeaves(child, path, out);
+      } else {
+        out.add(path);
+      }
     }
   }
 
@@ -205,21 +262,120 @@ public final class ConfigManager {
     if (Files.exists(file)) {
       return;
     }
-    try (InputStream in =
-        ConfigManager.class.getClassLoader().getResourceAsStream(defaultResource)) {
-      if (in == null) {
-        logger.error(
-            "Bundled default resource '{}' is missing; cannot create config file.",
-            new IllegalStateException(defaultResource),
-            defaultResource);
-        return;
-      }
+    try {
       if (file.getParent() != null) {
         Files.createDirectories(file.getParent());
       }
-      Files.copy(in, file);
+      Files.writeString(file, template(), StandardCharsets.UTF_8);
     } catch (IOException e) {
       logger.error("Failed to write default config to '{}'.", e, file);
+    }
+  }
+
+  /** Registers the key; called by {@link Builder#register()}. */
+  private <V> ConfigKey<V> add(ConfigKey<V> key) {
+    if (keys.containsKey(key.path())) {
+      throw new IllegalStateException("duplicate config key: " + key.path());
+    }
+    keys.put(key.path(), key);
+    values.put(key.path(), key.defaultValue());
+    return key;
+  }
+
+  /** Renders the template that first-run generation writes. */
+  String template() {
+    return ConfigTemplate.render(header, sectionComments, keys.values());
+  }
+
+  private static List<String> lines(String text) {
+    return List.of(text.stripTrailing().split("\n", -1));
+  }
+
+  /**
+   * Collects a key's documentation and mutability before registration. Every key must declare prose
+   * and must choose {@link #mutable()} or {@link #requiresRestart()} — both are emitted into the
+   * generated file, so leaving either implicit would ship an undocumented setting.
+   *
+   * @param <V> the value type
+   */
+  public static final class Builder<V> {
+
+    private final ConfigManager manager;
+    private final String path;
+    private final V def;
+    private final Codec<V> codec;
+    private List<String> comment = List.of();
+    private List<V> permitted = List.of();
+    private Boolean mutable;
+
+    private Builder(ConfigManager manager, String path, V def, Codec<V> codec) {
+      this.manager = manager;
+      this.path = path;
+      this.def = def;
+      this.codec = codec;
+    }
+
+    /**
+     * Sets the documentation emitted above this key.
+     *
+     * @param text the prose; each line becomes one comment line
+     * @return this builder
+     */
+    public Builder<V> comment(String text) {
+      this.comment = lines(text);
+      return this;
+    }
+
+    /**
+     * Restricts this key to a set of values, for platform-specific subsets of an enum. The
+     * permitted values are listed in the generated file and enforced on load.
+     *
+     * @param values the permitted values (must include the default)
+     * @return this builder
+     */
+    public Builder<V> permitted(List<V> values) {
+      this.permitted = List.copyOf(values);
+      return this;
+    }
+
+    /**
+     * Marks the key as updating live on {@code /odyssey reload}.
+     *
+     * @return this builder
+     */
+    public Builder<V> mutable() {
+      this.mutable = true;
+      return this;
+    }
+
+    /**
+     * Marks the key as taking effect only on a full restart.
+     *
+     * @return this builder
+     */
+    public Builder<V> requiresRestart() {
+      this.mutable = false;
+      return this;
+    }
+
+    /**
+     * Registers the key.
+     *
+     * @return the registered key
+     */
+    public ConfigKey<V> register() {
+      if (comment.isEmpty()) {
+        throw new IllegalStateException("config key '" + path + "' has no comment");
+      }
+      if (mutable == null) {
+        throw new IllegalStateException(
+            "config key '" + path + "' must declare mutable() or requiresRestart()");
+      }
+      if (!permitted.isEmpty() && !permitted.contains(def)) {
+        throw new IllegalStateException(
+            "config key '" + path + "' default " + def + " is not among " + permitted);
+      }
+      return manager.add(new ConfigKey<>(path, def, codec, mutable, comment, permitted));
     }
   }
 }

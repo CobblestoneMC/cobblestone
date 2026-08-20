@@ -14,7 +14,7 @@ package net.whimxiqal.odyssey;
  * tests and live servers diagnosable. Logger messages are developer-facing and are never
  * internationalized. Placeholders use the SLF4J {@code {}} style.
  */
-public interface OdysseyLogger {
+public abstract class OdysseyLogger {
 
   /**
    * Logs at trace level.
@@ -22,7 +22,7 @@ public interface OdysseyLogger {
    * @param message the message, with {@code {}} placeholders
    * @param args the placeholder arguments
    */
-  void trace(String message, Object... args);
+  public abstract void trace(String message, Object... args);
 
   /**
    * Logs at debug level.
@@ -30,7 +30,7 @@ public interface OdysseyLogger {
    * @param message the message, with {@code {}} placeholders
    * @param args the placeholder arguments
    */
-  void debug(String message, Object... args);
+  public abstract void debug(String message, Object... args);
 
   /**
    * Logs at info level.
@@ -38,7 +38,7 @@ public interface OdysseyLogger {
    * @param message the message, with {@code {}} placeholders
    * @param args the placeholder arguments
    */
-  void info(String message, Object... args);
+  public abstract void info(String message, Object... args);
 
   /**
    * Logs at warn level.
@@ -46,7 +46,7 @@ public interface OdysseyLogger {
    * @param message the message, with {@code {}} placeholders
    * @param args the placeholder arguments
    */
-  void warn(String message, Object... args);
+  public abstract void warn(String message, Object... args);
 
   /**
    * Logs at error level with an associated throwable.
@@ -55,5 +55,27 @@ public interface OdysseyLogger {
    * @param throwable the error
    * @param args the placeholder arguments
    */
-  void error(String message, Throwable throwable, Object... args);
+  public abstract void error(String message, Throwable throwable, Object... args);
+
+  /** Replaces each {@code {}} in order with the string form of the next argument. */
+  protected static String format(String message, Object[] args) {
+    if (args == null || args.length == 0) {
+      return message;
+    }
+    StringBuilder out = new StringBuilder(message.length() + 16);
+    int arg = 0;
+    int i = 0;
+    while (i < message.length()) {
+      if (arg < args.length
+          && i + 1 < message.length()
+          && message.charAt(i) == '{'
+          && message.charAt(i + 1) == '}') {
+        out.append(String.valueOf(args[arg++]));
+        i += 2;
+      } else {
+        out.append(message.charAt(i++));
+      }
+    }
+    return out.toString();
+  }
 }
