@@ -29,11 +29,11 @@ final class BlockLookup {
 
   private BlockLookup() {}
 
-  static FutureOr<BlockView> fetch(MinecraftWorld world, Collection<Cell> cells, Cell origin) {
+  static FutureOr<BlockView> fetch(MinecraftWorld world, Collection<Cell> cells, Cell destination) {
     Map<Cell, MinecraftBlock> immediate = new HashMap<>();
     Map<Cell, CompletableFuture<MinecraftBlock>> pending = new HashMap<>();
     for (Cell cell : cells) {
-      FutureOr<MinecraftBlock> block = world.blockAt(cell, origin);
+      FutureOr<MinecraftBlock> block = world.blockAt(cell, destination);
       if (block.isImmediate()) {
         immediate.put(cell, block.value());
       } else {

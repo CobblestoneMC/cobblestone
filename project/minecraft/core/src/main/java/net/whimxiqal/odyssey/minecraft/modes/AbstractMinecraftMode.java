@@ -32,11 +32,11 @@ abstract class AbstractMinecraftMode<A extends MinecraftAgent> implements Minecr
 
   @Override
   public final FutureOr<Collection<Movement<MinecraftStepPayload>>> step(
-      A agent, Cell from, MinecraftWorld world, TraversalState state) {
+      A agent, Cell from, MinecraftWorld world, TraversalState state, Cell destination) {
     if (!applies(agent, state)) {
       return FutureOr.of(List.of());
     }
-    return BlockLookup.fetch(world, requiredCells(from), from)
+    return BlockLookup.fetch(world, requiredCells(from), destination)
         .flatMap(view -> movements(agent, from, world, state, view));
   }
 

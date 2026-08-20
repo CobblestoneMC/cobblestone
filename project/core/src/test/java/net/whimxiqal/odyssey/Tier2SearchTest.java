@@ -241,7 +241,7 @@ class Tier2SearchTest {
   private static final class DiamondMode implements Mode<TestAgent, TestStep, TestDomain> {
     @Override
     public FutureOr<Collection<Movement<TestStep>>> step(
-        TestAgent agent, Cell from, TestDomain domain, TraversalState state) {
+        TestAgent agent, Cell from, TestDomain domain, TraversalState state, Cell destination) {
       Collection<Movement<TestStep>> moves;
       if (from.equals(new Cell(0, 0, 0))) {
         moves =
@@ -307,7 +307,7 @@ class Tier2SearchTest {
 
     @Override
     public FutureOr<Collection<Movement<TestStep>>> step(
-        TestAgent agent, Cell from, TestDomain domain, TraversalState state) {
+        TestAgent agent, Cell from, TestDomain domain, TraversalState state, Cell destination) {
       Collection<Movement<TestStep>> moves;
       if (from.equals(new Cell(0, 0, 0))) {
         moves =

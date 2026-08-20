@@ -34,7 +34,9 @@ public interface Mode<A extends Agent, T, D extends Domain> {
    * @param from the starting cell
    * @param domain the domain being traversed (same for every produced movement)
    * @param state the current traversal state
+   * @param destination the goal
    * @return the reachable movements, possibly pending on block I/O
    */
-  FutureOr<Collection<Movement<T>>> step(A agent, Cell from, D domain, TraversalState state);
+  FutureOr<Collection<Movement<T>>> step(
+      A agent, Cell from, D domain, TraversalState state, Cell destination);
 }

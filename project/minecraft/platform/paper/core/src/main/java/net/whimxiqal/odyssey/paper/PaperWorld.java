@@ -60,8 +60,8 @@ final class PaperWorld implements MinecraftWorld {
   }
 
   @Override
-  public FutureOr<MinecraftBlock> blockAt(Cell cell, Cell previous) {
-    return provider.block(cell, this, previous);
+  public FutureOr<MinecraftBlock> blockAt(Cell cell, Cell destination) {
+    return provider.block(cell, this, destination);
   }
 
   @Override

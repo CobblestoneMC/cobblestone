@@ -9,16 +9,16 @@ package net.whimxiqal.odyssey.minecraft;
 
 /**
  * Tunables for the {@link ChunkProvider}: cache capacity, snapshot staleness, the read-ahead
- * margin, and the load policy.
+ * distance, and the load policy.
  *
  * @param maxCachedChunks LRU capacity, in chunk snapshots
  * @param stalenessMillis a snapshot older than this (on access) is discarded and re-fetched
- * @param readAheadMargin when a served block is within this many blocks of a chunk border, the
- *     adjacent chunk in that direction is prefetched
+ * @param prefetchDistance how far ahead of a served block, in blocks along the line towards the
+ *     destination, chunks are prefetched
  * @param loadPolicy how aggressively to materialize missing chunks
  */
 public record ChunkProviderSettings(
-    int maxCachedChunks, long stalenessMillis, ChunkLoadPolicy loadPolicy) {
+    int maxCachedChunks, long stalenessMillis, int prefetchDistance, ChunkLoadPolicy loadPolicy) {
 
   /** Returns settings with sensible defaults. */
   public static ChunkProviderSettings defaults() {
@@ -37,6 +37,6 @@ public record ChunkProviderSettings(
    * @return the settings
    */
   public static ChunkProviderSettings defaults(ChunkLoadPolicy loadPolicy) {
-    return new ChunkProviderSettings(1024, 10_000L, loadPolicy);
+    return new ChunkProviderSettings(1024, 10_000L, 32, loadPolicy);
   }
 }

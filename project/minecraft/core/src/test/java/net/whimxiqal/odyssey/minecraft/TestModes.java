@@ -32,7 +32,9 @@ public final class TestModes {
       Cell origin,
       TraversalState state) {
     FutureOr<java.util.Collection<Movement<MinecraftStepPayload>>> result =
-        mode.step(player, origin, world, state);
+        // A test world serves every block from memory, so the destination — which only steers
+        // chunk read-ahead — makes no difference here.
+        mode.step(player, origin, world, state, origin);
     assertTrue(result.isImmediate(), "test worlds serve blocks immediately");
     Map<Cell, Movement<MinecraftStepPayload>> byCell = new HashMap<>();
     for (Movement<MinecraftStepPayload> movement : result.value()) {

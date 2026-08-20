@@ -265,8 +265,9 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     List<FutureOr<Collection<Movement<T>>>> results = new ArrayList<>(modes.size());
     boolean anyPending = false;
     for (Mode<A, T, D> mode : modes) {
+      var goal = target.nearestBoundaryCell(node.key.cell());
       FutureOr<Collection<Movement<T>>> movements =
-          mode.step(agent, node.key.cell(), domain, node.key.state());
+          mode.step(agent, node.key.cell(), domain, node.key.state(), goal);
       results.add(movements);
       anyPending |= !movements.isImmediate();
     }

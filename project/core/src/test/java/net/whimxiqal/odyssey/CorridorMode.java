@@ -33,7 +33,7 @@ final class CorridorMode implements Mode<TestAgent, TestStep, TestDomain> {
 
   @Override
   public FutureOr<Collection<Movement<TestStep>>> step(
-      TestAgent agent, Cell from, TestDomain domain, TraversalState state) {
+      TestAgent agent, Cell from, TestDomain domain, TraversalState state, Cell destination) {
     Collection<Movement<TestStep>> movements =
         List.of(new Movement<>(from.plus(1, 0, 0), 1.0, 1.0, TestStep.MOVE, state));
     if (!gated) {

@@ -17,9 +17,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.IntSupplier;
 import net.whimxiqal.odyssey.OdysseyLogger;
+import net.whimxiqal.odyssey.ScopedOdysseyLogger;
 import net.whimxiqal.odyssey.minecraft.ChunkLoadPolicy;
 import net.whimxiqal.odyssey.minecraft.MinecraftChunk;
 import org.spongepowered.api.ResourceKey;
+import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockState;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.world.chunk.ChunkEvent;
@@ -49,6 +51,14 @@ import org.spongepowered.math.vector.Vector3i;
  * level of 32, so the target chunk is loaded and block-ticking and its eight neighbours are loaded
  * at border level.
  *
+ * <p><b>Answer everything.</b> A fetch asks what a chunk is made of, and that question has an
+ * answer whether or not the loader is busy right now: a request that cannot be served immediately
+ * waits in line rather than being refused. {@link MinecraftChunk.Unknown} is reserved for the cases
+ * where the content genuinely cannot be known — the policy forbids the load that would reveal it,
+ * Sponge refuses the ticket, or the chunk never turns up. The load budget therefore bounds latency,
+ * never correctness, and the caller's {@code urgent} flag (which matters on platforms whose chunk
+ * API takes a priority) is ignored here.
+ *
  * <p><b>Generation.</b> Because a ticket generates terrain that does not exist, {@code allow_load}
  * consults the {@link ChunkExistenceIndex} first and declines to ticket anything that is not
  * already on disk. Only {@code allow_load_and_generate} skips that check.
@@ -70,16 +80,13 @@ final class SpongeChunkLoader {
    */
   private static final long TICKET_LIFETIME_TICKS = 200L;
 
-  /** Multiple of the budget beyond which even urgent requests are refused rather than queued. */
-  private static final int QUEUE_LIMIT_FACTOR = 4;
-
   private final SpongeScheduler scheduler;
   private final OdysseyLogger logger;
   private final IntSupplier maxLoadRequests;
   private final ChunkExistenceIndex index;
   private final Map<ChunkKey, Parked> pending = new ConcurrentHashMap<>();
 
-  /** Urgent requests waiting for a ticket slot. Server thread only. */
+  /** Fetches waiting for a ticket slot, served in the order they arrived. Server thread only. */
   private final Deque<Runnable> queued = new ArrayDeque<>();
 
   /** Tickets currently held. Server thread only. */
@@ -90,7 +97,7 @@ final class SpongeChunkLoader {
 
   SpongeChunkLoader(SpongeScheduler scheduler, OdysseyLogger logger, IntSupplier maxLoadRequests) {
     this.scheduler = scheduler;
-    this.logger = logger;
+    this.logger = new ScopedOdysseyLogger(logger, "SpongeChunkLoader");
     this.maxLoadRequests = maxLoadRequests;
     this.index = new ChunkExistenceIndex(scheduler, logger);
   }
@@ -102,25 +109,25 @@ final class SpongeChunkLoader {
    * @param chunkX the chunk x coordinate
    * @param chunkZ the chunk z coordinate
    * @param policy how far we may go to obtain it
-   * @param urgent whether a search is blocked on this chunk (as opposed to reading ahead)
-   * @return the snapshot, or {@link MinecraftChunk.Unknown} if it cannot be had under the policy
+   * @param urgent whether a search is blocked on this chunk (as opposed to reading ahead); ignored,
+   *     as Sponge's chunk loading takes no priority and every fetch is answered either way
+   * @return the snapshot, or {@link MinecraftChunk.Unknown} if the chunk's content cannot be known
    */
   CompletableFuture<MinecraftChunk> fetch(
       ServerWorld world, int chunkX, int chunkZ, ChunkLoadPolicy policy, boolean urgent) {
     CompletableFuture<MinecraftChunk> future = new CompletableFuture<>();
     // The world may only be touched on the server thread; the block array we come away with is a
     // detached copy that search workers can read freely.
-    scheduler.runGlobal(() -> resolve(world, chunkX, chunkZ, policy, urgent, future));
+    onServerThread(() -> resolve(world, chunkX, chunkZ, policy, future));
     return future;
   }
 
-  /** Resolves a fetch on the server thread: copy now, ticket and park, queue, or give up. */
+  /** Resolves a fetch on the server thread: copy now, ticket and park, or wait for a slot. */
   private void resolve(
       ServerWorld world,
       int cx,
       int cz,
       ChunkLoadPolicy policy,
-      boolean urgent,
       CompletableFuture<MinecraftChunk> future) {
     if (world.isChunkLoaded(cx, 0, cz, false)) {
       future.complete(copy(world, cx, cz));
@@ -144,17 +151,9 @@ final class SpongeChunkLoader {
       already.waiters.add(future); // someone already holds a ticket for this chunk; ride along
       return;
     }
-    if (!acquireSlot(urgent)) {
-      if (!urgent) {
-        future.complete(MinecraftChunk.Unknown.INSTANCE); // read-ahead yields the budget
-        return;
-      }
-      if (queued.size() >= QUEUE_LIMIT_FACTOR * budget()) {
-        logger.debug("Chunk load queue is full; treating [{}, {}] as unknown", cx, cz);
-        future.complete(MinecraftChunk.Unknown.INSTANCE);
-        return;
-      }
-      queued.add(() -> resolve(world, cx, cz, policy, true, future));
+    if (!acquireSlot()) {
+      // The budget is spent, which says nothing about what this chunk contains: get back in line.
+      queued.add(() -> resolve(world, cx, cz, policy, future));
       return;
     }
 
@@ -167,6 +166,8 @@ final class SpongeChunkLoader {
     Parked parked = new Parked(world, ticket.get());
     parked.waiters.add(future);
     pending.put(key, parked);
+    logger.trace(
+        "Queue ticket for chunk at {},{}, outstanding requests {}", key.cx, key.cz, outstanding);
 
     // The ticket may have promoted the chunk synchronously, in which case its load event has
     // already been and gone.
@@ -195,12 +196,10 @@ final class SpongeChunkLoader {
    * forbids it), and we do not.
    */
   @Listener
-  public void onChunkLoad(ChunkEvent.Blocks.Load event) {
-    logger.info(
-        "Loaded chunk at {},{}, outstanding requests {}",
-        event.chunkPosition().x(),
-        event.chunkPosition().z(),
-        outstanding);
+  public void onChunkLoad(ChunkEvent.Load event) {
+    // Note: I had previously used ChunkEvent.Blocks.Load, but it fires before the underlying data
+    // for world.isChunkLoaded is changed, so our earlier checks were out of sync with this event
+    // listener.
     Vector3i position = event.chunkPosition();
     ChunkKey key = new ChunkKey(event.worldKey(), position.x(), position.z());
     if (!pending.containsKey(key)) {
@@ -221,6 +220,7 @@ final class SpongeChunkLoader {
 
   /** Hands a result to everyone parked on a chunk and lets go of its ticket. */
   private void deliver(ChunkKey key, MinecraftChunk chunk) {
+    logger.trace("Delivered chunk at {},{}, outstanding requests {}", key.cx, key.cz, outstanding);
     Parked parked = pending.remove(key);
     if (parked == null) {
       return;
@@ -233,11 +233,28 @@ final class SpongeChunkLoader {
       index.markPresent(key.world(), key.cx(), key.cz());
     }
     // Ticket release touches the world's distance manager: server thread only.
-    scheduler.runGlobal(
+    onServerThread(
         () -> {
           parked.world.chunkManager().releaseTicket(parked.ticket);
           releaseSlot();
         });
+  }
+
+  /**
+   * Runs server-thread work, inline if we are already on that thread.
+   *
+   * <p>Sponge's scheduler always defers to the next tick, and the slot a delivery frees is on the
+   * critical path of the next chunk a search is waiting for: hopping when we are already where we
+   * need to be would idle a chunk-loading slot for a whole tick every time a chunk is delivered
+   * from the server thread — which is every chunk that was already loaded, every ticket that
+   * promotes synchronously, and every queued request the drain lets through.
+   */
+  private void onServerThread(Runnable task) {
+    if (Sponge.isServerAvailable() && Sponge.server().onMainThread()) {
+      task.run();
+      return;
+    }
+    scheduler.runGlobal(task);
   }
 
   private Optional<Ticket<Vector3i>> requestTicket(ServerWorld world, int cx, int cz) {
@@ -265,21 +282,16 @@ final class SpongeChunkLoader {
     return Math.max(1, maxLoadRequests.getAsInt());
   }
 
-  /**
-   * Takes a ticket slot if the budget allows. Read-ahead may only use part of the budget, so a
-   * burst of speculative fetches cannot starve the chunk a search is actually waiting on.
-   */
-  private boolean acquireSlot(boolean urgent) {
-    int budget = budget();
-    int limit = urgent ? budget : Math.max(1, budget - Math.max(1, budget / 4));
-    if (outstanding >= limit) {
+  /** Takes a ticket slot if the budget allows; whoever misses out waits in {@link #queued}. */
+  private boolean acquireSlot() {
+    if (outstanding >= budget()) {
       return false;
     }
     outstanding++;
     return true;
   }
 
-  /** Gives a slot back and lets any queued urgent requests through. Server thread only. */
+  /** Gives a slot back and lets the next queued fetches through. Server thread only. */
   private void releaseSlot() {
     if (outstanding > 0) {
       outstanding--;
