@@ -8,6 +8,7 @@
 package net.whimxiqal.odyssey.plugin.command;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -33,6 +34,10 @@ public final class FlagParser {
 
   /** Mode words accepted by {@code -no-mode}/{@code -no-<mode>}, mapped to their step type. */
   private static final Map<String, MinecraftStepType> MODE_WORDS = new LinkedHashMap<>();
+
+  /** Flags that consume the token after them, which is therefore not a destination token. */
+  private static final Set<String> VALUE_FLAGS =
+      Set.of("-navigator", "-no-world", "-no-dimension", "-no-mode");
 
   static {
     MODE_WORDS.put("walk", MinecraftStepType.WALK);
@@ -80,6 +85,71 @@ public final class FlagParser {
   /** The set of accepted mode words (for tab-completion of {@code -no-mode}). */
   public static Set<String> modeWords() {
     return Set.copyOf(MODE_WORDS.keySet());
+  }
+
+  /** The set of flags that take a following value (for tab-completion). */
+  public static Set<String> valueFlags() {
+    return VALUE_FLAGS;
+  }
+
+  /**
+   * Splits raw command input into tokens, <b>keeping</b> the empty token that a trailing space
+   * implies. Tab-completion needs that token: it is the (still empty) word being typed, and without
+   * it the completer would re-offer the word before it instead of moving on.
+   *
+   * @param raw the raw argument string, exactly as typed
+   * @return the tokens, never empty
+   */
+  public static List<String> tokenizeKeepingTrailing(String raw) {
+    if (raw.isEmpty()) {
+      return List.of("");
+    }
+    // -1 keeps the trailing empty string; a leading one appears only if the input starts blank.
+    List<String> tokens = new ArrayList<>(Arrays.asList(raw.split("\\s+", -1)));
+    if (tokens.isEmpty()) {
+      tokens.add("");
+    }
+    return tokens;
+  }
+
+  /**
+   * Everything typed before the token currently being completed, trailing space included.
+   *
+   * <p>Platforms differ in what a completion replaces. Brigadier can be told to replace just the
+   * last token, but a Sponge {@code remainingJoinedStrings} parameter replaces the whole argument —
+   * offering a bare {@code warp} there would turn {@code mco wa} into {@code warp}. Such a platform
+   * puts this prefix back in front of each suggestion.
+   *
+   * @param raw the raw argument string, exactly as typed
+   * @return the prefix, empty when the first token is still being typed
+   */
+  public static String completionPrefix(String raw) {
+    List<String> tokens = tokenizeKeepingTrailing(raw);
+    return raw.substring(0, raw.length() - tokens.getLast().length());
+  }
+
+  /**
+   * Keeps only the positional destination tokens: flags and the values they consume are dropped, so
+   * {@code -live mco warp} and {@code mco warp} address the same place.
+   *
+   * @param tokens the raw tokens
+   * @return the destination tokens, in order
+   */
+  public static List<String> destinationTokens(List<String> tokens) {
+    List<String> out = new ArrayList<>();
+    boolean skipValue = false;
+    for (String token : tokens) {
+      if (skipValue) {
+        skipValue = false;
+        continue;
+      }
+      if (VALUE_FLAGS.contains(token.toLowerCase(Locale.ROOT))) {
+        skipValue = true;
+      } else if (!token.startsWith("-")) {
+        out.add(token);
+      }
+    }
+    return out;
   }
 
   /**

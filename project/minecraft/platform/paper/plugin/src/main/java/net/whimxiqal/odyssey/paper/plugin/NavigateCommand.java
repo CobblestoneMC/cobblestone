@@ -20,7 +20,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
@@ -68,11 +67,9 @@ final class NavigateCommand {
 
   static final String PERMISSION_NAVIGATE = "odyssey.navigate";
   private static final String PERMISSION_NAVIGATOR_PREFIX = "odyssey.navigator.";
-  private static final Set<String> VALUE_FLAGS =
-      Set.of("-navigator", "-no-world", "-no-dimension", "-no-mode");
   // Above this many destination matches, tab-completion offers nothing — the player must type more
-  // to narrow down. Keeps huge destination sets from flooding completion.
-  private static final int MAX_DESTINATION_SUGGESTIONS = 16;
+  // to narrow down. Keeps a huge level the player asked for by name from flooding completion.
+  private static final int MAX_DESTINATION_SUGGESTIONS = DestinationResolver.PROMOTION_LIMIT;
   // A tiny, greedy search for the off-trail "guide" path: bounded and heavily weighted so it's
   // cheap.
   private static final SearchSettings GUIDE_SETTINGS =
@@ -184,7 +181,8 @@ final class NavigateCommand {
             destinationRoots(integrations, player),
             parsed.destination(),
             player::hasPermission,
-            canNavigate(player));
+            canNavigate(player),
+            log);
     if (resolution
         instanceof DestinationResolver.Ambiguous<World, Vector3i>(List<List<String>> addresses)) {
       messages.send(
@@ -418,7 +416,7 @@ final class NavigateCommand {
       return builder.buildFuture();
     }
     String remaining = builder.getRemaining();
-    List<String> tokens = tokenizeKeepingTrailing(remaining);
+    List<String> tokens = FlagParser.tokenizeKeepingTrailing(remaining);
     String last = tokens.isEmpty() ? "" : tokens.getLast();
     String previous =
         tokens.size() >= 2 ? tokens.get(tokens.size() - 2).toLowerCase(Locale.ROOT) : "";
@@ -440,7 +438,7 @@ final class NavigateCommand {
       List<String> suggestions =
           DestinationResolver.suggest(
               destinationRoots(integrations, player),
-              destinationTokens(tokens),
+              FlagParser.destinationTokens(tokens),
               player::hasPermission,
               canNavigate(player));
       // Only offer completions once the candidate set is small; otherwise the player narrows first.
@@ -485,25 +483,6 @@ final class NavigateCommand {
     return flags;
   }
 
-  /** Positional destination tokens only: flags and the values they consume are dropped. */
-  private static List<String> destinationTokens(List<String> tokens) {
-    List<String> out = new ArrayList<>();
-    boolean skipValue = false;
-    for (String token : tokens) {
-      if (skipValue) {
-        skipValue = false;
-        continue;
-      }
-      String lower = token.toLowerCase(Locale.ROOT);
-      if (VALUE_FLAGS.contains(lower)) {
-        skipValue = true;
-      } else if (!token.startsWith("-")) {
-        out.add(token);
-      }
-    }
-    return out;
-  }
-
   private static void sendFailure(
       Player player, Locale locale, Messages messages, FailureReason reason) {
     switch (reason) {
@@ -544,18 +523,6 @@ final class NavigateCommand {
   private static List<String> tokenize(String raw) {
     String trimmed = raw.trim();
     return trimmed.isEmpty() ? List.of() : Arrays.asList(trimmed.split("\\s+"));
-  }
-
-  /** Like {@link #tokenize} but preserves a trailing empty token when the input ends in a space. */
-  private static List<String> tokenizeKeepingTrailing(String raw) {
-    if (raw.isEmpty()) {
-      return List.of("");
-    }
-    List<String> tokens = new ArrayList<>(Arrays.asList(raw.split("\\s+", -1)));
-    if (tokens.isEmpty()) {
-      tokens.add("");
-    }
-    return tokens;
   }
 
   private static Locale localeOf(CommandSender sender, Messages messages) {

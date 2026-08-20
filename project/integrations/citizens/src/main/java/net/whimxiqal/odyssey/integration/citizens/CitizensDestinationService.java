@@ -36,7 +36,9 @@ final class CitizensDestinationService implements DestinationService {
 
   @Override
   public Collection<PlatformDestinationTree<World, Vector3i>> provide(Player player) {
-    DestinationTree npcNode = DestinationTree.node(NPC_KEY);
+    // Strict: a server can hold hundreds of NPCs, and none of them should be promoted to the
+    // root of /navigate — the player asks for "npc" first.
+    DestinationTree npcNode = DestinationTree.node(NPC_KEY).strict();
     boolean any = false;
     for (NPC npc : CitizensAPI.getNPCRegistry().sorted()) {
       int id = npc.getId();

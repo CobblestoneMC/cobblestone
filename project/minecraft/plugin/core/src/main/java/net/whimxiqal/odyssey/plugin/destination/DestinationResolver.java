@@ -8,29 +8,72 @@
 package net.whimxiqal.odyssey.plugin.destination;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
+import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
 import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
 
 /**
- * Turns the arguments a player typed into a concrete {@link MinecraftDestination}, traversing the
- * {@link PlatformDestinationTree}s gathered from every registered provider and applying <b>name
- * promotion</b>: a level whose node is not {@code strict} may be omitted, so {@code /nav home}
- * resolves when only one provider offers {@code home}, while an ambiguous name forces the fuller
- * path ({@code /nav essentials home}). Strict levels can never be omitted. The same traversal
- * powers tab-completion via {@link #suggest}.
+ * Turns the arguments a player typed into a concrete {@link MinecraftDestination}, walking the
+ * {@link PlatformDestinationTree}s gathered from every registered provider.
+ *
+ * <h2>Addressing</h2>
+ *
+ * <p>A destination's <b>canonical address</b> is the full key path to it ({@code citizens npc
+ * bob}). It may also be addressed by <b>any ordered subsequence of its ancestor keys plus its own
+ * key</b> — {@code npc bob}, {@code citizens bob}, {@code bob} — so long as that shorter form does
+ * not also address something else. If it does, the form is ambiguous and rejected ({@link
+ * Ambiguous}), and the player must type a fuller path. Two things block promotion outright:
+ *
+ * <ul>
+ *   <li>a node's own key is always required when the node is {@linkplain
+ *       PlatformDestinationTree#strict() strict}, and
+ *   <li>the destination's own key (the final token) is always required.
+ * </ul>
+ *
+ * <p>Matching is case-insensitive throughout, so two providers registering {@code quest} and {@code
+ * Quest} collide deliberately rather than silently offering the player two look-alike paths.
+ *
+ * <h2>Suggestions</h2>
+ *
+ * <p>{@link #suggest} answers "what may the next token be?", given the tokens already typed. It
+ * never enumerates the whole forest: it descends only along the typed prefix, and it declines to
+ * promote a level whose subtree contributes more than {@link #PROMOTION_LIMIT} tokens — such a
+ * level behaves as if it were strict, for suggestion purposes only. So an {@code npc} node with
+ * three hundred NPCs under it offers {@code npc} at the root rather than three hundred names, and
+ * those names are never materialized. Providers that know a level is large should still mark it
+ * {@code strict()}: that is cheaper (the subtree is not visited at all), and it also blocks
+ * promotion during {@link #resolve}, which the limit deliberately does not.
+ *
+ * <p>Suggestions are also filtered for usefulness: a token is offered only if it can lead
+ * somewhere. A token that would complete an address ambiguously, and that cannot be extended
+ * further, is not offered — typing it could only produce an "ambiguous" error.
  *
  * <p>This is platform-neutral: callers gather the provider roots (on Paper, from the {@code
  * ServicesManager}) and pass a permission predicate; the resolver never touches a server type.
- *
- * <p><b>Note:</b> resolution currently materializes every reachable node (it calls each child
- * supplier). That is fine for the shallow trees shipped so far; a provider exposing very large sets
- * (every town, every player home) will want a lazier, index-guided traversal — tracked for a later
- * pass.
  */
 public final class DestinationResolver {
+
+  /**
+   * How many tokens a promotable (non-strict) level may contribute to a suggestion set before it is
+   * treated as strict and contributes only its own key.
+   */
+  public static final int PROMOTION_LIMIT = 16;
+
+  /** How long to stay quiet about an address already reported as duplicated. */
+  private static final long DUPLICATE_WARN_COOLDOWN_MILLIS = 300_000L;
+
+  /** How many distinct duplicate addresses to remember before forgetting them all. */
+  private static final int DUPLICATE_WARN_MEMORY = 64;
+
+  /** Canonical address (lower-cased, space-joined) to the time it was last warned about. */
+  private static final Map<String, Long> DUPLICATE_WARNED = new ConcurrentHashMap<>();
 
   private DestinationResolver() {}
 
@@ -41,7 +84,7 @@ public final class DestinationResolver {
    * Exactly one destination matched.
    *
    * @param destination the resolved destination
-   * @param address the full key path that identifies it (for confirmation messages)
+   * @param address the canonical key path that identifies it (for confirmation messages)
    * @param <W> the world type
    * @param <V> the vector type
    */
@@ -51,7 +94,7 @@ public final class DestinationResolver {
   /**
    * More than one destination matched; the player must disambiguate with a fuller path.
    *
-   * @param addresses the full key paths of the candidates
+   * @param addresses the distinct canonical key paths of the candidates
    * @param <W> the world type
    * @param <V> the vector type
    */
@@ -79,7 +122,7 @@ public final class DestinationResolver {
       List<? extends PlatformDestinationTree<W, V>> roots,
       List<String> args,
       Predicate<String> hasPermission) {
-    return resolve(roots, args, hasPermission, address -> true);
+    return resolve(roots, args, hasPermission, address -> true, null);
   }
 
   /**
@@ -89,8 +132,8 @@ public final class DestinationResolver {
    * @param args the arguments typed so far (each a full token)
    * @param hasPermission tests whether the player holds a permission node (a destination's own
    *     required permissions)
-   * @param canNavigate tests whether the player may navigate to a destination at a given address
-   *     (see {@link NavigationPermissions})
+   * @param canNavigate tests whether the player may navigate to a destination at a given canonical
+   *     address (see {@link NavigationPermissions})
    * @param <W> the world type
    * @param <V> the vector type
    * @return the resolution
@@ -100,32 +143,67 @@ public final class DestinationResolver {
       List<String> args,
       Predicate<String> hasPermission,
       Predicate<List<String>> canNavigate) {
-    List<Address<W, V>> matched = new ArrayList<>();
-    for (Address<W, V> address : addresses(roots, hasPermission, canNavigate)) {
-      if (address.sequences().stream().anyMatch(sequence -> sequence.equals(args))) {
-        matched.add(address);
-      }
-    }
-    if (matched.isEmpty()) {
+    return resolve(roots, args, hasPermission, canNavigate, null);
+  }
+
+  /**
+   * Resolves the given arguments, reporting provider misconfiguration to the given log.
+   *
+   * <p>Two providers can register the very same canonical address, in which case no typed path can
+   * ever separate them. That is a bug in one of the providers, not something the player can fix, so
+   * it is logged (at most once per address per five minutes, so a player leaning on tab-completion
+   * cannot flood the console) in addition to being reported as {@link Ambiguous}.
+   *
+   * @param roots the destination-tree roots from every provider
+   * @param args the arguments typed so far (each a full token)
+   * @param hasPermission tests whether the player holds a permission node
+   * @param canNavigate tests whether the player may navigate to a given canonical address
+   * @param log where to report duplicate addresses, or {@code null} to stay silent
+   * @param <W> the world type
+   * @param <V> the vector type
+   * @return the resolution
+   */
+  public static <W, V> Resolution<W, V> resolve(
+      List<? extends PlatformDestinationTree<W, V>> roots,
+      List<String> args,
+      Predicate<String> hasPermission,
+      Predicate<List<String>> canNavigate,
+      OdysseyLogger log) {
+    if (args.isEmpty()) {
       return new NotFound<>();
     }
-    if (matched.size() == 1) {
-      return new Resolved<>(matched.getFirst().destination(), matched.getFirst().tokens());
+    List<Match<W, V>> matches = new ArrayList<>();
+    for (PlatformDestinationTree<W, V> root : roots) {
+      match(root, args, 0, new ArrayList<>(), matches, hasPermission, canNavigate);
     }
-    return new Ambiguous<>(matched.stream().map(Address::tokens).toList());
+    if (matches.isEmpty()) {
+      return new NotFound<>();
+    }
+    if (matches.size() == 1) {
+      return new Resolved<>(matches.getFirst().destination(), matches.getFirst().address());
+    }
+    // Distinct canonical addresses, first spelling wins; a repeat means two providers claimed the
+    // same address and the player has no way to tell them apart.
+    Map<String, List<String>> distinct = new LinkedHashMap<>();
+    for (Match<W, V> candidate : matches) {
+      String key = String.join(" ", candidate.address()).toLowerCase(Locale.ROOT);
+      if (distinct.putIfAbsent(key, candidate.address()) != null && log != null) {
+        warnDuplicate(log, key, candidate.address());
+      }
+    }
+    return new Ambiguous<>(List.copyOf(distinct.values()));
   }
 
   /**
    * Suggests completions for the token currently being typed (the last element of {@code args}, or
-   * a fresh token when {@code args} is empty). Honors promotion, so both a promoted leaf name and
-   * the fuller path are offered.
+   * a fresh token when {@code args} is empty).
    *
    * @param roots the destination-tree roots from every provider
    * @param args the arguments typed so far; the last is treated as a partial prefix
    * @param hasPermission tests whether the player holds a permission node
    * @param <W> the world type
    * @param <V> the vector type
-   * @return the distinct candidate tokens, in first-seen order
+   * @return the candidate tokens, alphabetically
    */
   public static <W, V> List<String> suggest(
       List<? extends PlatformDestinationTree<W, V>> roots,
@@ -140,10 +218,10 @@ public final class DestinationResolver {
    * @param roots the destination-tree roots from every provider
    * @param args the arguments typed so far; the last is treated as a partial prefix
    * @param hasPermission tests whether the player holds a permission node
-   * @param canNavigate tests whether the player may navigate to a destination at a given address
+   * @param canNavigate tests whether the player may navigate to a given canonical address
    * @param <W> the world type
    * @param <V> the vector type
-   * @return the distinct candidate tokens, in first-seen order
+   * @return the candidate tokens, alphabetically
    */
   public static <W, V> List<String> suggest(
       List<? extends PlatformDestinationTree<W, V>> roots,
@@ -152,66 +230,302 @@ public final class DestinationResolver {
       Predicate<List<String>> canNavigate) {
     int index = args.isEmpty() ? 0 : args.size() - 1;
     List<String> prefix = args.isEmpty() ? List.of() : args.subList(0, index);
-    String partial = args.isEmpty() ? "" : args.get(index);
-    LinkedHashSet<String> out = new LinkedHashSet<>();
-    for (Address<W, V> address : addresses(roots, hasPermission, canNavigate)) {
-      for (List<String> sequence : address.sequences()) {
-        if (sequence.size() <= index || !sequence.subList(0, index).equals(prefix)) {
+    String partial = (args.isEmpty() ? "" : args.get(index)).toLowerCase(Locale.ROOT);
+    Access<W, V> access = new Access<>(hasPermission, canNavigate);
+    Candidates candidates = new Candidates();
+    for (PlatformDestinationTree<W, V> root : roots) {
+      suggestFrom(root, prefix, 0, new ArrayList<>(), candidates, access);
+    }
+    return candidates.tokens(partial);
+  }
+
+  // -----------------------------------------------------------------------------------------
+  // Resolution
+  // -----------------------------------------------------------------------------------------
+
+  /**
+   * Matches {@code args} from index {@code ai} against {@code node}, whose own key has not yet been
+   * accounted for: it may be consumed (the player typed it) or, unless the node is strict, omitted.
+   * Either way the node's key joins the canonical trail.
+   */
+  private static <W, V> void match(
+      PlatformDestinationTree<W, V> node,
+      List<String> args,
+      int ai,
+      List<String> trail,
+      List<Match<W, V>> out,
+      Predicate<String> hasPermission,
+      Predicate<List<String>> canNavigate) {
+    String key = node.key();
+    trail.add(key);
+    if (ai < args.size() && args.get(ai).equalsIgnoreCase(key)) {
+      matchChildren(node, args, ai + 1, trail, out, hasPermission, canNavigate);
+    }
+    if (!node.strict()) {
+      matchChildren(node, args, ai, trail, out, hasPermission, canNavigate);
+    }
+    trail.removeLast();
+  }
+
+  /** Matches the remaining args against {@code node}'s children; {@code trail} ends at the node. */
+  private static <W, V> void matchChildren(
+      PlatformDestinationTree<W, V> node,
+      List<String> args,
+      int ai,
+      List<String> trail,
+      List<Match<W, V>> out,
+      Predicate<String> hasPermission,
+      Predicate<List<String>> canNavigate) {
+    if (ai >= args.size()) {
+      return; // nothing left to match, and a destination's own key is never optional
+    }
+    if (ai == args.size() - 1) {
+      // Only the last token can name a destination, and only by its exact key — so at most one
+      // destination per node is ever materialized.
+      String last = args.get(ai);
+      for (Map.Entry<String, Supplier<MinecraftDestination<W, V>>> entry :
+          node.destinations().entrySet()) {
+        if (!entry.getKey().equalsIgnoreCase(last)) {
           continue;
         }
-        String candidate = sequence.get(index);
-        if (candidate.startsWith(partial)) {
-          out.add(candidate);
+        trail.add(entry.getKey());
+        List<String> address = List.copyOf(trail);
+        trail.removeLast();
+        MinecraftDestination<W, V> destination = entry.getValue().get();
+        if (hasAll(hasPermission, destination.permissions()) && canNavigate.test(address)) {
+          out.add(new Match<>(address, destination));
         }
       }
     }
-    return List.copyOf(out);
+    // Sub-trees are still worth descending on the final token: the child's own key may be omitted,
+    // leaving that token to name a destination inside it.
+    for (Supplier<? extends PlatformDestinationTree<W, V>> child : node.subTrees().values()) {
+      match(child.get(), args, ai, trail, out, hasPermission, canNavigate);
+    }
   }
 
-  private static <W, V> List<Address<W, V>> addresses(
-      List<? extends PlatformDestinationTree<W, V>> roots,
-      Predicate<String> hasPermission,
-      Predicate<List<String>> canNavigate) {
-    List<Address<W, V>> out = new ArrayList<>();
-    for (PlatformDestinationTree<W, V> root : roots) {
-      collect(root, new ArrayList<>(), new ArrayList<>(), out, hasPermission, canNavigate);
+  /** One destination matched by the typed args, with the canonical address it is filed under. */
+  private record Match<W, V>(List<String> address, MinecraftDestination<W, V> destination) {}
+
+  // -----------------------------------------------------------------------------------------
+  // Suggestion
+  // -----------------------------------------------------------------------------------------
+
+  /** The two permission gates, carried together through the suggestion walk. */
+  private record Access<W, V>(
+      Predicate<String> hasPermission, Predicate<List<String>> canNavigate) {
+
+    boolean allows(List<String> address, MinecraftDestination<W, V> destination) {
+      return hasAll(hasPermission, destination.permissions()) && canNavigate.test(address);
+    }
+  }
+
+  /**
+   * Walks {@code node}, whose own key has not yet been accounted for, against the typed prefix.
+   * Once the prefix runs out the node's key is itself a candidate, and — if the node may be
+   * promoted past — so is everything its children contribute.
+   */
+  private static <W, V> void suggestFrom(
+      PlatformDestinationTree<W, V> node,
+      List<String> prefix,
+      int pi,
+      List<String> trail,
+      Candidates out,
+      Access<W, V> access) {
+    String key = node.key();
+    trail.add(key);
+    if (pi < prefix.size()) {
+      if (prefix.get(pi).equalsIgnoreCase(key)) {
+        suggestChildren(node, prefix, pi + 1, trail, out, access);
+      }
+      if (!node.strict()) {
+        suggestChildren(node, prefix, pi, trail, out, access);
+      }
+    } else {
+      // Promoting past this node means offering everything below it — worth it only for a small
+      // subtree, so an oversized one falls back to "type my key first".
+      Candidates promoted = node.strict() ? null : collect(node, trail, access, PROMOTION_LIMIT);
+      out.node(key, extendable(node, promoted));
+      if (promoted != null) {
+        out.merge(promoted);
+      }
+    }
+    trail.removeLast();
+  }
+
+  /** Continues the prefix walk into {@code node}'s children; {@code trail} ends at the node. */
+  private static <W, V> void suggestChildren(
+      PlatformDestinationTree<W, V> node,
+      List<String> prefix,
+      int pi,
+      List<String> trail,
+      Candidates out,
+      Access<W, V> access) {
+    if (pi == prefix.size()) {
+      // The player has typed their way to this node, so its children are what comes next — no limit
+      // applies to a level that was asked for by name.
+      Candidates children = collect(node, trail, access, Integer.MAX_VALUE);
+      if (children != null) {
+        out.merge(children);
+      }
+      return;
+    }
+    // A destination is always the last token, so only sub-trees can carry a longer prefix.
+    for (Supplier<? extends PlatformDestinationTree<W, V>> child : node.subTrees().values()) {
+      suggestFrom(child.get(), prefix, pi, trail, out, access);
+    }
+  }
+
+  /**
+   * The tokens that may directly follow {@code node} in a command: its destinations' keys, its
+   * sub-trees' keys, and — for each sub-tree small enough to promote past — that sub-tree's own
+   * contribution.
+   *
+   * @return the candidates, or {@code null} if there turned out to be more than {@code limit} of
+   *     them (in which case the walk stopped early)
+   */
+  private static <W, V> Candidates collect(
+      PlatformDestinationTree<W, V> node, List<String> trail, Access<W, V> access, int limit) {
+    Candidates out = new Candidates();
+    for (Map.Entry<String, Supplier<MinecraftDestination<W, V>>> entry :
+        node.destinations().entrySet()) {
+      trail.add(entry.getKey());
+      List<String> address = List.copyOf(trail);
+      trail.removeLast();
+      if (!access.allows(address, entry.getValue().get())) {
+        continue;
+      }
+      out.destination(entry.getKey());
+      if (out.size() > limit) {
+        return null;
+      }
+    }
+    for (Supplier<? extends PlatformDestinationTree<W, V>> supplier : node.subTrees().values()) {
+      PlatformDestinationTree<W, V> child = supplier.get();
+      Candidates promoted = null;
+      if (!child.strict()) { // a strict child's key is mandatory: nothing below it belongs here
+        trail.add(child.key());
+        promoted = collect(child, trail, access, PROMOTION_LIMIT);
+        trail.removeLast();
+      }
+      out.node(child.key(), extendable(child, promoted));
+      if (out.size() > limit) {
+        return null;
+      }
+      // Injecting a child's own contribution here is a bonus, so an oversized one is simply left
+      // out — the child's key stays, and the player reaches its contents by naming it. Only the
+      // children themselves (above) can push a level past the limit.
+      if (promoted != null && out.size() + promoted.size() <= limit) {
+        out.merge(promoted);
+      }
     }
     return out;
   }
 
-  private static <W, V> void collect(
-      PlatformDestinationTree<W, V> node,
-      List<String> keyTrail,
-      List<Boolean> strictTrail,
-      List<Address<W, V>> out,
-      Predicate<String> hasPermission,
-      Predicate<List<String>> canNavigate) {
-    keyTrail.add(node.key());
-    strictTrail.add(node.strict());
-    node.destinations()
-        .forEach(
-            (key, supplier) -> {
-              List<String> tokens = new ArrayList<>(keyTrail);
-              tokens.add(key);
-              MinecraftDestination<W, V> destination = supplier.get();
-              // A destination's own required permissions (default-deny) and the Odyssey navigation
-              // gate
-              // (default-allow, by tree address) both apply.
-              if (hasAll(hasPermission, destination.permissions()) && canNavigate.test(tokens)) {
-                boolean[] required = new boolean[tokens.size()];
-                for (int i = 0; i < strictTrail.size(); i++) {
-                  required[i] = strictTrail.get(i);
-                }
-                required[required.length - 1] = true; // the leaf name is always required
-                out.add(new Address<>(tokens, required, destination));
-              }
-            });
-    node.subTrees()
-        .forEach(
-            (key, supplier) ->
-                collect(supplier.get(), keyTrail, strictTrail, out, hasPermission, canNavigate));
-    keyTrail.removeLast();
-    strictTrail.removeLast();
+  /**
+   * Whether naming {@code node} gets the player anywhere. When its contents were gathered, that is
+   * simply whether anything came back — a level whose every destination is hidden from this player
+   * is a dead end and should not be offered. A strict level is never gathered (that is the point of
+   * marking it), so its structure is all there is to go on.
+   */
+  private static boolean extendable(PlatformDestinationTree<?, ?> node, Candidates gathered) {
+    if (node.strict() || gathered == null) {
+      return !node.subTrees().isEmpty() || !node.destinations().isEmpty();
+    }
+    return gathered.size() > 0;
+  }
+
+  /**
+   * The candidate tokens for one position in the command, deduplicated case-insensitively (the
+   * first spelling seen wins, matching being case-insensitive anyway).
+   */
+  private static final class Candidates {
+
+    private final Map<String, Candidate> byKey = new LinkedHashMap<>();
+
+    /** Records a token that completes an address here. */
+    void destination(String key) {
+      candidate(key).terminals++;
+    }
+
+    /** Records a token that names a level here, and whether anything lies below it. */
+    void node(String key, boolean extendable) {
+      candidate(key).extendable |= extendable;
+    }
+
+    void merge(Candidates other) {
+      other
+          .byKey
+          .values()
+          .forEach(
+              candidate -> {
+                Candidate mine = candidate(candidate.display);
+                mine.terminals += candidate.terminals;
+                mine.extendable |= candidate.extendable;
+              });
+    }
+
+    int size() {
+      return byKey.size();
+    }
+
+    private Candidate candidate(String key) {
+      return byKey.computeIfAbsent(key.toLowerCase(Locale.ROOT), ignored -> new Candidate(key));
+    }
+
+    /** The offerable tokens starting with {@code partial} (already lower-cased), alphabetically. */
+    List<String> tokens(String partial) {
+      List<String> out = new ArrayList<>();
+      byKey.forEach(
+          (key, candidate) -> {
+            if (!key.startsWith(partial)) {
+              return;
+            }
+            // A token that completes more than one address, and leads nowhere further, could only
+            // ever produce an "ambiguous" error — so it is not worth offering.
+            if (candidate.extendable || candidate.terminals == 1) {
+              out.add(candidate.display);
+            }
+          });
+      out.sort(String.CASE_INSENSITIVE_ORDER);
+      return List.copyOf(out);
+    }
+  }
+
+  /** One candidate token: how many addresses it completes here, and whether it can be extended. */
+  private static final class Candidate {
+    private final String display;
+    private int terminals;
+    private boolean extendable;
+
+    Candidate(String display) {
+      this.display = display;
+    }
+  }
+
+  // -----------------------------------------------------------------------------------------
+  // Shared
+  // -----------------------------------------------------------------------------------------
+
+  private static void warnDuplicate(OdysseyLogger log, String key, List<String> address) {
+    long now = System.currentTimeMillis();
+    Long last = DUPLICATE_WARNED.get(key);
+    if (last != null && now - last < DUPLICATE_WARN_COOLDOWN_MILLIS) {
+      return;
+    }
+    if (DUPLICATE_WARNED.size() >= DUPLICATE_WARN_MEMORY) {
+      DUPLICATE_WARNED.clear(); // bounded memory; the worst case is warning again a little early
+    }
+    DUPLICATE_WARNED.put(key, now);
+    log.warn(
+        "Two destination providers registered the same address '{}'. No player can navigate to "
+            + "either one — the providers must give their destinations distinct keys.",
+        String.join(" ", address));
+  }
+
+  /** Forgets the duplicate-address cooldowns. Test seam. */
+  static void resetDuplicateWarnings() {
+    DUPLICATE_WARNED.clear();
   }
 
   private static boolean hasAll(Predicate<String> hasPermission, List<String> permissions) {
@@ -221,30 +535,5 @@ public final class DestinationResolver {
       }
     }
     return true;
-  }
-
-  /** A full path to one destination, plus which tokens are required (non-promotable). */
-  private record Address<W, V>(
-      List<String> tokens, boolean[] required, MinecraftDestination<W, V> destination) {
-
-    /** All input token sequences that address this destination, choosing keep/drop on optionals. */
-    List<List<String>> sequences() {
-      List<List<String>> results = new ArrayList<>();
-      build(0, new ArrayList<>(), results);
-      return results;
-    }
-
-    private void build(int i, List<String> acc, List<List<String>> out) {
-      if (i == tokens.size()) {
-        out.add(List.copyOf(acc));
-        return;
-      }
-      if (!required[i]) {
-        build(i + 1, acc, out); // omit this (promotable) token
-      }
-      acc.add(tokens.get(i));
-      build(i + 1, acc, out); // include it
-      acc.removeLast();
-    }
   }
 }

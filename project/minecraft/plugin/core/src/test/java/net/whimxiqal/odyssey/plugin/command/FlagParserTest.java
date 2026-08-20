@@ -87,4 +87,53 @@ class FlagParserTest {
     assertEquals(Error.UNKNOWN_MODE, invalid.error());
     assertEquals("teleport", invalid.token());
   }
+
+  @Test
+  void trailingSpaceBecomesAnEmptyTokenForCompletion() {
+    // Tab-completion hinges on this: "mco " must leave an empty last token, or the completer would
+    // re-offer "mco" instead of moving on to what lives under it.
+    assertEquals(List.of(""), FlagParser.tokenizeKeepingTrailing(""));
+    assertEquals(List.of("mco"), FlagParser.tokenizeKeepingTrailing("mco"));
+    assertEquals(List.of("mco", ""), FlagParser.tokenizeKeepingTrailing("mco "));
+    assertEquals(List.of("mco", "wa"), FlagParser.tokenizeKeepingTrailing("mco wa"));
+    assertEquals(List.of("mco", "warp", ""), FlagParser.tokenizeKeepingTrailing("mco warp "));
+  }
+
+  @Test
+  void destinationTokensDropFlagsAndTheirValues() {
+    assertEquals(
+        List.of("mco", ""),
+        FlagParser.destinationTokens(FlagParser.tokenizeKeepingTrailing("-live mco ")));
+    assertEquals(
+        List.of("mco", ""),
+        FlagParser.destinationTokens(FlagParser.tokenizeKeepingTrailing("-navigator trail mco ")));
+    assertEquals(
+        List.of("mco", "wa"),
+        FlagParser.destinationTokens(FlagParser.tokenizeKeepingTrailing("-no-mode mine mco wa")));
+    // A flag being typed is not a destination token, but the empty token after it still is.
+    assertEquals(List.of("mco"), FlagParser.destinationTokens(List.of("mco", "-liv")));
+    // Case does not matter for flags.
+    assertEquals(
+        List.of("mco"), FlagParser.destinationTokens(List.of("-NAVIGATOR", "trail", "mco")));
+  }
+
+  @Test
+  void destinationTokensMatchWhatParsingWouldHaveKept() {
+    List<String> tokens = List.of("-live", "mco", "-no-mode", "mine", "warp", "spawn");
+    Parsed parsed = parsed(tokens.toArray(new String[0]));
+    assertEquals(parsed.destination(), FlagParser.destinationTokens(tokens));
+  }
+
+  @Test
+  void completionPrefixKeepsEverythingBeforeTheTokenBeingTyped() {
+    // Sponge replaces the whole argument with the completion, so a bare "warp" would turn
+    // "mco wa" into "warp"; the prefix is what puts "mco " back in front of it.
+    assertEquals("", FlagParser.completionPrefix(""));
+    assertEquals("", FlagParser.completionPrefix("mc"));
+    assertEquals("mco ", FlagParser.completionPrefix("mco "));
+    assertEquals("mco ", FlagParser.completionPrefix("mco wa"));
+    assertEquals("mco warp ", FlagParser.completionPrefix("mco warp "));
+    assertEquals("-live mco ", FlagParser.completionPrefix("-live mco wa"));
+    assertEquals("mco  ", FlagParser.completionPrefix("mco  wa"), "odd spacing is preserved");
+  }
 }

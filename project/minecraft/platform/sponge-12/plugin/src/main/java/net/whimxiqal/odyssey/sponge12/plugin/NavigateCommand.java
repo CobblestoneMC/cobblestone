@@ -65,6 +65,9 @@ import org.spongepowered.math.vector.Vector3i;
 final class NavigateCommand {
 
   static final String PERMISSION_NAVIGATE = "odyssey.navigate";
+  // Above this many destination matches, tab-completion offers nothing — the player must type more
+  // to narrow down. Keeps a huge level the player asked for by name from flooding completion.
+  private static final int MAX_DESTINATION_SUGGESTIONS = DestinationResolver.PROMOTION_LIMIT;
   private static final String PERMISSION_NAVIGATOR_PREFIX = "odyssey.navigator.";
   // A tiny, greedy search for the off-trail "guide" path: bounded and heavily weighted so it's
   // cheap.
@@ -184,7 +187,8 @@ final class NavigateCommand {
             destinationRoots(integrations, player),
             parsed.destination(),
             player::hasPermission,
-            canNavigate(player));
+            canNavigate(player),
+            log);
     if (resolution
         instanceof DestinationResolver.Ambiguous<ServerWorld, Vector3i>(List<List<String>> addrs)) {
       messages.send(
@@ -419,6 +423,11 @@ final class NavigateCommand {
     return roots;
   }
 
+  /**
+   * Tab-completion for the destination arguments. The token being typed is the last one — the empty
+   * token after a trailing space included — and it is passed through to the resolver, which does
+   * the prefix filtering itself.
+   */
   private static List<CommandCompletion> complete(
       org.spongepowered.api.command.parameter.CommandContext context,
       String input,
@@ -427,21 +436,23 @@ final class NavigateCommand {
     if (player.isEmpty()) {
       return List.of();
     }
-    List<String> tokens = tokenize(input);
-    String last = input.endsWith(" ") || tokens.isEmpty() ? "" : tokens.getLast();
-    List<String> priorDestination =
-        tokens.isEmpty() ? tokens : tokens.subList(0, tokens.size() - 1);
+    List<String> tokens = FlagParser.tokenizeKeepingTrailing(input);
     List<String> suggestions =
         DestinationResolver.suggest(
             destinationRoots(integrations, player.get()),
-            input.endsWith(" ") ? tokens : priorDestination,
+            FlagParser.destinationTokens(tokens),
             player.get()::hasPermission,
             canNavigate(player.get()));
+    // Only offer completions once the candidate set is small; otherwise the player narrows first.
+    if (suggestions.size() > MAX_DESTINATION_SUGGESTIONS) {
+      return List.of();
+    }
+    // A remaining-joined-strings completion replaces the whole argument, so each suggestion carries
+    // back everything already typed — flags included — with only the last token swapped out.
+    String prefix = FlagParser.completionPrefix(input);
     List<CommandCompletion> completions = new ArrayList<>();
     for (String suggestion : suggestions) {
-      if (suggestion.toLowerCase(Locale.ROOT).startsWith(last.toLowerCase(Locale.ROOT))) {
-        completions.add(CommandCompletion.of(suggestion));
-      }
+      completions.add(CommandCompletion.of(prefix + suggestion));
     }
     return completions;
   }

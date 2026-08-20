@@ -11,12 +11,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
+import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.api.Destination;
 import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
 import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
@@ -25,84 +27,147 @@ import net.whimxiqal.odyssey.plugin.destination.DestinationResolver.Ambiguous;
 import net.whimxiqal.odyssey.plugin.destination.DestinationResolver.NotFound;
 import net.whimxiqal.odyssey.plugin.destination.DestinationResolver.Resolution;
 import net.whimxiqal.odyssey.plugin.destination.DestinationResolver.Resolved;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** Name-promotion, ambiguity, strict levels, permissions, and tab-completion for the resolver. */
+/**
+ * Addressing (promotion, ambiguity, strict levels, case), permissions, laziness, and tab-completion
+ * for the resolver. Tests use arbitrary world/vector types; the resolver never inspects them.
+ */
 class DestinationResolverTest {
 
-  // Tests use arbitrary world/vector types; the resolver never inspects them.
   private static final Predicate<String> ALL = permission -> true;
+  private static final Predicate<List<String>> ANY = address -> true;
 
-  private static MinecraftDestination<String, Integer> dest(String... permissions) {
-    Destination<WorldRegion<String, Integer>> destination = List::of;
-    return new SimpleMinecraftDestination<>(destination, Component.text("x"), List.of(permissions));
+  /** Counts how many destinations the walk actually built — the cost we care about bounding. */
+  private int destinationsBuilt;
+
+  /** Counts how many sub-tree nodes the walk actually built. */
+  private int nodesBuilt;
+
+  @BeforeEach
+  void reset() {
+    destinationsBuilt = 0;
+    nodesBuilt = 0;
+    DestinationResolver.resetDuplicateWarnings();
   }
 
-  private static PlatformDestinationTree<String, Integer> leafTree(
-      String key, boolean strict, String... leafKeys) {
-    Map<String, Supplier<MinecraftDestination<String, Integer>>> leaves = new LinkedHashMap<>();
-    for (String leafKey : leafKeys) {
-      leaves.put(leafKey, DestinationResolverTest::dest);
+  // -----------------------------------------------------------------------------------------
+  // Resolution
+  // -----------------------------------------------------------------------------------------
+
+  @Test
+  void resolvesAnyOrderedSubsequenceOfTheAddress() {
+    List<PlatformDestinationTree<String, Integer>> roots =
+        roots(node("mco").sub(node("warp").leaf("spawn")));
+
+    // The full path, and every ordered subsequence of its ancestors, reach the same destination.
+    for (List<String> args :
+        List.of(
+            List.of("mco", "warp", "spawn"),
+            List.of("warp", "spawn"),
+            List.of("mco", "spawn"),
+            List.of("spawn"))) {
+      Resolution<String, Integer> resolution = resolve(roots, args);
+      assertInstanceOf(Resolved.class, resolution, args.toString());
+      // Whichever form was typed, the canonical address comes back for messages and permissions.
+      assertEquals(
+          List.of("mco", "warp", "spawn"),
+          ((Resolved<String, Integer>) resolution).address(),
+          args.toString());
     }
-    return new SimplePlatformDestinationTree<>(key, strict, Map.of(), leaves);
   }
 
   @Test
-  void resolvesExactAndPromotedPaths() {
+  void rejectsReorderedOrIncompletePaths() {
     List<PlatformDestinationTree<String, Integer>> roots =
-        List.of(leafTree("waypoint", false, "home"));
+        roots(node("mco").sub(node("warp").leaf("spawn")));
 
-    assertInstanceOf(
-        Resolved.class, DestinationResolver.resolve(roots, List.of("waypoint", "home"), ALL));
-    // Promotion: the non-strict "waypoint" level may be omitted.
-    Resolution<String, Integer> promoted = DestinationResolver.resolve(roots, List.of("home"), ALL);
-    assertInstanceOf(Resolved.class, promoted);
-    assertEquals(List.of("waypoint", "home"), ((Resolved<String, Integer>) promoted).address());
+    assertInstanceOf(NotFound.class, resolve(roots, List.of("warp", "mco", "spawn"))); // reordered
+    assertInstanceOf(NotFound.class, resolve(roots, List.of("mco", "warp"))); // no destination
+    assertInstanceOf(NotFound.class, resolve(roots, List.of("spawn", "mco"))); // name is not first
+    assertInstanceOf(NotFound.class, resolve(roots, List.of())); // nothing typed
+    assertInstanceOf(NotFound.class, resolve(roots, List.of("nowhere")));
+  }
+
+  @Test
+  void matchesCaseInsensitively() {
+    List<PlatformDestinationTree<String, Integer>> roots =
+        roots(node("mco").sub(node("warp").leaf("Spawn")));
+
+    assertInstanceOf(Resolved.class, resolve(roots, List.of("MCO", "Warp", "spawn")));
+    assertInstanceOf(Resolved.class, resolve(roots, List.of("SPAWN")));
+  }
+
+  @Test
+  void lookalikeKeysCollideRatherThanConfusingPlayers() {
+    // Two providers whose roots differ only in case are ambiguous on purpose — a player cannot be
+    // expected to tell "quest bounty" and "Quest bounty" apart.
+    List<PlatformDestinationTree<String, Integer>> roots =
+        roots(node("quest").leaf("bounty"), node("Quest").leaf("bounty"));
+
+    assertInstanceOf(Ambiguous.class, resolve(roots, List.of("quest", "bounty")));
   }
 
   @Test
   void ambiguousPromotionForcesFullerPath() {
     List<PlatformDestinationTree<String, Integer>> roots =
-        List.of(leafTree("waypoint", false, "home"), leafTree("essentials", false, "home"));
+        roots(node("waypoint").leaf("home"), node("essentials").leaf("home"));
 
-    Resolution<String, Integer> ambiguous =
-        DestinationResolver.resolve(roots, List.of("home"), ALL);
+    Resolution<String, Integer> ambiguous = resolve(roots, List.of("home"));
     assertInstanceOf(Ambiguous.class, ambiguous);
-    assertEquals(2, ((Ambiguous<String, Integer>) ambiguous).addresses().size());
+    assertEquals(
+        List.of(List.of("waypoint", "home"), List.of("essentials", "home")),
+        ((Ambiguous<String, Integer>) ambiguous).addresses());
 
     // Naming the provider disambiguates.
-    assertInstanceOf(
-        Resolved.class, DestinationResolver.resolve(roots, List.of("essentials", "home"), ALL));
+    assertInstanceOf(Resolved.class, resolve(roots, List.of("essentials", "home")));
   }
 
   @Test
   void strictLevelCannotBeOmitted() {
     List<PlatformDestinationTree<String, Integer>> roots =
-        List.of(leafTree("towny", true, "spawn"));
+        roots(node("towny").sub(node("town").strict().leaf("shire")));
 
-    assertInstanceOf(NotFound.class, DestinationResolver.resolve(roots, List.of("spawn"), ALL));
-    assertInstanceOf(
-        Resolved.class, DestinationResolver.resolve(roots, List.of("towny", "spawn"), ALL));
+    assertInstanceOf(NotFound.class, resolve(roots, List.of("shire")));
+    assertInstanceOf(NotFound.class, resolve(roots, List.of("towny", "shire")));
+    assertInstanceOf(Resolved.class, resolve(roots, List.of("town", "shire")));
+    assertInstanceOf(Resolved.class, resolve(roots, List.of("towny", "town", "shire")));
+  }
+
+  @Test
+  void oneKeyMayBeBothADestinationAndALevel() {
+    // Towny's shape: "towny resident" is the town itself, "towny resident home" its spawn.
+    List<PlatformDestinationTree<String, Integer>> roots =
+        roots(node("towny").leaf("resident").sub(node("resident").leaf("home")));
+
+    Resolution<String, Integer> town = resolve(roots, List.of("towny", "resident"));
+    assertInstanceOf(Resolved.class, town);
+    assertEquals(List.of("towny", "resident"), ((Resolved<String, Integer>) town).address());
+
+    Resolution<String, Integer> spawn = resolve(roots, List.of("towny", "resident", "home"));
+    assertInstanceOf(Resolved.class, spawn);
+    assertEquals(
+        List.of("towny", "resident", "home"), ((Resolved<String, Integer>) spawn).address());
   }
 
   @Test
   void permissionGatedDestinationsAreHidden() {
-    Map<String, Supplier<MinecraftDestination<String, Integer>>> leaves = new LinkedHashMap<>();
-    leaves.put("vault", () -> dest("odyssey.dest.vault"));
     List<PlatformDestinationTree<String, Integer>> roots =
-        List.of(new SimplePlatformDestinationTree<>("secret", false, Map.of(), leaves));
+        roots(node("secret").leaf("vault", "odyssey.dest.vault"));
 
     assertInstanceOf(
-        NotFound.class, DestinationResolver.resolve(roots, List.of("vault"), permission -> false));
+        NotFound.class,
+        DestinationResolver.resolve(roots, List.of("vault"), permission -> false, ANY));
     assertInstanceOf(
         Resolved.class,
-        DestinationResolver.resolve(roots, List.of("vault"), "odyssey.dest.vault"::equals));
+        DestinationResolver.resolve(roots, List.of("vault"), "odyssey.dest.vault"::equals, ANY));
   }
 
   @Test
   void navigationGateHidesDeniedAddresses() {
     List<PlatformDestinationTree<String, Integer>> roots =
-        List.of(leafTree("essentials", false, "home", "bed"));
+        roots(node("essentials").leaf("home").leaf("bed"));
     Predicate<List<String>> gate = address -> !address.equals(List.of("essentials", "home"));
 
     assertInstanceOf(
@@ -111,24 +176,314 @@ class DestinationResolverTest {
     assertInstanceOf(
         Resolved.class,
         DestinationResolver.resolve(roots, List.of("essentials", "bed"), ALL, gate));
-    // Suggestions also drop the gated leaf.
+    // Suggestions drop the gated destination too.
     assertEquals(
         List.of("bed"), DestinationResolver.suggest(roots, List.of("essentials", ""), ALL, gate));
   }
 
   @Test
-  void suggestsPromotedNamesAndProviderKeys() {
+  void aHiddenTwinLeavesTheOtherUnambiguous() {
+    // Two providers both offer "home", but this player may only use one — so the short form works.
     List<PlatformDestinationTree<String, Integer>> roots =
-        List.of(leafTree("waypoint", false, "home", "camp"), leafTree("essentials", false, "bed"));
+        roots(node("waypoint").leaf("home"), node("essentials").leaf("home", "essentials.home"));
 
-    List<String> top = DestinationResolver.suggest(roots, List.of(), ALL);
-    assertTrue(
-        top.containsAll(List.of("waypoint", "essentials", "home", "camp", "bed")), top.toString());
-
-    // After naming a provider, only that provider's leaves complete.
+    Resolution<String, Integer> resolution =
+        DestinationResolver.resolve(roots, List.of("home"), permission -> false, ANY);
+    assertInstanceOf(Resolved.class, resolution);
+    assertEquals(List.of("waypoint", "home"), ((Resolved<String, Integer>) resolution).address());
+    // And the completion offers it, since it is no longer ambiguous.
     assertEquals(
-        List.of("bed"), DestinationResolver.suggest(roots, List.of("essentials", ""), ALL));
-    // Partial prefix filters.
-    assertEquals(List.of("camp"), DestinationResolver.suggest(roots, List.of("ca"), ALL));
+        List.of("home", "waypoint"),
+        DestinationResolver.suggest(roots, List.of(), permission -> false, ANY));
+  }
+
+  @Test
+  void identicalAddressesFromTwoProvidersAreLoggedOnceThenSuppressed() {
+    // Same canonical address twice: nothing the player types can separate them, so the providers
+    // are at fault and the console hears about it — but only once, however hard the player retries.
+    List<PlatformDestinationTree<String, Integer>> roots =
+        roots(node("essentials").leaf("home"), node("essentials").leaf("home"));
+    RecordingLogger log = new RecordingLogger();
+
+    Resolution<String, Integer> resolution =
+        DestinationResolver.resolve(roots, List.of("essentials", "home"), ALL, ANY, log);
+    assertInstanceOf(Ambiguous.class, resolution);
+    // The duplicate collapses: the player is shown one address, not the same one twice.
+    assertEquals(
+        List.of(List.of("essentials", "home")),
+        ((Ambiguous<String, Integer>) resolution).addresses());
+    assertEquals(1, log.warnings.size());
+    assertTrue(log.warnings.getFirst().contains("essentials home"), log.warnings.toString());
+
+    DestinationResolver.resolve(roots, List.of("essentials", "home"), ALL, ANY, log);
+    DestinationResolver.resolve(roots, List.of("home"), ALL, ANY, log);
+    assertEquals(1, log.warnings.size(), "the cooldown should suppress repeats");
+  }
+
+  @Test
+  void promotionStillResolvesPastAnOversizedLevel() {
+    // The suggestion limit is about what is *offered*; a player who knows the name can still use
+    // the short form.
+    Tree npcs = node("npc");
+    for (int i = 0; i < 40; i++) {
+      npcs.leaf("npc-" + i);
+    }
+    List<PlatformDestinationTree<String, Integer>> roots = roots(node("citizens").sub(npcs));
+
+    assertInstanceOf(Resolved.class, resolve(roots, List.of("npc-7")));
+  }
+
+  @Test
+  void resolutionBuildsOnlyTheDestinationsItMatches() {
+    Tree warps = node("warp");
+    for (int i = 0; i < 40; i++) {
+      warps.leaf("warp-" + i);
+    }
+    List<PlatformDestinationTree<String, Integer>> roots = roots(node("mco").sub(warps));
+
+    assertInstanceOf(Resolved.class, resolve(roots, List.of("warp-3")));
+    assertEquals(1, destinationsBuilt, "only the destination whose key matched should be built");
+  }
+
+  // -----------------------------------------------------------------------------------------
+  // Suggestion
+  // -----------------------------------------------------------------------------------------
+
+  @Test
+  void suggestsTheNextTokenAfterAProviderKey() {
+    // The regression: typing "/nav mco " must move on to what lives under "mco", not re-offer it.
+    List<PlatformDestinationTree<String, Integer>> roots =
+        roots(node("mco").sub(node("warp").leaf("spawn").leaf("shop")));
+
+    assertEquals(List.of("mco", "shop", "spawn", "warp"), suggest(roots, List.of()));
+    assertEquals(List.of("mco"), suggest(roots, List.of("mc")));
+    assertEquals(List.of("shop", "spawn", "warp"), suggest(roots, List.of("mco", "")));
+    assertEquals(List.of("warp"), suggest(roots, List.of("mco", "wa")));
+    assertEquals(List.of("shop", "spawn"), suggest(roots, List.of("mco", "warp", "")));
+    assertEquals(List.of("spawn"), suggest(roots, List.of("mco", "warp", "sp")));
+    // A complete address has no continuation.
+    assertEquals(List.of(), suggest(roots, List.of("mco", "warp", "spawn", "")));
+    // The promoted forms complete just as well as the canonical one.
+    assertEquals(List.of("shop", "spawn"), suggest(roots, List.of("warp", "")));
+    assertEquals(List.of("shop", "spawn", "warp"), suggest(roots, List.of("mco", "")));
+  }
+
+  @Test
+  void suggestionsAreSortedAndCaseInsensitive() {
+    List<PlatformDestinationTree<String, Integer>> roots =
+        roots(node("MCO").sub(node("Warp").leaf("Spawn").leaf("shop")));
+
+    assertEquals(List.of("MCO", "shop", "Spawn", "Warp"), suggest(roots, List.of()));
+    assertEquals(List.of("shop", "Spawn", "Warp"), suggest(roots, List.of("mco", "")));
+    assertEquals(List.of("Spawn"), suggest(roots, List.of("mco", "warp", "sPa")));
+  }
+
+  @Test
+  void aStrictLevelIsNeverPromotedAndNeverWalked() {
+    List<PlatformDestinationTree<String, Integer>> roots =
+        roots(node("citizens").sub(node("npc").strict().leaf("bob").leaf("ann")));
+
+    // The names stay behind "npc", and finding that out costs nothing below the strict node.
+    assertEquals(List.of("citizens", "npc"), suggest(roots, List.of()));
+    assertEquals(0, destinationsBuilt, "a strict level's destinations must not be built");
+
+    assertEquals(List.of("npc"), suggest(roots, List.of("citizens", "")));
+    assertEquals(List.of("ann", "bob"), suggest(roots, List.of("npc", "")));
+    assertEquals(List.of("ann", "bob"), suggest(roots, List.of("citizens", "npc", "")));
+  }
+
+  @Test
+  void aSmallLevelIsPromotedIntoItsParentsSuggestions() {
+    List<PlatformDestinationTree<String, Integer>> roots =
+        roots(node("citizens").sub(node("npc").leaf("bob").leaf("ann")));
+
+    assertEquals(List.of("ann", "bob", "citizens", "npc"), suggest(roots, List.of()));
+  }
+
+  @Test
+  void anOversizedLevelActsStrictForSuggestionsOnly() {
+    Tree npcs = node("npc");
+    for (int i = 0; i < DestinationResolver.PROMOTION_LIMIT + 4; i++) {
+      npcs.leaf("npc-" + i);
+    }
+    List<PlatformDestinationTree<String, Integer>> roots = roots(node("citizens").sub(npcs));
+
+    // Too many to inject at the root, so "npc" behaves as if the provider had marked it strict.
+    assertEquals(List.of("citizens", "npc"), suggest(roots, List.of()));
+    assertTrue(
+        destinationsBuilt <= DestinationResolver.PROMOTION_LIMIT + 1,
+        "the walk should stop counting once past the limit, built " + destinationsBuilt);
+
+    // Named explicitly, the level shows everything it has — capping that is the command layer's
+    // call, not the resolver's.
+    assertEquals(
+        DestinationResolver.PROMOTION_LIMIT + 4, suggest(roots, List.of("npc", "")).size());
+  }
+
+  @Test
+  void anOversizedLevelDoesNotSinkItsSiblings() {
+    Tree npcs = node("npc");
+    for (int i = 0; i < DestinationResolver.PROMOTION_LIMIT + 4; i++) {
+      npcs.leaf("npc-" + i);
+    }
+    List<PlatformDestinationTree<String, Integer>> roots =
+        roots(node("citizens").sub(npcs).sub(node("shop").leaf("forge")));
+
+    // "npc" loses its promotion; "shop" keeps its own.
+    assertEquals(List.of("citizens", "forge", "npc", "shop"), suggest(roots, List.of()));
+  }
+
+  @Test
+  void aLevelWithTooManyChildrenMustBeNamed() {
+    Tree warps = node("warp");
+    for (int i = 0; i < DestinationResolver.PROMOTION_LIMIT + 1; i++) {
+      warps.leaf("warp-" + i);
+    }
+    List<PlatformDestinationTree<String, Integer>> roots = roots(warps);
+
+    // Nothing can be promoted out of a root this wide, so only the root itself is offered.
+    assertEquals(List.of("warp"), suggest(roots, List.of()));
+    assertEquals(
+        DestinationResolver.PROMOTION_LIMIT + 1, suggest(roots, List.of("warp", "")).size());
+  }
+
+  @Test
+  void anAmbiguousShortcutIsNotSuggested() {
+    List<PlatformDestinationTree<String, Integer>> roots =
+        roots(node("waypoint").leaf("home").leaf("camp"), node("essentials").leaf("home"));
+
+    // "home" would resolve ambiguously and cannot be repaired by typing more, so it is not offered;
+    // the unambiguous "camp" and both provider keys are.
+    assertEquals(List.of("camp", "essentials", "waypoint"), suggest(roots, List.of()));
+    // Under a provider it is unambiguous again.
+    assertEquals(List.of("home"), suggest(roots, List.of("essentials", "")));
+    assertEquals(List.of("camp", "home"), suggest(roots, List.of("waypoint", "")));
+  }
+
+  @Test
+  void anAmbiguousTokenThatLeadsSomewhereIsStillSuggested() {
+    // "resident" completes two addresses, but it also opens a level — typing it is progress.
+    List<PlatformDestinationTree<String, Integer>> roots =
+        roots(
+            node("towny").leaf("resident").sub(node("resident").leaf("home")),
+            node("other").leaf("resident"));
+
+    assertTrue(suggest(roots, List.of()).contains("resident"));
+    assertEquals(List.of("home"), suggest(roots, List.of("towny", "resident", "")));
+  }
+
+  @Test
+  void aDeadEndLevelIsNotSuggested() {
+    List<PlatformDestinationTree<String, Integer>> roots =
+        roots(node("empty"), node("mco").leaf("spawn"));
+
+    assertEquals(List.of("mco", "spawn"), suggest(roots, List.of()));
+  }
+
+  @Test
+  void tokensAreDeduplicatedAcrossProviders() {
+    // Both providers offer a "warp" level; the token appears once.
+    List<PlatformDestinationTree<String, Integer>> roots =
+        roots(
+            node("mco").sub(node("warp").leaf("spawn")),
+            node("other").sub(node("warp").leaf("market")));
+
+    assertEquals(List.of("market", "mco", "other", "spawn", "warp"), suggest(roots, List.of()));
+    assertEquals(List.of("market", "spawn"), suggest(roots, List.of("warp", "")));
+  }
+
+  // -----------------------------------------------------------------------------------------
+  // Fixtures
+  // -----------------------------------------------------------------------------------------
+
+  private static Resolution<String, Integer> resolve(
+      List<PlatformDestinationTree<String, Integer>> roots, List<String> args) {
+    return DestinationResolver.resolve(roots, args, ALL, ANY);
+  }
+
+  private static List<String> suggest(
+      List<PlatformDestinationTree<String, Integer>> roots, List<String> args) {
+    return DestinationResolver.suggest(roots, args, ALL, ANY);
+  }
+
+  private static List<PlatformDestinationTree<String, Integer>> roots(Tree... trees) {
+    List<PlatformDestinationTree<String, Integer>> out = new ArrayList<>();
+    for (Tree tree : trees) {
+      out.add(tree.build());
+    }
+    return out;
+  }
+
+  private Tree node(String key) {
+    return new Tree(key);
+  }
+
+  /** A test tree whose children count how often they are actually materialized. */
+  private final class Tree {
+
+    private final String key;
+    private boolean strict;
+    private final Map<String, Supplier<? extends PlatformDestinationTree<String, Integer>>> subs =
+        new LinkedHashMap<>();
+    private final Map<String, Supplier<MinecraftDestination<String, Integer>>> leaves =
+        new LinkedHashMap<>();
+
+    private Tree(String key) {
+      this.key = key;
+    }
+
+    Tree strict() {
+      this.strict = true;
+      return this;
+    }
+
+    Tree leaf(String leafKey, String... permissions) {
+      leaves.put(
+          leafKey,
+          () -> {
+            destinationsBuilt++;
+            Destination<WorldRegion<String, Integer>> destination = List::of;
+            return new SimpleMinecraftDestination<>(
+                destination, Component.text(leafKey), List.of(permissions));
+          });
+      return this;
+    }
+
+    Tree sub(Tree child) {
+      subs.put(
+          child.key,
+          () -> {
+            nodesBuilt++;
+            return child.build();
+          });
+      return this;
+    }
+
+    PlatformDestinationTree<String, Integer> build() {
+      return new SimplePlatformDestinationTree<>(key, strict, subs, leaves);
+    }
+  }
+
+  /** Captures warn-level messages, formatted the way the real loggers would render them. */
+  private static final class RecordingLogger extends OdysseyLogger {
+
+    private final List<String> warnings = new ArrayList<>();
+
+    @Override
+    public void trace(String message, Object... args) {}
+
+    @Override
+    public void debug(String message, Object... args) {}
+
+    @Override
+    public void info(String message, Object... args) {}
+
+    @Override
+    public void warn(String message, Object... args) {
+      warnings.add(format(message, args));
+    }
+
+    @Override
+    public void error(String message, Throwable throwable, Object... args) {}
   }
 }
