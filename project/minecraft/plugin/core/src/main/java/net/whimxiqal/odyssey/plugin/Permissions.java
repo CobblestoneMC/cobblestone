@@ -27,8 +27,8 @@ public enum Permissions {
    */
   NAVIGATOR("odyssey.navigator"),
 
-  /** Use of {@code /odyssey waypoint}, for the player's own waypoints. Default allow. */
-  WAYPOINT("odyssey.waypoint"),
+  /** Use of {@code /odyssey location}, for the player's own locations. Default allow. */
+  LOCATION("odyssey.location"),
 
   /** Reloading the configuration. Default op. */
   RELOAD("odyssey.admin.reload"),
@@ -36,8 +36,8 @@ public enum Permissions {
   /** Clearing the discovered-portal store. Default op. */
   PORTALS("odyssey.admin.portals"),
 
-  /** Creating and deleting server-wide waypoints ({@code -global}). Default op. */
-  WAYPOINT_GLOBAL("odyssey.admin.waypoint.global");
+  /** Creating and deleting server-wide locations ({@code -global}). Default op. */
+  LOCATION_GLOBAL("odyssey.admin.location.global");
 
   private final String node;
 

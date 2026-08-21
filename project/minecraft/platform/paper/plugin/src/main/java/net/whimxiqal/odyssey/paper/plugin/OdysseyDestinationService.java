@@ -20,8 +20,7 @@ import net.whimxiqal.odyssey.paper.api.WholeWorldRegion;
 import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
 import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
 import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
-import net.whimxiqal.odyssey.plugin.data.Waypoint;
-import net.whimxiqal.odyssey.plugin.data.WaypointDao;
+import net.whimxiqal.odyssey.plugin.data.LocationDao;
 import net.whimxiqal.odyssey.plugin.destination.SimpleMinecraftDestination;
 import net.whimxiqal.odyssey.plugin.destination.SimplePlatformDestinationTree;
 import org.bukkit.Bukkit;
@@ -34,14 +33,14 @@ import org.joml.Vector3i;
 public class OdysseyDestinationService implements DestinationService {
   public static final String PLAYER_TREE_KEY = "player";
   public static final String WORLD_TREE_KEY = "world";
-  public static final String WAYPOINT_TREE_KEY = "waypoint";
+  public static final String LOCATION_TREE_KEY = "location";
   public static final String GLOBAL_TREE_KEY = "global";
   public static final String PRIVATE_TREE_KEY = "private";
 
-  private final WaypointDao waypoints;
+  private final LocationDao locations;
 
-  public OdysseyDestinationService(WaypointDao waypoints) {
-    this.waypoints = waypoints;
+  public OdysseyDestinationService(LocationDao locations) {
+    this.locations = locations;
   }
 
   @Override
@@ -53,8 +52,8 @@ public class OdysseyDestinationService implements DestinationService {
             () -> providePlayerDestinationTree(player),
             WORLD_TREE_KEY,
             () -> provideWorldDestinationTree(player),
-            WAYPOINT_TREE_KEY,
-            () -> provideWaypointDestinationTree(player)),
+            LOCATION_TREE_KEY,
+            () -> provideLocationDestinationTree(player)),
         Map.of());
   }
 
@@ -107,16 +106,16 @@ public class OdysseyDestinationService implements DestinationService {
   }
 
   /**
-   * Waypoints split by scope, so a player's own {@code home} and a server-wide {@code home} are
-   * both reachable ({@code waypoint private home} / {@code waypoint global home}) rather than one
-   * silently shadowing the other. Neither level is strict, so plain {@code waypoint home} still
+   * Locations split by scope, so a player's own {@code home} and a server-wide {@code home} are
+   * both reachable ({@code location private home} / {@code location global home}) rather than one
+   * silently shadowing the other. Neither level is strict, so plain {@code location home} still
    * works whenever only one of the two exists.
    */
-  private PlatformDestinationTree<World, Vector3i> provideWaypointDestinationTree(Player player) {
+  private PlatformDestinationTree<World, Vector3i> provideLocationDestinationTree(Player player) {
     Map<String, Supplier<MinecraftDestination<World, Vector3i>>> globalLeaves =
-        leaves(waypoints.global());
+        leaves(locations.global());
     Map<String, Supplier<MinecraftDestination<World, Vector3i>>> privateLeaves =
-        leaves(waypoints.ownedBy(player.getUniqueId()));
+        leaves(locations.ownedBy(player.getUniqueId()));
     return new SimplePlatformDestinationTree<>(
         false,
         Map.of(
@@ -127,23 +126,24 @@ public class OdysseyDestinationService implements DestinationService {
         Map.of());
   }
 
-  /** Waypoint names are unique within a scope (the table's primary key), so this cannot collide. */
+  /** Location names are unique within a scope (the table's primary key), so this cannot collide. */
   private static Map<String, Supplier<MinecraftDestination<World, Vector3i>>> leaves(
-      List<Waypoint> waypoints) {
+      List<net.whimxiqal.odyssey.plugin.data.Location> locations) {
     Map<String, Supplier<MinecraftDestination<World, Vector3i>>> leaves = new LinkedHashMap<>();
-    for (Waypoint waypoint : waypoints) {
-      leaves.put(waypoint.name(), toDestination(waypoint));
+    for (var location : locations) {
+      leaves.put(location.name(), toDestination(location));
     }
     return leaves;
   }
 
-  private static Supplier<MinecraftDestination<World, Vector3i>> toDestination(Waypoint waypoint) {
-    NamespacedKey worldKey = NamespacedKey.fromString(waypoint.world());
+  private static Supplier<MinecraftDestination<World, Vector3i>> toDestination(
+      net.whimxiqal.odyssey.plugin.data.Location location) {
+    NamespacedKey worldKey = NamespacedKey.fromString(location.world());
     World world = worldKey == null ? null : Bukkit.getWorld(worldKey);
-    Location location = new Location(world, waypoint.x(), waypoint.y(), waypoint.z());
-    WorldRegion<World, Vector3i> region = SingleCellWorldRegion.of(location);
+    var bukkitLocation = new Location(world, location.x(), location.y(), location.z());
+    WorldRegion<World, Vector3i> region = SingleCellWorldRegion.of(bukkitLocation);
     Destination<WorldRegion<World, Vector3i>> destination = () -> List.of(region);
     return () ->
-        new SimpleMinecraftDestination<>(destination, Component.text(waypoint.name()), List.of());
+        new SimpleMinecraftDestination<>(destination, Component.text(location.name()), List.of());
   }
 }

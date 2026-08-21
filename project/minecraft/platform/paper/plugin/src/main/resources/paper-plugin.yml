@@ -15,8 +15,8 @@ permissions:
   odyssey.navigator:
     description: "Use of custom navigators (the parent of odyssey.navigator.<id>)"
     default: true
-  odyssey.waypoint:
-    description: "Use of personal waypoints"
+  odyssey.location:
+    description: "Use of personal locations"
     default: true
   odyssey.admin.reload:
     description: "Reload the Odyssey configuration"
@@ -24,6 +24,6 @@ permissions:
   odyssey.admin.portals:
     description: "Clear discovered portals"
     default: op
-  odyssey.admin.waypoint.global:
-    description: "Manage server-wide waypoints (-global)"
+  odyssey.admin.location.global:
+    description: "Manage server-wide locations (-global)"
     default: op

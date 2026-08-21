@@ -15,7 +15,7 @@ import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
 /**
  * A plain, immutable {@link PlatformDestinationTree} node built from ready-made child maps.
  * Children stay behind {@link Supplier}s so a provider can defer materializing large sets (every
- * waypoint, every town) until a node is actually visited during command traversal or
+ * location, every town) until a node is actually visited during command traversal or
  * tab-completion.
  *
  * @param <W> the platform world type

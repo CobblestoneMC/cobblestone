@@ -29,11 +29,11 @@ final class SpongePermissions {
     PermissionService service = Sponge.server().serviceProvider().permissionService();
     describe(service, container, Permissions.NAVIGATE, "Use of /navigate", true);
     describe(service, container, Permissions.NAVIGATOR, "Use of custom navigators", true);
-    describe(service, container, Permissions.WAYPOINT, "Use of personal waypoints", true);
+    describe(service, container, Permissions.LOCATION, "Use of personal locations", true);
     describe(service, container, Permissions.RELOAD, "Reload the Odyssey configuration", false);
     describe(service, container, Permissions.PORTALS, "Clear discovered portals", false);
     describe(
-        service, container, Permissions.WAYPOINT_GLOBAL, "Manage server-wide waypoints", false);
+        service, container, Permissions.LOCATION_GLOBAL, "Manage server-wide locations", false);
   }
 
   private static void describe(

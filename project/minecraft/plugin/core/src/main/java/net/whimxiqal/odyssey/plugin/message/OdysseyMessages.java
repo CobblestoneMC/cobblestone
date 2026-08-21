@@ -42,35 +42,35 @@ public final class OdysseyMessages {
   public static final Message1 RELOAD_RESTART_REQUIRED =
       Message1.info("command.odyssey.reload.restart_required");
 
-  /** Confirms a waypoint was set ({@code {0}} = its name). */
-  public static final Message1 WAYPOINT_SET = Message1.success("command.odyssey.waypoint.set");
+  /** Confirms a location was set ({@code {0}} = its name). */
+  public static final Message1 LOCATION_SET = Message1.success("command.odyssey.location.set");
 
-  /** Confirms a waypoint was removed ({@code {0}} = its name). */
-  public static final Message1 WAYPOINT_UNSET = Message1.success("command.odyssey.waypoint.unset");
+  /** Confirms a location was removed ({@code {0}} = its name). */
+  public static final Message1 LOCATION_UNSET = Message1.success("command.odyssey.location.unset");
 
-  /** Shown when unsetting a waypoint that does not exist ({@code {0}} = the name). */
-  public static final Message1 WAYPOINT_NOT_FOUND =
-      Message1.error("command.odyssey.waypoint.not_found");
+  /** Shown when unsetting a location that does not exist ({@code {0}} = the name). */
+  public static final Message1 LOCATION_NOT_FOUND =
+      Message1.error("command.odyssey.location.not_found");
 
-  /** Header for the waypoint listing ({@code {0}} = the count). */
-  public static final Message1 WAYPOINT_LIST_HEADER =
-      Message1.info("command.odyssey.waypoint.list.header");
+  /** Header for the location listing ({@code {0}} = the count). */
+  public static final Message1 LOCATION_LIST_HEADER =
+      Message1.info("command.odyssey.location.list.header");
 
-  /** A personal waypoint in the listing ({@code {0}} = name, {@code {1}} = location). */
-  public static final Message2 WAYPOINT_LIST_ENTRY =
-      Message2.info("command.odyssey.waypoint.list.entry");
+  /** A personal location in the listing ({@code {0}} = name, {@code {1}} = location). */
+  public static final Message2 LOCATION_LIST_ENTRY =
+      Message2.info("command.odyssey.location.list.entry");
 
-  /** A global waypoint in the listing ({@code {0}} = name, {@code {1}} = location). */
-  public static final Message2 WAYPOINT_LIST_GLOBAL =
-      Message2.info("command.odyssey.waypoint.list.global");
+  /** A global location in the listing ({@code {0}} = name, {@code {1}} = location). */
+  public static final Message2 LOCATION_LIST_GLOBAL =
+      Message2.info("command.odyssey.location.list.global");
 
-  /** Shown when the player has no waypoints. */
-  public static final Message0 WAYPOINT_LIST_NONE =
-      Message0.info("command.odyssey.waypoint.list.none");
+  /** Shown when the player has no locations. */
+  public static final Message0 LOCATION_LIST_NONE =
+      Message0.info("command.odyssey.location.list.none");
 
-  /** Shown when a waypoint could not be persisted (details are in the server log). */
-  public static final Message0 WAYPOINT_STORE_ERROR =
-      Message0.error("command.odyssey.waypoint.store_error");
+  /** Shown when a location could not be persisted (details are in the server log). */
+  public static final Message0 LOCATION_STORE_ERROR =
+      Message0.error("command.odyssey.location.store_error");
 
   /** Prompts the player to run a command to traverse a transition ({@code {0}} = the command). */
   public static final Message1 NAV_TRAIL_PROMPT_COMMAND =

@@ -14,51 +14,51 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import net.whimxiqal.odyssey.plugin.data.Waypoint;
-import net.whimxiqal.odyssey.plugin.data.WaypointDao;
+import net.whimxiqal.odyssey.plugin.data.Location;
+import net.whimxiqal.odyssey.plugin.data.LocationDao;
 
 /**
- * A {@link WaypointDao} over the shared JDBC connection. Global waypoints are stored under a fixed
+ * A {@link LocationDao} over the shared JDBC connection. Global locations are stored under a fixed
  * sentinel owner so {@code (owner, name)} can be a plain NOT-NULL primary key (a nullable primary
  * key is not portable across SQL backends). Upserts are a dialect-neutral delete-then-insert inside
  * a transaction rather than backend-specific {@code MERGE}/{@code ON CONFLICT}.
  */
-final class JdbcWaypointDao implements WaypointDao {
+final class JdbcLocationDao implements LocationDao {
 
-  /** Sentinel owner for global (server-wide) waypoints; the all-zero UUID never names a player. */
+  /** Sentinel owner for global (server-wide) locations; the all-zero UUID never names a player. */
   private static final String GLOBAL_OWNER = new UUID(0L, 0L).toString();
 
   private static final String INSERT =
-      "INSERT INTO odyssey_waypoint (owner, name, world, x, y, z) VALUES (?, ?, ?, ?, ?, ?)";
-  private static final String DELETE = "DELETE FROM odyssey_waypoint WHERE owner = ? AND name = ?";
+      "INSERT INTO odyssey_location (owner, name, world, x, y, z) VALUES (?, ?, ?, ?, ?, ?)";
+  private static final String DELETE = "DELETE FROM odyssey_location WHERE owner = ? AND name = ?";
   private static final String SELECT_ONE =
-      "SELECT owner, name, world, x, y, z FROM odyssey_waypoint WHERE owner = ? AND name = ?";
+      "SELECT owner, name, world, x, y, z FROM odyssey_location WHERE owner = ? AND name = ?";
   private static final String SELECT_BY_OWNER =
-      "SELECT owner, name, world, x, y, z FROM odyssey_waypoint WHERE owner = ? ORDER BY name";
+      "SELECT owner, name, world, x, y, z FROM odyssey_location WHERE owner = ? ORDER BY name";
 
   private final AbstractJdbcDataStore store;
 
-  JdbcWaypointDao(AbstractJdbcDataStore store) {
+  JdbcLocationDao(AbstractJdbcDataStore store) {
     this.store = store;
   }
 
   @Override
-  public void put(Waypoint waypoint) {
+  public void put(Location location) {
     store.inTransaction(
-        "put waypoint",
+        "put location",
         connection -> {
           try (PreparedStatement delete = connection.prepareStatement(DELETE)) {
-            delete.setString(1, ownerKey(waypoint.owner()));
-            delete.setString(2, waypoint.name());
+            delete.setString(1, ownerKey(location.owner()));
+            delete.setString(2, location.name());
             delete.executeUpdate();
           }
           try (PreparedStatement insert = connection.prepareStatement(INSERT)) {
-            insert.setString(1, ownerKey(waypoint.owner()));
-            insert.setString(2, waypoint.name());
-            insert.setString(3, waypoint.world());
-            insert.setInt(4, waypoint.x());
-            insert.setInt(5, waypoint.y());
-            insert.setInt(6, waypoint.z());
+            insert.setString(1, ownerKey(location.owner()));
+            insert.setString(2, location.name());
+            insert.setString(3, location.world());
+            insert.setInt(4, location.x());
+            insert.setInt(5, location.y());
+            insert.setInt(6, location.z());
             insert.executeUpdate();
           }
           return null;
@@ -68,7 +68,7 @@ final class JdbcWaypointDao implements WaypointDao {
   @Override
   public boolean remove(Optional<UUID> owner, String name) {
     return store.inTransaction(
-        "remove waypoint",
+        "remove location",
         connection -> {
           try (PreparedStatement delete = connection.prepareStatement(DELETE)) {
             delete.setString(1, ownerKey(owner));
@@ -79,38 +79,38 @@ final class JdbcWaypointDao implements WaypointDao {
   }
 
   @Override
-  public Optional<Waypoint> get(Optional<UUID> owner, String name) {
+  public Optional<Location> get(Optional<UUID> owner, String name) {
     return store.query(
-        "get waypoint",
+        "get location",
         connection -> {
           try (PreparedStatement select = connection.prepareStatement(SELECT_ONE)) {
             select.setString(1, ownerKey(owner));
             select.setString(2, name);
             try (ResultSet rows = select.executeQuery()) {
-              return rows.next() ? Optional.of(read(rows)) : Optional.<Waypoint>empty();
+              return rows.next() ? Optional.of(read(rows)) : Optional.<Location>empty();
             }
           }
         });
   }
 
   @Override
-  public List<Waypoint> ownedBy(UUID owner) {
+  public List<Location> ownedBy(UUID owner) {
     return selectByOwner(owner.toString());
   }
 
   @Override
-  public List<Waypoint> global() {
+  public List<Location> global() {
     return selectByOwner(GLOBAL_OWNER);
   }
 
-  private List<Waypoint> selectByOwner(String ownerKey) {
+  private List<Location> selectByOwner(String ownerKey) {
     return store.query(
-        "list waypoints",
+        "list locations",
         connection -> {
           try (PreparedStatement select = connection.prepareStatement(SELECT_BY_OWNER)) {
             select.setString(1, ownerKey);
             try (ResultSet rows = select.executeQuery()) {
-              List<Waypoint> result = new ArrayList<>();
+              List<Location> result = new ArrayList<>();
               while (rows.next()) {
                 result.add(read(rows));
               }
@@ -120,11 +120,11 @@ final class JdbcWaypointDao implements WaypointDao {
         });
   }
 
-  private static Waypoint read(ResultSet rows) throws SQLException {
+  private static Location read(ResultSet rows) throws SQLException {
     String ownerKey = rows.getString("owner");
     Optional<UUID> owner =
         GLOBAL_OWNER.equals(ownerKey) ? Optional.empty() : Optional.of(UUID.fromString(ownerKey));
-    return new Waypoint(
+    return new Location(
         owner,
         rows.getString("name"),
         rows.getString("world"),

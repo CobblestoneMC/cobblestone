@@ -104,7 +104,7 @@ public final class PaperNavigationServiceImpl
   }
 
   /**
-   * Begins a search toward a plugin-provided {@link Destination} (e.g. a resolved waypoint), which
+   * Begins a search toward a plugin-provided {@link Destination} (e.g. a resolved location), which
    * may span several regions/endpoints. Used by the {@code /navigate} command; not on the public
    * native façade because it speaks Paper's {@link WorldRegion} type.
    *

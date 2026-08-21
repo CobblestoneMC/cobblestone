@@ -15,20 +15,20 @@ import java.util.UUID;
  *
  * <p>Storage keeps only a world key and integer block coordinates so the record survives across
  * restarts and platforms; the plugin layer re-hydrates it into a live {@code MinecraftDestination}
- * when a search is requested. A waypoint is identified by {@code (owner, name)}: an empty {@link
- * #owner()} denotes a server-wide ("global") waypoint visible to everyone.
+ * when a search is requested. A location is identified by {@code (owner, name)}: an empty {@link
+ * #owner()} denotes a server-wide ("global") location visible to everyone.
  *
- * @param owner the owning player, or empty for a global waypoint
+ * @param owner the owning player, or empty for a global location
  * @param name the case-sensitive name (unique within an owner's scope)
  * @param world the namespaced world key (e.g. {@code minecraft:overworld})
  * @param x the block x-coordinate
  * @param y the block y-coordinate
  * @param z the block z-coordinate
  */
-public record Waypoint(Optional<UUID> owner, String name, String world, int x, int y, int z) {
+public record Location(Optional<UUID> owner, String name, String world, int x, int y, int z) {
 
   /**
-   * Creates a personal waypoint.
+   * Creates a personal location.
    *
    * @param owner the owning player
    * @param name the name
@@ -36,28 +36,28 @@ public record Waypoint(Optional<UUID> owner, String name, String world, int x, i
    * @param x the block x
    * @param y the block y
    * @param z the block z
-   * @return the waypoint
+   * @return the location
    */
-  public static Waypoint personal(UUID owner, String name, String world, int x, int y, int z) {
-    return new Waypoint(Optional.of(owner), name, world, x, y, z);
+  public static Location personal(UUID owner, String name, String world, int x, int y, int z) {
+    return new Location(Optional.of(owner), name, world, x, y, z);
   }
 
   /**
-   * Creates a global (server-wide) waypoint.
+   * Creates a global (server-wide) location.
    *
    * @param name the name
    * @param world the world key
    * @param x the block x
    * @param y the block y
    * @param z the block z
-   * @return the waypoint
+   * @return the location
    */
-  public static Waypoint global(String name, String world, int x, int y, int z) {
-    return new Waypoint(Optional.empty(), name, world, x, y, z);
+  public static Location global(String name, String world, int x, int y, int z) {
+    return new Location(Optional.empty(), name, world, x, y, z);
   }
 
   /**
-   * Returns whether this is a global (server-wide) waypoint.
+   * Returns whether this is a global (server-wide) location.
    *
    * @return {@code true} if global
    */

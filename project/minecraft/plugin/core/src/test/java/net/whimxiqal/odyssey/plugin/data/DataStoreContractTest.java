@@ -52,14 +52,14 @@ class DataStoreContractTest {
 
   @ParameterizedTest
   @MethodSource("backends")
-  void putThenGetPersonalWaypoint(Backend backend, @TempDir Path dir) {
+  void putThenGetPersonalLocation(Backend backend, @TempDir Path dir) {
     DataStore store = opened(backend, dir);
     try {
       UUID owner = UUID.randomUUID();
-      store.waypoints().put(Waypoint.personal(owner, "home", "minecraft:overworld", 10, 64, -20));
+      store.locations().put(Location.personal(owner, "home", "minecraft:overworld", 10, 64, -20));
 
-      Optional<Waypoint> found = store.waypoints().get(Optional.of(owner), "home");
-      assertTrue(found.isPresent(), "waypoint should be retrievable");
+      Optional<Location> found = store.locations().get(Optional.of(owner), "home");
+      assertTrue(found.isPresent(), "location should be retrievable");
       assertEquals("minecraft:overworld", found.get().world());
       assertEquals(10, found.get().x());
       assertEquals(64, found.get().y());
@@ -72,15 +72,15 @@ class DataStoreContractTest {
 
   @ParameterizedTest
   @MethodSource("backends")
-  void putThenGetGlobalWaypoint(Backend backend, @TempDir Path dir) {
+  void putThenGetGlobalLocation(Backend backend, @TempDir Path dir) {
     DataStore store = opened(backend, dir);
     try {
-      store.waypoints().put(Waypoint.global("spawn", "minecraft:overworld", 0, 70, 0));
+      store.locations().put(Location.global("spawn", "minecraft:overworld", 0, 70, 0));
 
-      Optional<Waypoint> found = store.waypoints().get(Optional.empty(), "spawn");
+      Optional<Location> found = store.locations().get(Optional.empty(), "spawn");
       assertTrue(found.isPresent());
       assertTrue(found.get().isGlobal());
-      assertEquals(List.of(found.get()), store.waypoints().global());
+      assertEquals(List.of(found.get()), store.locations().global());
     } finally {
       store.close();
     }
@@ -88,19 +88,19 @@ class DataStoreContractTest {
 
   @ParameterizedTest
   @MethodSource("backends")
-  void putOverwritesExistingWaypoint(Backend backend, @TempDir Path dir) {
+  void putOverwritesExistingLocation(Backend backend, @TempDir Path dir) {
     DataStore store = opened(backend, dir);
     try {
       UUID owner = UUID.randomUUID();
-      store.waypoints().put(Waypoint.personal(owner, "camp", "minecraft:overworld", 1, 1, 1));
-      store.waypoints().put(Waypoint.personal(owner, "camp", "minecraft:the_nether", 2, 2, 2));
+      store.locations().put(Location.personal(owner, "camp", "minecraft:overworld", 1, 1, 1));
+      store.locations().put(Location.personal(owner, "camp", "minecraft:the_nether", 2, 2, 2));
 
-      Optional<Waypoint> found = store.waypoints().get(Optional.of(owner), "camp");
+      Optional<Location> found = store.locations().get(Optional.of(owner), "camp");
       assertTrue(found.isPresent());
       assertEquals("minecraft:the_nether", found.get().world());
       assertEquals(2, found.get().x());
       assertEquals(
-          1, store.waypoints().ownedBy(owner).size(), "upsert must not create a duplicate");
+          1, store.locations().ownedBy(owner).size(), "upsert must not create a duplicate");
     } finally {
       store.close();
     }
@@ -112,11 +112,11 @@ class DataStoreContractTest {
     DataStore store = opened(backend, dir);
     try {
       UUID owner = UUID.randomUUID();
-      store.waypoints().put(Waypoint.personal(owner, "temp", "minecraft:overworld", 5, 5, 5));
+      store.locations().put(Location.personal(owner, "temp", "minecraft:overworld", 5, 5, 5));
 
-      assertTrue(store.waypoints().remove(Optional.of(owner), "temp"), "first remove hits a row");
-      assertFalse(store.waypoints().remove(Optional.of(owner), "temp"), "second remove is a no-op");
-      assertTrue(store.waypoints().get(Optional.of(owner), "temp").isEmpty());
+      assertTrue(store.locations().remove(Optional.of(owner), "temp"), "first remove hits a row");
+      assertFalse(store.locations().remove(Optional.of(owner), "temp"), "second remove is a no-op");
+      assertTrue(store.locations().get(Optional.of(owner), "temp").isEmpty());
     } finally {
       store.close();
     }
@@ -128,14 +128,14 @@ class DataStoreContractTest {
     DataStore store = opened(backend, dir);
     try {
       UUID owner = UUID.randomUUID();
-      store.waypoints().put(Waypoint.personal(owner, "shared", "minecraft:overworld", 1, 1, 1));
-      store.waypoints().put(Waypoint.global("shared", "minecraft:overworld", 9, 9, 9));
+      store.locations().put(Location.personal(owner, "shared", "minecraft:overworld", 1, 1, 1));
+      store.locations().put(Location.global("shared", "minecraft:overworld", 9, 9, 9));
 
       // Same name in two scopes coexist and do not leak into each other's listings.
-      assertEquals(1, store.waypoints().ownedBy(owner).size());
-      assertEquals(1, store.waypoints().global().size());
-      assertEquals(1, store.waypoints().get(Optional.of(owner), "shared").get().x());
-      assertEquals(9, store.waypoints().get(Optional.empty(), "shared").get().x());
+      assertEquals(1, store.locations().ownedBy(owner).size());
+      assertEquals(1, store.locations().global().size());
+      assertEquals(1, store.locations().get(Optional.of(owner), "shared").get().x());
+      assertEquals(9, store.locations().get(Optional.empty(), "shared").get().x());
     } finally {
       store.close();
     }
@@ -212,20 +212,20 @@ class DataStoreContractTest {
 
   @ParameterizedTest
   @MethodSource("backends")
-  void waypointSurvivesReopen(Backend backend, @TempDir Path dir) {
+  void locationSurvivesReopen(Backend backend, @TempDir Path dir) {
     UUID owner = UUID.randomUUID();
     DataStore first = opened(backend, dir);
     try {
-      first.waypoints().put(Waypoint.personal(owner, "base", "minecraft:overworld", 100, 63, 200));
+      first.locations().put(Location.personal(owner, "base", "minecraft:overworld", 100, 63, 200));
     } finally {
       first.close();
     }
 
-    // Simulate a server restart: a brand-new store over the same file must see the waypoint.
+    // Simulate a server restart: a brand-new store over the same file must see the location.
     DataStore second = opened(backend, dir);
     try {
-      Optional<Waypoint> found = second.waypoints().get(Optional.of(owner), "base");
-      assertTrue(found.isPresent(), "waypoint must persist across a restart");
+      Optional<Location> found = second.locations().get(Optional.of(owner), "base");
+      assertTrue(found.isPresent(), "location must persist across a restart");
       assertEquals(100, found.get().x());
       assertEquals(200, found.get().z());
     } finally {

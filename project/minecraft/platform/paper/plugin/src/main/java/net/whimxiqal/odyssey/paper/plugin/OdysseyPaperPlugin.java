@@ -39,7 +39,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  *
  * <p>Phase 6a bootstrap: load config, build the message pipeline, construct the plugin-owned
  * transition registry and the native platform API, register the single {@link NavigationService}
- * service, and wire the {@code /odyssey} command. Data store, listeners, waypoints, trips, portal
+ * service, and wire the {@code /odyssey} command. Data store, listeners, locations, trips, portal
  * discovery, and the {@code /navigate} tree arrive in Phases 6b/6c.
  */
 public final class OdysseyPaperPlugin extends JavaPlugin {
@@ -90,10 +90,10 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
         .getServicesManager()
         .register(IntegrationRegistrar.class, integrationRegistry, this, ServicePriority.Normal);
 
-    // Waypoints are surfaced to searches like any third-party provider — via the same registration
+    // Locations are surfaced to searches like any third-party provider — via the same registration
     // helper an integration would use.
     integrationRegistry.registerDestinations(
-        this, new OdysseyDestinationService(dataStore.waypoints()));
+        this, new OdysseyDestinationService(dataStore.locations()));
 
     Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
     Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), logger);
@@ -182,7 +182,7 @@ public final class OdysseyPaperPlugin extends JavaPlugin {
                           keys,
                           messages,
                           logger,
-                          dataStore.waypoints(),
+                          dataStore.locations(),
                           dataStore.portalTransitions(),
                           tripManager,
                           searchRegistry),

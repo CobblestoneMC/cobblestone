@@ -14,7 +14,7 @@ import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
 
 /**
  * A named, permission-gated navigation target surfaced by a {@link DestinationProvider} — e.g. a
- * waypoint, an Essentials home, or a town's spawn.
+ * location, an Essentials home, or a town's spawn.
  *
  * <p>The underlying {@link Destination} is the algorithm-level goal (a collection of {@code
  * DomainRegion}s); everything else here is presentation and access control the plugin layer cares
@@ -46,7 +46,7 @@ public interface MinecraftDestination<W, V> {
 
   /**
    * Returns whether this destination can move (e.g. another player), so a trip to it should default
-   * to live (auto-recalculating). Stationary destinations (waypoints, worlds) return {@code false}.
+   * to live (auto-recalculating). Stationary destinations (locations, worlds) return {@code false}.
    *
    * @return {@code true} if the destination is mobile
    */

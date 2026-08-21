@@ -51,7 +51,7 @@ import org.spongepowered.plugin.builtin.jvm.Plugin;
  * <p>On {@link ConstructPluginEvent} it loads config, opens the data store, and installs the core
  * navigation service ({@link OdysseyCoreAPI}) and the plugin-layer trip service + integration
  * registry ({@code OdysseyPluginAPI}) — Sponge has no service manager, so both are installed into
- * static accessors. Vanilla portals are discovered from teleports; waypoints and the trail
+ * static accessors. Vanilla portals are discovered from teleports; locations and the trail
  * navigator are registered like any integration; {@code /navigate} (flags, destination resolution,
  * live re-search) and the {@code /odyssey} admin tree drive guided trips; bStats metrics report
  * when enabled.
@@ -145,7 +145,7 @@ public final class OdysseySpongePlugin {
 
     // The plugin-layer: the trip service (search-then-guide) and the integration registry,
     // published
-    // through OdysseyPluginAPI. Waypoints and the trail navigator are registered like any
+    // through OdysseyPluginAPI. Locations and the trail navigator are registered like any
     // integration.
     Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
     this.messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), odysseyLogger);
@@ -157,7 +157,7 @@ public final class OdysseySpongePlugin {
         TrailNavigatorSettings.NAVIGATOR_ID,
         new SpongeTrailNavigatorFactory(config, keys, messages));
     integrationRegistry.registerDestinations(
-        container, new OdysseyDestinationService(dataStore.waypoints()));
+        container, new OdysseyDestinationService(dataStore.locations()));
 
     this.searchRegistry = new SearchRegistry<>();
     this.searchGate = new SearchGate(config.get(keys.searchMaxConcurrentPerPlayer));
@@ -218,7 +218,7 @@ public final class OdysseySpongePlugin {
             keys,
             messages,
             odysseyLogger,
-            dataStore.waypoints(),
+            dataStore.locations(),
             dataStore.portalTransitions(),
             tripManager,
             searchRegistry),

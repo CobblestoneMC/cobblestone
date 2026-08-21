@@ -31,8 +31,8 @@ class FlagParserTest {
 
   @Test
   void positionalArgumentsAndDefaults() {
-    Parsed parsed = parsed("waypoint", "home");
-    assertEquals(List.of("waypoint", "home"), parsed.destination());
+    Parsed parsed = parsed("location", "home");
+    assertEquals(List.of("location", "home"), parsed.destination());
     assertEquals(FlagParser.DEFAULT_NAVIGATOR, parsed.flags().navigator());
     assertEquals(Liveness.DEFAULT, parsed.flags().liveness());
     assertTrue(parsed.flags().excludedModes().isEmpty());

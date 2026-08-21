@@ -181,7 +181,7 @@ public final class Trip<E, P extends TripAgent<E>, L> {
   }
 
   /**
-   * Returns the human label of this trip's destination (e.g. {@code "waypoint home"}), used for the
+   * Returns the human label of this trip's destination (e.g. {@code "location home"}), used for the
    * trips listing and same-destination replacement.
    *
    * @return the destination label

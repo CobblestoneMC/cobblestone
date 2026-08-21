@@ -1,8 +1,8 @@
 -- Initial Odyssey schema.
 
--- Waypoints: per-player and global (server-wide) navigation targets.
--- Global waypoints are stored under a fixed sentinel owner so (owner, name) stays a NOT-NULL key.
-CREATE TABLE odyssey_waypoint (
+-- Locations: per-player and global (server-wide) navigation targets.
+-- Global locations are stored under a fixed sentinel owner so (owner, name) stays a NOT-NULL key.
+CREATE TABLE odyssey_location (
   owner CHAR(36) NOT NULL,
   name VARCHAR(64) NOT NULL,
   world VARCHAR(255) NOT NULL,

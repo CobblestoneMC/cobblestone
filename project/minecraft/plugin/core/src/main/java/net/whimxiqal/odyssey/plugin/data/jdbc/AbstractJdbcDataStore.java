@@ -23,14 +23,14 @@ import net.whimxiqal.odyssey.plugin.data.DataStore;
 import net.whimxiqal.odyssey.plugin.data.DataStoreException;
 import net.whimxiqal.odyssey.plugin.data.EndReturnPortalDao;
 import net.whimxiqal.odyssey.plugin.data.GatewayDao;
+import net.whimxiqal.odyssey.plugin.data.LocationDao;
 import net.whimxiqal.odyssey.plugin.data.PortalTransitionDao;
-import net.whimxiqal.odyssey.plugin.data.WaypointDao;
 
 /**
  * A {@link DataStore} over any JDBC backend. Shared by the SQL backends (SQLite, H2, and later
  * MySQL/PostgreSQL); each subclass supplies only its JDBC URL and driver class.
  *
- * <p>The store holds a single {@link Connection} guarded by a lock. Waypoint and (later) portal
+ * <p>The store holds a single {@link Connection} guarded by a lock. Location and (later) portal
  * writes are infrequent, so serializing DB access is simpler than a pool and keeps SQLite — which
  * serializes writes anyway — honest; a connection pool can arrive with the high-concurrency
  * backends in Phase 7. Schema is versioned by an ordered list of {@link #migrations()} statements
@@ -45,7 +45,7 @@ public abstract class AbstractJdbcDataStore implements DataStore {
   final Object lock = new Object();
 
   private Connection connection;
-  private WaypointDao waypointDao;
+  private LocationDao locationDao;
   private PortalTransitionDao portalTransitionDao;
   private EndReturnPortalDao endReturnPortalDao;
   private GatewayDao gatewayDao;
@@ -124,7 +124,7 @@ public abstract class AbstractJdbcDataStore implements DataStore {
       loadDriver();
       this.connection = DriverManager.getConnection(url);
       migrate();
-      this.waypointDao = new JdbcWaypointDao(this);
+      this.locationDao = new JdbcLocationDao(this);
       this.portalTransitionDao = new JdbcPortalTransitionDao(this);
       this.endReturnPortalDao = new JdbcEndReturnPortalDao(this);
       this.gatewayDao = new JdbcGatewayDao(this);
@@ -136,11 +136,11 @@ public abstract class AbstractJdbcDataStore implements DataStore {
   }
 
   @Override
-  public WaypointDao waypoints() {
-    if (waypointDao == null) {
+  public LocationDao locations() {
+    if (locationDao == null) {
       throw new IllegalStateException("DataStore.init() has not been called");
     }
-    return waypointDao;
+    return locationDao;
   }
 
   @Override

@@ -105,13 +105,13 @@ class DestinationResolverTest {
 
   @Test
   void ambiguousPromotionForcesFullerPath() {
-    var roots = roots(node("waypoint").leaf("home"), node("essentials").leaf("home"));
+    var roots = roots(node("location").leaf("home"), node("essentials").leaf("home"));
 
     Resolution<String, Integer> ambiguous = resolve(roots, List.of("home"));
     assertInstanceOf(Ambiguous.class, ambiguous);
     // Alphabetical, not the order the roots happened to be registered in.
     assertEquals(
-        List.of(List.of("essentials", "home"), List.of("waypoint", "home")),
+        List.of(List.of("essentials", "home"), List.of("location", "home")),
         ((Ambiguous<String, Integer>) ambiguous).addresses());
 
     // Naming the provider disambiguates.
@@ -175,15 +175,15 @@ class DestinationResolverTest {
   void aHiddenTwinLeavesTheOtherUnambiguous() {
     // Two providers both offer "home", but this player may only use one — so the short form works.
     var roots =
-        roots(node("waypoint").leaf("home"), node("essentials").leaf("home", "essentials.home"));
+        roots(node("location").leaf("home"), node("essentials").leaf("home", "essentials.home"));
 
     Resolution<String, Integer> resolution =
         DestinationResolver.resolve(roots, List.of("home"), permission -> false, ANY);
     assertInstanceOf(Resolved.class, resolution);
-    assertEquals(List.of("waypoint", "home"), ((Resolved<String, Integer>) resolution).address());
+    assertEquals(List.of("location", "home"), ((Resolved<String, Integer>) resolution).address());
     // And the completion offers it, since it is no longer ambiguous.
     assertEquals(
-        List.of("home", "waypoint"),
+        List.of("home", "location"),
         DestinationResolver.suggest(roots, List.of(), permission -> false, ANY));
   }
 
@@ -311,14 +311,14 @@ class DestinationResolverTest {
 
   @Test
   void anAmbiguousShortcutIsNotSuggested() {
-    var roots = roots(node("waypoint").leaf("home").leaf("camp"), node("essentials").leaf("home"));
+    var roots = roots(node("location").leaf("home").leaf("camp"), node("essentials").leaf("home"));
 
     // "home" would resolve ambiguously and cannot be repaired by typing more, so it is not offered;
     // the unambiguous "camp" and both provider keys are.
-    assertEquals(List.of("camp", "essentials", "waypoint"), suggest(roots, List.of()));
+    assertEquals(List.of("camp", "essentials", "location"), suggest(roots, List.of()));
     // Under a provider it is unambiguous again.
     assertEquals(List.of("home"), suggest(roots, List.of("essentials", "")));
-    assertEquals(List.of("camp", "home"), suggest(roots, List.of("waypoint", "")));
+    assertEquals(List.of("camp", "home"), suggest(roots, List.of("location", "")));
   }
 
   @Test

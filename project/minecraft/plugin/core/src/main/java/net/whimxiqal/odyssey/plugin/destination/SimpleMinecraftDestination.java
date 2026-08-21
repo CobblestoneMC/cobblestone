@@ -15,7 +15,7 @@ import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
 
 /**
  * A plain, immutable {@link MinecraftDestination}. Platform-neutral so every platform plugin and
- * built-in provider (waypoints now; portals, integrations later) can surface targets without a
+ * built-in provider (locations now; portals, integrations later) can surface targets without a
  * bespoke class.
  *
  * @param destination the core navigation goal

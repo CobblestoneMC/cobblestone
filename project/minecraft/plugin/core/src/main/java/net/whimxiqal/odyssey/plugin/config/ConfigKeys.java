@@ -182,7 +182,7 @@ public final class ConfigKeys {
             .register();
 
     manager.section(
-        "data", "Where Odyssey stores its data (waypoints, portals, segments, preferences).");
+        "data", "Where Odyssey stores its data (locations, portals, segments, preferences).");
     this.dataBackend =
         manager
             .key("data.backend", DataBackend.H2, Codec.ofEnum(DataBackend.class))

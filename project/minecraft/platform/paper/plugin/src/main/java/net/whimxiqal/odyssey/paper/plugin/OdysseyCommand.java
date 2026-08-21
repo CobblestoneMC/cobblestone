@@ -26,9 +26,8 @@ import net.whimxiqal.odyssey.plugin.Permissions;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
 import net.whimxiqal.odyssey.plugin.config.ConfigManager;
 import net.whimxiqal.odyssey.plugin.data.DataStoreException;
+import net.whimxiqal.odyssey.plugin.data.LocationDao;
 import net.whimxiqal.odyssey.plugin.data.PortalTransitionDao;
-import net.whimxiqal.odyssey.plugin.data.Waypoint;
-import net.whimxiqal.odyssey.plugin.data.WaypointDao;
 import net.whimxiqal.odyssey.plugin.message.Messages;
 import net.whimxiqal.odyssey.plugin.message.OdysseyMessages;
 import net.whimxiqal.odyssey.plugin.search.SearchRegistry;
@@ -41,7 +40,7 @@ import org.bukkit.entity.Player;
 
 /**
  * The {@code /odyssey} admin/utility command tree. For Phase 6b it carries {@code reload} and the
- * {@code waypoint set/unset} subcommands; portals, cancel, and trips join it in later sub-phases.
+ * {@code location set/unset} subcommands; portals, cancel, and trips join it in later sub-phases.
  */
 final class OdysseyCommand {
 
@@ -53,7 +52,7 @@ final class OdysseyCommand {
    * @param config the config manager (for reload)
    * @param keys the registered config keys (to re-read after reload)
    * @param messages the message renderer
-   * @param waypoints the waypoint DAO (for {@code waypoint set/unset})
+   * @param locations the location DAO (for {@code location set/unset})
    * @param portals the portal-transition DAO (for {@code portals clear})
    * @param trips the trip manager (for {@code cancel}/{@code trips})
    * @param searches the search registry (for {@code cancel})
@@ -64,7 +63,7 @@ final class OdysseyCommand {
       ConfigKeys keys,
       Messages messages,
       JulOdysseyLogger log,
-      WaypointDao waypoints,
+      LocationDao locations,
       PortalTransitionDao portals,
       TripManager<Entity, PaperTripAgent, Location> trips,
       SearchRegistry<Location> searches) {
@@ -110,14 +109,14 @@ final class OdysseyCommand {
                         .executes(
                             ctx -> clearPortals(ctx.getSource().getSender(), messages, portals))))
         .then(
-            Commands.literal("waypoint")
-                .requires(source -> source.getSender().hasPermission(Permissions.WAYPOINT.value()))
+            Commands.literal("location")
+                .requires(source -> source.getSender().hasPermission(Permissions.LOCATION.value()))
                 .executes(ctx -> showHelp(ctx.getSource().getSender(), messages))
                 .then(
                     Commands.literal("set")
                         .then(
                             Commands.argument("name", StringArgumentType.word())
-                                .executes(ctx -> setWaypoint(ctx, waypoints, messages, false))
+                                .executes(ctx -> setLocation(ctx, locations, messages, false))
                                 .then(
                                     Commands.literal("-global")
                                         .requires(
@@ -125,24 +124,24 @@ final class OdysseyCommand {
                                                 source
                                                     .getSender()
                                                     .hasPermission(
-                                                        Permissions.WAYPOINT_GLOBAL.value()))
+                                                        Permissions.LOCATION_GLOBAL.value()))
                                         .executes(
-                                            ctx -> setWaypoint(ctx, waypoints, messages, true)))))
+                                            ctx -> setLocation(ctx, locations, messages, true)))))
                 .then(
                     Commands.literal("unset")
                         .then(
                             Commands.argument("name", StringArgumentType.word())
                                 .suggests(
                                     (ctx, builder) ->
-                                        suggestWaypoints(
+                                        suggestLocations(
                                             ctx.getSource().getSender(),
                                             builder,
-                                            waypoints,
+                                            locations,
                                             ctx.getSource()
                                                 .getSender()
                                                 .hasPermission(
-                                                    Permissions.WAYPOINT_GLOBAL.value())))
-                                .executes(ctx -> unsetWaypoint(ctx, waypoints, messages, false))
+                                                    Permissions.LOCATION_GLOBAL.value())))
+                                .executes(ctx -> unsetLocation(ctx, locations, messages, false))
                                 .then(
                                     Commands.literal("-global")
                                         .requires(
@@ -150,14 +149,14 @@ final class OdysseyCommand {
                                                 source
                                                     .getSender()
                                                     .hasPermission(
-                                                        Permissions.WAYPOINT_GLOBAL.value()))
+                                                        Permissions.LOCATION_GLOBAL.value()))
                                         .executes(
-                                            ctx -> unsetWaypoint(ctx, waypoints, messages, true)))))
+                                            ctx -> unsetLocation(ctx, locations, messages, true)))))
                 .then(
                     Commands.literal("list")
                         .executes(
                             ctx ->
-                                listWaypoints(ctx.getSource().getSender(), messages, waypoints))))
+                                listLocations(ctx.getSource().getSender(), messages, locations))))
         .build();
   }
 
@@ -193,60 +192,60 @@ final class OdysseyCommand {
         sender,
         messages,
         locale,
-        "/odyssey waypoint set|unset|list <name> [-global]",
-        "command.odyssey.help.waypoint");
+        "/odyssey location set|unset|list <name> [-global]",
+        "command.odyssey.help.location");
     CommandHelp.line(
         sender, messages, locale, "/odyssey portals clear", "command.odyssey.help.portals");
     return Command.SINGLE_SUCCESS;
   }
 
-  private static int listWaypoints(CommandSender sender, Messages messages, WaypointDao waypoints) {
+  private static int listLocations(CommandSender sender, Messages messages, LocationDao locations) {
     Locale locale = localeOf(sender, messages);
     if (!(sender instanceof Player player)) {
       messages.send(sender, locale, OdysseyMessages.PLAYERS_ONLY);
       return Command.SINGLE_SUCCESS;
     }
-    List<Waypoint> personal = waypoints.ownedBy(player.getUniqueId());
-    List<Waypoint> global = waypoints.global();
+    var personal = locations.ownedBy(player.getUniqueId());
+    var global = locations.global();
     if (personal.isEmpty() && global.isEmpty()) {
-      messages.send(player, locale, OdysseyMessages.WAYPOINT_LIST_NONE);
+      messages.send(player, locale, OdysseyMessages.LOCATION_LIST_NONE);
       return Command.SINGLE_SUCCESS;
     }
     messages.send(
-        player, locale, OdysseyMessages.WAYPOINT_LIST_HEADER, personal.size() + global.size());
-    for (Waypoint waypoint : personal) {
+        player, locale, OdysseyMessages.LOCATION_LIST_HEADER, personal.size() + global.size());
+    for (var location : personal) {
       messages.send(
-          player, locale, OdysseyMessages.WAYPOINT_LIST_ENTRY, waypoint.name(), location(waypoint));
+          player, locale, OdysseyMessages.LOCATION_LIST_ENTRY, location.name(), location(location));
     }
-    for (Waypoint waypoint : global) {
+    for (var location : global) {
       messages.send(
           player,
           locale,
-          OdysseyMessages.WAYPOINT_LIST_GLOBAL,
-          waypoint.name(),
-          location(waypoint));
+          OdysseyMessages.LOCATION_LIST_GLOBAL,
+          location.name(),
+          location(location));
     }
     return Command.SINGLE_SUCCESS;
   }
 
-  private static String location(Waypoint waypoint) {
-    return waypoint.world() + " " + waypoint.x() + ", " + waypoint.y() + ", " + waypoint.z();
+  private static String location(net.whimxiqal.odyssey.plugin.data.Location location) {
+    return location.world() + " " + location.x() + ", " + location.y() + ", " + location.z();
   }
 
-  private static CompletableFuture<Suggestions> suggestWaypoints(
+  private static CompletableFuture<Suggestions> suggestLocations(
       CommandSender sender,
       SuggestionsBuilder builder,
-      WaypointDao waypoints,
+      LocationDao locations,
       boolean includeGlobal) {
     if (sender instanceof Player player) {
       String prefix = builder.getRemaining().toLowerCase(Locale.ROOT);
-      List<Waypoint> candidates = new ArrayList<>(waypoints.ownedBy(player.getUniqueId()));
+      var candidates = new ArrayList<>(locations.ownedBy(player.getUniqueId()));
       if (includeGlobal) {
-        candidates.addAll(waypoints.global());
+        candidates.addAll(locations.global());
       }
-      for (Waypoint waypoint : candidates) {
-        if (waypoint.name().toLowerCase(Locale.ROOT).startsWith(prefix)) {
-          builder.suggest(waypoint.name());
+      for (var location : candidates) {
+        if (location.name().toLowerCase(Locale.ROOT).startsWith(prefix)) {
+          builder.suggest(location.name());
         }
       }
     }
@@ -328,9 +327,9 @@ final class OdysseyCommand {
     return Command.SINGLE_SUCCESS;
   }
 
-  private static int setWaypoint(
+  private static int setLocation(
       CommandContext<CommandSourceStack> ctx,
-      WaypointDao waypoints,
+      LocationDao locations,
       Messages messages,
       boolean global) {
     CommandSender sender = ctx.getSource().getSender();
@@ -340,32 +339,36 @@ final class OdysseyCommand {
       return Command.SINGLE_SUCCESS;
     }
     String name = StringArgumentType.getString(ctx, "name");
-    Location location = player.getLocation();
+    Location bukkitLocation = player.getLocation();
     String world = player.getWorld().getKey().asString();
-    Waypoint waypoint =
+    var location =
         global
-            ? Waypoint.global(
-                name, world, location.getBlockX(), location.getBlockY(), location.getBlockZ())
-            : Waypoint.personal(
+            ? net.whimxiqal.odyssey.plugin.data.Location.global(
+                name,
+                world,
+                bukkitLocation.getBlockX(),
+                bukkitLocation.getBlockY(),
+                bukkitLocation.getBlockZ())
+            : net.whimxiqal.odyssey.plugin.data.Location.personal(
                 player.getUniqueId(),
                 name,
                 world,
-                location.getBlockX(),
-                location.getBlockY(),
-                location.getBlockZ());
+                bukkitLocation.getBlockX(),
+                bukkitLocation.getBlockY(),
+                bukkitLocation.getBlockZ());
     try {
-      waypoints.put(waypoint);
+      locations.put(location);
     } catch (DataStoreException e) {
-      messages.send(sender, locale, OdysseyMessages.WAYPOINT_STORE_ERROR);
+      messages.send(sender, locale, OdysseyMessages.LOCATION_STORE_ERROR);
       return Command.SINGLE_SUCCESS;
     }
-    messages.send(sender, locale, OdysseyMessages.WAYPOINT_SET, name);
+    messages.send(sender, locale, OdysseyMessages.LOCATION_SET, name);
     return Command.SINGLE_SUCCESS;
   }
 
-  private static int unsetWaypoint(
+  private static int unsetLocation(
       CommandContext<CommandSourceStack> ctx,
-      WaypointDao waypoints,
+      LocationDao locations,
       Messages messages,
       boolean global) {
     CommandSender sender = ctx.getSource().getSender();
@@ -378,15 +381,15 @@ final class OdysseyCommand {
     boolean removed;
     try {
       removed =
-          waypoints.remove(global ? Optional.empty() : Optional.of(player.getUniqueId()), name);
+          locations.remove(global ? Optional.empty() : Optional.of(player.getUniqueId()), name);
     } catch (DataStoreException e) {
-      messages.send(sender, locale, OdysseyMessages.WAYPOINT_STORE_ERROR);
+      messages.send(sender, locale, OdysseyMessages.LOCATION_STORE_ERROR);
       return Command.SINGLE_SUCCESS;
     }
     messages.send(
         sender,
         locale,
-        removed ? OdysseyMessages.WAYPOINT_UNSET : OdysseyMessages.WAYPOINT_NOT_FOUND,
+        removed ? OdysseyMessages.LOCATION_UNSET : OdysseyMessages.LOCATION_NOT_FOUND,
         name);
     return Command.SINGLE_SUCCESS;
   }

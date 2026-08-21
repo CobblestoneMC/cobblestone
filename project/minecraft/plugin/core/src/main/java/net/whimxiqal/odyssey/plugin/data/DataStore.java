@@ -13,7 +13,7 @@ package net.whimxiqal.odyssey.plugin.data;
  * Odyssey runs as a plugin — the core navigation library is standalone. (design/06)
  *
  * <p>Only the DAOs whose subsystems have landed are exposed here; rail/highway segment and
- * player-preference DAOs join {@link #waypoints()} and {@link #portalTransitions()} as those
+ * player-preference DAOs join {@link #locations()} and {@link #portalTransitions()} as those
  * features arrive in later sub-phases. A store is single-use: {@link #init()} once at enable,
  * {@link #close()} once at disable.
  */
@@ -27,11 +27,11 @@ public interface DataStore {
   void init();
 
   /**
-   * Returns the waypoint DAO.
+   * Returns the location DAO.
    *
-   * @return the waypoint DAO
+   * @return the location DAO
    */
-  WaypointDao waypoints();
+  LocationDao locations();
 
   /**
    * Returns the portal-transition DAO (end portals: region → point).

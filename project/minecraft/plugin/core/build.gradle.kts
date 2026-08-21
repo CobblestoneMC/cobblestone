@@ -1,6 +1,3 @@
-// minecraft-plugin — shared, platform-neutral plugin behavior (config, i18n, and — as later
-// sub-phases land — data layer, waypoints, trips, command helpers). Not published; the platform
-// plugins bundle it. (design/06)
 plugins {
     id("odyssey.java-conventions")
 }
