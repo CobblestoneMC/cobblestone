@@ -12,10 +12,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.TreeMap;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
 import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
 
@@ -66,15 +65,6 @@ public final class DestinationResolver {
    */
   public static final int PROMOTION_LIMIT = 16;
 
-  /** How long to stay quiet about an address already reported as duplicated. */
-  private static final long DUPLICATE_WARN_COOLDOWN_MILLIS = 300_000L;
-
-  /** How many distinct duplicate addresses to remember before forgetting them all. */
-  private static final int DUPLICATE_WARN_MEMORY = 64;
-
-  /** Canonical address (lower-cased, space-joined) to the time it was last warned about. */
-  private static final Map<String, Long> DUPLICATE_WARNED = new ConcurrentHashMap<>();
-
   private DestinationResolver() {}
 
   /** The outcome of resolving typed arguments against the destination forest. */
@@ -94,7 +84,7 @@ public final class DestinationResolver {
   /**
    * More than one destination matched; the player must disambiguate with a fuller path.
    *
-   * @param addresses the distinct canonical key paths of the candidates
+   * @param addresses the distinct canonical key paths of the candidates, alphabetically
    * @param <W> the world type
    * @param <V> the vector type
    */
@@ -122,7 +112,7 @@ public final class DestinationResolver {
       Map<String, ? extends PlatformDestinationTree<W, V>> roots,
       List<String> args,
       Predicate<String> hasPermission) {
-    return resolve(roots, args, hasPermission, address -> true, null);
+    return resolve(roots, args, hasPermission, address -> true);
   }
 
   /**
@@ -143,32 +133,6 @@ public final class DestinationResolver {
       List<String> args,
       Predicate<String> hasPermission,
       Predicate<List<String>> canNavigate) {
-    return resolve(roots, args, hasPermission, canNavigate, null);
-  }
-
-  /**
-   * Resolves the given arguments, reporting provider misconfiguration to the given log.
-   *
-   * <p>Two providers can register the very same canonical address, in which case no typed path can
-   * ever separate them. That is a bug in one of the providers, not something the player can fix, so
-   * it is logged (at most once per address per five minutes, so a player leaning on tab-completion
-   * cannot flood the console) in addition to being reported as {@link Ambiguous}.
-   *
-   * @param roots the destination-tree roots from every provider
-   * @param args the arguments typed so far (each a full token)
-   * @param hasPermission tests whether the player holds a permission node
-   * @param canNavigate tests whether the player may navigate to a given canonical address
-   * @param log where to report duplicate addresses, or {@code null} to stay silent
-   * @param <W> the world type
-   * @param <V> the vector type
-   * @return the resolution
-   */
-  public static <W, V> Resolution<W, V> resolve(
-      Map<String, ? extends PlatformDestinationTree<W, V>> roots,
-      List<String> args,
-      Predicate<String> hasPermission,
-      Predicate<List<String>> canNavigate,
-      OdysseyLogger log) {
     if (args.isEmpty()) {
       return new NotFound<>();
     }
@@ -190,14 +154,12 @@ public final class DestinationResolver {
     if (matches.size() == 1) {
       return new Resolved<>(matches.getFirst().destination(), matches.getFirst().address());
     }
-    // Distinct canonical addresses, first spelling wins; a repeat means two providers claimed the
-    // same address and the player has no way to tell them apart.
-    Map<String, List<String>> distinct = new LinkedHashMap<>();
+    // Distinct canonical addresses, first spelling wins. Sorted, so what the player is shown does
+    // not depend on the order the roots happened to be iterated in.
+    Map<String, List<String>> distinct = new TreeMap<>();
     for (Match<W, V> candidate : matches) {
-      String key = String.join(" ", candidate.address()).toLowerCase(Locale.ROOT);
-      if (distinct.putIfAbsent(key, candidate.address()) != null && log != null) {
-        warnDuplicate(log, key, candidate.address());
-      }
+      distinct.putIfAbsent(
+          String.join(" ", candidate.address()).toLowerCase(Locale.ROOT), candidate.address());
     }
     return new Ambiguous<>(List.copyOf(distinct.values()));
   }
@@ -516,27 +478,6 @@ public final class DestinationResolver {
   // -----------------------------------------------------------------------------------------
   // Shared
   // -----------------------------------------------------------------------------------------
-
-  private static void warnDuplicate(OdysseyLogger log, String key, List<String> address) {
-    long now = System.currentTimeMillis();
-    Long last = DUPLICATE_WARNED.get(key);
-    if (last != null && now - last < DUPLICATE_WARN_COOLDOWN_MILLIS) {
-      return;
-    }
-    if (DUPLICATE_WARNED.size() >= DUPLICATE_WARN_MEMORY) {
-      DUPLICATE_WARNED.clear(); // bounded memory; the worst case is warning again a little early
-    }
-    DUPLICATE_WARNED.put(key, now);
-    log.warn(
-        "Two destination providers registered the same address '{}'. No player can navigate to "
-            + "either one — the providers must give their destinations distinct keys.",
-        String.join(" ", address));
-  }
-
-  /** Forgets the duplicate-address cooldowns. Test seam. */
-  static void resetDuplicateWarnings() {
-    DUPLICATE_WARNED.clear();
-  }
 
   private static boolean hasAll(Predicate<String> hasPermission, List<String> permissions) {
     for (String permission : permissions) {

@@ -12,8 +12,6 @@ import fr.skytasul.quests.api.players.PlayerAccount;
 import fr.skytasul.quests.api.players.PlayersManager;
 import fr.skytasul.quests.api.quests.Quest;
 import java.util.Locale;
-import java.util.Map;
-import java.util.function.Supplier;
 import net.whimxiqal.odyssey.paper.plugin.api.Destination;
 import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
 import net.whimxiqal.odyssey.paper.plugin.api.DestinationTree;
@@ -24,24 +22,23 @@ import org.bukkit.entity.Player;
 import org.joml.Vector3i;
 
 /**
- * Surfaces the player's started quests as navigation targets: {@code beautyquests → quest →
- * <name>}, one leaf per started quest whose current stage has a precise location. The plugin-unique
- * {@code beautyquests} root keeps these from colliding with other integrations' trees; Odyssey's
- * resolver still lets a player type just the quest name when it's unambiguous. Navigating is gated
- * by Odyssey's {@code odyssey.navigate.beautyquests.quest.*} permission (default-allow). The target
- * is snapshotted when the tree is built (on the main thread, as {@code getLocated} requires);
- * advancing a stage is picked up the next time destinations are resolved.
+ * Surfaces the player's started quests as navigation targets: {@code odysseybeautyquests → quest →
+ * <name>}, one leaf per started quest whose current stage has a precise location. Odyssey roots the
+ * branch at this plugin's own name, which keeps these from colliding with other integrations'
+ * trees; its resolver still lets a player type just the quest name when it's unambiguous.
+ * Navigating is gated by Odyssey's {@code odyssey.navigate.odysseybeautyquests.quest.*} permission
+ * (default-allow). The target is snapshotted when the tree is built (on the main thread, as {@code
+ * getLocated} requires); advancing a stage is picked up the next time destinations are resolved.
  */
 final class BeautyQuestsDestinationService implements DestinationService {
 
-  static final String TREE_KEY = "beautyquests";
   static final String QUEST_KEY = "quest";
 
   @Override
-  public Map<String, Supplier<PlatformDestinationTree<World, Vector3i>>> provide(Player player) {
+  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
     PlayerAccount account = PlayersManager.getPlayerAccount(player);
     if (account == null) {
-      return Map.of();
+      return null;
     }
     DestinationTree quests = DestinationTree.builder();
     boolean any = false;
@@ -54,9 +51,7 @@ final class BeautyQuestsDestinationService implements DestinationService {
       quests.leaf(slug(label), Destination.at(target, label));
       any = true;
     }
-    return any
-        ? Map.of(TREE_KEY, () -> DestinationTree.builder().subtree(QUEST_KEY, quests).build())
-        : Map.of();
+    return any ? DestinationTree.builder().subtree(QUEST_KEY, quests).build() : null;
   }
 
   /** A player-facing quest label: its name, or a stable fallback from its id. */

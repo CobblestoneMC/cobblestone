@@ -37,6 +37,7 @@ import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.lifecycle.ConstructPluginEvent;
 import org.spongepowered.api.event.lifecycle.RegisterCommandEvent;
+import org.spongepowered.api.event.lifecycle.StartedEngineEvent;
 import org.spongepowered.api.event.lifecycle.StoppingEngineEvent;
 import org.spongepowered.api.event.network.ServerSideConnectionEvent;
 import org.spongepowered.api.profile.GameProfile;
@@ -192,6 +193,16 @@ public final class OdysseySpongePlugin {
     }
 
     logger.info("Odyssey enabled.");
+  }
+
+  /**
+   * Describes Odyssey's permission nodes once the permission service exists. Sponge has no
+   * per-plugin unload event, so there is no counterpart to Paper's disable-time registry purge —
+   * plugins live for the whole server run.
+   */
+  @Listener
+  public void onStartedEngine(StartedEngineEvent<Server> event) {
+    SpongePermissions.register(container);
   }
 
   /** Registers the {@code /odyssey} and {@code /navigate} commands. */

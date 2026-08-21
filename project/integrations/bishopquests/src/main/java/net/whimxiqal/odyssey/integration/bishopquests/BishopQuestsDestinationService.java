@@ -10,29 +10,27 @@ package net.whimxiqal.odyssey.integration.bishopquests;
 import com.leonardobishop.quests.common.player.QPlayer;
 import com.leonardobishop.quests.common.plugin.Quests;
 import com.leonardobishop.quests.common.quest.Quest;
-import java.util.Collection;
-import java.util.List;
 import java.util.Locale;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestination;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationService;
-import net.whimxiqal.odyssey.paper.plugin.api.PaperDestinationTree;
-import net.whimxiqal.odyssey.plugin.api.DestinationTree;
+import net.whimxiqal.odyssey.paper.plugin.api.Destination;
+import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
+import net.whimxiqal.odyssey.paper.plugin.api.DestinationTree;
+import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.joml.Vector3i;
 
 /**
- * Surfaces the player's started quests as navigation targets: {@code quests → quest → <name>}, one
- * leaf per started quest with a current {@code position} objective. The plugin-unique {@code
- * quests} root (LMBishop's plugin id) keeps these from colliding with other integrations' trees;
- * Odyssey's resolver still lets a player type just the quest name when it's unambiguous. Navigating
- * is gated by Odyssey's {@code odyssey.navigate.quests.quest.*} permission (default-allow). The
- * target is snapshotted when the tree is built (on the main thread, as quest progress requires).
+ * Surfaces the player's started quests as navigation targets: {@code odysseybishopquests → quest →
+ * <name>}, one leaf per started quest with a current {@code position} objective. Odyssey roots the
+ * branch at this plugin's own name, which keeps these from colliding with other integrations'
+ * trees; its resolver still lets a player type just the quest name when it's unambiguous.
+ * Navigating is gated by Odyssey's {@code odyssey.navigate.odysseybishopquests.quest.*} permission
+ * (default-allow). The target is snapshotted when the tree is built (on the main thread, as quest
+ * progress requires).
  */
-final class BishopQuestsDestinationService implements PaperDestinationService {
+final class BishopQuestsDestinationService implements DestinationService {
 
-  static final String TREE_KEY = "quests";
   static final String QUEST_KEY = "quest";
 
   private final Quests quests;
@@ -42,12 +40,12 @@ final class BishopQuestsDestinationService implements PaperDestinationService {
   }
 
   @Override
-  public Collection<DestinationTree<World, Vector3i>> provide(Player player) {
+  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
     QPlayer qPlayer = quests.getPlayerManager().getPlayer(player.getUniqueId());
     if (qPlayer == null) {
-      return List.of();
+      return null;
     }
-    PaperDestinationTree questNode = PaperDestinationTree.node(QUEST_KEY);
+    DestinationTree questNode = DestinationTree.builder();
     boolean any = false;
     for (Quest quest : qPlayer.getQuestProgressFile().getStartedQuests()) {
       Location target = QuestTargets.current(qPlayer, quest);
@@ -55,12 +53,10 @@ final class BishopQuestsDestinationService implements PaperDestinationService {
         continue; // no current position objective — nothing to walk to
       }
       String label = quest.getId();
-      questNode.leaf(slug(label), PaperDestination.at(target, label));
+      questNode.leaf(slug(label), Destination.at(target, label));
       any = true;
     }
-    return any
-        ? List.of(PaperDestinationTree.node(TREE_KEY).subtree(questNode).build())
-        : List.of();
+    return any ? DestinationTree.builder().subtree(QUEST_KEY, questNode).build() : null;
   }
 
   /** A single command token from a quest id: lowercase, non-alphanumeric runs become one dash. */

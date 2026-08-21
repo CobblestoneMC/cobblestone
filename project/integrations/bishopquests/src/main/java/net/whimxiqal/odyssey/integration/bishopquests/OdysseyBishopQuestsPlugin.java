@@ -8,7 +8,7 @@
 package net.whimxiqal.odyssey.integration.bishopquests;
 
 import com.leonardobishop.quests.common.plugin.Quests;
-import net.whimxiqal.odyssey.paper.plugin.api.OdysseyPlugin;
+import net.whimxiqal.odyssey.paper.plugin.api.OdysseyPluginAPI;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -36,7 +36,8 @@ public final class OdysseyBishopQuestsPlugin extends JavaPlugin {
     saveDefaultConfig();
     QuestNavPrefs prefs = new QuestNavPrefs(getConfig());
 
-    OdysseyPlugin.registrar().registerDestinations(this, new BishopQuestsDestinationService(quests));
+    OdysseyPluginAPI.registrar()
+        .registerDestinations(this, new BishopQuestsDestinationService(quests));
     getServer()
         .getPluginManager()
         .registerEvents(new BishopQuestsTrackListener(quests, prefs), this);

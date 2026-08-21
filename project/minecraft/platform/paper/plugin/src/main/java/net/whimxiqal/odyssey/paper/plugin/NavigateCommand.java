@@ -17,11 +17,11 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
@@ -47,7 +47,6 @@ import net.whimxiqal.odyssey.plugin.command.FlagParser;
 import net.whimxiqal.odyssey.plugin.command.NavigationFlags;
 import net.whimxiqal.odyssey.plugin.destination.DestinationResolver;
 import net.whimxiqal.odyssey.plugin.destination.NavigationPermissions;
-import net.whimxiqal.odyssey.plugin.destination.SimplePlatformDestinationTree;
 import net.whimxiqal.odyssey.plugin.message.Messages;
 import net.whimxiqal.odyssey.plugin.message.OdysseyMessages;
 import net.whimxiqal.odyssey.plugin.search.SearchGate;
@@ -91,8 +90,7 @@ final class NavigateCommand {
       OdysseyLogger log,
       Messages messages) {
     return Commands.literal("navigate")
-        .requires(
-            source -> source.getSender().hasPermission(Permissions.PERMISSION_NAVIGATE.value()))
+        .requires(source -> source.getSender().hasPermission(Permissions.NAVIGATE.value()))
         .executes(ctx -> navHelp(ctx.getSource().getSender(), messages))
         .then(
             Commands.argument("args", StringArgumentType.greedyString())
@@ -163,8 +161,7 @@ final class NavigateCommand {
     NavigationFlags flags = parsed.flags();
 
     if (!flags.navigator().equals(FlagParser.DEFAULT_NAVIGATOR)
-        && !player.hasPermission(
-            Permissions.PERMISSION_NAVIGATOR.value() + "." + flags.navigator())) {
+        && !mayUseNavigator(player, flags.navigator())) {
       messages.send(player, locale, OdysseyMessages.NO_PERMISSION);
       return Command.SINGLE_SUCCESS;
     }
@@ -179,8 +176,7 @@ final class NavigateCommand {
             destinationRoots(integrations, player),
             parsed.destination(),
             player::hasPermission,
-            canNavigate(player),
-            log);
+            canNavigate(player));
     if (resolution
         instanceof DestinationResolver.Ambiguous<World, Vector3i>(List<List<String>> addresses)) {
       messages.send(
@@ -456,14 +452,26 @@ final class NavigateCommand {
         NavigationPermissions.allowed(address, player::isPermissionSet, player::hasPermission);
   }
 
+  /**
+   * Whether the player may use a non-default navigator. Default-allow, matching the per-destination
+   * gate: {@code odyssey.navigator.<id>} cannot be declared up front (a navigator's id comes from
+   * whichever plugin registered it), so an undeclared node must not read as a denial.
+   */
+  private static boolean mayUseNavigator(Player player, String navigator) {
+    String node = Permissions.NAVIGATOR.value() + "." + navigator;
+    return !player.isPermissionSet(node) || player.hasPermission(node);
+  }
+
   private static Map<String, PlatformDestinationTree<World, Vector3i>> destinationRoots(
       PaperIntegrationRegistry integrations, Player player) {
-    Map<String, PlatformDestinationTree<World, Vector3i>> roots = new HashMap<>();
+    Map<String, PlatformDestinationTree<World, Vector3i>> roots = new TreeMap<>();
     for (var provider : integrations.destinationProviders().entrySet()) {
-      roots.put(
-          provider.getKey(),
-          new SimplePlatformDestinationTree<>(
-              false, provider.getValue().provide(player), Map.of()));
+      PlatformDestinationTree<World, Vector3i> root = provider.getValue().provide(player);
+      // An empty root would be offered as a token that leads nowhere — drop it instead.
+      if (root == null || (root.subTrees().isEmpty() && root.destinations().isEmpty())) {
+        continue;
+      }
+      roots.put(provider.getKey(), root);
     }
     return roots;
   }

@@ -7,9 +7,9 @@
 
 package net.whimxiqal.odyssey.sponge12.plugin;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentSkipListMap;
 import net.whimxiqal.odyssey.minecraft.registry.OwnedRegistry;
 import net.whimxiqal.odyssey.sponge12.plugin.api.DestinationService;
 import net.whimxiqal.odyssey.sponge12.plugin.api.IntegrationRegistrar;
@@ -24,10 +24,17 @@ import org.spongepowered.plugin.PluginContainer;
  */
 public final class SpongeIntegrationRegistry implements IntegrationRegistrar {
 
-  private record NavigatorEntry(String id, NavigatorFactory factory) {}
+  private record NavigatorEntry(String owner, NavigatorFactory factory) {}
 
   private final OwnedRegistry<DestinationService> destinations = new OwnedRegistry<>();
-  private final OwnedRegistry<NavigatorEntry> navigators = new OwnedRegistry<>();
+
+  /**
+   * Navigators are keyed by their own id, not by owner: a plugin may offer several, and {@code
+   * /navigate -navigator <id>} looks one up by id. First registration of an id wins; who registered
+   * it is remembered only so {@link #purge} can find it again.
+   */
+  private final ConcurrentSkipListMap<String, NavigatorEntry> navigators =
+      new ConcurrentSkipListMap<>();
 
   @Override
   public void registerDestinations(PluginContainer owner, DestinationService provider) {
@@ -36,10 +43,14 @@ public final class SpongeIntegrationRegistry implements IntegrationRegistrar {
 
   @Override
   public void registerNavigator(PluginContainer owner, String id, NavigatorFactory factory) {
-    navigators.register(owner.metadata().id(), new NavigatorEntry(id, factory));
+    navigators.putIfAbsent(id, new NavigatorEntry(owner.metadata().id(), factory));
   }
 
-  /** The registered destination providers, in registration order. */
+  /**
+   * The registered destination providers, keyed by the plugin that registered each one. The key is
+   * player-visible — it roots that plugin's {@code /navigate} branch — but Sponge already requires
+   * plugin ids to be lower-case, so unlike Paper there is nothing to fold here.
+   */
   Map<String, DestinationService> destinationProviders() {
     return destinations.map();
   }
@@ -48,21 +59,13 @@ public final class SpongeIntegrationRegistry implements IntegrationRegistrar {
    * The factory registered under a navigator id, or {@code null} if none. First registered wins.
    */
   NavigatorFactory navigator(String id) {
-    for (NavigatorEntry entry : navigators.map().values()) {
-      if (entry.id().equals(id)) {
-        return entry.factory();
-      }
-    }
-    return null;
+    NavigatorEntry entry = navigators.get(id);
+    return entry == null ? null : entry.factory();
   }
 
-  /** The ids of all registered navigators, in registration order. */
+  /** The ids of all registered navigators, alphabetically. */
   List<String> navigatorIds() {
-    List<String> ids = new ArrayList<>();
-    for (NavigatorEntry entry : navigators.map().values()) {
-      ids.add(entry.id());
-    }
-    return ids;
+    return List.copyOf(navigators.keySet());
   }
 
   /**
@@ -72,6 +75,6 @@ public final class SpongeIntegrationRegistry implements IntegrationRegistrar {
    */
   void purge(String owner) {
     destinations.purge(owner);
-    navigators.purge(owner);
+    navigators.values().removeIf(entry -> entry.owner().equals(owner));
   }
 }

@@ -11,7 +11,7 @@ import com.leonardobishop.quests.bukkit.api.event.PlayerStartTrackQuestEvent;
 import com.leonardobishop.quests.common.player.QPlayer;
 import com.leonardobishop.quests.common.plugin.Quests;
 import com.leonardobishop.quests.common.quest.Quest;
-import net.whimxiqal.odyssey.paper.plugin.api.OdysseyPlugin;
+import net.whimxiqal.odyssey.paper.plugin.api.OdysseyPluginAPI;
 import net.whimxiqal.odyssey.plugin.api.NavigatorSettings;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -54,7 +54,7 @@ final class BishopQuestsTrackListener implements Listener {
     Player player = event.getPlayer();
     NavigatorSettings settings = prefs.settings(questId);
     // The quest id is the trip's stable label, so re-tracking (or the next objective) replaces it.
-    OdysseyPlugin.tripService()
+    OdysseyPluginAPI.tripService()
         .navigate(
             player,
             target,

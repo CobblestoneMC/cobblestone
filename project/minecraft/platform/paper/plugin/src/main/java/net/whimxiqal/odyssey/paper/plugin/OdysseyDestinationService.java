@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import net.kyori.adventure.text.Component;
 import net.whimxiqal.odyssey.api.Destination;
 import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
@@ -36,6 +35,8 @@ public class OdysseyDestinationService implements DestinationService {
   public static final String PLAYER_TREE_KEY = "player";
   public static final String WORLD_TREE_KEY = "world";
   public static final String WAYPOINT_TREE_KEY = "waypoint";
+  public static final String GLOBAL_TREE_KEY = "global";
+  public static final String PRIVATE_TREE_KEY = "private";
 
   private final WaypointDao waypoints;
 
@@ -44,14 +45,17 @@ public class OdysseyDestinationService implements DestinationService {
   }
 
   @Override
-  public Map<String, Supplier<PlatformDestinationTree<World, Vector3i>>> provide(Player player) {
-    return Map.of(
-        PLAYER_TREE_KEY,
-        () -> providePlayerDestinationTree(player),
-        WORLD_TREE_KEY,
-        () -> provideWorldDestinationTree(player),
-        WAYPOINT_TREE_KEY,
-        () -> provideWaypointDestinationTree(player));
+  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
+    return new SimplePlatformDestinationTree<>(
+        false,
+        Map.of(
+            PLAYER_TREE_KEY,
+            () -> providePlayerDestinationTree(player),
+            WORLD_TREE_KEY,
+            () -> provideWorldDestinationTree(player),
+            WAYPOINT_TREE_KEY,
+            () -> provideWaypointDestinationTree(player)),
+        Map.of());
   }
 
   private PlatformDestinationTree<World, Vector3i> providePlayerDestinationTree(Player player) {
@@ -102,21 +106,35 @@ public class OdysseyDestinationService implements DestinationService {
     return new SimplePlatformDestinationTree<>(false, Map.of(), leaves);
   }
 
+  /**
+   * Waypoints split by scope, so a player's own {@code home} and a server-wide {@code home} are
+   * both reachable ({@code waypoint private home} / {@code waypoint global home}) rather than one
+   * silently shadowing the other. Neither level is strict, so plain {@code waypoint home} still
+   * works whenever only one of the two exists.
+   */
   private PlatformDestinationTree<World, Vector3i> provideWaypointDestinationTree(Player player) {
-    var globalLeaves =
-        waypoints.global().stream()
-            .collect(Collectors.toMap(Waypoint::name, OdysseyDestinationService::toDestination));
-    var privateLeaves =
-        waypoints.ownedBy(player.getUniqueId()).stream()
-            .collect(Collectors.toMap(Waypoint::name, OdysseyDestinationService::toDestination));
+    Map<String, Supplier<MinecraftDestination<World, Vector3i>>> globalLeaves =
+        leaves(waypoints.global());
+    Map<String, Supplier<MinecraftDestination<World, Vector3i>>> privateLeaves =
+        leaves(waypoints.ownedBy(player.getUniqueId()));
     return new SimplePlatformDestinationTree<>(
         false,
         Map.of(
-            "global",
+            GLOBAL_TREE_KEY,
             () -> new SimplePlatformDestinationTree<>(false, Map.of(), globalLeaves),
-            "private",
+            PRIVATE_TREE_KEY,
             () -> new SimplePlatformDestinationTree<>(false, Map.of(), privateLeaves)),
         Map.of());
+  }
+
+  /** Waypoint names are unique within a scope (the table's primary key), so this cannot collide. */
+  private static Map<String, Supplier<MinecraftDestination<World, Vector3i>>> leaves(
+      List<Waypoint> waypoints) {
+    Map<String, Supplier<MinecraftDestination<World, Vector3i>>> leaves = new LinkedHashMap<>();
+    for (Waypoint waypoint : waypoints) {
+      leaves.put(waypoint.name(), toDestination(waypoint));
+    }
+    return leaves;
   }
 
   private static Supplier<MinecraftDestination<World, Vector3i>> toDestination(Waypoint waypoint) {

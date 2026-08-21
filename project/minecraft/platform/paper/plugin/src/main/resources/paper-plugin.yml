@@ -10,14 +10,20 @@ folia-supported: true
 
 permissions:
   odyssey.navigate:
-    description: "Use of /navigate"
+    description: "Use of /navigate and the trip commands that manage its results"
     default: true
   odyssey.navigator:
-    description: "Use of custom navigators"
+    description: "Use of custom navigators (the parent of odyssey.navigator.<id>)"
     default: true
   odyssey.waypoint:
-    description: "Use of waypoints"
+    description: "Use of personal waypoints"
     default: true
-  odyssey.admin:
-    description: "Use of administrative Odyssey commands"
+  odyssey.admin.reload:
+    description: "Reload the Odyssey configuration"
+    default: op
+  odyssey.admin.portals:
+    description: "Clear discovered portals"
+    default: op
+  odyssey.admin.waypoint.global:
+    description: "Manage server-wide waypoints (-global)"
     default: op

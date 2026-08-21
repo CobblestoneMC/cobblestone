@@ -7,8 +7,6 @@
 
 package net.whimxiqal.odyssey.integration.essentials;
 
-import java.util.Map;
-import java.util.function.Supplier;
 import net.whimxiqal.odyssey.paper.plugin.api.Destination;
 import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
 import net.whimxiqal.odyssey.paper.plugin.api.DestinationTree;
@@ -18,16 +16,16 @@ import org.bukkit.entity.Player;
 import org.joml.Vector3i;
 
 /**
- * Surfaces Essentials teleports as navigation targets: {@code essentials → home → <name>} (one leaf
- * per the player's homes) and {@code essentials → spawn}. Navigating to one is gated by Odyssey's
- * own {@code odyssey.navigate.essentials.*} permission (default-allow) rather than the Essentials
- * teleport permission — so a player can walk to a place even where {@code /home}/{@code /spawn} is
- * revoked (the teleport transition still requires the Essentials permission). Destinations
- * re-resolve on query, so moving a home or the spawn is reflected without a restart.
+ * Surfaces Essentials teleports as navigation targets: {@code odysseyessentials → home → <name>}
+ * (one leaf per the player's homes) and {@code odysseyessentials → spawn}. Navigating to one is
+ * gated by Odyssey's own {@code odyssey.navigate.odysseyessentials.*} permission (default-allow)
+ * rather than the Essentials teleport permission — so a player can walk to a place even where
+ * {@code /home}/{@code /spawn} is revoked (the teleport transition still requires the Essentials
+ * permission). Destinations re-resolve on query, so moving a home or the spawn is reflected without
+ * a restart.
  */
 final class EssentialsDestinationService implements DestinationService {
 
-  static final String TREE_KEY = "essentials";
   static final String HOME_KEY = "home";
   static final String SPAWN_KEY = "spawn";
 
@@ -38,7 +36,7 @@ final class EssentialsDestinationService implements DestinationService {
   }
 
   @Override
-  public Map<String, Supplier<PlatformDestinationTree<World, Vector3i>>> provide(Player player) {
+  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
     DestinationTree homes = DestinationTree.builder().strict();
     for (String home : essentials.homes(player)) {
       homes.leaf(home, () -> Destination.at(essentials.home(player, home), home));
@@ -47,6 +45,6 @@ final class EssentialsDestinationService implements DestinationService {
     if (essentials.hasSpawn()) {
       root.leaf(SPAWN_KEY, () -> Destination.at(essentials.spawn(player), "spawn"));
     }
-    return Map.of(TREE_KEY, root::build);
+    return root.build();
   }
 }

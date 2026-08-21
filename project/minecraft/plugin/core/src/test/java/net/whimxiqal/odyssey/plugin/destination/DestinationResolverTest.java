@@ -11,15 +11,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
-import net.whimxiqal.odyssey.OdysseyLogger;
 import net.whimxiqal.odyssey.api.Destination;
 import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
 import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
@@ -50,7 +48,6 @@ class DestinationResolverTest {
   void reset() {
     destinationsBuilt = 0;
     nodesBuilt = 0;
-    DestinationResolver.resetDuplicateWarnings();
   }
 
   // -----------------------------------------------------------------------------------------
@@ -112,8 +109,9 @@ class DestinationResolverTest {
 
     Resolution<String, Integer> ambiguous = resolve(roots, List.of("home"));
     assertInstanceOf(Ambiguous.class, ambiguous);
+    // Alphabetical, not the order the roots happened to be registered in.
     assertEquals(
-        List.of(List.of("waypoint", "home"), List.of("essentials", "home")),
+        List.of(List.of("essentials", "home"), List.of("waypoint", "home")),
         ((Ambiguous<String, Integer>) ambiguous).addresses());
 
     // Naming the provider disambiguates.
@@ -369,7 +367,8 @@ class DestinationResolverTest {
   }
 
   private static Map<String, PlatformDestinationTree<String, Integer>> roots(Tree... trees) {
-    Map<String, PlatformDestinationTree<String, Integer>> out = new HashMap<>();
+    // Sorted, as the command builds it: root order must not depend on registration order.
+    Map<String, PlatformDestinationTree<String, Integer>> out = new TreeMap<>();
     for (Tree tree : trees) {
       out.put(tree.key, tree.build());
     }
@@ -424,28 +423,5 @@ class DestinationResolverTest {
     PlatformDestinationTree<String, Integer> build() {
       return new SimplePlatformDestinationTree<>(strict, subs, leaves);
     }
-  }
-
-  /** Captures warn-level messages, formatted the way the real loggers would render them. */
-  private static final class RecordingLogger extends OdysseyLogger {
-
-    private final List<String> warnings = new ArrayList<>();
-
-    @Override
-    public void trace(String message, Object... args) {}
-
-    @Override
-    public void debug(String message, Object... args) {}
-
-    @Override
-    public void info(String message, Object... args) {}
-
-    @Override
-    public void warn(String message, Object... args) {
-      warnings.add(format(message, args));
-    }
-
-    @Override
-    public void error(String message, Throwable throwable, Object... args) {}
   }
 }

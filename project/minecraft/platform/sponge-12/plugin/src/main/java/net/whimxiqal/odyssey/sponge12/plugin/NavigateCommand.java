@@ -8,11 +8,11 @@
 package net.whimxiqal.odyssey.sponge12.plugin;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
@@ -38,7 +38,6 @@ import net.whimxiqal.odyssey.plugin.command.FlagParser;
 import net.whimxiqal.odyssey.plugin.command.NavigationFlags;
 import net.whimxiqal.odyssey.plugin.destination.DestinationResolver;
 import net.whimxiqal.odyssey.plugin.destination.NavigationPermissions;
-import net.whimxiqal.odyssey.plugin.destination.SimplePlatformDestinationTree;
 import net.whimxiqal.odyssey.plugin.message.Messages;
 import net.whimxiqal.odyssey.plugin.message.OdysseyMessages;
 import net.whimxiqal.odyssey.plugin.search.SearchGate;
@@ -73,7 +72,6 @@ final class NavigateCommand {
   // Above this many destination matches, tab-completion offers nothing — the player must type more
   // to narrow down. Keeps a huge level the player asked for by name from flooding completion.
   private static final int MAX_DESTINATION_SUGGESTIONS = DestinationResolver.PROMOTION_LIMIT;
-  private static final String PERMISSION_NAVIGATOR_PREFIX = "odyssey.navigator.";
   // A tiny, greedy search for the off-trail "guide" path: bounded and heavily weighted so it's
   // cheap.
   private static final SearchSettings GUIDE_SETTINGS =
@@ -101,7 +99,7 @@ final class NavigateCommand {
     Command.Builder command =
         Command.builder()
             .shortDescription(Component.text("Navigate to a location or destination"))
-            .permission(Permissions.PERMISSION_NAVIGATE.value());
+            .permission(Permissions.NAVIGATE.value());
     for (Parameter.Key<String> key : WORD_KEYS) {
       command.addParameter(
           Parameter.string()
@@ -179,8 +177,7 @@ final class NavigateCommand {
     NavigationFlags flags = parsed.flags();
 
     if (!flags.navigator().equals(FlagParser.DEFAULT_NAVIGATOR)
-        && !player.hasPermission(
-            Permissions.PERMISSION_NAVIGATOR.value() + "." + flags.navigator())) {
+        && !mayUseNavigator(player, flags.navigator())) {
       messages.send(player, locale, OdysseyMessages.NO_PERMISSION);
       return;
     }
@@ -194,8 +191,7 @@ final class NavigateCommand {
             destinationRoots(integrations, player),
             parsed.destination(),
             player::hasPermission,
-            canNavigate(player),
-            log);
+            canNavigate(player));
     if (resolution
         instanceof DestinationResolver.Ambiguous<ServerWorld, Vector3i>(List<List<String>> addrs)) {
       messages.send(
@@ -419,14 +415,31 @@ final class NavigateCommand {
             player::hasPermission);
   }
 
+  /**
+   * Whether the player may use a non-default navigator. Default-allow, matching the per-destination
+   * gate: {@code odyssey.navigator.<id>} cannot be declared up front (a navigator's id comes from
+   * whichever plugin registered it), so an undefined node must not read as a denial.
+   */
+  private static boolean mayUseNavigator(ServerPlayer player, String navigator) {
+    return player.permissionValue(Permissions.NAVIGATOR.value() + "." + navigator)
+        != Tristate.FALSE;
+  }
+
+  /**
+   * The destination forest for this player: one root per registered provider, keyed by the plugin
+   * that registered it. The owner is the root key rather than something the provider picks, so two
+   * plugins that both offer a {@code warp} level stay tellable apart.
+   */
   private static Map<String, PlatformDestinationTree<ServerWorld, Vector3i>> destinationRoots(
       SpongeIntegrationRegistry integrations, ServerPlayer player) {
-    Map<String, PlatformDestinationTree<ServerWorld, Vector3i>> roots = new HashMap<>();
+    Map<String, PlatformDestinationTree<ServerWorld, Vector3i>> roots = new TreeMap<>();
     for (var provider : integrations.destinationProviders().entrySet()) {
-      roots.put(
-          provider.getKey(),
-          new SimplePlatformDestinationTree<>(
-              false, provider.getValue().provide(player), Map.of()));
+      PlatformDestinationTree<ServerWorld, Vector3i> root = provider.getValue().provide(player);
+      // An empty root would be offered as a token that leads nowhere — drop it instead.
+      if (root == null || (root.subTrees().isEmpty() && root.destinations().isEmpty())) {
+        continue;
+      }
+      roots.put(provider.getKey(), root);
     }
     return roots;
   }

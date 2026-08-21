@@ -53,34 +53,43 @@ final class OdysseyCommand {
     Parameter.Value<String> unsetName =
         Parameter.string()
             .key("name")
-            .completer((ctx, input) -> suggestWaypoints(ctx, input, waypoints))
+            .completer(
+                (ctx, input) ->
+                    suggestWaypoints(
+                        ctx,
+                        input,
+                        waypoints,
+                        ctx.hasPermission(Permissions.WAYPOINT_GLOBAL.value())))
             .build();
-    var globalFlag =
-        Parameter.builder(Boolean.class)
-            .key("global")
-            .requiredPermission(Permissions.PERMISSION_WAYPOINT_GLOBAL.value())
-            .build();
-    Flag global = Flag.of(globalFlag);
+    // A valueless switch (-global), gated on the admin node. Flag.of(Parameter, …) would instead
+    // build a flag that takes an argument, which is not what `-global` means here.
+    Flag global =
+        Flag.builder().alias("global").setPermission(Permissions.WAYPOINT_GLOBAL.value()).build();
 
     Command.Parameterized reload =
         Command.builder()
-            .permission(Permissions.PERMISSION_RELOAD.value())
+            .permission(Permissions.RELOAD.value())
             .executor(ctx -> reload(ctx, config, keys, messages, log))
             .build();
     Command.Parameterized cancel =
         Command.builder()
+            .permission(Permissions.NAVIGATE.value())
             .addParameter(cancelId)
             .executor(ctx -> cancel(ctx, messages, trips, searches, cancelId))
             .build();
     Command.Parameterized tripsCmd =
-        Command.builder().executor(ctx -> trips(ctx, messages, trips)).build();
+        Command.builder()
+            .permission(Permissions.NAVIGATE.value())
+            .executor(ctx -> trips(ctx, messages, trips))
+            .build();
     Command.Parameterized portalsClear =
         Command.builder()
-            .permission(Permissions.PERMISSION_PORTALS.value())
+            .permission(Permissions.PORTALS.value())
             .executor(ctx -> clearPortals(ctx, messages, portals))
             .build();
     Command.Parameterized portalsCmd =
         Command.builder()
+            .permission(Permissions.PORTALS.value())
             .addChild(portalsClear, "clear")
             .executor(ctx -> help(ctx, messages))
             .build();
@@ -100,7 +109,7 @@ final class OdysseyCommand {
         Command.builder().executor(ctx -> listWaypoints(ctx, messages, waypoints)).build();
     Command.Parameterized waypointCmd =
         Command.builder()
-            .permission(Permissions.PERMISSION_WAYPOINT.value())
+            .permission(Permissions.WAYPOINT.value())
             .addChild(waypointSet, "set")
             .addChild(waypointUnset, "unset")
             .addChild(waypointList, "list")
@@ -243,7 +252,7 @@ final class OdysseyCommand {
       return CommandResult.success();
     }
     boolean global = ctx.hasFlag("global");
-    if (global && !player.get().hasPermission(Permissions.PERMISSION_WAYPOINT_GLOBAL.value())) {
+    if (global && !player.get().hasPermission(Permissions.WAYPOINT_GLOBAL.value())) {
       messages.send(player.get(), locale, OdysseyMessages.NO_PERMISSION);
       return CommandResult.success();
     }
@@ -282,7 +291,7 @@ final class OdysseyCommand {
       return CommandResult.success();
     }
     boolean global = ctx.hasFlag("global");
-    if (global && !player.get().hasPermission(Permissions.PERMISSION_WAYPOINT_GLOBAL.value())) {
+    if (global && !player.get().hasPermission(Permissions.WAYPOINT_GLOBAL.value())) {
       messages.send(player.get(), locale, OdysseyMessages.NO_PERMISSION);
       return CommandResult.success();
     }
@@ -342,7 +351,7 @@ final class OdysseyCommand {
   }
 
   private static List<CommandCompletion> suggestWaypoints(
-      CommandContext ctx, String input, WaypointDao waypoints) {
+      CommandContext ctx, String input, WaypointDao waypoints, boolean includeGlobal) {
     Optional<ServerPlayer> player = ctx.cause().first(ServerPlayer.class);
     if (player.isEmpty()) {
       return List.of();
@@ -351,7 +360,9 @@ final class OdysseyCommand {
     List<CommandCompletion> completions = new java.util.ArrayList<>();
     List<Waypoint> candidates =
         new java.util.ArrayList<>(waypoints.ownedBy(player.get().uniqueId()));
-    candidates.addAll(waypoints.global());
+    if (includeGlobal) {
+      candidates.addAll(waypoints.global());
+    }
     for (Waypoint waypoint : candidates) {
       if (waypoint.name().toLowerCase(Locale.ROOT).startsWith(prefix)) {
         completions.add(CommandCompletion.of(waypoint.name()));

@@ -7,20 +7,28 @@
 
 package net.whimxiqal.odyssey.paper.plugin.api;
 
-import java.util.Map;
-import java.util.function.Supplier;
 import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3i;
 
+/** Supplies the destinations one integration offers a player. */
+@FunctionalInterface
 public interface DestinationService {
 
   /**
-   * Builds the destination tree visible to the given player.
+   * The root of this integration's destination tree for the given player.
+   *
+   * <p>The root's own key is <b>not</b> chosen here: Odyssey files the tree under the registering
+   * plugin's name, so two plugins offering a {@code warp} level stay distinguishable. Build the
+   * levels below that — {@code DestinationTree.builder().subtree("town", …)} — not a level named
+   * after the plugin itself.
    *
    * @param player the player requesting navigation
-   * @return the (lazily-evaluated) tree
+   * @return the (lazily-evaluated) tree, or {@code null} if this integration has nothing to offer
+   *     this player right now
    */
-  Map<String, Supplier<PlatformDestinationTree<World, Vector3i>>> provide(Player player);
+  @Nullable
+  PlatformDestinationTree<World, Vector3i> provide(Player player);
 }

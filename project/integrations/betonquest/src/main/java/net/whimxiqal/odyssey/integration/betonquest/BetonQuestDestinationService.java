@@ -12,7 +12,6 @@ package net.whimxiqal.odyssey.integration.betonquest;
 
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Supplier;
 import net.whimxiqal.odyssey.paper.plugin.api.Destination;
 import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
 import net.whimxiqal.odyssey.paper.plugin.api.DestinationTree;
@@ -27,16 +26,16 @@ import org.bukkit.entity.Player;
 import org.joml.Vector3i;
 
 /**
- * Surfaces the player's active quest compasses as navigation targets: {@code betonquest → compass →
- * <name>}, one leaf per compass whose location resolves. The plugin-unique {@code betonquest} root
- * keeps these from colliding with other integrations' trees; Odyssey's resolver still lets a player
- * type just the compass name when it's unambiguous. Navigating is gated by Odyssey's {@code
- * odyssey.navigate.betonquest.compass.*} permission (default-allow). Targets are snapshotted when
- * the tree is built (on the main thread, as compass-location resolution requires).
+ * Surfaces the player's active quest compasses as navigation targets: {@code odysseybetonquest →
+ * compass → <name>}, one leaf per compass whose location resolves. Odyssey roots the branch at this
+ * plugin's own name, which keeps these from colliding with other integrations' trees; its resolver
+ * still lets a player type just the compass name when it's unambiguous. Navigating is gated by
+ * Odyssey's {@code odyssey.navigate.odysseybetonquest.compass.*} permission (default-allow).
+ * Targets are snapshotted when the tree is built (on the main thread, as compass-location
+ * resolution requires).
  */
 final class BetonQuestDestinationService implements DestinationService {
 
-  static final String TREE_KEY = "betonquest";
   static final String COMPASS_KEY = "compass";
 
   private final BetonQuestApi api;
@@ -46,10 +45,10 @@ final class BetonQuestDestinationService implements DestinationService {
   }
 
   @Override
-  public Map<String, Supplier<PlatformDestinationTree<World, Vector3i>>> provide(Player player) {
+  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
     OnlineProfile profile = api.profiles().getProfile(player);
     if (profile == null) {
-      return Map.of();
+      return null;
     }
     Map<CompassIdentifier, QuestCompass> compasses = api.compasses().forProfile(profile);
     DestinationTree compass = DestinationTree.builder();
@@ -63,9 +62,7 @@ final class BetonQuestDestinationService implements DestinationService {
       compass.leaf(slug(name), Destination.at(target, name));
       any = true;
     }
-    return any
-        ? Map.of(TREE_KEY, () -> DestinationTree.builder().subtree(COMPASS_KEY, compass).build())
-        : Map.of();
+    return any ? DestinationTree.builder().subtree(COMPASS_KEY, compass).build() : null;
   }
 
   /**

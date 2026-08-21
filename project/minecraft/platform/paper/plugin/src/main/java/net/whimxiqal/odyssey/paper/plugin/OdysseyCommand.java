@@ -77,15 +77,11 @@ final class OdysseyCommand {
             Commands.literal("?").executes(ctx -> showHelp(ctx.getSource().getSender(), messages)))
         .then(
             Commands.literal("reload")
-                .requires(
-                    source ->
-                        source.getSender().hasPermission(Permissions.PERMISSION_RELOAD.value()))
+                .requires(source -> source.getSender().hasPermission(Permissions.RELOAD.value()))
                 .executes(ctx -> reload(ctx.getSource().getSender(), config, keys, messages, log)))
         .then(
             Commands.literal("cancel")
-                .requires(
-                    source ->
-                        source.getSender().hasPermission(Permissions.PERMISSION_NAVIGATE.value()))
+                .requires(source -> source.getSender().hasPermission(Permissions.NAVIGATE.value()))
                 .executes(ctx -> cancelAll(ctx.getSource().getSender(), messages, trips, searches))
                 .then(
                     Commands.literal("all")
@@ -103,15 +99,11 @@ final class OdysseyCommand {
                                     IntegerArgumentType.getInteger(ctx, "id")))))
         .then(
             Commands.literal("trips")
-                .requires(
-                    source ->
-                        source.getSender().hasPermission(Permissions.PERMISSION_NAVIGATE.value()))
+                .requires(source -> source.getSender().hasPermission(Permissions.NAVIGATE.value()))
                 .executes(ctx -> trips(ctx.getSource().getSender(), messages, trips)))
         .then(
             Commands.literal("portals")
-                .requires(
-                    source ->
-                        source.getSender().hasPermission(Permissions.PERMISSION_PORTALS.value()))
+                .requires(source -> source.getSender().hasPermission(Permissions.PORTALS.value()))
                 .executes(ctx -> showHelp(ctx.getSource().getSender(), messages))
                 .then(
                     Commands.literal("clear")
@@ -119,9 +111,7 @@ final class OdysseyCommand {
                             ctx -> clearPortals(ctx.getSource().getSender(), messages, portals))))
         .then(
             Commands.literal("waypoint")
-                .requires(
-                    source ->
-                        source.getSender().hasPermission(Permissions.PERMISSION_WAYPOINT.value()))
+                .requires(source -> source.getSender().hasPermission(Permissions.WAYPOINT.value()))
                 .executes(ctx -> showHelp(ctx.getSource().getSender(), messages))
                 .then(
                     Commands.literal("set")
@@ -130,6 +120,12 @@ final class OdysseyCommand {
                                 .executes(ctx -> setWaypoint(ctx, waypoints, messages, false))
                                 .then(
                                     Commands.literal("-global")
+                                        .requires(
+                                            source ->
+                                                source
+                                                    .getSender()
+                                                    .hasPermission(
+                                                        Permissions.WAYPOINT_GLOBAL.value()))
                                         .executes(
                                             ctx -> setWaypoint(ctx, waypoints, messages, true)))))
                 .then(
@@ -145,11 +141,16 @@ final class OdysseyCommand {
                                             ctx.getSource()
                                                 .getSender()
                                                 .hasPermission(
-                                                    Permissions.PERMISSION_WAYPOINT_GLOBAL
-                                                        .value())))
+                                                    Permissions.WAYPOINT_GLOBAL.value())))
                                 .executes(ctx -> unsetWaypoint(ctx, waypoints, messages, false))
                                 .then(
                                     Commands.literal("-global")
+                                        .requires(
+                                            source ->
+                                                source
+                                                    .getSender()
+                                                    .hasPermission(
+                                                        Permissions.WAYPOINT_GLOBAL.value()))
                                         .executes(
                                             ctx -> unsetWaypoint(ctx, waypoints, messages, true)))))
                 .then(

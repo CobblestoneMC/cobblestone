@@ -52,3 +52,15 @@ tasks.named<ShadowJar>("shadowJar") {
 tasks.named("build") {
     dependsOn("shadowJar")
 }
+
+// The plugin metadata carries the project version, rather than a copy that drifts out of date.
+tasks.processResources {
+    val props = mapOf(
+        "projectVersion" to project.version,
+    )
+
+    inputs.properties(props)
+    filesMatching("**/sponge_plugins.json") {
+        expand(props)
+    }
+}

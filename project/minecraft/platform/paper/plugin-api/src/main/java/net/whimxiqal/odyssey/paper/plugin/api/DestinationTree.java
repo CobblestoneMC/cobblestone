@@ -20,9 +20,9 @@ import org.joml.Vector3i;
  * /navigate} structure as structure, not nested {@code Map<String, Supplier<…>>} plumbing:
  *
  * <pre>{@code
- * PaperDestinationTree.node("towny")
+ * DestinationTree.builder()
  *     .subtree("town", townList)          // a lazily-built child
- *     .leaf("resident", PaperDestination.at(spawn, "resident"));
+ *     .leaf("resident", Destination.at(spawn, "resident"));
  * }</pre>
  *
  * <p>Children are held behind {@link Supplier}s, so huge sets (every town, every home) are not
@@ -37,7 +37,7 @@ public final class DestinationTree {
   private final Map<String, Supplier<MinecraftDestination<World, Vector3i>>> destinations =
       new LinkedHashMap<>();
 
-  /** Begins a node with the given key (unique among its siblings). */
+  /** Begins a node. Its key is chosen by whoever attaches it — see {@link #subtree}. */
   public static DestinationTree builder() {
     return new DestinationTree();
   }
@@ -67,7 +67,7 @@ public final class DestinationTree {
     return this;
   }
 
-  /** Adds a child sub-tree from another builder. */
+  /** Adds a child sub-tree from another builder, under the given key. */
   public DestinationTree subtree(String key, DestinationTree child) {
     return subtree(key, child::build);
   }

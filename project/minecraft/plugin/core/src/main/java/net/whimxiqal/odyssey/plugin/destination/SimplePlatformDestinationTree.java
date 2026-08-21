@@ -36,8 +36,8 @@ public final class SimplePlatformDestinationTree<W, V> implements PlatformDestin
    */
   public SimplePlatformDestinationTree(
       boolean strict,
-      Map<String, Supplier<PlatformDestinationTree<W, V>>> subTrees,
-      Map<String, Supplier<MinecraftDestination<W, V>>> destinations) {
+      Map<String, ? extends Supplier<? extends PlatformDestinationTree<W, V>>> subTrees,
+      Map<String, ? extends Supplier<MinecraftDestination<W, V>>> destinations) {
     this.strict = strict;
     this.subTrees = Map.copyOf(subTrees);
     this.destinations = Map.copyOf(destinations);

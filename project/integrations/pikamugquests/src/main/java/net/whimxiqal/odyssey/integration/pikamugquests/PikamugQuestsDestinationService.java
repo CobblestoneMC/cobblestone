@@ -8,8 +8,6 @@
 package net.whimxiqal.odyssey.integration.pikamugquests;
 
 import java.util.Locale;
-import java.util.Map;
-import java.util.function.Supplier;
 import me.pikamug.quests.Quests;
 import me.pikamug.quests.player.Quester;
 import me.pikamug.quests.quests.Quest;
@@ -22,17 +20,16 @@ import org.bukkit.entity.Player;
 import org.joml.Vector3i;
 
 /**
- * Surfaces the player's active quests as navigation targets: {@code quests → quest → <name>}, one
- * leaf per current quest whose current stage has a locatable objective (a reach-location or
- * kill-within region). The plugin-unique {@code quests} root keeps these from colliding with other
- * integrations' trees; Odyssey's resolver still lets a player type just the quest name when it's
- * unambiguous. Navigating is gated by Odyssey's {@code odyssey.navigate.pikamugquests.quest.*}
- * permission (default-allow). Targets re-resolve on query, so advancing a stage is reflected
- * without a restart.
+ * Surfaces the player's active quests as navigation targets: {@code odysseypikamugquests → quest →
+ * <name>}, one leaf per current quest whose current stage has a locatable objective (a
+ * reach-location or kill-within region). Odyssey roots the branch at this plugin's own name, which
+ * keeps these from colliding with other integrations' trees; its resolver still lets a player type
+ * just the quest name when it's unambiguous. Navigating is gated by Odyssey's {@code
+ * odyssey.navigate.odysseypikamugquests.quest.*} permission (default-allow). Targets re-resolve on
+ * query, so advancing a stage is reflected without a restart.
  */
 final class PikamugQuestsDestinationService implements DestinationService {
 
-  static final String TREE_KEY = "quests";
   static final String QUEST_KEY = "quest";
 
   private final Quests quests;
@@ -42,10 +39,10 @@ final class PikamugQuestsDestinationService implements DestinationService {
   }
 
   @Override
-  public Map<String, Supplier<PlatformDestinationTree<World, Vector3i>>> provide(Player player) {
+  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
     Quester quester = quests.getQuester(player.getUniqueId());
     if (quester == null) {
-      return Map.of();
+      return null;
     }
     DestinationTree questNode = DestinationTree.builder();
     boolean any = false;
@@ -61,9 +58,7 @@ final class PikamugQuestsDestinationService implements DestinationService {
                   QuestTargets.current(quests.getQuester(player.getUniqueId()), quest), label));
       any = true;
     }
-    return any
-        ? Map.of(TREE_KEY, () -> DestinationTree.builder().subtree(QUEST_KEY, questNode).build())
-        : Map.of();
+    return any ? DestinationTree.builder().subtree(QUEST_KEY, questNode).build() : null;
   }
 
   /**

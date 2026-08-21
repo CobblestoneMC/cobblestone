@@ -14,9 +14,7 @@ import com.palmergames.bukkit.towny.object.TownBlock;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
-import java.util.function.Supplier;
 import net.whimxiqal.odyssey.paper.plugin.api.Destination;
 import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
 import net.whimxiqal.odyssey.paper.plugin.api.DestinationTree;
@@ -28,29 +26,28 @@ import org.bukkit.entity.Player;
 import org.joml.Vector3i;
 
 /**
- * Surfaces Towny towns as navigation targets, keyed by the {@code /navigate} tree:
+ * Surfaces Towny towns as navigation targets, keyed by the {@code /navigate} tree (Odyssey roots
+ * the branch at this plugin's own name, so nothing here collides with another integration):
  *
  * <ul>
- *   <li>{@code towny → town → <town>} — anywhere in the town (all its claimed plots)
- *   <li>{@code towny → town → <town> → home} — the town's home block
- *   <li>{@code towny → town → <town> → outpost → <#>} — an outpost's block
- *   <li>{@code towny → town → <town> → type → <plottype>} — the nearest plot of a type (bank, shop,
- *       …)
- *   <li>{@code towny → town → <town> → plot → <name>} — a named plot
- *   <li>{@code towny → resident → …} — the same, for the player's own town (no need to type its
- *       name)
+ *   <li>{@code odysseytowny → town → <town>} — anywhere in the town (all its claimed plots)
+ *   <li>{@code odysseytowny → town → <town> → home} — the town's home block
+ *   <li>{@code odysseytowny → town → <town> → outpost → <#>} — an outpost's block
+ *   <li>{@code odysseytowny → town → <town> → type → <plottype>} — the nearest plot of a type
+ *       (bank, shop, …)
+ *   <li>{@code odysseytowny → town → <town> → plot → <name>} — a named plot
+ *   <li>{@code odysseytowny → resident → …} — the same, for the player's own town (no need to type
+ *       its name)
  * </ul>
  *
- * <p>Navigability is gated by Odyssey's {@code odyssey.navigate.towny.*} permission
+ * <p>Navigability is gated by Odyssey's {@code odyssey.navigate.odysseytowny.*} permission
  * (default-allow), not by whether the player may teleport there. Regions are read from Towny
  * lazily, on the search-initiating thread.
  */
 final class TownyDestinationService implements DestinationService {
 
-  static final String TREE_KEY = "towny";
-
   @Override
-  public Map<String, Supplier<PlatformDestinationTree<World, Vector3i>>> provide(Player player) {
+  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
     DestinationTree towns = DestinationTree.builder().strict();
     for (Town town : TownyAPI.getInstance().getTowns()) {
       String name = town.getName();
@@ -65,7 +62,7 @@ final class TownyDestinationService implements DestinationService {
       root.subtree("resident", () -> townDetail(own));
       root.leaf("resident", () -> wholeTown(own));
     }
-    return Map.of(TREE_KEY, root::build);
+    return root.build();
   }
 
   private static PlatformDestinationTree<World, Vector3i> townDetail(Town town) {
