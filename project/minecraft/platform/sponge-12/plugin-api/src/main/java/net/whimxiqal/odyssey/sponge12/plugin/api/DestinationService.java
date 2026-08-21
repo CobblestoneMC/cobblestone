@@ -7,7 +7,8 @@
 
 package net.whimxiqal.odyssey.sponge12.plugin.api;
 
-import java.util.Collection;
+import java.util.Map;
+import java.util.function.Supplier;
 import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.world.server.ServerWorld;
@@ -22,5 +23,6 @@ public interface DestinationService {
    * @param player the player requesting navigation
    * @return the (lazily-evaluated) trees
    */
-  Collection<PlatformDestinationTree<ServerWorld, Vector3i>> provide(ServerPlayer player);
+  Map<String, Supplier<PlatformDestinationTree<ServerWorld, Vector3i>>> provide(
+      ServerPlayer player);
 }

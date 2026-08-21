@@ -17,8 +17,10 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -35,8 +37,8 @@ import net.whimxiqal.odyssey.api.SearchSettings;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftSearchSettings;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.paper.PaperNavigationServiceImpl;
-import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
 import net.whimxiqal.odyssey.paper.plugin.api.NavigatorFactory;
+import net.whimxiqal.odyssey.plugin.Permissions;
 import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
 import net.whimxiqal.odyssey.plugin.api.NavigatorSettings;
 import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
@@ -45,6 +47,7 @@ import net.whimxiqal.odyssey.plugin.command.FlagParser;
 import net.whimxiqal.odyssey.plugin.command.NavigationFlags;
 import net.whimxiqal.odyssey.plugin.destination.DestinationResolver;
 import net.whimxiqal.odyssey.plugin.destination.NavigationPermissions;
+import net.whimxiqal.odyssey.plugin.destination.SimplePlatformDestinationTree;
 import net.whimxiqal.odyssey.plugin.message.Messages;
 import net.whimxiqal.odyssey.plugin.message.OdysseyMessages;
 import net.whimxiqal.odyssey.plugin.search.SearchGate;
@@ -64,9 +67,6 @@ import org.joml.Vector3i;
  * platform-neutral plugin-core helpers (flag parsing, destination resolution).
  */
 final class NavigateCommand {
-
-  static final String PERMISSION_NAVIGATE = "odyssey.navigate";
-  private static final String PERMISSION_NAVIGATOR_PREFIX = "odyssey.navigator.";
   // Above this many destination matches, tab-completion offers nothing — the player must type more
   // to narrow down. Keeps a huge level the player asked for by name from flooding completion.
   private static final int MAX_DESTINATION_SUGGESTIONS = DestinationResolver.PROMOTION_LIMIT;
@@ -91,12 +91,9 @@ final class NavigateCommand {
       OdysseyLogger log,
       Messages messages) {
     return Commands.literal("navigate")
-        .requires(source -> source.getSender().hasPermission(PERMISSION_NAVIGATE))
+        .requires(
+            source -> source.getSender().hasPermission(Permissions.PERMISSION_NAVIGATE.value()))
         .executes(ctx -> navHelp(ctx.getSource().getSender(), messages))
-        .then(
-            Commands.literal("help")
-                .executes(ctx -> navHelp(ctx.getSource().getSender(), messages)))
-        .then(Commands.literal("?").executes(ctx -> navHelp(ctx.getSource().getSender(), messages)))
         .then(
             Commands.argument("args", StringArgumentType.greedyString())
                 .suggests(
@@ -166,7 +163,8 @@ final class NavigateCommand {
     NavigationFlags flags = parsed.flags();
 
     if (!flags.navigator().equals(FlagParser.DEFAULT_NAVIGATOR)
-        && !player.hasPermission(PERMISSION_NAVIGATOR_PREFIX + flags.navigator())) {
+        && !player.hasPermission(
+            Permissions.PERMISSION_NAVIGATOR.value() + "." + flags.navigator())) {
       messages.send(player, locale, OdysseyMessages.NO_PERMISSION);
       return Command.SINGLE_SUCCESS;
     }
@@ -458,11 +456,14 @@ final class NavigateCommand {
         NavigationPermissions.allowed(address, player::isPermissionSet, player::hasPermission);
   }
 
-  private static List<PlatformDestinationTree<World, Vector3i>> destinationRoots(
+  private static Map<String, PlatformDestinationTree<World, Vector3i>> destinationRoots(
       PaperIntegrationRegistry integrations, Player player) {
-    List<PlatformDestinationTree<World, Vector3i>> roots = new ArrayList<>();
-    for (DestinationService provider : integrations.destinationProviders()) {
-      roots.addAll(provider.provide(player));
+    Map<String, PlatformDestinationTree<World, Vector3i>> roots = new HashMap<>();
+    for (var provider : integrations.destinationProviders().entrySet()) {
+      roots.put(
+          provider.getKey(),
+          new SimplePlatformDestinationTree<>(
+              false, provider.getValue().provide(player), Map.of()));
     }
     return roots;
   }

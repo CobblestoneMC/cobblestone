@@ -9,6 +9,7 @@ package net.whimxiqal.odyssey.sponge12.plugin;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import net.whimxiqal.odyssey.minecraft.registry.OwnedRegistry;
 import net.whimxiqal.odyssey.sponge12.plugin.api.DestinationService;
 import net.whimxiqal.odyssey.sponge12.plugin.api.IntegrationRegistrar;
@@ -39,15 +40,15 @@ public final class SpongeIntegrationRegistry implements IntegrationRegistrar {
   }
 
   /** The registered destination providers, in registration order. */
-  List<DestinationService> destinationProviders() {
-    return destinations.values();
+  Map<String, DestinationService> destinationProviders() {
+    return destinations.map();
   }
 
   /**
    * The factory registered under a navigator id, or {@code null} if none. First registered wins.
    */
   NavigatorFactory navigator(String id) {
-    for (NavigatorEntry entry : navigators.values()) {
+    for (NavigatorEntry entry : navigators.map().values()) {
       if (entry.id().equals(id)) {
         return entry.factory();
       }
@@ -58,7 +59,7 @@ public final class SpongeIntegrationRegistry implements IntegrationRegistrar {
   /** The ids of all registered navigators, in registration order. */
   List<String> navigatorIds() {
     List<String> ids = new ArrayList<>();
-    for (NavigatorEntry entry : navigators.values()) {
+    for (NavigatorEntry entry : navigators.map().values()) {
       ids.add(entry.id());
     }
     return ids;
@@ -68,9 +69,9 @@ public final class SpongeIntegrationRegistry implements IntegrationRegistrar {
    * Drops everything a departing owner registered (called when that plugin stops).
    *
    * @param owner the departing owner's id
-   * @return how many registrations were removed
    */
-  int purge(String owner) {
-    return destinations.purge(owner) + navigators.purge(owner);
+  void purge(String owner) {
+    destinations.purge(owner);
+    navigators.purge(owner);
   }
 }

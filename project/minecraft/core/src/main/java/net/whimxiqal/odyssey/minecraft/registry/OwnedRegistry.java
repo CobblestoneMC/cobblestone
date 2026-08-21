@@ -7,8 +7,8 @@
 
 package net.whimxiqal.odyssey.minecraft.registry;
 
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A thread-safe, owner-keyed registry of values Odyssey collects from other plugins and its own
@@ -17,15 +17,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * bookkeeping the Bukkit service manager used to do for us, now that Odyssey owns the collection).
  *
  * <p>Writes (register/purge) happen on the server thread during plugin enable/disable or reload;
- * reads ({@link #values}) happen on search worker threads, so the backing list is copy-on-write.
+ * reads ({@link #map}) happen on search worker threads, so the backing list is copy-on-write.
  *
  * @param <T> the registered value type (a destination provider, a search modifier, …)
  */
 public final class OwnedRegistry<T> {
 
-  private record Owned<T>(String owner, T value) {}
-
-  private final List<Owned<T>> entries = new CopyOnWriteArrayList<>();
+  private final ConcurrentHashMap<String, T> entries = new ConcurrentHashMap<>();
 
   /**
    * Registers a value under an owner.
@@ -34,7 +32,10 @@ public final class OwnedRegistry<T> {
    * @param value the value to register
    */
   public void register(String owner, T value) {
-    entries.add(new Owned<>(owner, value));
+    var old = entries.putIfAbsent(owner, value);
+    if (old != null) {
+      throw new IllegalArgumentException("A value was already registered for owner " + owner);
+    }
   }
 
   /**
@@ -42,8 +43,8 @@ public final class OwnedRegistry<T> {
    *
    * @return the values
    */
-  public List<T> values() {
-    return entries.stream().map(Owned::value).toList();
+  public Map<String, T> map() {
+    return Map.copyOf(entries);
   }
 
   /**
@@ -52,9 +53,7 @@ public final class OwnedRegistry<T> {
    * @param owner the owner whose registrations to drop
    * @return how many registrations were removed
    */
-  public int purge(String owner) {
-    List<Owned<T>> removed = entries.stream().filter(entry -> entry.owner().equals(owner)).toList();
-    entries.removeAll(removed);
-    return removed.size();
+  public T purge(String owner) {
+    return entries.remove(owner);
   }
 }

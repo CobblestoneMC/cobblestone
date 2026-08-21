@@ -21,13 +21,6 @@ import java.util.function.Supplier;
 public interface PlatformDestinationTree<W, V> {
 
   /**
-   * Returns this node's key (unique among its siblings).
-   *
-   * @return the key
-   */
-  String key();
-
-  /**
    * Returns whether this level is strict: a strict level may never be omitted in commands (it is
    * never a candidate for name-promotion).
    *

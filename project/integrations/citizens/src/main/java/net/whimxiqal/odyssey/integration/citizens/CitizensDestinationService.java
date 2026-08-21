@@ -7,9 +7,9 @@
 
 package net.whimxiqal.odyssey.integration.citizens;
 
-import java.util.Collection;
-import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.Supplier;
 import net.citizensnpcs.api.CitizensAPI;
 import net.citizensnpcs.api.npc.NPC;
 import net.whimxiqal.odyssey.paper.plugin.api.Destination;
@@ -35,10 +35,10 @@ final class CitizensDestinationService implements DestinationService {
   static final String NPC_KEY = "npc";
 
   @Override
-  public Collection<PlatformDestinationTree<World, Vector3i>> provide(Player player) {
+  public Map<String, Supplier<PlatformDestinationTree<World, Vector3i>>> provide(Player player) {
     // Strict: a server can hold hundreds of NPCs, and none of them should be promoted to the
     // root of /navigate — the player asks for "npc" first.
-    DestinationTree npcNode = DestinationTree.node(NPC_KEY).strict();
+    DestinationTree npcNode = DestinationTree.builder().strict();
     boolean any = false;
     for (NPC npc : CitizensAPI.getNPCRegistry().sorted()) {
       int id = npc.getId();
@@ -52,7 +52,9 @@ final class CitizensDestinationService implements DestinationService {
           });
       any = true;
     }
-    return any ? List.of(DestinationTree.node(TREE_KEY).subtree(npcNode).build()) : List.of();
+    return any
+        ? Map.of(TREE_KEY, () -> DestinationTree.builder().subtree(NPC_KEY, npcNode).build())
+        : Map.of();
   }
 
   /** The command token for an NPC: its slugged name plus id, unique across same-named NPCs. */

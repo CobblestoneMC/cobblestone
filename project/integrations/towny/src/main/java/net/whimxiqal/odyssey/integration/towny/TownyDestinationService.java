@@ -11,11 +11,12 @@ import com.palmergames.bukkit.towny.TownyAPI;
 import com.palmergames.bukkit.towny.object.Resident;
 import com.palmergames.bukkit.towny.object.Town;
 import com.palmergames.bukkit.towny.object.TownBlock;
-import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import net.whimxiqal.odyssey.paper.plugin.api.Destination;
 import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
 import net.whimxiqal.odyssey.paper.plugin.api.DestinationTree;
@@ -49,36 +50,36 @@ final class TownyDestinationService implements DestinationService {
   static final String TREE_KEY = "towny";
 
   @Override
-  public Collection<PlatformDestinationTree<World, Vector3i>> provide(Player player) {
-    DestinationTree towns = DestinationTree.node("town").strict();
+  public Map<String, Supplier<PlatformDestinationTree<World, Vector3i>>> provide(Player player) {
+    DestinationTree towns = DestinationTree.builder().strict();
     for (Town town : TownyAPI.getInstance().getTowns()) {
       String name = town.getName();
       // The whole town is a leaf; its home/outpost/type/plot are a sub-tree — same key, both roles.
       towns.leaf(name, () -> wholeTown(town));
-      towns.subtree(name, () -> townDetail(name, town));
+      towns.subtree(name, () -> townDetail(town));
     }
 
-    DestinationTree root = DestinationTree.node(TREE_KEY).subtree(towns);
+    DestinationTree root = DestinationTree.builder().subtree("town", towns);
     Town own = ownTown(player);
     if (own != null) {
-      root.subtree("resident", () -> townDetail("resident", own));
+      root.subtree("resident", () -> townDetail(own));
       root.leaf("resident", () -> wholeTown(own));
     }
-    return List.of(root.build());
+    return Map.of(TREE_KEY, root::build);
   }
 
-  private static PlatformDestinationTree<World, Vector3i> townDetail(String key, Town town) {
-    return DestinationTree.node(key)
+  private static PlatformDestinationTree<World, Vector3i> townDetail(Town town) {
+    return DestinationTree.builder()
         .strict()
         .leaf("home", () -> Destination.at(town.getSpawnOrNull(), "home"))
         .subtree("outpost", () -> outposts(town))
-        .subtree("type", () -> plots(town, "type", TownBlock::getTypeName))
-        .subtree("plot", () -> plots(town, "plot", TownBlock::getName))
+        .subtree("type", () -> plots(town, TownBlock::getTypeName))
+        .subtree("plot", () -> plots(town, TownBlock::getName))
         .build();
   }
 
   private static PlatformDestinationTree<World, Vector3i> outposts(Town town) {
-    DestinationTree tree = DestinationTree.node("outpost").strict();
+    DestinationTree tree = DestinationTree.builder().strict();
     List<Location> spawns = town.getAllOutpostSpawns();
     for (int i = 0; i < spawns.size(); i++) {
       Location spawn = spawns.get(i);
@@ -89,8 +90,8 @@ final class TownyDestinationService implements DestinationService {
 
   /** A sub-tree keyed by a plot attribute (type or name); each leaf unions the matching plots. */
   private static PlatformDestinationTree<World, Vector3i> plots(
-      Town town, String nodeKey, java.util.function.Function<TownBlock, String> attribute) {
-    DestinationTree tree = DestinationTree.node(nodeKey).strict();
+      Town town, java.util.function.Function<TownBlock, String> attribute) {
+    DestinationTree tree = DestinationTree.builder().strict();
     Set<String> keys = new LinkedHashSet<>();
     for (TownBlock townBlock : town.getTownBlocks()) {
       String value = attribute.apply(townBlock);

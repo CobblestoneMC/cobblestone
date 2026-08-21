@@ -7,8 +7,8 @@
 
 package net.whimxiqal.odyssey.integration.essentials;
 
-import java.util.Collection;
-import java.util.List;
+import java.util.Map;
+import java.util.function.Supplier;
 import net.whimxiqal.odyssey.paper.plugin.api.Destination;
 import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
 import net.whimxiqal.odyssey.paper.plugin.api.DestinationTree;
@@ -38,15 +38,15 @@ final class EssentialsDestinationService implements DestinationService {
   }
 
   @Override
-  public Collection<PlatformDestinationTree<World, Vector3i>> provide(Player player) {
-    DestinationTree homes = DestinationTree.node(HOME_KEY).strict();
+  public Map<String, Supplier<PlatformDestinationTree<World, Vector3i>>> provide(Player player) {
+    DestinationTree homes = DestinationTree.builder().strict();
     for (String home : essentials.homes(player)) {
       homes.leaf(home, () -> Destination.at(essentials.home(player, home), home));
     }
-    DestinationTree root = DestinationTree.node(TREE_KEY).subtree(homes);
+    DestinationTree root = DestinationTree.builder().subtree(HOME_KEY, homes);
     if (essentials.hasSpawn()) {
       root.leaf(SPAWN_KEY, () -> Destination.at(essentials.spawn(player), "spawn"));
     }
-    return List.of(root.build());
+    return Map.of(TREE_KEY, root::build);
   }
 }

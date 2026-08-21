@@ -23,7 +23,6 @@ import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
  */
 public final class SimplePlatformDestinationTree<W, V> implements PlatformDestinationTree<W, V> {
 
-  private final String key;
   private final boolean strict;
   private final Map<String, Supplier<? extends PlatformDestinationTree<W, V>>> subTrees;
   private final Map<String, Supplier<MinecraftDestination<W, V>>> destinations;
@@ -31,25 +30,17 @@ public final class SimplePlatformDestinationTree<W, V> implements PlatformDestin
   /**
    * Creates a node.
    *
-   * @param key the node's key (unique among its siblings)
    * @param strict whether this level may never be omitted in commands
    * @param subTrees the child sub-trees, keyed by key
    * @param destinations the leaf destinations, keyed by key
    */
   public SimplePlatformDestinationTree(
-      String key,
       boolean strict,
-      Map<String, Supplier<? extends PlatformDestinationTree<W, V>>> subTrees,
+      Map<String, Supplier<PlatformDestinationTree<W, V>>> subTrees,
       Map<String, Supplier<MinecraftDestination<W, V>>> destinations) {
-    this.key = key;
     this.strict = strict;
     this.subTrees = Map.copyOf(subTrees);
     this.destinations = Map.copyOf(destinations);
-  }
-
-  @Override
-  public String key() {
-    return key;
   }
 
   @Override

@@ -7,7 +7,8 @@
 
 package net.whimxiqal.odyssey.paper.plugin.api;
 
-import java.util.Collection;
+import java.util.Map;
+import java.util.function.Supplier;
 import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -21,5 +22,5 @@ public interface DestinationService {
    * @param player the player requesting navigation
    * @return the (lazily-evaluated) tree
    */
-  Collection<PlatformDestinationTree<World, Vector3i>> provide(Player player);
+  Map<String, Supplier<PlatformDestinationTree<World, Vector3i>>> provide(Player player);
 }

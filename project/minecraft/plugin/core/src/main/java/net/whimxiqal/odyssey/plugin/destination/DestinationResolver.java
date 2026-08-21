@@ -119,7 +119,7 @@ public final class DestinationResolver {
    * @return the resolution
    */
   public static <W, V> Resolution<W, V> resolve(
-      List<? extends PlatformDestinationTree<W, V>> roots,
+      Map<String, ? extends PlatformDestinationTree<W, V>> roots,
       List<String> args,
       Predicate<String> hasPermission) {
     return resolve(roots, args, hasPermission, address -> true, null);
@@ -139,7 +139,7 @@ public final class DestinationResolver {
    * @return the resolution
    */
   public static <W, V> Resolution<W, V> resolve(
-      List<? extends PlatformDestinationTree<W, V>> roots,
+      Map<String, ? extends PlatformDestinationTree<W, V>> roots,
       List<String> args,
       Predicate<String> hasPermission,
       Predicate<List<String>> canNavigate) {
@@ -164,7 +164,7 @@ public final class DestinationResolver {
    * @return the resolution
    */
   public static <W, V> Resolution<W, V> resolve(
-      List<? extends PlatformDestinationTree<W, V>> roots,
+      Map<String, ? extends PlatformDestinationTree<W, V>> roots,
       List<String> args,
       Predicate<String> hasPermission,
       Predicate<List<String>> canNavigate,
@@ -173,8 +173,16 @@ public final class DestinationResolver {
       return new NotFound<>();
     }
     List<Match<W, V>> matches = new ArrayList<>();
-    for (PlatformDestinationTree<W, V> root : roots) {
-      match(root, args, 0, new ArrayList<>(), matches, hasPermission, canNavigate);
+    for (var root : roots.entrySet()) {
+      match(
+          root.getKey(),
+          root.getValue(),
+          args,
+          0,
+          new ArrayList<>(),
+          matches,
+          hasPermission,
+          canNavigate);
     }
     if (matches.isEmpty()) {
       return new NotFound<>();
@@ -206,7 +214,7 @@ public final class DestinationResolver {
    * @return the candidate tokens, alphabetically
    */
   public static <W, V> List<String> suggest(
-      List<? extends PlatformDestinationTree<W, V>> roots,
+      Map<String, ? extends PlatformDestinationTree<W, V>> roots,
       List<String> args,
       Predicate<String> hasPermission) {
     return suggest(roots, args, hasPermission, address -> true);
@@ -224,7 +232,7 @@ public final class DestinationResolver {
    * @return the candidate tokens, alphabetically
    */
   public static <W, V> List<String> suggest(
-      List<? extends PlatformDestinationTree<W, V>> roots,
+      Map<String, ? extends PlatformDestinationTree<W, V>> roots,
       List<String> args,
       Predicate<String> hasPermission,
       Predicate<List<String>> canNavigate) {
@@ -233,8 +241,8 @@ public final class DestinationResolver {
     String partial = (args.isEmpty() ? "" : args.get(index)).toLowerCase(Locale.ROOT);
     Access<W, V> access = new Access<>(hasPermission, canNavigate);
     Candidates candidates = new Candidates();
-    for (PlatformDestinationTree<W, V> root : roots) {
-      suggestFrom(root, prefix, 0, new ArrayList<>(), candidates, access);
+    for (var root : roots.entrySet()) {
+      suggestFrom(root.getKey(), root.getValue(), prefix, 0, new ArrayList<>(), candidates, access);
     }
     return candidates.tokens(partial);
   }
@@ -249,6 +257,7 @@ public final class DestinationResolver {
    * Either way the node's key joins the canonical trail.
    */
   private static <W, V> void match(
+      String key,
       PlatformDestinationTree<W, V> node,
       List<String> args,
       int ai,
@@ -256,7 +265,6 @@ public final class DestinationResolver {
       List<Match<W, V>> out,
       Predicate<String> hasPermission,
       Predicate<List<String>> canNavigate) {
-    String key = node.key();
     trail.add(key);
     if (ai < args.size() && args.get(ai).equalsIgnoreCase(key)) {
       matchChildren(node, args, ai + 1, trail, out, hasPermission, canNavigate);
@@ -299,8 +307,9 @@ public final class DestinationResolver {
     }
     // Sub-trees are still worth descending on the final token: the child's own key may be omitted,
     // leaving that token to name a destination inside it.
-    for (Supplier<? extends PlatformDestinationTree<W, V>> child : node.subTrees().values()) {
-      match(child.get(), args, ai, trail, out, hasPermission, canNavigate);
+    for (var child : node.subTrees().entrySet()) {
+      match(
+          child.getKey(), child.getValue().get(), args, ai, trail, out, hasPermission, canNavigate);
     }
   }
 
@@ -326,13 +335,13 @@ public final class DestinationResolver {
    * promoted past — so is everything its children contribute.
    */
   private static <W, V> void suggestFrom(
+      String key,
       PlatformDestinationTree<W, V> node,
       List<String> prefix,
       int pi,
       List<String> trail,
       Candidates out,
       Access<W, V> access) {
-    String key = node.key();
     trail.add(key);
     if (pi < prefix.size()) {
       if (prefix.get(pi).equalsIgnoreCase(key)) {
@@ -371,8 +380,8 @@ public final class DestinationResolver {
       return;
     }
     // A destination is always the last token, so only sub-trees can carry a longer prefix.
-    for (Supplier<? extends PlatformDestinationTree<W, V>> child : node.subTrees().values()) {
-      suggestFrom(child.get(), prefix, pi, trail, out, access);
+    for (var child : node.subTrees().entrySet()) {
+      suggestFrom(child.getKey(), child.getValue().get(), prefix, pi, trail, out, access);
     }
   }
 
@@ -400,15 +409,16 @@ public final class DestinationResolver {
         return null;
       }
     }
-    for (Supplier<? extends PlatformDestinationTree<W, V>> supplier : node.subTrees().values()) {
-      PlatformDestinationTree<W, V> child = supplier.get();
+    for (var supplier : node.subTrees().entrySet()) {
+      var key = supplier.getKey();
+      PlatformDestinationTree<W, V> child = supplier.getValue().get();
       Candidates promoted = null;
       if (!child.strict()) { // a strict child's key is mandatory: nothing below it belongs here
-        trail.add(child.key());
+        trail.add(key);
         promoted = collect(child, trail, access, PROMOTION_LIMIT);
         trail.removeLast();
       }
-      out.node(child.key(), extendable(child, promoted));
+      out.node(key, extendable(child, promoted));
       if (out.size() > limit) {
         return null;
       }

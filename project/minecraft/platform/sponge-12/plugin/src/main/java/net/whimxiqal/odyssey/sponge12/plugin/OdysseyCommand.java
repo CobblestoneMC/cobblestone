@@ -12,6 +12,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import net.kyori.adventure.audience.Audience;
+import net.whimxiqal.odyssey.plugin.Permissions;
 import net.whimxiqal.odyssey.plugin.config.ConfigKeys;
 import net.whimxiqal.odyssey.plugin.config.ConfigManager;
 import net.whimxiqal.odyssey.plugin.data.DataStoreException;
@@ -36,10 +37,6 @@ import org.spongepowered.api.world.server.ServerLocation;
 /** The {@code /odyssey} (alias {@code /ody}) admin/utility command tree. */
 final class OdysseyCommand {
 
-  private static final String PERMISSION_RELOAD = "odyssey.admin.reload";
-  private static final String PERMISSION_WAYPOINT_GLOBAL = "odyssey.admin.waypoint.global";
-  private static final String PERMISSION_PORTALS = "odyssey.admin.portals";
-
   private OdysseyCommand() {}
 
   static Command.Parameterized build(
@@ -58,11 +55,16 @@ final class OdysseyCommand {
             .key("name")
             .completer((ctx, input) -> suggestWaypoints(ctx, input, waypoints))
             .build();
-    Flag global = Flag.of("global");
+    var globalFlag =
+        Parameter.builder(Boolean.class)
+            .key("global")
+            .requiredPermission(Permissions.PERMISSION_WAYPOINT_GLOBAL.value())
+            .build();
+    Flag global = Flag.of(globalFlag);
 
     Command.Parameterized reload =
         Command.builder()
-            .permission(PERMISSION_RELOAD)
+            .permission(Permissions.PERMISSION_RELOAD.value())
             .executor(ctx -> reload(ctx, config, keys, messages, log))
             .build();
     Command.Parameterized cancel =
@@ -74,7 +76,7 @@ final class OdysseyCommand {
         Command.builder().executor(ctx -> trips(ctx, messages, trips)).build();
     Command.Parameterized portalsClear =
         Command.builder()
-            .permission(PERMISSION_PORTALS)
+            .permission(Permissions.PERMISSION_PORTALS.value())
             .executor(ctx -> clearPortals(ctx, messages, portals))
             .build();
     Command.Parameterized portalsCmd =
@@ -98,6 +100,7 @@ final class OdysseyCommand {
         Command.builder().executor(ctx -> listWaypoints(ctx, messages, waypoints)).build();
     Command.Parameterized waypointCmd =
         Command.builder()
+            .permission(Permissions.PERMISSION_WAYPOINT.value())
             .addChild(waypointSet, "set")
             .addChild(waypointUnset, "unset")
             .addChild(waypointList, "list")
@@ -240,7 +243,7 @@ final class OdysseyCommand {
       return CommandResult.success();
     }
     boolean global = ctx.hasFlag("global");
-    if (global && !player.get().hasPermission(PERMISSION_WAYPOINT_GLOBAL)) {
+    if (global && !player.get().hasPermission(Permissions.PERMISSION_WAYPOINT_GLOBAL.value())) {
       messages.send(player.get(), locale, OdysseyMessages.NO_PERMISSION);
       return CommandResult.success();
     }
@@ -279,7 +282,7 @@ final class OdysseyCommand {
       return CommandResult.success();
     }
     boolean global = ctx.hasFlag("global");
-    if (global && !player.get().hasPermission(PERMISSION_WAYPOINT_GLOBAL)) {
+    if (global && !player.get().hasPermission(Permissions.PERMISSION_WAYPOINT_GLOBAL.value())) {
       messages.send(player.get(), locale, OdysseyMessages.NO_PERMISSION);
       return CommandResult.success();
     }

@@ -11,9 +11,9 @@ import fr.skytasul.quests.api.QuestsAPI;
 import fr.skytasul.quests.api.players.PlayerAccount;
 import fr.skytasul.quests.api.players.PlayersManager;
 import fr.skytasul.quests.api.quests.Quest;
-import java.util.Collection;
-import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.Supplier;
 import net.whimxiqal.odyssey.paper.plugin.api.Destination;
 import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
 import net.whimxiqal.odyssey.paper.plugin.api.DestinationTree;
@@ -38,12 +38,12 @@ final class BeautyQuestsDestinationService implements DestinationService {
   static final String QUEST_KEY = "quest";
 
   @Override
-  public Collection<PlatformDestinationTree<World, Vector3i>> provide(Player player) {
+  public Map<String, Supplier<PlatformDestinationTree<World, Vector3i>>> provide(Player player) {
     PlayerAccount account = PlayersManager.getPlayerAccount(player);
     if (account == null) {
-      return List.of();
+      return Map.of();
     }
-    DestinationTree quests = DestinationTree.node(QUEST_KEY);
+    DestinationTree quests = DestinationTree.builder();
     boolean any = false;
     for (Quest quest : QuestsAPI.getAPI().getQuestsManager().getQuestsStarted(account)) {
       Location target = QuestTargets.current(account, quest);
@@ -54,7 +54,9 @@ final class BeautyQuestsDestinationService implements DestinationService {
       quests.leaf(slug(label), Destination.at(target, label));
       any = true;
     }
-    return any ? List.of(DestinationTree.node(TREE_KEY).subtree(quests).build()) : List.of();
+    return any
+        ? Map.of(TREE_KEY, () -> DestinationTree.builder().subtree(QUEST_KEY, quests).build())
+        : Map.of();
   }
 
   /** A player-facing quest label: its name, or a stable fallback from its id. */

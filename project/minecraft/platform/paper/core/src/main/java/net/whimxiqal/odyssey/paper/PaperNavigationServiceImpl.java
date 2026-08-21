@@ -8,6 +8,7 @@
 package net.whimxiqal.odyssey.paper;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -162,8 +163,8 @@ public final class PaperNavigationServiceImpl
    * @param owner the departing owner's name
    * @return how many modifiers were removed
    */
-  public int purgeOwner(String owner) {
-    return searchModifiers.purge(owner);
+  public void purgeOwner(String owner) {
+    searchModifiers.purge(owner);
   }
 
   private SearchHandle<Location, MinecraftStepPayload> search(
@@ -175,7 +176,7 @@ public final class PaperNavigationServiceImpl
     Position<MinecraftWorld> originPosition =
         new Position<>(PaperConversions.cell(origin), wrap(origin.getWorld()));
     // One snapshot of the registered modifiers drives all three influences on this search.
-    List<SearchModificationService> modifiers = searchModifiers.values();
+    Collection<SearchModificationService> modifiers = searchModifiers.map().values();
     net.whimxiqal.odyssey.minecraft.BreakChecker<OdysseyPlayer> breakChecker =
         buildBreakChecker(modifiers, player);
     List<Restriction<OdysseyPlayer, MinecraftWorld>> restrictions =
@@ -208,7 +209,7 @@ public final class PaperNavigationServiceImpl
   private CompletableFuture<
           List<net.whimxiqal.odyssey.Transition<MinecraftStepPayload, MinecraftWorld>>>
       gatherTransitions(
-          List<SearchModificationService> modifiers,
+          Collection<SearchModificationService> modifiers,
           Player player,
           Set<String> excludedWorlds,
           Set<String> excludedDimensions) {
@@ -245,7 +246,7 @@ public final class PaperNavigationServiceImpl
    * Composes every modifier's break checker into one; a block is breakable only if all permit it.
    */
   private net.whimxiqal.odyssey.minecraft.BreakChecker<OdysseyPlayer> buildBreakChecker(
-      List<SearchModificationService> modifiers, Player player) {
+      Collection<SearchModificationService> modifiers, Player player) {
     List<BreakChecker> checkers = new ArrayList<>();
     for (SearchModificationService modifier : modifiers) {
       BreakChecker checker = modifier.computeBreakChecker(player);
@@ -275,7 +276,7 @@ public final class PaperNavigationServiceImpl
 
   /** One composite passability restriction; a cell is impassable if any modifier bars entry. */
   private List<Restriction<OdysseyPlayer, MinecraftWorld>> buildRestrictions(
-      List<SearchModificationService> modifiers, Player player) {
+      Collection<SearchModificationService> modifiers, Player player) {
     List<PassChecker> checkers = new ArrayList<>();
     for (SearchModificationService modifier : modifiers) {
       PassChecker checker = modifier.computePassChecker(player);

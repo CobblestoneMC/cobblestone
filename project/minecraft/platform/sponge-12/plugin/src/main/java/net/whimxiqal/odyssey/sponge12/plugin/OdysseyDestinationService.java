@@ -7,7 +7,6 @@
 
 package net.whimxiqal.odyssey.sponge12.plugin;
 
-import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,11 +46,15 @@ public final class OdysseyDestinationService implements DestinationService {
   }
 
   @Override
-  public Collection<PlatformDestinationTree<ServerWorld, Vector3i>> provide(ServerPlayer player) {
-    return List.of(
-        providePlayerDestinationTree(player),
-        provideWorldDestinationTree(player),
-        provideWaypointDestinationTree(player));
+  public Map<String, Supplier<PlatformDestinationTree<ServerWorld, Vector3i>>> provide(
+      ServerPlayer player) {
+    return Map.of(
+        PLAYER_TREE_KEY,
+        () -> providePlayerDestinationTree(player),
+        WORLD_TREE_KEY,
+        () -> provideWorldDestinationTree(player),
+        WAYPOINT_TREE_KEY,
+        () -> provideWaypointDestinationTree(player));
   }
 
   private PlatformDestinationTree<ServerWorld, Vector3i> providePlayerDestinationTree(
@@ -72,15 +75,17 @@ public final class OdysseyDestinationService implements DestinationService {
             Destination<WorldRegion<ServerWorld, Vector3i>> destination =
                 () -> {
                   Optional<ServerPlayer> target = Sponge.server().player(uuid);
-                  return target.isEmpty()
-                      ? List.of()
-                      : List.of(SingleCellWorldRegion.of(target.get().serverLocation()));
+                  return target
+                      .<List<WorldRegion<ServerWorld, Vector3i>>>map(
+                          serverPlayer ->
+                              List.of(SingleCellWorldRegion.of(serverPlayer.serverLocation())))
+                      .orElseGet(List::of);
                 };
             return new SimpleMinecraftDestination<>(
                 destination, Component.text(name), List.of(), true);
           });
     }
-    return new SimplePlatformDestinationTree<>(PLAYER_TREE_KEY, false, Map.of(), leaves);
+    return new SimplePlatformDestinationTree<>(false, Map.of(), leaves);
   }
 
   private PlatformDestinationTree<ServerWorld, Vector3i> provideWorldDestinationTree(
@@ -102,7 +107,7 @@ public final class OdysseyDestinationService implements DestinationService {
                 destination, Component.text(worldKey), List.of());
           });
     }
-    return new SimplePlatformDestinationTree<>(WORLD_TREE_KEY, false, Map.of(), leaves);
+    return new SimplePlatformDestinationTree<>(false, Map.of(), leaves);
   }
 
   private PlatformDestinationTree<ServerWorld, Vector3i> provideWaypointDestinationTree(
@@ -116,7 +121,7 @@ public final class OdysseyDestinationService implements DestinationService {
     for (Waypoint waypoint : waypoints.ownedBy(player.uniqueId())) {
       leaves.put(waypoint.name(), () -> toDestination(waypoint));
     }
-    return new SimplePlatformDestinationTree<>(WAYPOINT_TREE_KEY, false, Map.of(), leaves);
+    return new SimplePlatformDestinationTree<>(false, Map.of(), leaves);
   }
 
   private static MinecraftDestination<ServerWorld, Vector3i> toDestination(Waypoint waypoint) {

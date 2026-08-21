@@ -31,20 +31,15 @@ import org.joml.Vector3i;
  */
 public final class DestinationTree {
 
-  private final String key;
   private boolean strict;
   private final Map<String, Supplier<? extends PlatformDestinationTree<World, Vector3i>>> subTrees =
       new LinkedHashMap<>();
   private final Map<String, Supplier<MinecraftDestination<World, Vector3i>>> destinations =
       new LinkedHashMap<>();
 
-  private DestinationTree(String key) {
-    this.key = key;
-  }
-
   /** Begins a node with the given key (unique among its siblings). */
-  public static DestinationTree node(String key) {
-    return new DestinationTree(key);
+  public static DestinationTree builder() {
+    return new DestinationTree();
   }
 
   /** Marks this level strict — it may never be omitted in commands (no name-promotion). */
@@ -73,17 +68,16 @@ public final class DestinationTree {
   }
 
   /** Adds a child sub-tree from another builder. */
-  public DestinationTree subtree(DestinationTree child) {
-    return subtree(child.key, child::build);
+  public DestinationTree subtree(String key, DestinationTree child) {
+    return subtree(key, child::build);
   }
 
   /** Builds the immutable tree node. */
   public PlatformDestinationTree<World, Vector3i> build() {
-    return new Node(key, strict, Map.copyOf(subTrees), Map.copyOf(destinations));
+    return new Node(strict, Map.copyOf(subTrees), Map.copyOf(destinations));
   }
 
   private record Node(
-      String key,
       boolean strict,
       Map<String, Supplier<? extends PlatformDestinationTree<World, Vector3i>>> subTrees,
       Map<String, Supplier<MinecraftDestination<World, Vector3i>>> destinations)

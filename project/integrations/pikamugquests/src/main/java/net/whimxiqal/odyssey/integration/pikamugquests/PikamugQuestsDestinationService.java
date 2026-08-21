@@ -7,9 +7,9 @@
 
 package net.whimxiqal.odyssey.integration.pikamugquests;
 
-import java.util.Collection;
-import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.Supplier;
 import me.pikamug.quests.Quests;
 import me.pikamug.quests.player.Quester;
 import me.pikamug.quests.quests.Quest;
@@ -42,12 +42,12 @@ final class PikamugQuestsDestinationService implements DestinationService {
   }
 
   @Override
-  public Collection<PlatformDestinationTree<World, Vector3i>> provide(Player player) {
+  public Map<String, Supplier<PlatformDestinationTree<World, Vector3i>>> provide(Player player) {
     Quester quester = quests.getQuester(player.getUniqueId());
     if (quester == null) {
-      return List.of();
+      return Map.of();
     }
-    DestinationTree questNode = DestinationTree.node(QUEST_KEY);
+    DestinationTree questNode = DestinationTree.builder();
     boolean any = false;
     for (Quest quest : quester.getCurrentQuests().keySet()) {
       if (QuestTargets.current(quester, quest) == null) {
@@ -61,7 +61,9 @@ final class PikamugQuestsDestinationService implements DestinationService {
                   QuestTargets.current(quests.getQuester(player.getUniqueId()), quest), label));
       any = true;
     }
-    return any ? List.of(DestinationTree.node(TREE_KEY).subtree(questNode).build()) : List.of();
+    return any
+        ? Map.of(TREE_KEY, () -> DestinationTree.builder().subtree(QUEST_KEY, questNode).build())
+        : Map.of();
   }
 
   /**

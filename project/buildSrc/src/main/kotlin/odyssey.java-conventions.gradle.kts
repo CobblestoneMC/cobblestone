@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "net.whimxiqal.odyssey"
-version = "0.1.0-SNAPSHOT"
+version = "0.0.0-SNAPSHOT"
 
 repositories {
     mavenCentral()

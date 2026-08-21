@@ -10,10 +10,9 @@
  */
 package net.whimxiqal.odyssey.integration.betonquest;
 
-import java.util.Collection;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Supplier;
 import net.whimxiqal.odyssey.paper.plugin.api.Destination;
 import net.whimxiqal.odyssey.paper.plugin.api.DestinationService;
 import net.whimxiqal.odyssey.paper.plugin.api.DestinationTree;
@@ -47,13 +46,13 @@ final class BetonQuestDestinationService implements DestinationService {
   }
 
   @Override
-  public Collection<PlatformDestinationTree<World, Vector3i>> provide(Player player) {
+  public Map<String, Supplier<PlatformDestinationTree<World, Vector3i>>> provide(Player player) {
     OnlineProfile profile = api.profiles().getProfile(player);
     if (profile == null) {
-      return List.of();
+      return Map.of();
     }
     Map<CompassIdentifier, QuestCompass> compasses = api.compasses().forProfile(profile);
-    DestinationTree compass = DestinationTree.node(COMPASS_KEY);
+    DestinationTree compass = DestinationTree.builder();
     boolean any = false;
     for (Map.Entry<CompassIdentifier, QuestCompass> entry : compasses.entrySet()) {
       Location target = CompassTargets.locationOf(entry.getValue(), profile);
@@ -64,7 +63,9 @@ final class BetonQuestDestinationService implements DestinationService {
       compass.leaf(slug(name), Destination.at(target, name));
       any = true;
     }
-    return any ? List.of(DestinationTree.node(TREE_KEY).subtree(compass).build()) : List.of();
+    return any
+        ? Map.of(TREE_KEY, () -> DestinationTree.builder().subtree(COMPASS_KEY, compass).build())
+        : Map.of();
   }
 
   /**

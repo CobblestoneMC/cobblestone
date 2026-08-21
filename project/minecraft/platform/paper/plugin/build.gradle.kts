@@ -35,10 +35,10 @@ dependencies {
 }
 
 // The shaded jar is the shippable artifact; give the thin jar a classifier so they don't collide.
-tasks.named<Jar>("jar") {
+tasks.jar {
     archiveClassifier.set("dev")
 }
-tasks.named<ShadowJar>("shadowJar") {
+tasks.shadowJar {
     archiveClassifier.set("")
     // Concatenate META-INF/services/* across all shaded modules so no ServiceLoader provider
     // (e.g. our OdysseyApi) is dropped when they merge into the single uberjar.
@@ -51,4 +51,15 @@ tasks.named<ShadowJar>("shadowJar") {
 // produces every shippable plugin jar without a separate command.
 tasks.named("assemble") {
     dependsOn(tasks.named("shadowJar"))
+}
+
+tasks.processResources {
+    val props = mapOf(
+        "projectVersion" to project.version,
+    )
+
+    inputs.properties(props)
+    filesMatching("**/paper-plugin.yml") {
+        expand(props)
+    }
 }

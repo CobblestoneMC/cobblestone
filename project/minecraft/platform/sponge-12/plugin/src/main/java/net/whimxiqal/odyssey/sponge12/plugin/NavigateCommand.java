@@ -8,8 +8,10 @@
 package net.whimxiqal.odyssey.sponge12.plugin;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -27,6 +29,7 @@ import net.whimxiqal.odyssey.api.SearchSettings;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftSearchSettings;
 import net.whimxiqal.odyssey.minecraft.api.MinecraftStepPayload;
 import net.whimxiqal.odyssey.minecraft.api.WorldRegion;
+import net.whimxiqal.odyssey.plugin.Permissions;
 import net.whimxiqal.odyssey.plugin.api.MinecraftDestination;
 import net.whimxiqal.odyssey.plugin.api.NavigatorSettings;
 import net.whimxiqal.odyssey.plugin.api.PlatformDestinationTree;
@@ -35,6 +38,7 @@ import net.whimxiqal.odyssey.plugin.command.FlagParser;
 import net.whimxiqal.odyssey.plugin.command.NavigationFlags;
 import net.whimxiqal.odyssey.plugin.destination.DestinationResolver;
 import net.whimxiqal.odyssey.plugin.destination.NavigationPermissions;
+import net.whimxiqal.odyssey.plugin.destination.SimplePlatformDestinationTree;
 import net.whimxiqal.odyssey.plugin.message.Messages;
 import net.whimxiqal.odyssey.plugin.message.OdysseyMessages;
 import net.whimxiqal.odyssey.plugin.search.SearchGate;
@@ -42,7 +46,6 @@ import net.whimxiqal.odyssey.plugin.search.SearchRegistry;
 import net.whimxiqal.odyssey.plugin.trip.GuideSearch;
 import net.whimxiqal.odyssey.plugin.trip.LiveSearch;
 import net.whimxiqal.odyssey.sponge12.SpongeNavigationServiceImpl;
-import net.whimxiqal.odyssey.sponge12.plugin.api.DestinationService;
 import org.spongepowered.api.command.Command;
 import org.spongepowered.api.command.CommandCompletion;
 import org.spongepowered.api.command.CommandResult;
@@ -61,7 +64,6 @@ import org.spongepowered.math.vector.Vector3i;
  */
 final class NavigateCommand {
 
-  static final String PERMISSION_NAVIGATE = "odyssey.navigate";
   // How many words /navigate accepts. Each word is its own parameter (see #build), so this is a
   // hard cap: a destination address plus a flag or two fits comfortably.
   private static final int MAX_WORDS = 8;
@@ -99,7 +101,7 @@ final class NavigateCommand {
     Command.Builder command =
         Command.builder()
             .shortDescription(Component.text("Navigate to a location or destination"))
-            .permission(PERMISSION_NAVIGATE);
+            .permission(Permissions.PERMISSION_NAVIGATE.value());
     for (Parameter.Key<String> key : WORD_KEYS) {
       command.addParameter(
           Parameter.string()
@@ -177,7 +179,8 @@ final class NavigateCommand {
     NavigationFlags flags = parsed.flags();
 
     if (!flags.navigator().equals(FlagParser.DEFAULT_NAVIGATOR)
-        && !player.hasPermission(PERMISSION_NAVIGATOR_PREFIX + flags.navigator())) {
+        && !player.hasPermission(
+            Permissions.PERMISSION_NAVIGATOR.value() + "." + flags.navigator())) {
       messages.send(player, locale, OdysseyMessages.NO_PERMISSION);
       return;
     }
@@ -416,11 +419,14 @@ final class NavigateCommand {
             player::hasPermission);
   }
 
-  private static List<PlatformDestinationTree<ServerWorld, Vector3i>> destinationRoots(
+  private static Map<String, PlatformDestinationTree<ServerWorld, Vector3i>> destinationRoots(
       SpongeIntegrationRegistry integrations, ServerPlayer player) {
-    List<PlatformDestinationTree<ServerWorld, Vector3i>> roots = new ArrayList<>();
-    for (DestinationService provider : integrations.destinationProviders()) {
-      roots.addAll(provider.provide(player));
+    Map<String, PlatformDestinationTree<ServerWorld, Vector3i>> roots = new HashMap<>();
+    for (var provider : integrations.destinationProviders().entrySet()) {
+      roots.put(
+          provider.getKey(),
+          new SimplePlatformDestinationTree<>(
+              false, provider.getValue().provide(player), Map.of()));
     }
     return roots;
   }
