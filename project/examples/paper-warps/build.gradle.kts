@@ -1,14 +1,14 @@
 // example-warps — a self-contained example integration plugin. It shows a third-party developer how
-// to teach Odyssey new travel routes: register a PaperTransitionProvider that surfaces named "warps"
+// to teach Cobblestone new travel routes: register a PaperTransitionProvider that surfaces named "warps"
 // (walk to the warp anchor, run /warp <name> to teleport) as cross-world graph edges.
 //
-// Deliberately lightweight: it compiles against Odyssey's published API only and ships a *thin* jar
-// with no shading. The odyssey.* API classes it references are provided at runtime by the Odyssey
+// Deliberately lightweight: it compiles against Cobblestone's published API only and ships a *thin* jar
+// with no shading. The cobblestone.* API classes it references are provided at runtime by the Cobblestone
 // plugin, which this plugin depends on (see paper-plugin.yml). This is exactly what a real integration
-// (OdysseyEssentials, OdysseyCitizens, …) would do.
+// (CobblestoneEssentials, CobblestoneCitizens, …) would do.
 
 plugins {
-    id("odyssey.java-conventions")
+    id("cobblestone.java-conventions")
 }
 
 java {
@@ -26,7 +26,7 @@ repositories {
 }
 
 dependencies {
-    // Odyssey's transition-provider API. compileOnly: the classes are inside the Odyssey plugin jar at
+    // Cobblestone's transition-provider API. compileOnly: the classes are inside the Cobblestone plugin jar at
     // runtime, so we must not bundle our own copy (that would split the type identity across loaders).
     compileOnly(project(":minecraft:platform:paper:paper-api"))
     compileOnly(project(":minecraft:platform:paper:paper-plugin-api"))

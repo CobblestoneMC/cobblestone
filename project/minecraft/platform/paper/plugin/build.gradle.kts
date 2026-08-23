@@ -1,11 +1,11 @@
-// paper-plugin — the shippable Paper/Folia plugin. Only our own net.whimxiqal.odyssey.* modules are
+// paper-plugin — the shippable Paper/Folia plugin. Only our own org.cobblestonemc.* modules are
 // shaded into the jar (they are not on a public Maven repo); third-party runtime libraries (SnakeYAML
 // now; JDBC/bStats/etc. later) are declared in the paper-plugin.yml loader and downloaded by Paper's
 // MavenLibraryResolver at runtime. Adventure and paper-api are provided by the server. (design/07)
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
-    id("odyssey.java-conventions")
+    id("cobblestone.java-conventions")
     alias(libs.plugins.shadow)
 }
 
@@ -34,14 +34,14 @@ dependencies {
     compileOnly(libs.adventure.api)
 }
 
-// The shaded jar is the shippable artifact: it is the only one named `Odyssey-Paper-<version>-all.jar`,
+// The shaded jar is the shippable artifact: it is the only one named `Cobblestone-Paper-<version>-all.jar`,
 // so CI (and admins) can identify it by name alone rather than by ruling other jars out.
 tasks.shadowJar {
-    archiveBaseName.set("Odyssey-Paper")
+    archiveBaseName.set("Cobblestone-Paper")
     // Concatenate META-INF/services/* across all shaded modules so no ServiceLoader provider
-    // (e.g. our OdysseyApi) is dropped when they merge into the single uberjar.
+    // (e.g. our CobblestoneApi) is dropped when they merge into the single uberjar.
     mergeServiceFiles()
-    relocate("org.bstats", "net.whimxiqal.odyssey.libs.bstats")
+    relocate("org.bstats", "org.cobblestonemc.libs.bstats")
 }
 
 // Make the shaded plugin jar part of the normal build, so a single `./gradlew build` at the repo root

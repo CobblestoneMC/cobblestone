@@ -1,15 +1,15 @@
-// odyssey-betonquest — connects BetonQuest to Odyssey. When a player sets their quest compass to a
-// target, it starts (or replaces) a guided Odyssey trip there; it also surfaces each of the player's
+// cobblestone-betonquest — connects BetonQuest to Cobblestone. When a player sets their quest compass to a
+// target, it starts (or replaces) a guided Cobblestone trip there; it also surfaces each of the player's
 // active quest compasses as a `/navigate compass <name>` destination. A thin, un-shaded jar: it
-// compiles against Odyssey's published API and the BetonQuest API, both provided at runtime.
+// compiles against Cobblestone's published API and the BetonQuest API, both provided at runtime.
 //
 // LICENSING NOTE: BetonQuest is GPL-3.0 (the other integrations' target plugins are MIT). This module
 // only compiles against BetonQuest's addon API (compileOnly) and links to it at runtime like any
 // BetonQuest addon; it ships no BetonQuest code. If distributed, consider whether this module should
-// carry a GPL-compatible license rather than Odyssey's MIT.
+// carry a GPL-compatible license rather than Cobblestone's MIT.
 
 plugins {
-    id("odyssey.java-conventions")
+    id("cobblestone.java-conventions")
 }
 
 java {
@@ -33,7 +33,7 @@ repositories {
 }
 
 dependencies {
-    // Odyssey's published API — provided at runtime by the Odyssey plugin, so compileOnly only.
+    // Cobblestone's published API — provided at runtime by the Cobblestone plugin, so compileOnly only.
     compileOnly(project(":minecraft:platform:paper:paper-api"))
     compileOnly(project(":minecraft:platform:paper:paper-plugin-api"))
     // The server API (Bukkit/Paper) and BetonQuest, both provided at runtime. BetonQuest's addon

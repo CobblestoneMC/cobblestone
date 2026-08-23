@@ -1,14 +1,14 @@
-# OdysseyBetonQuest — guide players to their BetonQuest quest-compass targets.
+# CobblestoneBetonQuest — guide players to their BetonQuest quest-compass targets.
 #
 # When a player sets their quest compass to a target (via the compass item or command),
-# OdysseyBetonQuest can start a guided Odyssey trip there. Each of the player's active quest compasses
+# CobblestoneBetonQuest can start a guided Cobblestone trip there. Each of the player's active quest compasses
 # is also offered as a `/navigate compass <name>` destination.
 
 # Whether to automatically start a trip when a player sets their quest compass. Individual compasses
 # can override below.
 auto-navigate: true
 
-# The navigator (display style) to guide compass trips with. "trail" is Odyssey's built-in particle
+# The navigator (display style) to guide compass trips with. "trail" is Cobblestone's built-in particle
 # trail; particles/colors below only apply to it.
 navigator: trail
 

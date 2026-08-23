@@ -1,10 +1,10 @@
-// odyssey-citizens — connects Citizens to Odyssey. It surfaces the server's Citizens NPCs as
+// cobblestone-citizens — connects Citizens to Cobblestone. It surfaces the server's Citizens NPCs as
 // navigable destinations (`/navigate citizens npc <name>`), so a player can walk to any NPC. A thin,
-// un-shaded jar: it compiles against Odyssey's published API and the Citizens API, both provided at
+// un-shaded jar: it compiles against Cobblestone's published API and the Citizens API, both provided at
 // runtime.
 
 plugins {
-    id("odyssey.java-conventions")
+    id("cobblestone.java-conventions")
 }
 
 java {
@@ -25,7 +25,7 @@ repositories {
 }
 
 dependencies {
-    // Odyssey's published API — provided at runtime by the Odyssey plugin, so compileOnly only.
+    // Cobblestone's published API — provided at runtime by the Cobblestone plugin, so compileOnly only.
     compileOnly(project(":minecraft:platform:paper:paper-api"))
     compileOnly(project(":minecraft:platform:paper:paper-plugin-api"))
     // The server API (Bukkit/Paper) and the Citizens API, both provided at runtime. Citizens only

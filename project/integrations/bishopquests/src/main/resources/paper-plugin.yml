@@ -1,14 +1,14 @@
-name: OdysseyBishopQuests
+name: CobblestoneBishopQuests
 version: '0.1.0-SNAPSHOT'
-description: Odyssey integration for LMBishop Quests — guide players to their tracked quest objectives.
+description: Cobblestone integration for LMBishop Quests — guide players to their tracked quest objectives.
 author: whimxiqal
-website: https://github.com/whimxiqal/Odyssey
-main: net.whimxiqal.odyssey.integration.bishopquests.OdysseyBishopQuestsPlugin
+website: https://cobblestonemc.org
+main: org.cobblestonemc.integration.bishopquests.CobblestoneBishopQuestsPlugin
 api-version: '1.21'
 folia-supported: false
 dependencies:
   server:
-    odyssey:
+    cobblestone:
       load: BEFORE
     Quests:
       load: BEFORE

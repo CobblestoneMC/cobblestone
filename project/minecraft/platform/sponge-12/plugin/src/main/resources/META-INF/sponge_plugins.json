@@ -7,7 +7,7 @@
   "global": {
     "version": "$projectVersion",
     "links": {
-      "homepage": "https://github.com/whimxiqal/odyssey"
+      "homepage": "https://cobblestonemc.org"
     },
     "contributors": [
       {
@@ -26,10 +26,10 @@
   },
   "plugins": [
     {
-      "id": "odyssey",
-      "name": "Odyssey",
+      "id": "cobblestone",
+      "name": "Cobblestone",
       "description": "A Minecraft navigation plugin.",
-      "entrypoint": "net.whimxiqal.odyssey.sponge12.plugin.OdysseySpongePlugin"
+      "entrypoint": "org.cobblestonemc.sponge12.plugin.CobblestoneSpongePlugin"
     }
   ]
 }

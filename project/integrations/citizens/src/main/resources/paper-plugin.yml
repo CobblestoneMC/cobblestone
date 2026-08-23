@@ -1,14 +1,14 @@
-name: OdysseyCitizens
+name: CobblestoneCitizens
 version: '0.1.0-SNAPSHOT'
-description: Odyssey integration for Citizens — navigate to any NPC.
+description: Cobblestone integration for Citizens — navigate to any NPC.
 author: whimxiqal
-website: https://github.com/whimxiqal/Odyssey
-main: net.whimxiqal.odyssey.integration.citizens.OdysseyCitizensPlugin
+website: https://cobblestonemc.org
+main: org.cobblestonemc.integration.citizens.CobblestoneCitizensPlugin
 api-version: '1.21'
 folia-supported: false
 dependencies:
   server:
-    odyssey:
+    cobblestone:
       load: BEFORE
     Citizens:
       load: BEFORE

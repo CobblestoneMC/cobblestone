@@ -1,14 +1,14 @@
-name: OdysseyEssentials
+name: CobblestoneEssentials
 version: '0.1.0-SNAPSHOT'
-description: Odyssey integration for EssentialsX — navigate to /home and /spawn.
+description: Cobblestone integration for EssentialsX — navigate to /home and /spawn.
 author: whimxiqal
-website: https://github.com/whimxiqal/Odyssey
-main: net.whimxiqal.odyssey.integration.essentials.OdysseyEssentialsPlugin
+website: https://cobblestonemc.org
+main: org.cobblestonemc.integration.essentials.CobblestoneEssentialsPlugin
 api-version: '1.21'
 folia-supported: false
 dependencies:
   server:
-    odyssey:
+    cobblestone:
       load: BEFORE
     Essentials:
       load: BEFORE

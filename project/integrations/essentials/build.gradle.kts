@@ -1,10 +1,10 @@
-// odyssey-essentials — connects EssentialsX to Odyssey. It surfaces the player's /home and /spawn
+// cobblestone-essentials — connects EssentialsX to Cobblestone. It surfaces the player's /home and /spawn
 // teleports as navigable destinations and as COMMAND transitions (a route may "use" the teleport as a
 // wormhole and prompt the player to run the command). A thin, un-shaded jar: it compiles against
-// Odyssey's published API and the EssentialsX API, both provided at runtime.
+// Cobblestone's published API and the EssentialsX API, both provided at runtime.
 
 plugins {
-    id("odyssey.java-conventions")
+    id("cobblestone.java-conventions")
 }
 
 java {
@@ -25,7 +25,7 @@ repositories {
 }
 
 dependencies {
-    // Odyssey's published API — provided at runtime by the Odyssey plugin, so compileOnly only.
+    // Cobblestone's published API — provided at runtime by the Cobblestone plugin, so compileOnly only.
     compileOnly(project(":minecraft:platform:paper:paper-api"))
     compileOnly(project(":minecraft:platform:paper:paper-plugin-api"))
     // The server API (Bukkit/Paper) and EssentialsX, both provided at runtime. EssentialsX is fetched

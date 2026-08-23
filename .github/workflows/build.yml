@@ -84,12 +84,12 @@ jobs:
       - name: Upload Paper plugin
         uses: actions/upload-artifact@v7
         with:
-          name: Odyssey-Paper
-          path: project/minecraft/platform/paper/plugin/build/libs/Odyssey-Paper-*-all.jar
+          name: Cobblestone-Paper
+          path: project/minecraft/platform/paper/plugin/build/libs/Cobblestone-Paper-*-all.jar
           if-no-files-found: error
       - name: Upload Sponge plugin
         uses: actions/upload-artifact@v7
         with:
-          name: Odyssey-Sponge
-          path: project/minecraft/platform/sponge-12/plugin/build/libs/Odyssey-Sponge-*-all.jar
+          name: Cobblestone-Sponge
+          path: project/minecraft/platform/sponge-12/plugin/build/libs/Cobblestone-Sponge-*-all.jar
           if-no-files-found: error

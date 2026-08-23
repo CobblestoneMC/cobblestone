@@ -1,29 +1,29 @@
-name: odyssey
+name: cobblestone
 version: $projectVersion
 description: A Minecraft navigation plugin.
 author: whimxiqal
-website: https://github.com/whimxiqal/Odyssey
-main: net.whimxiqal.odyssey.paper.plugin.OdysseyPaperPlugin
-loader: net.whimxiqal.odyssey.paper.plugin.PaperOdysseyLoader
+website: https://cobblestonemc.org
+main: org.cobblestonemc.paper.plugin.CobblestonePaperPlugin
+loader: plugin.paper.org.cobblestonemc.PaperCobblestoneLoader
 api-version: '1.21'
 folia-supported: true
 
 permissions:
-  odyssey.navigate:
+  cobblestone.navigate:
     description: "Use of /navigate and the trip commands that manage its results"
     default: true
-  odyssey.navigator:
-    description: "Use of custom navigators (the parent of odyssey.navigator.<id>)"
+  cobblestone.navigator:
+    description: "Use of custom navigators (the parent of cobblestone.navigator.<id>)"
     default: true
-  odyssey.location:
+  cobblestone.location:
     description: "Use of personal locations"
     default: true
-  odyssey.admin.reload:
-    description: "Reload the Odyssey configuration"
+  cobblestone.admin.reload:
+    description: "Reload the Cobblestone configuration"
     default: op
-  odyssey.admin.portals:
+  cobblestone.admin.portals:
     description: "Clear discovered portals"
     default: op
-  odyssey.admin.location.global:
+  cobblestone.admin.location.global:
     description: "Manage server-wide locations (-global)"
     default: op
