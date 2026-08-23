@@ -27,7 +27,10 @@ public class DataStoreException extends RuntimeException {
   }
 
   public static class NoDriver extends DataStoreException {
-    String missingDriver;
+
+    private static final long serialVersionUID = 1L;
+
+    private final String missingDriver;
 
     public NoDriver(String missingDriver, Throwable cause) {
       super("Missing driver " + missingDriver, cause);
