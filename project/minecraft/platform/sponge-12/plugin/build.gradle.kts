@@ -4,7 +4,7 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
-    id("odyssey.java-conventions")
+    id("cobblestone.java-conventions")
     alias(libs.plugins.shadow)
 }
 
@@ -35,15 +35,15 @@ dependencies {
     compileOnly(libs.adventure.api)
 }
 
-// The shaded jar is the shippable artifact: it is the only one named `Odyssey-Sponge-<version>-all.jar`,
+// The shaded jar is the shippable artifact: it is the only one named `Cobblestone-Sponge-<version>-all.jar`,
 // so CI (and admins) can identify it by name alone rather than by ruling other jars out.
 tasks.named<ShadowJar>("shadowJar") {
-    archiveBaseName.set("Odyssey-Sponge")
+    archiveBaseName.set("Cobblestone-Sponge")
 
-    relocate("org.yaml.snakeyaml", "net.whimxiqal.odyssey.libs.snakeyaml")
-    relocate("org.bstats", "net.whimxiqal.odyssey.libs.bstats")
-//    relocate("org.sqlite", "net.whimxiqal.odyssey.libs.sqlite")
-    relocate("org.h2", "net.whimxiqal.odyssey.libs.h2")
+    relocate("org.yaml.snakeyaml", "org.cobblestonemc.libs.snakeyaml")
+    relocate("org.bstats", "org.cobblestonemc.libs.bstats")
+//    relocate("org.sqlite", "org.cobblestonemc.libs.sqlite")
+    relocate("org.h2", "org.cobblestonemc.libs.h2")
 }
 
 tasks.named("build") {

@@ -2,17 +2,17 @@ pluginManagement {
     repositories {
         gradlePluginPortal()
         mavenCentral()
-        // The Typewriter module-plugin (for the odyssey-typewriter extension). The 2.1.x line (for
+        // The Typewriter module-plugin (for the cobblestone-typewriter extension). The 2.1.x line (for
         // engine 0.9) currently lives on the beta channel.
         maven("https://maven.typewritermc.com/releases")
         maven("https://maven.typewritermc.com/beta")
     }
 }
 
-rootProject.name = "odyssey"
+rootProject.name = "cobblestone"
 
 // All subprojects live flat under project/ and are named exactly as in design/01-modules-and-build.md.
-// Integration plugins (OdysseyCitizens, OdysseyEssentials, …) are added in Phase 8; they depend on
+// Integration plugins (CobblestoneCitizens, CobblestoneEssentials, …) are added in Phase 8; they depend on
 // third-party plugin APIs not yet wired here.
 include(":api")
 include(":core")
@@ -44,26 +44,26 @@ include(":minecraft:platform:sponge-12:plugin")
 project(":minecraft:platform:sponge-12:plugin").name = "sponge-12-plugin"
 
 // Example integration plugins live under examples/ — self-contained, third-party-style plugins that
-// depend only on Odyssey's published API to demonstrate extending navigation (design/08).
+// depend only on Cobblestone's published API to demonstrate extending navigation (design/08).
 include(":examples:paper-warps")
 project(":examples:paper-warps").name = "example-warps"
 
-// Real integration plugins live under integrations/ — each connects one third-party plugin to Odyssey.
+// Real integration plugins live under integrations/ — each connects one third-party plugin to Cobblestone.
 include(":integrations:essentials")
-project(":integrations:essentials").name = "odyssey-essentials"
+project(":integrations:essentials").name = "cobblestone-essentials"
 include(":integrations:towny")
-project(":integrations:towny").name = "odyssey-towny"
+project(":integrations:towny").name = "cobblestone-towny"
 include(":integrations:pikamugquests")
-project(":integrations:pikamugquests").name = "odyssey-pikamugquests"
+project(":integrations:pikamugquests").name = "cobblestone-pikamugquests"
 include(":integrations:beautyquests")
-project(":integrations:beautyquests").name = "odyssey-beautyquests"
+project(":integrations:beautyquests").name = "cobblestone-beautyquests"
 include(":integrations:betonquest")
-project(":integrations:betonquest").name = "odyssey-betonquest"
+project(":integrations:betonquest").name = "cobblestone-betonquest"
 // disabled until proper jar file is available
 //include(":integrations:bishopquests")
-//project(":integrations:bishopquests").name = "odyssey-bishopquests"
+//project(":integrations:bishopquests").name = "cobblestone-bishopquests"
 // A Typewriter extension (Kotlin), not a Bukkit plugin — built with Typewriter's own module-plugin.
 include(":integrations:typewriter")
-project(":integrations:typewriter").name = "odyssey-typewriter"
+project(":integrations:typewriter").name = "cobblestone-typewriter"
 include(":integrations:citizens")
-project(":integrations:citizens").name = "odyssey-citizens"
+project(":integrations:citizens").name = "cobblestone-citizens"

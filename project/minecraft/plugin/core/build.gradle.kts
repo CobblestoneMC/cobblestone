@@ -1,5 +1,5 @@
 plugins {
-    id("odyssey.java-conventions")
+    id("cobblestone.java-conventions")
 }
 
 dependencies {

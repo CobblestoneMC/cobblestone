@@ -1,14 +1,14 @@
-# OdysseyBeautyQuests — guide players to their BeautyQuests stages.
+# CobblestoneBeautyQuests — guide players to their BeautyQuests stages.
 #
 # When a player advances to a new quest stage that has a precise location (a "reach location", an NPC
-# to talk to), OdysseyBeautyQuests can start a guided Odyssey trip there. Each started quest's current
+# to talk to), CobblestoneBeautyQuests can start a guided Cobblestone trip there. Each started quest's current
 # locatable stage is also offered as a `/navigate quest <name>` destination.
 
 # Whether to automatically start a trip when a player advances to a locatable quest stage. Individual
 # quests can override below.
 auto-navigate: true
 
-# The navigator (display style) to guide quest trips with. "trail" is Odyssey's built-in particle
+# The navigator (display style) to guide quest trips with. "trail" is Cobblestone's built-in particle
 # trail; particles/colors below only apply to it.
 navigator: trail
 

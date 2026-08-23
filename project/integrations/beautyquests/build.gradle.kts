@@ -1,15 +1,15 @@
-// odyssey-beautyquests — connects SkytAsul's BeautyQuests to Odyssey. When a player advances to a
+// cobblestone-beautyquests — connects SkytAsul's BeautyQuests to Cobblestone. When a player advances to a
 // new quest stage that has a precise location (a "reach location", an NPC to talk to), it starts (or
-// replaces) a guided Odyssey trip there; it also surfaces each started quest's current locatable
+// replaces) a guided Cobblestone trip there; it also surfaces each started quest's current locatable
 // stage as a `/navigate quest <name>` destination. A thin, un-shaded jar: it compiles against
-// Odyssey's published API and the BeautyQuests API, both provided at runtime.
+// Cobblestone's published API and the BeautyQuests API, both provided at runtime.
 //
 // NOTE ON VERSION: we target the RELEASED BeautyQuests API (fr.skytasul:beautyquests-api:1.0.4, the
 // PlayerAccount model), which is what servers run — not the unreleased 2.0 "Quester" rewrite that is
 // not yet published to Maven.
 
 plugins {
-    id("odyssey.java-conventions")
+    id("cobblestone.java-conventions")
 }
 
 java {
@@ -30,7 +30,7 @@ repositories {
 }
 
 dependencies {
-    // Odyssey's published API — provided at runtime by the Odyssey plugin, so compileOnly only.
+    // Cobblestone's published API — provided at runtime by the Cobblestone plugin, so compileOnly only.
     compileOnly(project(":minecraft:platform:paper:paper-api"))
     compileOnly(project(":minecraft:platform:paper:paper-plugin-api"))
     // The server API (Bukkit/Paper) and BeautyQuests, both provided at runtime. BeautyQuests is

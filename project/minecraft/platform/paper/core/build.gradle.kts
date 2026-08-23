@@ -1,5 +1,5 @@
 plugins {
-    id("odyssey.publish-conventions")
+    id("cobblestone.publish-conventions")
 }
 
 java {

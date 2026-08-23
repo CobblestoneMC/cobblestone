@@ -1,0 +1,12 @@
+/*
+ * Cobblestone — a Minecraft navigation plugin.
+ * Copyright (c) 2026 whimxiqal.
+ *
+ * Licensed under the MIT License. See the LICENSE file in the project root for full text.
+ */
+
+/**
+ * The Paper-native binding of Cobblestone's plugin-extension API. Depend on this to integrate with
+ * the installed Cobblestone plugin using {@code org.bukkit} types.
+ */
+package org.cobblestonemc.paper.plugin.api;

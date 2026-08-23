@@ -1,14 +1,14 @@
-name: OdysseyWarps
+name: CobblestoneWarps
 version: '0.1.0-SNAPSHOT'
-description: Example Odyssey integration — surfaces named /warp points as navigable routes.
+description: Example Cobblestone integration — surfaces named /warp points as navigable routes.
 author: whimxiqal
-website: https://github.com/whimxiqal/Odyssey
-main: net.whimxiqal.odyssey.example.warps.OdysseyWarpsPlugin
+website: https://cobblestonemc.org
+main: org.cobblestonemc.example.warps.CobblestoneWarpsPlugin
 api-version: '1.21'
 folia-supported: true
-# We register our PaperTransitionProvider into Odyssey's service and use its API types, so Odyssey must
+# We register our PaperTransitionProvider into Cobblestone's service and use its API types, so Cobblestone must
 # be present and loaded first. A hard dependency guarantees both.
 dependencies:
   server:
-    odyssey:
+    cobblestone:
       load: BEFORE

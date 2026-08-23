@@ -1,14 +1,14 @@
-name: OdysseyPikamugQuests
+name: CobblestonePikamugQuests
 version: '0.1.0-SNAPSHOT'
-description: Odyssey integration for PikaMug Quests — guide players to their quest objectives.
+description: Cobblestone integration for PikaMug Quests — guide players to their quest objectives.
 author: whimxiqal
-website: https://github.com/whimxiqal/Odyssey
-main: net.whimxiqal.odyssey.integration.pikamugquests.OdysseyPikamugQuestsPlugin
+website: https://cobblestonemc.org
+main: org.cobblestonemc.integration.pikamugquests.CobblestonePikamugQuestsPlugin
 api-version: '1.21'
 folia-supported: false
 dependencies:
   server:
-    odyssey:
+    cobblestone:
       load: BEFORE
     Quests:
       load: BEFORE

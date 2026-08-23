@@ -2,7 +2,7 @@
 // internal-but-required dependency (the supported paper-plugin-api extends types from here). First
 // module to use Kyori Adventure, so destination names and messages are rich Components. (design/06)
 plugins {
-    id("odyssey.publish-conventions")
+    id("cobblestone.publish-conventions")
 }
 
 dependencies {

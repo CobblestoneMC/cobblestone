@@ -1,14 +1,14 @@
-# OdysseyQuests — guide players to their Quests objectives.
+# CobblestoneQuests — guide players to their Quests objectives.
 #
 # When a quest's compass target updates for a player (accepting a quest, advancing a stage, an
-# objective moving), OdysseyQuests can start a guided Odyssey trip to that objective. Each active
+# objective moving), CobblestoneQuests can start a guided Cobblestone trip to that objective. Each active
 # quest's current locatable objective is also offered as a `/navigate quest <name>` destination.
 
 # Whether to automatically start a trip when a quest's compass target updates. Players who never use
 # the vanilla quest compass simply never trigger this. Individual quests can override below.
 auto-navigate: true
 
-# The navigator (display style) to guide quest trips with. "trail" is Odyssey's built-in particle
+# The navigator (display style) to guide quest trips with. "trail" is Cobblestone's built-in particle
 # trail; particles/colors below only apply to it.
 navigator: trail
 

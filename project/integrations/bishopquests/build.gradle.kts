@@ -1,11 +1,11 @@
-// odyssey-bishopquests — connects LMBishop's Quests to Odyssey. When a player tracks a quest, it
-// starts (or replaces) a guided Odyssey trip to that quest's current "position" objective; it also
+// cobblestone-bishopquests — connects LMBishop's Quests to Cobblestone. When a player tracks a quest, it
+// starts (or replaces) a guided Cobblestone trip to that quest's current "position" objective; it also
 // surfaces each started quest's position objective as a `/navigate quests quest <name>` destination.
-// A thin, un-shaded jar: it compiles against Odyssey's published API and the Quests API, both
+// A thin, un-shaded jar: it compiles against Cobblestone's published API and the Quests API, both
 // provided at runtime.
 
 plugins {
-    id("odyssey.java-conventions")
+    id("cobblestone.java-conventions")
 }
 
 java {
@@ -26,7 +26,7 @@ repositories {
 }
 
 dependencies {
-    // Odyssey's published API — provided at runtime by the Odyssey plugin, so compileOnly only.
+    // Cobblestone's published API — provided at runtime by the Cobblestone plugin, so compileOnly only.
     compileOnly(project(":minecraft:platform:paper:paper-api"))
     compileOnly(project(":minecraft:platform:paper:paper-plugin-api"))
     // The server API (Bukkit/Paper) and LMBishop Quests, both provided at runtime. Quests is vendored

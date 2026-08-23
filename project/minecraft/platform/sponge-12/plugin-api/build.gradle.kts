@@ -1,8 +1,8 @@
 // sponge-12-plugin-api — the published Sponge-native binding of the plugin-extension surface. Other
-// Sponge plugins depend on this to register destinations/navigators with the installed Odyssey
+// Sponge plugins depend on this to register destinations/navigators with the installed Cobblestone
 // plugin and reach navigation in native ServerPlayer/ServerLocation terms. (design/06, design/07)
 plugins {
-    id("odyssey.publish-conventions")
+    id("cobblestone.publish-conventions")
 }
 
 java {

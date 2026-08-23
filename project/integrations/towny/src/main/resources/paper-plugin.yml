@@ -1,14 +1,14 @@
-name: OdysseyTowny
+name: CobblestoneTowny
 version: '0.1.0-SNAPSHOT'
-description: Odyssey integration for Towny — navigate to towns/plots/outposts, route through spawns, respect build protection.
+description: Cobblestone integration for Towny — navigate to towns/plots/outposts, route through spawns, respect build protection.
 author: whimxiqal
-website: https://github.com/whimxiqal/Odyssey
-main: net.whimxiqal.odyssey.integration.towny.OdysseyTownyPlugin
+website: https://cobblestonemc.org
+main: org.cobblestonemc.integration.towny.CobblestoneTownyPlugin
 api-version: '1.21'
 folia-supported: false
 dependencies:
   server:
-    odyssey:
+    cobblestone:
       load: BEFORE
     Towny:
       load: BEFORE
