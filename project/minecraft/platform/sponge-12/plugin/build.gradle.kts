@@ -35,13 +35,10 @@ dependencies {
     compileOnly(libs.adventure.api)
 }
 
-// The shaded jar is the shippable artifact; give the thin jar a classifier so they don't collide.
-tasks.named<Jar>("jar") {
-    archiveClassifier.set("dev")
-}
-
+// The shaded jar is the shippable artifact: it is the only one named `Odyssey-Sponge-<version>-all.jar`,
+// so CI (and admins) can identify it by name alone rather than by ruling other jars out.
 tasks.named<ShadowJar>("shadowJar") {
-    archiveClassifier.set("")
+    archiveBaseName.set("Odyssey-Sponge")
 
     relocate("org.yaml.snakeyaml", "net.whimxiqal.odyssey.libs.snakeyaml")
     relocate("org.bstats", "net.whimxiqal.odyssey.libs.bstats")

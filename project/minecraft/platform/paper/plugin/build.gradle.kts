@@ -34,16 +34,13 @@ dependencies {
     compileOnly(libs.adventure.api)
 }
 
-// The shaded jar is the shippable artifact; give the thin jar a classifier so they don't collide.
-tasks.jar {
-    archiveClassifier.set("dev")
-}
+// The shaded jar is the shippable artifact: it is the only one named `Odyssey-Paper-<version>-all.jar`,
+// so CI (and admins) can identify it by name alone rather than by ruling other jars out.
 tasks.shadowJar {
-    archiveClassifier.set("")
+    archiveBaseName.set("Odyssey-Paper")
     // Concatenate META-INF/services/* across all shaded modules so no ServiceLoader provider
     // (e.g. our OdysseyApi) is dropped when they merge into the single uberjar.
     mergeServiceFiles()
-    // Relocate bStats so it never clashes with another plugin's bundled copy (design/10).
     relocate("org.bstats", "net.whimxiqal.odyssey.libs.bstats")
 }
 
