@@ -187,7 +187,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                           tripManager,
                           searchRegistry),
                       "Cobblestone admin and utility commands",
-                      List.of("ody"));
+                      List.of("stone"));
               event
                   .registrar()
                   .register(

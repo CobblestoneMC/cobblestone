@@ -29,7 +29,7 @@ import org.bukkit.entity.Player;
 
 /**
  * The commands: {@code /warp <name>} (the teleport players run — and the one Cobblestone prompts on
- * a routed command warp) and {@code /odywarp …} to manage destinations, warps, and portals. Built
+ * a routed command warp) and {@code /cobwarp …} to manage destinations, warps, and portals. Built
  * with Paper's Brigadier {@link Commands} API.
  */
 final class WarpCommands {
@@ -53,9 +53,9 @@ final class WarpCommands {
         .build();
   }
 
-  /** Builds the {@code /odywarp} management tree. */
+  /** Builds the {@code /cobwarp} management tree. */
   static LiteralCommandNode<CommandSourceStack> admin(WarpStore store, Selections selections) {
-    return Commands.literal("odywarp")
+    return Commands.literal("cobwarp")
         .requires(source -> source.getSender().hasPermission(PERMISSION_ADMIN))
         .then(
             Commands.literal("create")
@@ -189,7 +189,7 @@ final class WarpCommands {
                 ? "Moved destination '" + name + "' here; all portals to it now lead here."
                 : "Created destination '"
                     + name
-                    + "'. Link a portal with /odywarp create portal <name> "
+                    + "'. Link a portal with /cobwarp create portal <name> "
                     + name
                     + ".",
             NamedTextColor.GREEN));
@@ -234,7 +234,7 @@ final class WarpCommands {
           player,
           "No destination named '"
               + destination
-              + "'. Create it first with /odywarp create destination "
+              + "'. Create it first with /cobwarp create destination "
               + destination
               + ".");
       return 0;
@@ -259,7 +259,7 @@ final class WarpCommands {
       error(
           player,
           "Only one corner is selected. Set the other with the wooden shovel, "
-              + "or clear it with /odywarp selection clear.");
+              + "or clear it with /cobwarp selection clear.");
       return 0;
     } else {
       portal =

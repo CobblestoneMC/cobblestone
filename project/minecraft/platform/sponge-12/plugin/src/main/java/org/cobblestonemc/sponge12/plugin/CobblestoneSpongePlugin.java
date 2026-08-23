@@ -225,7 +225,7 @@ public final class CobblestoneSpongePlugin {
             tripManager,
             searchRegistry),
         "cobblestone",
-        "ody");
+        "stone");
     event.register(
         container,
         NavigateCommand.build(
