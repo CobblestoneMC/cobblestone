@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.sponge12.plugin;
 
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,7 @@ import org.cobblestonemc.plugin.destination.SimplePlatformDestinationTree;
 import org.cobblestonemc.sponge12.api.SingleCellWorldRegion;
 import org.cobblestonemc.sponge12.api.WholeWorldRegion;
 import org.cobblestonemc.sponge12.plugin.api.DestinationService;
+import org.cobblestonemc.sponge12.plugin.api.DestinationTree;
 import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
@@ -94,24 +96,36 @@ public final class CobblestoneDestinationService implements DestinationService {
 
   private PlatformDestinationTree<ServerWorld, Vector3i> provideWorldDestinationTree(
       ServerPlayer player) {
-    String currentKey = player.world().key().asString();
-    Map<String, Supplier<MinecraftDestination<ServerWorld, Vector3i>>> leaves =
-        new LinkedHashMap<>();
-    for (ServerWorld world : Sponge.server().worldManager().worlds()) {
-      String worldKey = world.key().asString();
-      if (worldKey.equals(currentKey)) {
+    var currentKey = player.world().key();
+    Map<String, Map<String, ServerWorld>> namespacedWorlds = new HashMap<>();
+    for (var world : Sponge.server().worldManager().worlds()) {
+      var key = world.key();
+      if (key.equals(currentKey)) {
         continue; // no point navigating to the world you're already in
       }
-      leaves.put(
-          worldKey,
-          () -> {
-            WorldRegion<ServerWorld, Vector3i> region = new WholeWorldRegion(worldKey);
-            Destination<WorldRegion<ServerWorld, Vector3i>> destination = () -> List.of(region);
-            return new SimpleMinecraftDestination<>(
-                destination, Component.text(worldKey), List.of());
-          });
+      namespacedWorlds
+          .computeIfAbsent(key.key().namespace(), k -> new HashMap<>())
+          .put(key.value(), world);
     }
-    return new SimplePlatformDestinationTree<>(false, Map.of(), leaves);
+    var subTrees = DestinationTree.emptySubTrees();
+    for (var namespace : namespacedWorlds.entrySet()) {
+      var worldLeaves = DestinationTree.emptyLeaves();
+      for (var value : namespace.getValue().entrySet()) {
+        worldLeaves.put(
+            value.getKey(),
+            () -> {
+              WorldRegion<ServerWorld, Vector3i> region =
+                  new WholeWorldRegion(value.getValue().key().asString());
+              Destination<WorldRegion<ServerWorld, Vector3i>> destination = () -> List.of(region);
+              return new SimpleMinecraftDestination<>(
+                  destination, Component.text(value.getValue().key().asString()), List.of());
+            });
+      }
+      subTrees.put(
+          namespace.getKey(),
+          () -> new SimplePlatformDestinationTree<>(false, Map.of(), worldLeaves));
+    }
+    return new SimplePlatformDestinationTree<>(false, subTrees, Map.of());
   }
 
   /**

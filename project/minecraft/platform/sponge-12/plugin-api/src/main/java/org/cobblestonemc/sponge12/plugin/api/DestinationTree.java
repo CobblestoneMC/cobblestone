@@ -26,8 +26,8 @@ import org.spongepowered.math.vector.Vector3i;
 public final class DestinationTree {
 
   private boolean strict;
-  private final Map<String, Supplier<? extends PlatformDestinationTree<ServerWorld, Vector3i>>>
-      subTrees = new LinkedHashMap<>();
+  private final Map<String, Supplier<PlatformDestinationTree<ServerWorld, Vector3i>>> subTrees =
+      new LinkedHashMap<>();
   private final Map<String, Supplier<MinecraftDestination<ServerWorld, Vector3i>>> destinations =
       new LinkedHashMap<>();
 
@@ -36,6 +36,15 @@ public final class DestinationTree {
   /** Begins a node. Its key is chosen by whoever attaches it — see {@link #subtree}. */
   public static DestinationTree builder() {
     return new DestinationTree();
+  }
+
+  public static Map<String, Supplier<PlatformDestinationTree<ServerWorld, Vector3i>>>
+      emptySubTrees() {
+    return new LinkedHashMap<>();
+  }
+
+  public static Map<String, Supplier<MinecraftDestination<ServerWorld, Vector3i>>> emptyLeaves() {
+    return new LinkedHashMap<>();
   }
 
   /** Marks this level strict — it may never be omitted in commands (no name-promotion). */
@@ -58,7 +67,7 @@ public final class DestinationTree {
 
   /** Adds a child sub-tree, built on demand. */
   public DestinationTree subtree(
-      String key, Supplier<? extends PlatformDestinationTree<ServerWorld, Vector3i>> tree) {
+      String key, Supplier<PlatformDestinationTree<ServerWorld, Vector3i>> tree) {
     subTrees.put(key, tree);
     return this;
   }
