@@ -93,7 +93,16 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     // Locations are surfaced to searches like any third-party provider — via the same registration
     // helper an integration would use.
     integrationRegistry.registerDestinations(
-        this, new CobblestoneDestinationSource(dataStore.locations()));
+        this,
+        new CobblestoneDestinationSource(
+            dataStore.locations(), dataStore.deaths(), () -> config.get(keys.deathsTrack)));
+    // Each player's last death is recorded so they can navigate back to it.
+    getServer()
+        .getPluginManager()
+        .registerEvents(
+            new DeathListener(
+                dataStore.deaths(), platformApi.scheduler(), () -> config.get(keys.deathsTrack)),
+            this);
 
     Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
     Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), logger);

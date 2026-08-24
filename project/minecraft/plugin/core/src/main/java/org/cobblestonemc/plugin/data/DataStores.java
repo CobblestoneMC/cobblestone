@@ -17,7 +17,9 @@ public final class DataStores {
   private DataStores() {}
 
   /**
-   * Creates (but does not {@link DataStore#init() open}) the store for a backend.
+   * Creates (but does not {@link DataStore#init() open}) the store for a backend. The store is
+   * wrapped so the DAOs behind tab-completion read through a short-lived per-player cache; see
+   * {@link CachingDataStore}.
    *
    * @param backend the selected backend
    * @param file the database file location (in the plugin's data folder)
@@ -25,8 +27,10 @@ public final class DataStores {
    * @return the store
    */
   public static DataStore create(DataBackend backend, Path file, CobblestoneLogger logger) {
-    return switch (backend) {
-      case H2 -> new H2DataStore(file, logger);
-    };
+    DataStore store =
+        switch (backend) {
+          case H2 -> new H2DataStore(file, logger);
+        };
+    return new CachingDataStore(store);
   }
 }

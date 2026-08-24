@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
@@ -25,6 +26,8 @@ import org.cobblestonemc.paper.api.WholeWorldRegion;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.cobblestonemc.plugin.api.PlatformDestinationTree;
+import org.cobblestonemc.plugin.data.DeathLocation;
+import org.cobblestonemc.plugin.data.DeathLocationDao;
 import org.cobblestonemc.plugin.data.LocationDao;
 import org.cobblestonemc.plugin.destination.SimpleMinecraftDestination;
 import org.cobblestonemc.plugin.destination.SimplePlatformDestinationTree;
@@ -36,11 +39,17 @@ public class CobblestoneDestinationSource implements DestinationService {
   public static final String LOCATION_TREE_KEY = "location";
   public static final String GLOBAL_TREE_KEY = "global";
   public static final String PRIVATE_TREE_KEY = "private";
+  public static final String DEATH_TREE_KEY = "death";
 
   private final LocationDao locations;
+  private final DeathLocationDao deaths;
+  private final BooleanSupplier trackDeaths;
 
-  public CobblestoneDestinationSource(LocationDao locations) {
+  public CobblestoneDestinationSource(
+      LocationDao locations, DeathLocationDao deaths, BooleanSupplier trackDeaths) {
     this.locations = locations;
+    this.deaths = deaths;
+    this.trackDeaths = trackDeaths;
   }
 
   @Override
@@ -54,7 +63,35 @@ public class CobblestoneDestinationSource implements DestinationService {
             () -> provideWorldDestinationTree(player),
             LOCATION_TREE_KEY,
             () -> provideLocationDestinationTree(player)),
-        Map.of());
+        deathLeaves(player));
+  }
+
+  /**
+   * The player's last death, as a single {@code cobblestone death} leaf. Absent entirely when death
+   * tracking is off or the player has not died since it was turned on, so {@code /navigate death}
+   * reports an unknown destination rather than a route that cannot exist.
+   */
+  private Map<String, Supplier<MinecraftDestination<World, Vector3i>>> deathLeaves(Player player) {
+    if (!trackDeaths.getAsBoolean()) {
+      return Map.of();
+    }
+    return deaths
+        .get(player.getUniqueId())
+        .map(
+            death ->
+                Map.of(
+                    DEATH_TREE_KEY,
+                    (Supplier<MinecraftDestination<World, Vector3i>>) () -> toDestination(death)))
+        .orElseGet(Map::of);
+  }
+
+  private static MinecraftDestination<World, Vector3i> toDestination(DeathLocation death) {
+    NamespacedKey worldKey = NamespacedKey.fromString(death.world());
+    World world = worldKey == null ? null : Bukkit.getWorld(worldKey);
+    var bukkitLocation = new Location(world, death.x(), death.y(), death.z());
+    WorldRegion<World, Vector3i> region = SingleCellWorldRegion.of(bukkitLocation);
+    Destination<WorldRegion<World, Vector3i>> destination = () -> List.of(region);
+    return new SimpleMinecraftDestination<>(destination, Component.text(DEATH_TREE_KEY), List.of());
   }
 
   private PlatformDestinationTree<World, Vector3i> providePlayerDestinationTree(Player player) {

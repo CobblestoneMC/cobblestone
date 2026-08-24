@@ -105,6 +105,13 @@ public final class ConfigKeys {
    */
   public final ConfigKey<Boolean> portalsNormalizeExit;
 
+  /**
+   * Whether each player's last death location is recorded and offered as the {@code cobblestone
+   * death} destination. Mutable — turning it off stops recording and hides the destination, but
+   * keeps what is already stored.
+   */
+  public final ConfigKey<Boolean> deathsTrack;
+
   /** Whether anonymous bStats metrics are reported. Requires a restart. */
   public final ConfigKey<Boolean> metricsEnabled;
 
@@ -334,6 +341,24 @@ public final class ConfigKeys {
                 Snap a nether portal EXIT to the destination portal's center at ground level. Only
                 affects where within the (same) destination portal you land, so it is safe to leave
                 on.""")
+            .mutable()
+            .register();
+
+    manager.section(
+        "deaths",
+        """
+        Death locations. Cobblestone can remember where each player last died, so they can walk
+        back to their things with "/navigate death".""");
+    this.deathsTrack =
+        manager
+            .key("deaths.track", true, Codec.ofBoolean())
+            .comment(
+                """
+                Whether to record where each player last died and offer it as the "death"
+                destination. Turning this off stops recording new deaths and hides the destination
+                from /navigate; death locations already stored are kept, and reappear if you turn
+                it back on. Players can also be denied the destination individually with the
+                permission "cobblestone.navigate.cobblestone.death".""")
             .mutable()
             .register();
 
