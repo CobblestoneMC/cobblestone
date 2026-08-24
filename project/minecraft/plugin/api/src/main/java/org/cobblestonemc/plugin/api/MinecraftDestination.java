@@ -13,12 +13,15 @@ import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.minecraft.api.WorldRegion;
 
 /**
- * A named, permission-gated navigation target surfaced by a {@link DestinationProvider} — e.g. a
- * location, an Essentials home, or a town's spawn.
+ * A named, permission-gated navigation target — e.g. a location, an Essentials home, or a town's
+ * spawn.
  *
  * <p>The underlying {@link Destination} is the algorithm-level goal (a collection of {@code
  * DomainRegion}s); everything else here is presentation and access control the plugin layer cares
  * about.
+ *
+ * @param <W> The world type
+ * @param <V> The 3D vector type
  */
 public interface MinecraftDestination<W, V> {
 
