@@ -159,7 +159,17 @@ public final class CobblestoneSpongePlugin {
         TrailNavigatorSettings.NAVIGATOR_ID,
         new SpongeTrailNavigatorFactory(config, keys, messages));
     integrationRegistry.registerDestinations(
-        container, new CobblestoneDestinationService(dataStore.locations()));
+        container,
+        new CobblestoneDestinationService(
+            dataStore.locations(), dataStore.deaths(), () -> config.get(keys.deathsTrack)));
+    // Each player's last death is recorded so they can navigate back to it.
+    Sponge.eventManager()
+        .registerListeners(
+            container,
+            new SpongeDeathListener(
+                dataStore.deaths(),
+                navigationService.scheduler(),
+                () -> config.get(keys.deathsTrack)));
 
     this.searchRegistry = new SearchRegistry<>();
     this.searchGate = new SearchGate(config.get(keys.searchMaxConcurrentPerPlayer));

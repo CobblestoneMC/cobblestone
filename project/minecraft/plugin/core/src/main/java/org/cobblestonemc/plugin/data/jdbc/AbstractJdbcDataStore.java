@@ -21,6 +21,7 @@ import java.util.List;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.plugin.data.DataStore;
 import org.cobblestonemc.plugin.data.DataStoreException;
+import org.cobblestonemc.plugin.data.DeathLocationDao;
 import org.cobblestonemc.plugin.data.EndReturnPortalDao;
 import org.cobblestonemc.plugin.data.GatewayDao;
 import org.cobblestonemc.plugin.data.LocationDao;
@@ -46,6 +47,7 @@ public abstract class AbstractJdbcDataStore implements DataStore {
 
   private Connection connection;
   private LocationDao locationDao;
+  private DeathLocationDao deathLocationDao;
   private PortalTransitionDao portalTransitionDao;
   private EndReturnPortalDao endReturnPortalDao;
   private GatewayDao gatewayDao;
@@ -125,6 +127,7 @@ public abstract class AbstractJdbcDataStore implements DataStore {
       this.connection = DriverManager.getConnection(url);
       migrate();
       this.locationDao = new JdbcLocationDao(this);
+      this.deathLocationDao = new JdbcDeathLocationDao(this);
       this.portalTransitionDao = new JdbcPortalTransitionDao(this);
       this.endReturnPortalDao = new JdbcEndReturnPortalDao(this);
       this.gatewayDao = new JdbcGatewayDao(this);
@@ -141,6 +144,14 @@ public abstract class AbstractJdbcDataStore implements DataStore {
       throw new IllegalStateException("DataStore.init() has not been called");
     }
     return locationDao;
+  }
+
+  @Override
+  public DeathLocationDao deaths() {
+    if (deathLocationDao == null) {
+      throw new IllegalStateException("DataStore.init() has not been called");
+    }
+    return deathLocationDao;
   }
 
   @Override

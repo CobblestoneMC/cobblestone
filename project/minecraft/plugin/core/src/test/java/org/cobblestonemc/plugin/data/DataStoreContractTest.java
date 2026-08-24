@@ -18,15 +18,17 @@ import java.util.UUID;
 import java.util.function.BiFunction;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.plugin.data.jdbc.H2DataStore;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /**
- * One behavioral contract every {@link DataStore} backend must satisfy, run against both embedded
- * JDBC engines (SQLite and H2). Backends are supplied as a {@code (file, logger) -> DataStore}
- * factory so the "restart" case can reopen a fresh store over the same on-disk file.
+ * One behavioral contract every {@link DataStore} backend must satisfy, run against the embedded
+ * JDBC engine both bare and behind the caching DAOs the plugin really uses. Backends are supplied
+ * as a {@code (file, logger) -> DataStore} factory so the "restart" case can reopen a fresh store
+ * over the same on-disk file.
  */
 class DataStoreContractTest {
 
@@ -35,13 +37,19 @@ class DataStoreContractTest {
   /** A backend under test: a display name plus a factory over a database file. */
   record Backend(String name, BiFunction<Path, CobblestoneLogger, DataStore> open) {
     @Override
-    public String toString() {
+    public @NotNull String toString() {
       return name;
     }
   }
 
   static List<Arguments> backends() {
-    return List.of(Arguments.of(new Backend("h2", H2DataStore::new)));
+    return List.of(
+        Arguments.of(new Backend("h2", H2DataStore::new)),
+        // The store the plugin actually gets: the same backend behind the caching DAOs, so the
+        // contract also pins that caching stays invisible (writes invalidate what they touch).
+        Arguments.of(
+            new Backend(
+                "h2 (cached)", (file, logger) -> DataStores.create(DataBackend.H2, file, logger))));
   }
 
   private static DataStore opened(Backend backend, Path dir) {
@@ -228,6 +236,68 @@ class DataStoreContractTest {
       assertTrue(found.isPresent(), "location must persist across a restart");
       assertEquals(100, found.get().x());
       assertEquals(200, found.get().z());
+    } finally {
+      second.close();
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("backends")
+  void lastDeathIsStoredPerPlayer(Backend backend, @TempDir Path dir) {
+    DataStore store = opened(backend, dir);
+    try {
+      UUID player = UUID.randomUUID();
+      UUID other = UUID.randomUUID();
+      assertTrue(store.deaths().get(player).isEmpty(), "a player who has not died has no record");
+
+      store.deaths().upsert(new DeathLocation(player, "minecraft:overworld", 1, 64, 2));
+      store.deaths().upsert(new DeathLocation(other, "minecraft:the_nether", 9, 9, 9));
+
+      Optional<DeathLocation> found = store.deaths().get(player);
+      assertTrue(found.isPresent());
+      assertEquals("minecraft:overworld", found.get().world());
+      assertEquals(1, found.get().x());
+      assertEquals(64, found.get().y());
+      assertEquals(2, found.get().z());
+      assertEquals("minecraft:the_nether", store.deaths().get(other).orElseThrow().world());
+    } finally {
+      store.close();
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("backends")
+  void deathOverwritesThePreviousOne(Backend backend, @TempDir Path dir) {
+    DataStore store = opened(backend, dir);
+    try {
+      UUID player = UUID.randomUUID();
+      store.deaths().upsert(new DeathLocation(player, "minecraft:overworld", 1, 1, 1));
+      store.deaths().upsert(new DeathLocation(player, "minecraft:the_end", 2, 2, 2));
+
+      DeathLocation found = store.deaths().get(player).orElseThrow();
+      assertEquals("minecraft:the_end", found.world(), "only the latest death is kept");
+      assertEquals(2, found.x());
+    } finally {
+      store.close();
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("backends")
+  void deathSurvivesReopen(Backend backend, @TempDir Path dir) {
+    UUID player = UUID.randomUUID();
+    DataStore first = opened(backend, dir);
+    try {
+      first.deaths().upsert(new DeathLocation(player, "minecraft:overworld", -30, 12, 400));
+    } finally {
+      first.close();
+    }
+
+    DataStore second = opened(backend, dir);
+    try {
+      DeathLocation found = second.deaths().get(player).orElseThrow();
+      assertEquals(-30, found.x());
+      assertEquals(400, found.z());
     } finally {
       second.close();
     }

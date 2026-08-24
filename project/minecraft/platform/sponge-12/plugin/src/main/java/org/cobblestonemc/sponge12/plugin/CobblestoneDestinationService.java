@@ -13,12 +13,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.minecraft.api.WorldRegion;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.cobblestonemc.plugin.api.PlatformDestinationTree;
+import org.cobblestonemc.plugin.data.DeathLocation;
+import org.cobblestonemc.plugin.data.DeathLocationDao;
 import org.cobblestonemc.plugin.data.Location;
 import org.cobblestonemc.plugin.data.LocationDao;
 import org.cobblestonemc.plugin.destination.SimpleMinecraftDestination;
@@ -42,11 +45,17 @@ public final class CobblestoneDestinationService implements DestinationService {
   public static final String LOCATION_TREE_KEY = "location";
   public static final String GLOBAL_TREE_KEY = "global";
   public static final String PRIVATE_TREE_KEY = "private";
+  public static final String DEATH_TREE_KEY = "death";
 
   private final LocationDao locations;
+  private final DeathLocationDao deaths;
+  private final BooleanSupplier trackDeaths;
 
-  public CobblestoneDestinationService(LocationDao locations) {
+  public CobblestoneDestinationService(
+      LocationDao locations, DeathLocationDao deaths, BooleanSupplier trackDeaths) {
     this.locations = locations;
+    this.deaths = deaths;
+    this.trackDeaths = trackDeaths;
   }
 
   @Override
@@ -60,7 +69,42 @@ public final class CobblestoneDestinationService implements DestinationService {
             () -> provideWorldDestinationTree(player),
             LOCATION_TREE_KEY,
             () -> provideLocationDestinationTree(player)),
-        Map.of());
+        deathLeaves(player));
+  }
+
+  /**
+   * The player's last death, as a single {@code cobblestone death} leaf. Absent entirely when death
+   * tracking is off or the player has not died since it was turned on, so {@code /navigate death}
+   * reports an unknown destination rather than a route that cannot exist.
+   */
+  private Map<String, Supplier<MinecraftDestination<ServerWorld, Vector3i>>> deathLeaves(
+      ServerPlayer player) {
+    if (!trackDeaths.getAsBoolean()) {
+      return Map.of();
+    }
+    return deaths
+        .get(player.uniqueId())
+        .map(
+            death ->
+                Map.of(
+                    DEATH_TREE_KEY,
+                    (Supplier<MinecraftDestination<ServerWorld, Vector3i>>)
+                        () -> toDestination(death)))
+        .orElseGet(Map::of);
+  }
+
+  private static MinecraftDestination<ServerWorld, Vector3i> toDestination(DeathLocation death) {
+    Destination<WorldRegion<ServerWorld, Vector3i>> destination =
+        () -> {
+          ServerWorld world =
+              Sponge.server().worldManager().world(ResourceKey.resolve(death.world())).orElse(null);
+          return world == null
+              ? List.of()
+              : List.of(
+                  SingleCellWorldRegion.of(
+                      ServerLocation.of(world, death.x(), death.y(), death.z())));
+        };
+    return new SimpleMinecraftDestination<>(destination, Component.text(DEATH_TREE_KEY), List.of());
   }
 
   private PlatformDestinationTree<ServerWorld, Vector3i> providePlayerDestinationTree(
