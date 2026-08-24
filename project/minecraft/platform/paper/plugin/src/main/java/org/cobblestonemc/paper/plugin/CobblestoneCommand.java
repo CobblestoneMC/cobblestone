@@ -68,6 +68,53 @@ final class CobblestoneCommand {
       PortalTransitionDao portals,
       TripManager<Entity, PaperTripAgent, Location> trips,
       SearchRegistry<Location> searches) {
+
+    var locationSubCommand =
+        Commands.literal("location")
+            .requires(source -> source.getSender().hasPermission(Permissions.LOCATION.value()))
+            .executes(ctx -> showHelp(ctx.getSource().getSender(), messages))
+            .then(
+                Commands.literal("set")
+                    .then(
+                        Commands.argument("name", StringArgumentType.word())
+                            .executes(ctx -> setLocation(ctx, locations, messages, false))
+                            .then(
+                                Commands.literal("-global")
+                                    .requires(
+                                        source ->
+                                            source
+                                                .getSender()
+                                                .hasPermission(Permissions.LOCATION_GLOBAL.value()))
+                                    .executes(ctx -> setLocation(ctx, locations, messages, true)))))
+            .then(
+                Commands.literal("unset")
+                    .then(
+                        Commands.argument("name", StringArgumentType.word())
+                            .suggests(
+                                (ctx, builder) ->
+                                    suggestLocations(
+                                        ctx.getSource().getSender(),
+                                        builder,
+                                        locations,
+                                        ctx.getSource()
+                                            .getSender()
+                                            .hasPermission(Permissions.LOCATION_GLOBAL.value())))
+                            .executes(ctx -> unsetLocation(ctx, locations, messages, false))
+                            .then(
+                                Commands.literal("-global")
+                                    .requires(
+                                        source ->
+                                            source
+                                                .getSender()
+                                                .hasPermission(Permissions.LOCATION_GLOBAL.value()))
+                                    .executes(
+                                        ctx -> unsetLocation(ctx, locations, messages, true)))))
+            .then(
+                Commands.literal("list")
+                    .executes(
+                        ctx -> listLocations(ctx.getSource().getSender(), messages, locations)))
+            .build();
+
     return Commands.literal("cobblestone")
         .executes(ctx -> showHelp(ctx.getSource().getSender(), messages))
         .then(
@@ -109,55 +156,8 @@ final class CobblestoneCommand {
                     Commands.literal("clear")
                         .executes(
                             ctx -> clearPortals(ctx.getSource().getSender(), messages, portals))))
-        .then(
-            Commands.literal("location")
-                .requires(source -> source.getSender().hasPermission(Permissions.LOCATION.value()))
-                .executes(ctx -> showHelp(ctx.getSource().getSender(), messages))
-                .then(
-                    Commands.literal("set")
-                        .then(
-                            Commands.argument("name", StringArgumentType.word())
-                                .executes(ctx -> setLocation(ctx, locations, messages, false))
-                                .then(
-                                    Commands.literal("-global")
-                                        .requires(
-                                            source ->
-                                                source
-                                                    .getSender()
-                                                    .hasPermission(
-                                                        Permissions.LOCATION_GLOBAL.value()))
-                                        .executes(
-                                            ctx -> setLocation(ctx, locations, messages, true)))))
-                .then(
-                    Commands.literal("unset")
-                        .then(
-                            Commands.argument("name", StringArgumentType.word())
-                                .suggests(
-                                    (ctx, builder) ->
-                                        suggestLocations(
-                                            ctx.getSource().getSender(),
-                                            builder,
-                                            locations,
-                                            ctx.getSource()
-                                                .getSender()
-                                                .hasPermission(
-                                                    Permissions.LOCATION_GLOBAL.value())))
-                                .executes(ctx -> unsetLocation(ctx, locations, messages, false))
-                                .then(
-                                    Commands.literal("-global")
-                                        .requires(
-                                            source ->
-                                                source
-                                                    .getSender()
-                                                    .hasPermission(
-                                                        Permissions.LOCATION_GLOBAL.value()))
-                                        .executes(
-                                            ctx -> unsetLocation(ctx, locations, messages, true)))))
-                .then(
-                    Commands.literal("list")
-                        .executes(
-                            ctx ->
-                                listLocations(ctx.getSource().getSender(), messages, locations))))
+        .then(locationSubCommand)
+        .then(Commands.literal("loc").redirect(locationSubCommand))
         .build();
   }
 

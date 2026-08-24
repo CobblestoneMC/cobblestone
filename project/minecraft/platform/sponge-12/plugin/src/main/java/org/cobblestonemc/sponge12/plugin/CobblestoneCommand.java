@@ -123,7 +123,7 @@ final class CobblestoneCommand {
         .addChild(cancel, "cancel")
         .addChild(tripsCmd, "trips")
         .addChild(portalsCmd, "portals")
-        .addChild(locationCmd, "location")
+        .addChild(locationCmd, "location", "loc")
         .executor(ctx -> help(ctx, messages))
         .build();
   }
