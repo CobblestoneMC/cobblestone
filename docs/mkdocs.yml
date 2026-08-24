@@ -2,3 +2,5 @@ site_name: Cobblestone
 site_url: https://cobblestonemc.org
 theme:
   name: material
+  logo: assets/logo.png
+  favicon: assets/logo.png
