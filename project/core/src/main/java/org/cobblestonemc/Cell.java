@@ -12,6 +12,10 @@ package org.cobblestonemc;
  *
  * <p>A {@code Cell} carries no domain; cells are only meaningful within a known {@link Domain}
  * context. Value-based equality and hash code come from the record components.
+ *
+ * @param x x coordinate
+ * @param y y coordinate
+ * @param z z coordinate
  */
 public record Cell(int x, int y, int z) {
 

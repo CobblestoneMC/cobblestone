@@ -2,7 +2,6 @@
 // shaded into the jar (they are not on a public Maven repo); third-party runtime libraries (SnakeYAML
 // now; JDBC/bStats/etc. later) are declared in the paper-plugin.yml loader and downloaded by Paper's
 // MavenLibraryResolver at runtime. Adventure and paper-api are provided by the server. (design/07)
-import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
     id("cobblestone.java-conventions")

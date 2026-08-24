@@ -36,6 +36,8 @@ public interface CobblestoneApi {
   /**
    * Begins a search from {@code origin} toward {@code destination}.
    *
+   * @param logger the logger to track logging events
+   * @param scheduler the scheduler of tasks for the algorithm to parallelize work
    * @param agent the navigating agent
    * @param origin the starting position
    * @param destination the goal
@@ -43,6 +45,7 @@ public interface CobblestoneApi {
    *     target region, for goal-aware modes)
    * @param transitions the transitions (portals, teleports, mounts, …) available to the agent
    * @param restrictions the passability restrictions barring the agent from certain cells
+   * @param heuristic the heuristic to use for approaching the destination
    * @param settings the search limits and knobs
    * @param <A> the agent type
    * @param <T> the payload type

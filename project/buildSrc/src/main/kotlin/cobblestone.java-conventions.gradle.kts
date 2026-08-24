@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "org.cobblestonemc"
-version = "0.0.0-SNAPSHOT"
+version = "${project.property("apiVersion")}.${project.property("patchVersion")}-SNAPSHOT"
 
 repositories {
     mavenCentral()
@@ -58,4 +58,9 @@ dependencies {
 tasks.register("formatAndBuild") {
     description = "Run spotlessApply and then build"
     dependsOn("spotlessApply", "build")
+}
+
+tasks.javadoc {
+    // TODO remove this
+    isFailOnError = false
 }

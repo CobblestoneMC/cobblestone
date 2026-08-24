@@ -53,8 +53,9 @@ public final class Heuristics {
    * real per-block cost seen so far in the current solve (falling back to {@code
    * cheapestCostPerBlock} before any samples). This makes {@code h} track the terrain/mode actually
    * being traversed, so A* explores far fewer cells — at the price of admissibility, so paths may
-   * be slightly sub-optimal (weighted-A*-style). Tier-1 still uses the admissible {@link #estimate}
-   * (distance × {@code cheapestCostPerBlock}).
+   * be slightly sub-optimal (weighted-A*-style). Tier-1 still uses the admissible {@link
+   * HeuristicStrategy#estimate(Cell, DomainRegion, TraversalState)} (distance × {@code
+   * cheapestCostPerBlock}).
    *
    * @param cheapestCostPerBlock a lower bound on per-block cost, used before samples and by Tier-1
    * @return the running-average heuristic
