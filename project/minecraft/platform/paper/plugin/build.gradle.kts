@@ -33,10 +33,9 @@ dependencies {
     compileOnly(libs.adventure.api)
 }
 
-// The shaded jar is the shippable artifact: it is the only one named `Cobblestone-Paper-<version>-all.jar`,
-// so CI (and admins) can identify it by name alone rather than by ruling other jars out.
 tasks.shadowJar {
     archiveBaseName.set("Cobblestone-Paper")
+    archiveClassifier.set("")
     // Concatenate META-INF/services/* across all shaded modules so no ServiceLoader provider
     // (e.g. our CobblestoneApi) is dropped when they merge into the single uberjar.
     mergeServiceFiles()

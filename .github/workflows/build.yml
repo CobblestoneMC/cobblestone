@@ -75,21 +75,14 @@ jobs:
             21
             25
       - uses: gradle/actions/setup-gradle@v6
-      - name: Build shaded plugin jars
+      - name: Build
         run: |
-          ./gradlew \
-            :minecraft:platform:paper:paper-plugin:shadowJar \
-            :minecraft:platform:sponge-12:sponge-12-plugin:shadowJar \
-            --stacktrace
-      - name: Upload Paper plugin
+          ./gradlew build --stacktrace
+      - name: Upload
         uses: actions/upload-artifact@v7
         with:
-          name: Cobblestone-Paper
-          path: project/minecraft/platform/paper/plugin/build/libs/Cobblestone-Paper-*-all.jar
+          name: all-artifacts
+          path: |
+            **/build
           if-no-files-found: error
-      - name: Upload Sponge plugin
-        uses: actions/upload-artifact@v7
-        with:
-          name: Cobblestone-Sponge
-          path: project/minecraft/platform/sponge-12/plugin/build/libs/Cobblestone-Sponge-*-all.jar
-          if-no-files-found: error
+          retention-days: 7

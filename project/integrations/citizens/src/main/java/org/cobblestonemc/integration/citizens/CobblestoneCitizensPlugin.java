@@ -19,13 +19,15 @@ public final class CobblestoneCitizensPlugin extends JavaPlugin {
 
   @Override
   public void onEnable() {
-    if (getServer().getPluginManager().getPlugin("Citizens") == null) {
+    var citizens = getServer().getPluginManager().getPlugin("Citizens");
+    if (citizens == null) {
       getLogger().severe("Citizens not found; disabling CobblestoneCitizens.");
       getServer().getPluginManager().disablePlugin(this);
       return;
     }
 
-    CobblestonePaperApi.registrar().registerDestinations(this, new CitizensDestinationService());
+    CobblestonePaperApi.registrar()
+        .registerDestinations(citizens, new CitizensDestinationService());
 
     getLogger().info("CobblestoneCitizens enabled.");
   }

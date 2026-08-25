@@ -33,7 +33,7 @@ public final class CobblestonePikamugQuestsPlugin extends JavaPlugin {
     QuestNavPrefs prefs = new QuestNavPrefs(getConfig());
 
     CobblestonePaperApi.registrar()
-        .registerDestinations(this, new PikamugQuestsDestinationService(quests));
+        .registerDestinations(questsPlugin, new PikamugQuestsDestinationService(quests));
     getServer().getPluginManager().registerEvents(new PikamugQuestsCompassListener(prefs), this);
 
     getLogger().info("CobblestonePikamugQuests enabled.");

@@ -46,3 +46,7 @@ dependencies {
     // BetonQuest's API signatures carry JetBrains @NotNull/@Nullable; provide them so javac resolves.
     compileOnly("org.jetbrains:annotations:24.0.1")
 }
+
+tasks.jar {
+    archiveBaseName.set("CobblestoneBeautyQuests")
+}

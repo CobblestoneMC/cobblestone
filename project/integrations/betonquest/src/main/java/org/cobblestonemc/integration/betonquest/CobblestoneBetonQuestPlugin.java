@@ -28,7 +28,8 @@ public final class CobblestoneBetonQuestPlugin extends JavaPlugin {
   @Override
   public void onEnable() {
     Optional<BetonQuestApiService> service = BetonQuestApiService.get();
-    if (service.isEmpty()) {
+    var betonQuest = getServer().getPluginManager().getPlugin("BetonQuest");
+    if (service.isEmpty() || betonQuest == null) {
       getLogger().severe("BetonQuest API not available; disabling CobblestoneBetonQuest.");
       getServer().getPluginManager().disablePlugin(this);
       return;
@@ -39,7 +40,7 @@ public final class CobblestoneBetonQuestPlugin extends JavaPlugin {
     QuestNavPrefs prefs = new QuestNavPrefs(getConfig());
 
     CobblestonePaperApi.registrar()
-        .registerDestinations(this, new BetonQuestDestinationService(api));
+        .registerDestinations(betonQuest, new BetonQuestDestinationService(api));
     getServer().getPluginManager().registerEvents(new BetonQuestCompassListener(api, prefs), this);
 
     getLogger().info("CobblestoneBetonQuest enabled.");

@@ -4,7 +4,7 @@ description: A Minecraft navigation plugin.
 author: whimxiqal
 website: https://cobblestonemc.org
 main: org.cobblestonemc.paper.plugin.CobblestonePaperPlugin
-loader: plugin.paper.org.cobblestonemc.PaperCobblestoneLoader
+loader: org.cobblestonemc.paper.plugin.CobblestonePaperLoader
 api-version: '1.21'
 folia-supported: true
 

@@ -27,12 +27,6 @@ import org.bstats.charts.SingleLineChart;
  */
 public final class MetricsCharts {
 
-  /**
-   * Cobblestone's registered bStats service id; a non-positive value keeps metrics off (a guard for
-   * local forks that have not registered their own).
-   */
-  public static final int BSTATS_PLUGIN_ID = 33218;
-
   private MetricsCharts() {}
 
   /**

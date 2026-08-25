@@ -39,10 +39,10 @@ dependencies {
 // so CI (and admins) can identify it by name alone rather than by ruling other jars out.
 tasks.named<ShadowJar>("shadowJar") {
     archiveBaseName.set("Cobblestone-Sponge")
+    archiveClassifier.set("")
 
     relocate("org.yaml.snakeyaml", "org.cobblestonemc.libs.snakeyaml")
     relocate("org.bstats", "org.cobblestonemc.libs.bstats")
-//    relocate("org.sqlite", "org.cobblestonemc.libs.sqlite")
     relocate("org.h2", "org.cobblestonemc.libs.h2")
 }
 

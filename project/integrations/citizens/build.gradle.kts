@@ -33,3 +33,7 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
     compileOnly("net.citizensnpcs:citizensapi:2.0.43-SNAPSHOT") { isTransitive = false }
 }
+
+tasks.jar {
+    archiveBaseName.set("CobblestoneCitizens")
+}

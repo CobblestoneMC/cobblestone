@@ -21,10 +21,7 @@ import org.spongepowered.api.event.lifecycle.ConstructPluginEvent;
  */
 final class SpongeMetrics {
 
-  /**
-   * The bStats service id for Cobblestone's Sponge plugin (distinct from the Bukkit registration).
-   */
-  private static final int SPONGE_BSTATS_ID = 33513;
+  private static final int BSTATS_PLUGIN_ID = 33625;
 
   private final Metrics metrics;
 
@@ -34,7 +31,7 @@ final class SpongeMetrics {
       String backend,
       TripManager<?, ?, ?> trips,
       SearchRegistry<?> searches) {
-    this.metrics = factory.make(SPONGE_BSTATS_ID);
+    this.metrics = factory.make(BSTATS_PLUGIN_ID);
     // We create the Metrics while handling ConstructPluginEvent, so bStats' own @Listener for it
     // has
     // already been dispatched; drive its startup with the in-flight event ourselves.

@@ -31,3 +31,7 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
     compileOnly("com.palmergames.bukkit.towny:towny:0.103.1.1")
 }
+
+tasks.jar {
+    archiveBaseName.set("CobblestoneTowny")
+}

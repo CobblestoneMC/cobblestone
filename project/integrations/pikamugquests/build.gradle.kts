@@ -39,3 +39,7 @@ dependencies {
     // Quests' API signatures carry JetBrains @NotNull/@Nullable; provide them so javac resolves them.
     compileOnly("org.jetbrains:annotations:24.0.1")
 }
+
+tasks.jar {
+    archiveBaseName.set("CobblestonePikamugQuests")
+}

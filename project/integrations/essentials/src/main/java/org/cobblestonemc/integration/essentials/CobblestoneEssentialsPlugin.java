@@ -37,9 +37,9 @@ public final class CobblestoneEssentialsPlugin extends JavaPlugin {
     Essentials essentials = new Essentials(essentialsApi, spawnApi);
 
     CobblestonePaperApi.registrar()
-        .registerDestinations(this, new EssentialsDestinationService(essentials));
+        .registerDestinations(essentialsPlugin, new EssentialsDestinationService(essentials));
     CobblestoneCoreApi.registrar()
-        .register(this, new EssentialsSearchModificationService(essentials));
+        .register(essentialsPlugin, new EssentialsSearchModificationService(essentials));
 
     getLogger()
         .info(
