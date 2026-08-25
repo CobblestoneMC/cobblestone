@@ -21,21 +21,23 @@ import org.cobblestonemc.plugin.trip.TripManager;
  * defines the chart set both platforms report. bStats is opt-out via {@code
  * plugins/bStats/config.yml} and Cobblestone's own {@code metrics.enabled}.
  */
-final class CobblestoneMetrics {
+final class PaperMetrics {
+
+  private static final int BSTATS_PLUGIN_ID = 33624;
 
   private final Metrics metrics;
 
-  CobblestoneMetrics(
+  PaperMetrics(
       JavaPlugin plugin,
       String backend,
       TripManager<Entity, PaperTripAgent, Location> trips,
       SearchRegistry<Location> searches) {
-    if (MetricsCharts.BSTATS_PLUGIN_ID <= 0) {
+    if (BSTATS_PLUGIN_ID <= 0) {
       plugin.getLogger().info("bStats metrics not started: no bStats plugin id is configured yet.");
       this.metrics = null;
       return;
     }
-    this.metrics = new Metrics(plugin, MetricsCharts.BSTATS_PLUGIN_ID);
+    this.metrics = new Metrics(plugin, BSTATS_PLUGIN_ID);
     MetricsCharts.register(
         metrics::addCustomChart,
         backend,

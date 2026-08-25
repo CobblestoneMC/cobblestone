@@ -34,3 +34,7 @@ dependencies {
     compileOnly("net.essentialsx:EssentialsX:2.20.1") { isTransitive = false }
     compileOnly("net.essentialsx:EssentialsXSpawn:2.20.1") { isTransitive = false }
 }
+
+tasks.jar {
+    archiveBaseName.set("CobblestoneEssentials")
+}

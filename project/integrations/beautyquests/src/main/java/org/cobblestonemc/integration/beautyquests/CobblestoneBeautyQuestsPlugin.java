@@ -21,7 +21,8 @@ public final class CobblestoneBeautyQuestsPlugin extends JavaPlugin {
 
   @Override
   public void onEnable() {
-    if (getServer().getPluginManager().getPlugin("BeautyQuests") == null) {
+    var beautyQuests = getServer().getPluginManager().getPlugin("BeautyQuests");
+    if (beautyQuests == null) {
       getLogger().severe("BeautyQuests not found; disabling CobblestoneBeautyQuests.");
       getServer().getPluginManager().disablePlugin(this);
       return;
@@ -31,7 +32,7 @@ public final class CobblestoneBeautyQuestsPlugin extends JavaPlugin {
     QuestNavPrefs prefs = new QuestNavPrefs(getConfig());
 
     CobblestonePaperApi.registrar()
-        .registerDestinations(this, new BeautyQuestsDestinationService());
+        .registerDestinations(beautyQuests, new BeautyQuestsDestinationService());
     getServer().getPluginManager().registerEvents(new BeautyQuestsStageListener(prefs), this);
 
     getLogger().info("CobblestoneBeautyQuests enabled.");

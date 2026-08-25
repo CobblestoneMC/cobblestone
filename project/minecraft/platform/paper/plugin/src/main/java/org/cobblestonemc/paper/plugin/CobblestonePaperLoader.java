@@ -20,7 +20,7 @@ import org.eclipse.aether.repository.RemoteRepository;
  * Maven resolver on startup.
  */
 @SuppressWarnings("UnstableApiUsage")
-public class PaperCobblestoneLoader implements PluginLoader {
+public class CobblestonePaperLoader implements PluginLoader {
 
   @Override
   public void classloader(PluginClasspathBuilder classpathBuilder) {

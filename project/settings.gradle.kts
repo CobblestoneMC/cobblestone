@@ -59,9 +59,11 @@ include(":integrations:beautyquests")
 project(":integrations:beautyquests").name = "cobblestone-beautyquests"
 include(":integrations:betonquest")
 project(":integrations:betonquest").name = "cobblestone-betonquest"
-// disabled until proper jar file is available
+
+// disabled until bishop quests provides accessible API via a maven repo
 //include(":integrations:bishopquests")
 //project(":integrations:bishopquests").name = "cobblestone-bishopquests"
+
 // A Typewriter extension (Kotlin), not a Bukkit plugin — built with Typewriter's own module-plugin.
 include(":integrations:typewriter")
 project(":integrations:typewriter").name = "cobblestone-typewriter"

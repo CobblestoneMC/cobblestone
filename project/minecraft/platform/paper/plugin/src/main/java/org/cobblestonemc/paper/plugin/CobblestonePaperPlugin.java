@@ -47,7 +47,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
   private PaperNavigationServiceImpl platformApi;
   private DataStore dataStore;
   private TripManager<Entity, PaperTripAgent, Location> tripManager;
-  private CobblestoneMetrics metrics;
+  private PaperMetrics metrics;
   private final SearchRegistry<Location> searchRegistry = new SearchRegistry<>();
 
   @Override
@@ -215,7 +215,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
 
     if (config.get(keys.metricsEnabled)) {
       this.metrics =
-          new CobblestoneMetrics(
+          new PaperMetrics(
               this,
               config.get(keys.dataBackend).name().toLowerCase(Locale.ROOT),
               tripManager,

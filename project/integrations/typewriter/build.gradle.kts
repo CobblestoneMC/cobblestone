@@ -57,3 +57,7 @@ kotlin {
 tasks.withType<JavaCompile>().configureEach {
     options.release = 25
 }
+
+tasks.jar {
+    archiveBaseName.set("CobblestoneTypewriterExtension")
+}

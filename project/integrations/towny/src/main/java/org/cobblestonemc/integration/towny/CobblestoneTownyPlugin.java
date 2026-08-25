@@ -20,13 +20,14 @@ public final class CobblestoneTownyPlugin extends JavaPlugin {
 
   @Override
   public void onEnable() {
-    if (getServer().getPluginManager().getPlugin("Towny") == null) {
+    var towny = getServer().getPluginManager().getPlugin("Towny");
+    if (towny == null) {
       getLogger().severe("Towny not found; disabling CobblestoneTowny.");
       getServer().getPluginManager().disablePlugin(this);
       return;
     }
-    CobblestonePaperApi.registrar().registerDestinations(this, new TownyDestinationService());
-    CobblestoneCoreApi.registrar().register(this, new TownySearchModificationService(this));
+    CobblestonePaperApi.registrar().registerDestinations(towny, new TownyDestinationService());
+    CobblestoneCoreApi.registrar().register(towny, new TownySearchModificationService(this));
     getLogger().info("CobblestoneTowny enabled.");
   }
 }
