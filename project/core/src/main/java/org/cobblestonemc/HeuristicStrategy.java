@@ -19,9 +19,9 @@ import org.cobblestonemc.api.TraversalState;
  * the region's geometry via {@link DomainRegion#nearestBoundaryCell(Cell)}.
  *
  * <p>Tier-1 uses {@link #estimate} directly as an admissible edge cost. Tier-2 A* instead obtains a
- * per-solve {@link SolveHeuristic} via {@link #newSolve(int)}, which may adapt to observed costs; a
- * plain (stateless) strategy hands back a wrapper that just delegates {@link #estimate} and ignores
- * feedback.
+ * per-solve {@link SolveHeuristic} via {@link #newSolve(int)}, which may adapt to the costs seen
+ * along the trail leading to each cell; a plain (stateless) strategy hands back a wrapper that just
+ * delegates {@link #estimate} and carries no trail average.
  */
 @FunctionalInterface
 public interface HeuristicStrategy {
@@ -47,13 +47,19 @@ public interface HeuristicStrategy {
   default SolveHeuristic newSolve(int windowWidth) {
     return new SolveHeuristic() {
       @Override
-      public double estimate(Cell from, DomainRegion<?> target, TraversalState state) {
-        return HeuristicStrategy.this.estimate(from, target, state);
+      public double seed() {
+        return 0.0; // no trail average to carry; estimate ignores it
       }
 
       @Override
-      public void observe(double stepCost, double blocks) {
-        // Stateless: nothing to learn.
+      public double advance(double trailAverage, double stepCost, double blocks) {
+        return trailAverage; // stateless: nothing to learn
+      }
+
+      @Override
+      public double estimate(
+          Cell from, DomainRegion<?> target, TraversalState state, double trailAverage) {
+        return HeuristicStrategy.this.estimate(from, target, state);
       }
     };
   }

@@ -20,7 +20,7 @@ import org.cobblestonemc.plugin.api.TripOutcome;
 
 /**
  * Starts guided <b>trips</b> for a player — the "actually take me there" half that a search alone
- * doesn't do. Fetch it via {@link Cobblestone#tripService()}. Two entry points:
+ * doesn't do. Fetch it via {@link CobblestonePaperApi#tripService()}. Two entry points:
  *
  * <ul>
  *   <li>{@link #navigate} — the common one: search to a destination and, if a route is found, start

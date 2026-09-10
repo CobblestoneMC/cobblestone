@@ -9,6 +9,7 @@ package org.cobblestonemc.plugin.destination;
 
 import java.util.List;
 import java.util.function.Predicate;
+import org.cobblestonemc.plugin.Permissions;
 
 /**
  * The Cobblestone-owned permission that gates whether a player may <b>navigate</b> to a destination
@@ -25,8 +26,7 @@ import java.util.function.Predicate;
  */
 public final class NavigationPermissions {
 
-  /** The base of every navigation-gate permission node. */
-  public static final String BASE = "cobblestone.navigate";
+  public static final String BASE = Permissions.NAVIGATE.value();
 
   private NavigationPermissions() {}
 

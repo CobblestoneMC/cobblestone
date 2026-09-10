@@ -43,8 +43,8 @@ import org.cobblestonemc.plugin.message.Messages;
 public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
 
   private static final double COMPLETION_RADIUS_SQUARED = 4.0; // within 2 blocks of the goal
-  private static final double SPREAD_HORIZONTAL = 0.30; // Gaussian sigma across the column
-  private static final double SPREAD_VERTICAL = 0.20;
+  private static final double SPREAD_HORIZONTAL = 0.15; // Gaussian sigma across the column
+  private static final double SPREAD_VERTICAL = 0.15;
   private static final double NEAR_BUFFER = 1.0; // clear bubble around the player, in blocks
   private static final double NEAR_BUFFER_SQUARED = NEAR_BUFFER * NEAR_BUFFER;
   private static final double CALC_GUIDE_THRESHOLD = NEAR_BUFFER + 1.0;

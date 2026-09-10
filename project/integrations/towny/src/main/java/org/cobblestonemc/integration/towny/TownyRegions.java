@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.integration.towny;
 
+import com.palmergames.bukkit.towny.TownySettings;
 import com.palmergames.bukkit.towny.object.Town;
 import com.palmergames.bukkit.towny.object.TownBlock;
 import com.palmergames.bukkit.towny.object.WorldCoord;
@@ -33,17 +34,23 @@ final class TownyRegions {
   private TownyRegions() {}
 
   /** The box region covering one claimed chunk. */
-  static WorldRegion<World, Vector3i> chunk(World world, int chunkX, int chunkZ) {
-    int minX = chunkX << 4;
-    int minZ = chunkZ << 4;
+  static WorldRegion<World, Vector3i> chunk(
+      World world, int coordX, int coordZ, int townBlockSize) {
+    int minX = coordX * townBlockSize;
+    int minZ = coordZ * townBlockSize;
     return BoxWorldRegion.of(
         new Location(world, minX, world.getMinHeight(), minZ),
-        new Location(world, minX + 15, world.getMaxHeight() - 1, minZ + 15));
+        new Location(
+            world,
+            minX + (townBlockSize - 1),
+            world.getMaxHeight() - 1,
+            minZ + (townBlockSize - 1)));
   }
 
   /** Box regions for every claimed chunk of the town whose block passes {@code include}. */
   static List<WorldRegion<World, Vector3i>> plots(Town town, Predicate<TownBlock> include) {
     List<WorldRegion<World, Vector3i>> regions = new ArrayList<>();
+    int townBlockSize = TownySettings.getTownBlockSize();
     for (TownBlock townBlock : town.getTownBlocks()) {
       if (!include.test(townBlock)) {
         continue;
@@ -53,7 +60,7 @@ final class TownyRegions {
       if (world == null) {
         continue; // the town's world is unloaded; skip
       }
-      regions.add(chunk(world, coord.getCoord().getX(), coord.getCoord().getZ()));
+      regions.add(chunk(world, coord.getCoord().getX(), coord.getCoord().getZ(), townBlockSize));
     }
     return regions;
   }

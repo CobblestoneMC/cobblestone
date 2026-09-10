@@ -11,7 +11,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Stream;
 import net.kyori.adventure.audience.Audience;
+import org.cobblestonemc.LogLevel;
 import org.cobblestonemc.plugin.Permissions;
 import org.cobblestonemc.plugin.config.ConfigKeys;
 import org.cobblestonemc.plugin.config.ConfigManager;
@@ -71,6 +73,23 @@ final class CobblestoneCommand {
             .permission(Permissions.RELOAD.value())
             .executor(ctx -> reload(ctx, config, keys, messages, log))
             .build();
+    Parameter.Value<String> logLevel =
+        Parameter.string()
+            .key("level")
+            .completer(
+                (ctx, input) ->
+                    Stream.of(LogLevel.values())
+                        .map(Enum::name)
+                        .filter(level -> level.startsWith(input.toUpperCase(Locale.ROOT)))
+                        .map(CommandCompletion::of)
+                        .toList())
+            .build();
+    Command.Parameterized loglevel =
+        Command.builder()
+            .permission(Permissions.ADMIN.value())
+            .addParameter(logLevel)
+            .executor(ctx -> loglevel(ctx, messages, log, logLevel))
+            .build();
     Command.Parameterized cancel =
         Command.builder()
             .permission(Permissions.NAVIGATE.value())
@@ -120,6 +139,7 @@ final class CobblestoneCommand {
         .shortDescription(
             net.kyori.adventure.text.Component.text("Cobblestone admin and utilities"))
         .addChild(reload, "reload")
+        .addChild(loglevel, "loglevel")
         .addChild(cancel, "cancel")
         .addChild(tripsCmd, "trips")
         .addChild(portalsCmd, "portals")
@@ -154,6 +174,36 @@ final class CobblestoneCommand {
         locale,
         "/cobblestone portals clear",
         "command.cobblestone.help.portals");
+    SpongeCommandHelp.line(
+        audience,
+        messages,
+        locale,
+        "/cobblestone loglevel <level>",
+        "command.cobblestone.help.loglevel");
+    return CommandResult.success();
+  }
+
+  /**
+   * Applies a new console verbosity threshold. The level lives only in the logger, so it lasts
+   * until the next restart — see {@code ConfigKeys} for why it is not a config setting.
+   */
+  private static CommandResult loglevel(
+      CommandContext ctx,
+      Messages messages,
+      Log4JCobblestoneLogger log,
+      Parameter.Value<String> levelParameter) {
+    Audience audience = ctx.cause().audience();
+    Locale locale = localeOf(ctx, messages);
+    String input = ctx.requireOne(levelParameter);
+    LogLevel level;
+    try {
+      level = LogLevel.valueOf(input.toUpperCase(Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      messages.send(audience, locale, CobblestoneMessages.LOG_LEVEL_INVALID, input);
+      return CommandResult.success();
+    }
+    log.setLevel(level);
+    messages.send(audience, locale, CobblestoneMessages.LOG_LEVEL_SET, level.name());
     return CommandResult.success();
   }
 
@@ -167,7 +217,6 @@ final class CobblestoneCommand {
     Locale locale = localeOf(ctx, messages);
     List<String> restartRequired = config.reload();
     messages.setShowPrefix(config.get(keys.messagesShowPrefix));
-    log.setLevel(config.get(keys.loggingLevel));
     messages.send(audience, locale, CobblestoneMessages.RELOAD_SUCCESS);
     if (!restartRequired.isEmpty()) {
       messages.send(

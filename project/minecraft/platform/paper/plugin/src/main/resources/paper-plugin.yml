@@ -18,6 +18,9 @@ permissions:
   cobblestone.location:
     description: "Use of personal locations"
     default: true
+  cobblestone.admin:
+    description: "Cobblestone's coarse admin operations (e.g. /cobblestone loglevel)"
+    default: op
   cobblestone.admin.reload:
     description: "Reload the Cobblestone configuration"
     default: op

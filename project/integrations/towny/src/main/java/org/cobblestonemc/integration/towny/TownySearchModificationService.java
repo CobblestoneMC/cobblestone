@@ -9,17 +9,20 @@ package org.cobblestonemc.integration.towny;
 
 import com.palmergames.bukkit.towny.TownyAPI;
 import com.palmergames.bukkit.towny.TownySettings;
+import com.palmergames.bukkit.towny.event.executors.TownyActionEventExecutor;
 import com.palmergames.bukkit.towny.exceptions.TownyException;
 import com.palmergames.bukkit.towny.object.Nation;
 import com.palmergames.bukkit.towny.object.Resident;
 import com.palmergames.bukkit.towny.object.Town;
-import com.palmergames.bukkit.towny.object.TownyPermission.ActionType;
-import com.palmergames.bukkit.towny.utils.PlayerCacheUtil;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.cobblestonemc.paper.api.BreakChecker;
@@ -36,9 +39,10 @@ import org.cobblestonemc.paper.api.Transition;
  * unusual states (wars, jailing) are left to Towny to reject. Read on the search-initiating (main)
  * thread.
  *
- * <p><b>Breakability</b> — {@code PlayerCacheUtil.getCachePermission(…, DESTROY)} decides whether
- * the player may dig a block, so mining routes avoid protected land. That call touches Towny's
- * caches, so it is hopped to the main thread and its result delivered through the future.
+ * <p><b>Breakability</b> — {@code TownyActionEventExecutor.canDestroy} decides whether the player
+ * may dig a block, so mining routes avoid protected land. It fires Towny's own event, so it must
+ * run on the main thread; the result is delivered through the future, and answers are cached per
+ * search by plot and material.
  */
 final class TownySearchModificationService implements SearchModificationService {
 
@@ -91,7 +95,7 @@ final class TownySearchModificationService implements SearchModificationService 
   private boolean canSpawnToTown(
       Player player, Resident resident, Town ownTown, Nation ownNation, Town town) {
     if (town.equals(ownTown)) {
-      return player.hasPermission(SPAWN_TOWN);
+      return TownySettings.isConfigAllowingTownSpawn() && player.hasPermission(SPAWN_TOWN);
     }
     if (resident != null && town.hasOutlaw(resident)) {
       return false;
@@ -137,22 +141,55 @@ final class TownySearchModificationService implements SearchModificationService 
 
   @Override
   public BreakChecker computeBreakChecker(Player player) {
-    return (breaker, location, block) -> {
-      CompletableFuture<Boolean> future = new CompletableFuture<>();
-      // getCachePermission touches Towny's caches / Bukkit; evaluate it on the main thread.
-      Bukkit.getScheduler()
-          .runTask(
-              plugin,
-              () -> {
-                if (!breaker.isOnline()) {
-                  future.complete(true); // gone; do not block mining
-                  return;
-                }
-                future.complete(
-                    PlayerCacheUtil.getCachePermission(
-                        breaker, location, block.getMaterial(), ActionType.DESTROY));
-              });
-      return future;
-    };
+    // One cache per search: a search asks about thousands of blocks, and every miss is a hop to the
+    // main thread and back — the search parks for the whole round trip each time. Towny's answer,
+    // though, is a property of the town block (a 16x16 column) and the material, not of the
+    // individual block: every stone block in one plot answers the same. So the thousands of
+    // questions a search actually has collapse to a handful of distinct ones.
+    Map<PermissionKey, CompletableFuture<Boolean>> cache = new ConcurrentHashMap<>();
+    return (breaker, location, block) ->
+        cache.computeIfAbsent(
+            PermissionKey.of(location, block.getMaterial()), key -> ask(breaker, location, block));
+  }
+
+  /** Puts one breakability question to Towny on the main thread. */
+  private CompletableFuture<Boolean> ask(Player breaker, Location location, BlockData block) {
+    CompletableFuture<Boolean> future = new CompletableFuture<>();
+    Bukkit.getScheduler()
+        .runTask(
+            plugin,
+            () -> {
+              if (!breaker.isOnline()) {
+                future.complete(true); // gone; do not block mining
+                return;
+              }
+              // canDestroy, not PlayerCacheUtil.getCachePermission. The latter queries the
+              // player's own movement cache, which is built for wherever the player is standing —
+              // asking it about a house a thousand blocks away answers from the wrong context and
+              // misses trusted residents, so a player who could plainly break there was told they
+              // could not. canDestroy runs Towny's whole decision, event and all.
+              future.complete(
+                  TownyActionEventExecutor.canDestroy(breaker, location, block.getMaterial()));
+            });
+    return future;
+  }
+
+  /**
+   * What Towny's answer actually depends on: which town block the location falls in, in which
+   * world, and the material being broken.
+   *
+   * <p>Deliberately coarser than the block position. Towny grants build rights per plot, so two
+   * blocks of the same material in the same plot always get the same verdict; keying on the plot
+   * turns a search's thousands of questions into a few. It errs towards asking more rather than
+   * fewer — a plot is the finest granularity Towny itself distinguishes.
+   */
+  private record PermissionKey(String world, int townBlockX, int townBlockZ, Material material) {
+    static PermissionKey of(Location location, Material material) {
+      return new PermissionKey(
+          location.getWorld().getName(),
+          location.getBlockX() >> 4,
+          location.getBlockZ() >> 4,
+          material);
+    }
   }
 }

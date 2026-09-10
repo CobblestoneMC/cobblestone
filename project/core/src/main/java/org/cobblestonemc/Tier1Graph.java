@@ -33,12 +33,14 @@ final class Tier1Graph<T, D extends Domain> extends Graph<Tier1Node<T, D>, Tier1
   private final Map<D, List<Transition<T, D>>> transitionsByOriginDomain = new HashMap<>();
   private final Map<D, List<DomainRegion<D>>> destinationsByDomain = new HashMap<>();
   private final Tier1Node.Source<T, D> originNode;
+  private final double unsolvedFactor;
 
   Tier1Graph(
       Position<D> origin,
       List<? extends Transition<T, D>> transitions,
       Collection<? extends DomainRegion<D>> destinationRegions,
-      HeuristicStrategy heuristic) {
+      HeuristicStrategy heuristic,
+      double unsolvedFactor) {
     this.heuristic = heuristic;
     this.originNode = new Tier1Node.Source<>(origin, TraversalState.DEFAULT);
     for (Transition<T, D> transition : transitions) {
@@ -49,6 +51,7 @@ final class Tier1Graph<T, D extends Domain> extends Graph<Tier1Node<T, D>, Tier1
     for (DomainRegion<D> region : destinationRegions) {
       destinationsByDomain.computeIfAbsent(region.domain(), key -> new ArrayList<>()).add(region);
     }
+    this.unsolvedFactor = unsolvedFactor;
   }
 
   Tier1Node.Source<T, D> originNode() {
@@ -92,15 +95,16 @@ final class Tier1Graph<T, D extends Domain> extends Graph<Tier1Node<T, D>, Tier1
         new ArrayList<>(transitionTargets.size() + destinationTargets.size());
     for (Transition<T, D> target : transitionTargets) {
       edges.add(
-          new Tier1Edge<T, D>(
-              new VirtualPath<T, D>(fromCell, destinationDomain, target.origin(), state),
+          new Tier1Edge<>(
+              new VirtualPath<>(
+                  fromCell, destinationDomain, target.origin(), state, unsolvedFactor),
               new Tier1Node.AtTransition<>(target, target.apply(state)),
               state));
     }
     for (DomainRegion<D> target : destinationTargets) {
       edges.add(
-          new Tier1Edge<T, D>(
-              new VirtualPath<T, D>(fromCell, destinationDomain, target, state),
+          new Tier1Edge<>(
+              new VirtualPath<>(fromCell, destinationDomain, target, state, unsolvedFactor),
               new Tier1Node.Sink<>(),
               state));
     }

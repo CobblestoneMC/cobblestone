@@ -26,6 +26,7 @@ import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.cobblestonemc.LogLevel;
 import org.cobblestonemc.plugin.Permissions;
 import org.cobblestonemc.plugin.config.ConfigKeys;
 import org.cobblestonemc.plugin.config.ConfigManager;
@@ -127,6 +128,19 @@ final class CobblestoneCommand {
                 .requires(source -> source.getSender().hasPermission(Permissions.RELOAD.value()))
                 .executes(ctx -> reload(ctx.getSource().getSender(), config, keys, messages, log)))
         .then(
+            Commands.literal("loglevel")
+                .requires(source -> source.getSender().hasPermission(Permissions.ADMIN.value()))
+                .then(
+                    Commands.argument("level", StringArgumentType.word())
+                        .suggests(CobblestoneCommand::suggestLogLevels)
+                        .executes(
+                            ctx ->
+                                loglevel(
+                                    ctx.getSource().getSender(),
+                                    messages,
+                                    log,
+                                    StringArgumentType.getString(ctx, "level")))))
+        .then(
             Commands.literal("cancel")
                 .requires(source -> source.getSender().hasPermission(Permissions.NAVIGATE.value()))
                 .executes(ctx -> cancelAll(ctx.getSource().getSender(), messages, trips, searches))
@@ -170,7 +184,6 @@ final class CobblestoneCommand {
     Locale locale = localeOf(sender, messages);
     final List<String> restartRequired = config.reload();
     messages.setShowPrefix(config.get(keys.messagesShowPrefix));
-    log.setLevel(config.get(keys.loggingLevel));
     messages.send(sender, locale, CobblestoneMessages.RELOAD_SUCCESS);
     if (!restartRequired.isEmpty()) {
       messages.send(
@@ -180,6 +193,36 @@ final class CobblestoneCommand {
           String.join(", ", restartRequired));
     }
     return Command.SINGLE_SUCCESS;
+  }
+
+  /**
+   * Applies a new console verbosity threshold. The level lives only in the logger, so it lasts
+   * until the next restart — see {@code ConfigKeys} for why it is not a config setting.
+   */
+  private static int loglevel(
+      CommandSender sender, Messages messages, JulCobblestoneLogger log, String input) {
+    Locale locale = localeOf(sender, messages);
+    LogLevel level;
+    try {
+      level = LogLevel.valueOf(input.toUpperCase(Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      messages.send(sender, locale, CobblestoneMessages.LOG_LEVEL_INVALID, input);
+      return Command.SINGLE_SUCCESS;
+    }
+    log.setLevel(level);
+    messages.send(sender, locale, CobblestoneMessages.LOG_LEVEL_SET, level.name());
+    return Command.SINGLE_SUCCESS;
+  }
+
+  private static CompletableFuture<Suggestions> suggestLogLevels(
+      CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+    String prefix = builder.getRemaining().toUpperCase(Locale.ROOT);
+    for (LogLevel level : LogLevel.values()) {
+      if (level.name().startsWith(prefix)) {
+        builder.suggest(level.name());
+      }
+    }
+    return builder.buildFuture();
   }
 
   private static int showHelp(CommandSender sender, Messages messages) {
@@ -203,6 +246,12 @@ final class CobblestoneCommand {
         "command.cobblestone.help.location");
     CommandHelp.line(
         sender, messages, locale, "/cobblestone portals clear", "command.cobblestone.help.portals");
+    CommandHelp.line(
+        sender,
+        messages,
+        locale,
+        "/cobblestone loglevel <level>",
+        "command.cobblestone.help.loglevel");
     return Command.SINGLE_SUCCESS;
   }
 

@@ -58,6 +58,14 @@ public final class TestWorld implements MinecraftWorld {
   }
 
   @Override
+  public FutureOr<MinecraftChunk> chunkAt(Cell cell, Cell previous) {
+    int baseX = (cell.x() >> 4) << 4;
+    int baseZ = (cell.z() >> 4) << 4;
+    return FutureOr.of(
+        (localX, y, localZ) -> grid.getOrDefault(new Cell(baseX + localX, y, baseZ + localZ), air));
+  }
+
+  @Override
   public boolean equals(Object o) {
     return o instanceof TestWorld other && key.equals(other.key);
   }

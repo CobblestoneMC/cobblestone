@@ -42,6 +42,7 @@ import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.minecraft.BreakChecker;
 import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
+import org.cobblestonemc.minecraft.ChunkProviderStats;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -63,13 +64,11 @@ public final class PaperNavigationServiceImpl
 
   // The true global-minimum per-block cost (flying, MovementCosts.FLY = 0.08). Used as the
   // admissible Tier-1 bound and the running-average's cold-start estimate.
-  private static final double CHEAPEST_COST_PER_BLOCK = 0.08;
 
   private final CobblestoneLogger logger;
   private final PaperScheduler scheduler;
   private final ChunkProvider chunkProvider;
   private final CobblestoneApi core;
-  private final HeuristicStrategy heuristic;
   private final Map<String, MinecraftWorld> worldCache = new ConcurrentHashMap<>();
   private final OwnedRegistry<SearchModificationService> searchModifiers = new OwnedRegistry<>();
 
@@ -86,7 +85,6 @@ public final class PaperNavigationServiceImpl
     PaperPlatformApi platform = new PaperPlatformApi(plugin, scheduler);
     this.chunkProvider = new ChunkProvider(platform, chunkSettings);
     this.core = CobblestoneApi.load();
-    this.heuristic = Heuristics.runningAverage(CHEAPEST_COST_PER_BLOCK);
   }
 
   @Override
@@ -148,6 +146,18 @@ public final class PaperNavigationServiceImpl
     return scheduler;
   }
 
+  /**
+   * Drops the cached snapshot of the chunk containing a changed block, so searches see the edit.
+   * Wired to the server's block-change events by the plugin layer; safe from any thread.
+   *
+   * @param worldKey the world's namespaced key
+   * @param blockX the block X coordinate
+   * @param blockZ the block Z coordinate
+   */
+  public void invalidateBlock(String worldKey, int blockX, int blockZ) {
+    chunkProvider.invalidateBlock(worldKey, blockX, blockZ);
+  }
+
   /** Stops the search worker pool; call on plugin disable. */
   public void shutdown() {
     scheduler.shutdown();
@@ -162,7 +172,6 @@ public final class PaperNavigationServiceImpl
    * Drops every search modifier a departing owner registered (called when that plugin disables).
    *
    * @param owner the departing owner's name
-   * @return how many modifiers were removed
    */
   public void purgeOwner(String owner) {
     searchModifiers.purge(owner);
@@ -186,6 +195,15 @@ public final class PaperNavigationServiceImpl
     ModesProvider<CobblestonePlayer, MinecraftStepPayload, MinecraftWorld> modes =
         MinecraftModes.providerFor(
             agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
+    // Per-player, not a shared constant: the bound has to reflect what this player can actually do,
+    // or Tier-1 prices every route as if they could fly. See MinecraftModes#cheapestCostPerBlock.
+    HeuristicStrategy heuristic =
+        Heuristics.runningAverage(
+            MinecraftModes.cheapestCostPerBlock(agent, settings.excludedModes()));
+
+    // Chunk counters are provider-wide, so attribute this search's share by diffing a reading
+    // taken now against one taken when it finishes. See ChunkProviderStats.
+    ChunkProviderStats chunksBefore = chunkProvider.stats();
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
         gatherTransitions(
@@ -203,6 +221,11 @@ public final class PaperNavigationServiceImpl
                         restrictions,
                         heuristic,
                         settings.settings()));
+    handleFuture
+        .thenCompose(SearchHandle::future)
+        .whenComplete(
+            (result, error) ->
+                logger.debug("Chunks; {}", chunkProvider.stats().since(chunksBefore)));
     return new PaperSearchHandle(handleFuture);
   }
 

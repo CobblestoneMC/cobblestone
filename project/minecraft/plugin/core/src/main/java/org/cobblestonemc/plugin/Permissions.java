@@ -31,6 +31,12 @@ public enum Permissions {
   /** Use of {@code /cobblestone location}, for the player's own locations. Default allow. */
   LOCATION("cobblestone.location"),
 
+  /**
+   * The coarse administration node, covering the operational dials that are not worth their own
+   * permission — currently {@code /cobblestone loglevel}. Default op.
+   */
+  ADMIN("cobblestone.admin"),
+
   /** Reloading the configuration. Default op. */
   RELOAD("cobblestone.admin.reload"),
 

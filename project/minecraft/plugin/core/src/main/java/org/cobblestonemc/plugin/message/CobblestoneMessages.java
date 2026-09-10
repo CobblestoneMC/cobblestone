@@ -43,6 +43,14 @@ public final class CobblestoneMessages {
   public static final Message1 RELOAD_RESTART_REQUIRED =
       Message1.info("command.cobblestone.reload.restart_required");
 
+  /** Confirms the console log level was changed ({@code {0}} = the new level). */
+  public static final Message1 LOG_LEVEL_SET =
+      Message1.success("command.cobblestone.log_level.set");
+
+  /** Shown when {@code loglevel} is given a name that is not a level ({@code {0}} = the input). */
+  public static final Message1 LOG_LEVEL_INVALID =
+      Message1.error("command.cobblestone.log_level.invalid");
+
   /** Confirms a location was set ({@code {0}} = its name). */
   public static final Message1 LOCATION_SET = Message1.success("command.cobblestone.location.set");
 

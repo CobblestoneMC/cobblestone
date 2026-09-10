@@ -156,4 +156,38 @@ public final class TestBlocks {
       }
     };
   }
+
+  /**
+   * A door standing open. Still impassable — passability is a material-level fact, so a door reads
+   * the same whichever way it is standing (see {@code MinecraftBlock}); only {@code DoorMode} can
+   * cross one.
+   */
+  public static MinecraftBlock openDoor() {
+    return new MinecraftBlock() {
+      @Override
+      public boolean isPassable() {
+        return false;
+      }
+
+      @Override
+      public boolean isSolidTop() {
+        return false;
+      }
+
+      @Override
+      public boolean isDoor() {
+        return true;
+      }
+
+      @Override
+      public boolean isOpen() {
+        return true;
+      }
+
+      @Override
+      public boolean opensByHand() {
+        return true;
+      }
+    };
+  }
 }

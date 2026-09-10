@@ -10,31 +10,54 @@ package org.cobblestonemc;
 import org.cobblestonemc.api.TraversalState;
 
 /**
- * A per-solve, possibly-stateful heuristic instance created by {@link
- * HeuristicStrategy#newSolve(int)} for a single Tier-2 A* solve. Unlike the stateless {@link
- * HeuristicStrategy} (which Tier-1 uses as an admissible lower bound), a solve heuristic may adapt
- * to the costs actually seen during the search — e.g. the running-average heuristic tightens its
- * estimate toward the real per-block cost of the terrain being traversed, trading admissibility for
- * a far smaller explored frontier.
+ * A heuristic for a single Tier-2 A* solve, created by {@link HeuristicStrategy#newSolve(int)}.
+ * Unlike the stateless {@link HeuristicStrategy} (which Tier-1 uses as an admissible lower bound),
+ * a solve heuristic may adapt to the costs actually seen — e.g. the running-average heuristic
+ * tightens its estimate toward the real per-block cost of the terrain being crossed, trading
+ * admissibility for a far smaller explored frontier.
+ *
+ * <p><b>The adaptation is per-cell, not per-solve.</b> Each cell carries a <i>trail average</i>:
+ * the average per-block cost of the steps leading to it, which the search inherits down the search
+ * tree via {@link #advance} and hands back to {@link #estimate}. So a cell three blocks into a
+ * mountain is priced as if the rest of its journey were also through rock, while a cell on the
+ * grass beside it is priced as grass — which is the whole point, since the two are otherwise
+ * separated by less than a second of {@code f} across a two-thousand-block journey and A* would
+ * explore both exhaustively.
+ *
+ * <p>Implementations are consulted from one solve's worker at a time but hold no mutable state of
+ * their own: the state lives on the cells. That also means the estimate for a cell is a property of
+ * that cell's own history rather than of whatever the search happened to expand most recently.
  */
 public interface SolveHeuristic {
 
   /**
-   * Estimates the remaining cost from {@code from} into {@code target} while in {@code state}.
+   * Returns the trail average the start cell carries, before any step has been taken.
+   *
+   * @return the seed per-block cost, in seconds per block
+   */
+  double seed();
+
+  /**
+   * Folds one step into the trail average, giving the average carried by the cell the step leads
+   * to. A step covering several blocks (a long fall) moves the average as much as that many
+   * single-block steps would; a zero-length step (a transition in place) leaves it untouched.
+   *
+   * @param trailAverage the average carried by the cell the step leaves from
+   * @param stepCost the step's cost in seconds
+   * @param blocks the step's length in blocks
+   * @return the average carried by the cell the step arrives at
+   */
+  double advance(double trailAverage, double stepCost, double blocks);
+
+  /**
+   * Estimates the remaining cost from {@code from} into {@code target} while in {@code state},
+   * scaled by the trail average {@code from} carries.
    *
    * @param from the current cell
    * @param target the region being sought
    * @param state the current traversal state
+   * @param trailAverage the per-block cost of the trail leading to {@code from}
    * @return a cost estimate in seconds (not necessarily a lower bound)
    */
-  double estimate(Cell from, DomainRegion<?> target, TraversalState state);
-
-  /**
-   * Feeds back the real cost of a step the search committed to, so an adaptive heuristic can
-   * update. A stateless heuristic ignores this.
-   *
-   * @param stepCost the step's cost in seconds
-   * @param blocks the step's length in blocks (used to derive a per-block cost)
-   */
-  void observe(double stepCost, double blocks);
+  double estimate(Cell from, DomainRegion<?> target, TraversalState state, double trailAverage);
 }

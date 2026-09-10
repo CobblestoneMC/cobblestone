@@ -82,7 +82,7 @@ public abstract class Graph<N, E> {
         continue;
       }
       if (isGoal.test(node)) {
-        return Optional.of(reconstruct(source, node, prev));
+        return Optional.of(reconstruct(source, node, prev, current.dist()));
       }
       for (E edge : outboundEdges(node)) {
         double edgeCost = cost(edge);
@@ -101,7 +101,7 @@ public abstract class Graph<N, E> {
     return Optional.empty();
   }
 
-  private GraphPath<N, E> reconstruct(N source, N goal, Map<N, Backlink<N, E>> prev) {
+  private GraphPath<N, E> reconstruct(N source, N goal, Map<N, Backlink<N, E>> prev, double dist) {
     Deque<N> nodes = new ArrayDeque<>();
     Deque<E> edges = new ArrayDeque<>();
     N cursor = goal;
@@ -112,7 +112,7 @@ public abstract class Graph<N, E> {
       nodes.addFirst(link.from());
       cursor = link.from();
     }
-    return new GraphPath<>(new ArrayList<>(nodes), new ArrayList<>(edges));
+    return new GraphPath<>(new ArrayList<>(nodes), new ArrayList<>(edges), dist);
   }
 
   private record Frontier<N>(N node, double dist) {}

@@ -19,6 +19,6 @@ record PaperChunk(ChunkSnapshot snapshot) implements MinecraftChunk {
 
   @Override
   public MinecraftBlock block(int localX, int y, int localZ) {
-    return new PaperBlock(snapshot.getBlockData(localX, y, localZ));
+    return PaperBlocks.of(snapshot, localX, y, localZ);
   }
 }

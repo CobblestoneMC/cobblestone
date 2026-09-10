@@ -39,7 +39,7 @@ final class MovementCosts {
   static final double PLACE_BOAT = 1.00;
 
   /** Seconds to fall one block. */
-  static final double FALL_PER_BLOCK = 0.10;
+  static final double FALL_PER_BLOCK = 0.18;
 
   /** Multiplier applied to distance for a diagonal move. */
   static final double DIAGONAL = Math.sqrt(2.0);

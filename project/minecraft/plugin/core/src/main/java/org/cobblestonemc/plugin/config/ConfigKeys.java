@@ -8,7 +8,7 @@
 package org.cobblestonemc.plugin.config;
 
 import java.util.List;
-import org.cobblestonemc.LogLevel;
+import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.plugin.data.DataBackend;
 
@@ -32,9 +32,6 @@ public final class ConfigKeys {
 
   /** The locale used for console/system messages (BCP-47 language tag). Immutable. */
   public final ConfigKey<String> localeDefault;
-
-  /** The logging verbosity threshold. Mutable — applied on reload. */
-  public final ConfigKey<LogLevel> loggingLevel;
 
   /** Whether the {@code [✦]} prefix badge precedes every player message. Mutable. */
   public final ConfigKey<Boolean> messagesShowPrefix;
@@ -64,7 +61,7 @@ public final class ConfigKeys {
   public final ConfigKey<Integer> algorithmMaxCellsVisited;
 
   /** Wall-clock budget for a whole search, in seconds. Mutable. */
-  public final ConfigKey<Integer> algorithmMaxWallClockSeconds;
+  public final ConfigKey<Long> algorithmMaxWallClockSeconds;
 
   /** Tier-1 recalculation overshoot threshold (1.30 = re-plan at 30% over estimate). Mutable. */
   public final ConfigKey<Double> algorithmTier1RecalcThreshold;
@@ -166,18 +163,10 @@ public final class ConfigKeys {
             .requiresRestart()
             .register();
 
-    manager.section(
-        "logging",
-        """
-        Logging verbosity. trace/debug surface Cobblestone's own diagnostics (including a per-search
-        summary at debug) on the console.""");
-    this.loggingLevel =
-        manager
-            .key("logging.level", LogLevel.INFO, Codec.ofEnum(LogLevel.class))
-            .comment("The lowest level of message Cobblestone writes to the console.")
-            .permitted(List.of(LogLevel.values()))
-            .mutable()
-            .register();
+    // Logging verbosity is deliberately not a config key: it is a debugging dial, not a
+    // deployment setting. It lives in memory (defaulting to INFO) and is turned with
+    // `/cobblestone loglevel`, so an admin can raise it mid-incident and have it fall back
+    // on restart rather than leaving a server running at trace forever.
 
     manager.section("messages", "How Cobblestone's chat messages look.");
     this.messagesShowPrefix =
@@ -253,19 +242,28 @@ public final class ConfigKeys {
         hardware.""");
     this.algorithmMaxCellsVisited =
         manager
-            .key("search.algorithm.max_cells_visited", 1_000_000, Codec.ofInt())
+            .key(
+                "search.algorithm.max_cells_visited",
+                SearchSettings.DEFAULT_MAX_CELLS_VISITED,
+                Codec.ofInt())
             .comment("Most cells a single A* solve may visit before giving up (a memory guard).")
             .mutable()
             .register();
     this.algorithmMaxWallClockSeconds =
         manager
-            .key("search.algorithm.max_wall_clock_seconds", 60, Codec.ofInt())
+            .key(
+                "search.algorithm.max_wall_clock_seconds",
+                SearchSettings.DEFAULT_MAX_WALL_CLOCK_MILLIS / 1000,
+                Codec.ofLong())
             .comment("Wall-clock budget for the whole search, in seconds.")
             .mutable()
             .register();
     this.algorithmTier1RecalcThreshold =
         manager
-            .key("search.algorithm.tier1_recalc_threshold", 1.30, Codec.ofDouble())
+            .key(
+                "search.algorithm.tier1_recalc_threshold",
+                SearchSettings.DEFAULT_TIER1_RECALC_THRESHOLD,
+                Codec.ofDouble())
             .comment(
                 "Re-plan the coarse route when a leg runs this factor over its estimate (1.30 = 30%"
                     + " over).")
@@ -273,17 +271,23 @@ public final class ConfigKeys {
             .register();
     this.algorithmRunningAverageWidth =
         manager
-            .key("search.algorithm.running_average_width", 5, Codec.ofInt())
+            .key(
+                "search.algorithm.running_average_width",
+                SearchSettings.DEFAULT_RUNNING_AVERAGE_WIDTH,
+                Codec.ofInt())
             .comment("Window width for the running-average heuristic.")
             .mutable()
             .register();
     this.algorithmHeuristicWeight =
         manager
-            .key("search.algorithm.heuristic_weight", 1.2, Codec.ofDouble())
+            .key(
+                "search.algorithm.heuristic_weight",
+                SearchSettings.DEFAULT_HEURISTIC_WEIGHT,
+                Codec.ofDouble())
             .comment(
                 """
                 A* heuristic weight. 1.0 finds optimal paths but explores a lot; higher is much
-                faster and slightly suboptimal (bounded by this factor). 1.2 is a good balance.""")
+                faster and slightly suboptimal (bounded by this factor).""")
             .mutable()
             .register();
 

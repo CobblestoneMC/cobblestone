@@ -12,6 +12,7 @@ import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.MinecraftBlock;
+import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 
 /**
@@ -62,6 +63,11 @@ final class PaperWorld implements MinecraftWorld {
   @Override
   public FutureOr<MinecraftBlock> blockAt(Cell cell, Cell destination) {
     return provider.block(cell, this, destination);
+  }
+
+  @Override
+  public FutureOr<MinecraftChunk> chunkAt(Cell cell, Cell destination) {
+    return provider.chunk(cell, this, destination);
   }
 
   @Override

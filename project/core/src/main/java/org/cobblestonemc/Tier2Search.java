@@ -7,6 +7,7 @@
 
 package org.cobblestonemc;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -22,6 +23,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
@@ -77,8 +79,22 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   // --- search state; touched only inside pump() (single-flight) ---
   private final Map<CellState, Node<T>> nodes = new HashMap<>();
   private final Map<Cell, Set<CellState>> byCell = new HashMap<>();
-  private final PriorityQueue<Entry> open =
-      new PriorityQueue<>(Comparator.comparingDouble(Entry::estimatedTotalCost));
+
+  /**
+   * Lowest {@code f} first, and among equal {@code f} the node with the <b>largest</b> {@code g} —
+   * the one furthest along its route.
+   *
+   * <p>The tie-break is not a detail. Movement costs are near-uniform over a lattice, so huge
+   * numbers of cells share an {@code f} exactly; with no secondary key their order is whatever the
+   * heap happens to give, and the search fans out over every equal-cost route at once instead of
+   * following one. Preferring the deeper node turns that fan into a probe, and a probe that reaches
+   * the goal retires the whole tie group behind it.
+   */
+  private static final Comparator<Entry> BY_ESTIMATE =
+      Comparator.comparingDouble(Entry::estimatedTotalCost)
+          .thenComparing(Comparator.comparingDouble(Entry::currentCost).reversed());
+
+  private final PriorityQueue<Entry> open = new PriorityQueue<>(BY_ESTIMATE);
   private int expandedCount;
   private PendingModes<T> pendingModes;
   private CellState pendingGoal; // an optimistically-reached goal awaiting path confirmation
@@ -100,6 +116,34 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private final CompletableFuture<Tier2Result<T, D>> result = new CompletableFuture<>();
   private final Stopwatch activeStopwatch = new Stopwatch();
   private long parkTimestamp = System.currentTimeMillis();
+
+  // Parking is what a search does while a mode waits on a block it does not have. Wall time is
+  // essentially activeTime + parkedTime, so these two counters say whether a slow search is
+  // thinking too hard or waiting too long — and the mean park says how long each wait costs.
+  private boolean pumped;
+  private long parks;
+  private long parkedMillis;
+
+  // How near the target the search has actually got, against how far it started. This is the one
+  // number that separates the two ways a solve can run out of time: a search grinding slowly along
+  // a route it is following closes the gap, while a search walled in — by terrain, or by chunks the
+  // load policy will not materialize — burns its whole budget without the gap moving.
+  private final double startDistance;
+  private double closestApproach = Double.POSITIVE_INFINITY;
+
+  /**
+   * Within this many blocks of the target, the heuristic weight eases back down towards 1.
+   *
+   * <p>A weighted search prices a step <em>away</em> from the target at {@code weight} times what a
+   * step towards it earns, so when the goal sits in a pocket — a room whose door faces away, a
+   * ledge reached from behind — the search will exhaust an enormous number of cells at the pocket's
+   * mouth before it will accept one that retreats. It arrives within a few blocks and stops there.
+   *
+   * <p>Decaying only over the last stretch fixes that without giving up any of the speed: the long
+   * haul still runs at full weight, and the endgame runs nearly admissible, which is exactly where
+   * thoroughness is worth paying for. Sized to comfortably contain a building.
+   */
+  private static final double ENDGAME_RADIUS = 64.0;
 
   Tier2Search(
       CobblestoneLogger logger,
@@ -132,20 +176,97 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     this.deadlineMillis = deadlineMillis;
 
     this.start = new CellState(virtualPath.fromCell(), virtualPath.state());
+    this.startDistance = start.cell().distance(target.nearestBoundaryCell(start.cell()));
     Node<T> startNode = getOrCreate(start);
     startNode.cost = 0.0;
+    // `heuristic` here is the strategy parameter; the per-solve instance is the field.
+    startNode.trailAverage = this.heuristic.seed();
     open.add(
         new Entry(
-            start, 0.0, heuristicWeight * heuristic.estimate(start.cell(), target, start.state())));
+            start,
+            0.0,
+            weightAt(start.cell())
+                * this.heuristic.estimate(
+                    start.cell(), target, start.state(), startNode.trailAverage)));
   }
 
   CompletableFuture<Tier2Result<T, D>> solve() {
+    armDeadline();
     wake();
     return result;
   }
 
+  /**
+   * Schedules a single wake-up at the deadline, so the budget is enforced even while the search is
+   * parked.
+   *
+   * <p>The deadline is tested inside {@link #loop()}, which only runs when something calls {@link
+   * #wake()} — a mode's blocks arriving, or a restriction verdict landing. Every park therefore
+   * depends on a callback that may never come: a chunk future that never completes, or an
+   * integration that schedules its verdict onto a server thread and loses it. Without this timer
+   * such a search waits forever rather than timing out, and the greedier the heuristic the likelier
+   * it is to get there — a search that reaches its goal quickly spends most of its life parked on
+   * path confirmation, which is exactly the state that depends on those verdicts.
+   */
+  private void armDeadline() {
+    if (deadlineMillis <= 0) {
+      return;
+    }
+    long delay = Math.max(1, deadlineMillis - System.currentTimeMillis());
+    // Hold the solve weakly and the result strongly. A timer task lives until it fires, and a
+    // lambda capturing `this` would pin the whole search — every node, every candidate parent, the
+    // open set — for the full budget after the search had already finished, which on a busy server
+    // is gigabytes of finished searches waiting on their own timers. The result future is small and
+    // does not reference the search, so capturing it costs nothing and still guarantees the
+    // timeout: if the solve is still alive we wake it, so it reports the timeout with its stats,
+    // and if it has been collected we complete the result ourselves.
+    WeakReference<Tier2Search<A, T, D>> self = new WeakReference<>(this);
+    CompletableFuture<Tier2Result<T, D>> pending = result;
+    CompletableFuture.runAsync(
+        () -> {
+          if (pending.isDone()) {
+            return;
+          }
+          Tier2Search<A, T, D> search = self.get();
+          if (search != null) {
+            search.wake();
+          } else {
+            pending.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.TIMED_OUT));
+          }
+        },
+        CompletableFuture.delayedExecutor(delay, TimeUnit.MILLISECONDS, executor));
+  }
+
+  /**
+   * The heuristic weight to apply at {@code cell}: the configured weight out in the open, easing to
+   * 1 as the search closes on the target. See {@link #ENDGAME_RADIUS}.
+   */
+  private double weightAt(Cell cell) {
+    if (heuristicWeight <= 1.0) {
+      return heuristicWeight;
+    }
+    double remaining = cell.distance(target.nearestBoundaryCell(cell));
+    if (remaining >= ENDGAME_RADIUS) {
+      return heuristicWeight;
+    }
+    return 1.0 + (heuristicWeight - 1.0) * (remaining / ENDGAME_RADIUS);
+  }
+
   private String stats() {
-    return "activeTime:" + activeStopwatch.elapsed() + "ms, " + "visited:" + nodes.size();
+    return ("activeTime:%dms, parkedTime:%dms, parks:%d (mean %.1fms), visited:%d, expanded:%d, "
+            + "approach:%.0f/%.0f blocks (%.0f%%)")
+        .formatted(
+            activeStopwatch.elapsed(),
+            parkedMillis,
+            parks,
+            parks == 0 ? 0.0 : (double) parkedMillis / parks,
+            nodes.size(),
+            expandedCount,
+            startDistance - Math.min(closestApproach, startDistance),
+            startDistance,
+            startDistance <= 0
+                ? 100.0
+                : (1 - Math.min(closestApproach, startDistance) / startDistance) * 100);
   }
 
   /** Signals that there is work and schedules a single {@link #pump()} run if one is not active. */
@@ -161,7 +282,14 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       // Consume signals: each pass runs the loop until it hits a wait; re-run while new work
       // arrived.
       while (signalled.compareAndSet(true, false)) {
-        logger.trace("Woke up after {}ms", System.currentTimeMillis() - parkTimestamp);
+        long parked = System.currentTimeMillis() - parkTimestamp;
+        logger.trace("Woke up after {}ms", parked);
+        if (pumped) {
+          // The gap before the very first pump is scheduling latency, not a block wait.
+          parks++;
+          parkedMillis += parked;
+        }
+        pumped = true;
         activeStopwatch.resume();
 
         loop();
@@ -241,9 +369,9 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         }
       }
       node.closed = true;
-      if (node.bestParent != null) {
-        heuristic.observe(node.bestEdge.cost(), node.bestParent.cell().distance(node.key.cell()));
-      }
+      Cell closed = node.key.cell();
+      closestApproach =
+          Math.min(closestApproach, closed.distance(target.nearestBoundaryCell(closed)));
       if (target.contains(node.key.cell())) {
         if (pathConfirmed(node.key)) {
           finishSolved(node.key);
@@ -315,12 +443,17 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       // Use the parent's current g: a repair may have raised it while these modes were pending.
       double tentative = parent.cost + movement.cost();
       if (tentative < neighbor.cost) {
+        // setBestParent first: it folds this edge into the neighbor's trail average, which is what
+        // prices the neighbor's remaining journey.
         setBestParent(neighbor, parentKey, movement, tentative);
         open.add(
             new Entry(
                 key,
                 tentative,
-                tentative + heuristicWeight * heuristic.estimate(cell, target, movement.state())));
+                tentative
+                    + weightAt(cell)
+                        * heuristic.estimate(
+                            cell, target, movement.state(), neighbor.trailAverage)));
       }
     }
   }
@@ -338,6 +471,9 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     Node<T> parent = nodes.get(parentKey);
     if (parent != null) {
       parent.children.add(node.key);
+      node.trailAverage =
+          heuristic.advance(
+              parent.trailAverage, edge.cost(), parentKey.cell().distance(node.key.cell()));
     }
   }
 
@@ -492,13 +628,14 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     Deque<CellState> frontier = new ArrayDeque<>(invalidated);
     while (!frontier.isEmpty()) {
       CellState key = frontier.pop();
+      Node<T> node = nodes.get(key);
+      if (node == null) {
+        continue; // already gone; there is nothing left of it to re-parent
+      }
       if (!affected.add(key)) {
         continue;
       }
-      Node<T> node = nodes.get(key);
-      if (node != null) {
-        frontier.addAll(node.children);
-      }
+      frontier.addAll(node.children);
     }
     if (affected.isEmpty()) {
       return;
@@ -510,7 +647,20 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     Map<CellState, List<CellState>> internalEdges = new HashMap<>();
     Map<CellState, Repair<T>> tentative = new HashMap<>();
     for (CellState key : affected) {
+      // Every key here had a node when the subtree was walked, and nothing removes nodes in
+      // between, so this cannot be null.
       Node<T> node = nodes.get(key);
+      // Detach from the old best parent before forgetting who it was. A parent outside the
+      // affected subtree keeps its `children` entry otherwise, and if this node is then pruned for
+      // having no surviving route, removeNode cannot unlink it — it looks up the parent through
+      // the very field cleared below. That leaves a child pointing at a node that no longer
+      // exists, and the next repair to walk this parent's children trips over it.
+      if (node.bestParent != null) {
+        Node<T> oldParent = nodes.get(node.bestParent);
+        if (oldParent != null) {
+          oldParent.children.remove(key);
+        }
+      }
       node.children.clear();
       node.cost = Double.POSITIVE_INFINITY;
       node.bestParent = null;
@@ -549,7 +699,9 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
             new Entry(
                 key,
                 node.cost,
-                node.cost + heuristicWeight * heuristic.estimate(key.cell(), target, key.state())));
+                node.cost
+                    + weightAt(key.cell())
+                        * heuristic.estimate(key.cell(), target, key.state(), node.trailAverage)));
       }
       List<CellState> children = internalEdges.get(key);
       if (children == null) {
@@ -596,8 +748,21 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
    * Whether {@code goal}'s current best path is fully confirmed: every cell has a passable verdict
    * (for global restrictions) and every edge's mode-scoped restriction has resolved as not-barred.
    */
+  /**
+   * Whether every cell and edge of the best route to {@code goal} is known to be allowed, firing
+   * any check that has not run yet.
+   *
+   * <p>It walks the <b>whole</b> route before answering, rather than stopping at the first
+   * unresolved check. Each check an integration owns costs a hop to the server thread and back, so
+   * stopping early confirmed the path one edge per round trip: a route with a few hundred
+   * restricted edges — a mining route through a town, say — spent its entire budget parked, waiting
+   * out those hops one at a time, having reached the destination in seconds. Firing them all at
+   * once turns that into a single wait. The exception is an edge that comes back barred on the
+   * spot: that severs the route and repairs it, so there is nothing left to walk.
+   */
   private boolean pathConfirmed(CellState goal) {
     CellState cursor = goal;
+    boolean awaitingVerdict = false;
     while (true) {
       Node<T> node = nodes.get(cursor);
       if (node == null) {
@@ -606,10 +771,10 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       if (hasRestrictions
           && !cursor.equals(start)
           && !Boolean.FALSE.equals(passability.get(cursor.cell()))) {
-        return false; // cell unknown (or, defensively, impassable) — not yet confirmed
+        awaitingVerdict = true; // cell unknown (or, defensively, impassable) — not yet confirmed
       }
       if (node.bestParent == null) {
-        return true; // reached the start
+        return !awaitingVerdict; // reached the start
       }
       Supplier<FutureOr<Boolean>> restricted = node.bestEdge.restricted();
       if (restricted != null) {
@@ -617,10 +782,9 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         // have been popped, so pathConfirmed is the fallback that fires it.
         FutureOr<Boolean> verdict = checkEdge(node.bestParent, cursor, restricted);
         if (!verdict.isImmediate()) {
-          return false; // the edge check is pending; its verdict will wake us
-        }
-        if (Boolean.TRUE.equals(verdict.value())) {
-          removeEdge(node.bestParent, cursor); // barred — drop and repair; not confirmed
+          awaitingVerdict = true; // its verdict will wake us; keep firing the rest meanwhile
+        } else if (Boolean.TRUE.equals(verdict.value())) {
+          removeEdge(node.bestParent, cursor); // barred — drop and repair; the route is gone
           return false;
         }
       }
@@ -629,7 +793,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   }
 
   private void finishSolved(CellState goal) {
-    logger.debug("Solved; {}", stats());
+    logger.debug("Solved; cost: {}; {}", nodes.get(goal).cost, stats());
     result.complete(new Tier2Result.Solved<>(reconstruct(goal), nodes.get(goal).cost));
   }
 
@@ -669,6 +833,15 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private static final class Node<T> {
     final CellState key;
     double cost = Double.POSITIVE_INFINITY;
+
+    /**
+     * The average per-block cost of the trail reaching this cell, inherited from {@link
+     * #bestParent} and fed to the heuristic. A re-parenting recomputes it here but does not
+     * propagate to descendants: {@code h} is a hint, and chasing the subtree would cost more than
+     * the slightly stale estimate does.
+     */
+    double trailAverage;
+
     CellState bestParent;
     Movement<T> bestEdge;
     final Map<CellState, Movement<T>> parents = new HashMap<>();

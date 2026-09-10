@@ -16,9 +16,9 @@ import org.cobblestonemc.FutureOr;
  * Dimensions are distinguished by {@link #environment()}, never by subtyping (so the {@code D}
  * generic stays a single type across a search).
  *
- * <p>A world is also the block-access handle a mode uses: {@link #blockAt(Cell)} returns a {@link
- * FutureOr} that is immediate on a cache hit and pending on a miss (the platform's chunk provider
- * backs it). Equality/hash are by the world's namespaced {@link #key()}.
+ * <p>A world is also the block-access handle a mode uses: {@link #blockAt(Cell, Cell)} returns a
+ * {@link FutureOr} that is immediate on a cache hit and pending on a miss (the platform's chunk
+ * provider backs it). Equality/hash are by the world's namespaced {@link #key()}.
  */
 public interface MinecraftWorld extends Domain {
 
@@ -45,6 +45,21 @@ public interface MinecraftWorld extends Domain {
    * @return the block, immediate or pending
    */
   FutureOr<MinecraftBlock> blockAt(Cell cell, Cell destination);
+
+  /**
+   * Returns the snapshot of the chunk containing {@code cell}, possibly pending on a fetch.
+   *
+   * <p>This is the bulk form of {@link #blockAt}: a caller wanting many blocks around one point
+   * resolves the handful of chunks they fall in and indexes the snapshots directly, rather than
+   * paying the provider's per-block lookup a few hundred times per expansion. Local coordinates are
+   * {@code x & 15} and {@code z & 15}; a {@code y} outside {@link #minY()}..{@link #maxY()} has no
+   * block and the caller must treat it as unknown.
+   *
+   * @param cell a cell in the wanted chunk
+   * @param destination the destination of whatever this process is moving in, for readahead
+   * @return the chunk snapshot, immediate or pending
+   */
+  FutureOr<MinecraftChunk> chunkAt(Cell cell, Cell destination);
 
   /** The vanilla dimension kinds, plus a catch-all for custom/modded dimensions. */
   enum Environment {

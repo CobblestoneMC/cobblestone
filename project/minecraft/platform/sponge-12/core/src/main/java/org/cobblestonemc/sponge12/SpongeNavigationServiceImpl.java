@@ -71,14 +71,12 @@ public final class SpongeNavigationServiceImpl
 
   // The true global-minimum per-block cost (flying, MovementCosts.FLY = 0.08). Used as the
   // admissible Tier-1 bound and the running-average's cold-start estimate.
-  private static final double CHEAPEST_COST_PER_BLOCK = 0.08;
 
   private final CobblestoneLogger logger;
   private final SpongeScheduler scheduler;
   private final SpongePlatformApi platform;
   private final ChunkProvider chunkProvider;
   private final CobblestoneApi core;
-  private final HeuristicStrategy heuristic;
   private final Map<String, MinecraftWorld> worldCache = new ConcurrentHashMap<>();
   private final OwnedRegistry<SearchModificationService> searchModifiers = new OwnedRegistry<>();
 
@@ -101,7 +99,6 @@ public final class SpongeNavigationServiceImpl
     this.platform = new SpongePlatformApi(scheduler, logger, maxChunkLoadRequests);
     this.chunkProvider = new ChunkProvider(platform, chunkSettings);
     this.core = CobblestoneApi.load();
-    this.heuristic = Heuristics.runningAverage(CHEAPEST_COST_PER_BLOCK);
   }
 
   public void registerListeners(PluginContainer plugin) {
@@ -171,6 +168,18 @@ public final class SpongeNavigationServiceImpl
     return scheduler;
   }
 
+  /**
+   * Drops the cached snapshot of the chunk containing a changed block, so searches see the edit.
+   * Wired to the server's block-change events by the plugin layer; safe from any thread.
+   *
+   * @param worldKey the world's namespaced key
+   * @param blockX the block X coordinate
+   * @param blockZ the block Z coordinate
+   */
+  public void invalidateBlock(String worldKey, int blockX, int blockZ) {
+    chunkProvider.invalidateBlock(worldKey, blockX, blockZ);
+  }
+
   /** Stops the search worker pool; call on plugin disable. */
   public void shutdown() {
     scheduler.shutdown();
@@ -212,6 +221,11 @@ public final class SpongeNavigationServiceImpl
     ModesProvider<CobblestonePlayer, MinecraftStepPayload, MinecraftWorld> modes =
         MinecraftModes.providerFor(
             agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
+    // Per-player, not a shared constant: the bound has to reflect what this player can actually do,
+    // or Tier-1 prices every route as if they could fly. See MinecraftModes#cheapestCostPerBlock.
+    HeuristicStrategy heuristic =
+        Heuristics.runningAverage(
+            MinecraftModes.cheapestCostPerBlock(agent, settings.excludedModes()));
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
         gatherTransitions(
