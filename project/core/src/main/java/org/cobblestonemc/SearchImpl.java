@@ -84,14 +84,17 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
     this.modes = modes;
     this.restrictions = List.copyOf(restrictions);
     this.settings = settings;
-    this.tier1 = new Tier1Graph<>(origin, transitions, destination.regions(), heuristic);
+
+    this.tier1 =
+        new Tier1Graph<>(
+            origin, transitions, destination.regions(), heuristic, settings.tier1RecalcThreshold());
     this.deadlineMillis = System.currentTimeMillis() + settings.maxWallClockMillis();
 
     this.logger.debug("Constructed for agent {} and destination {}", agent, destination);
   }
 
   void start() {
-    logger.debug("Executing async start");
+    logger.trace("Executing async start");
     scheduler.runAsync(this::step);
   }
 
@@ -115,7 +118,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
       finish(new NavigationResult.Failure<>(FailureReason.TIMED_OUT));
       return;
     }
-    logger.debug("Executing step on thread", Thread.currentThread().getName());
+    logger.debug("Executing search step", Thread.currentThread().getName());
     try {
       if (graphPath == null) {
         Optional<GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>>> found =
@@ -129,6 +132,12 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
         }
         graphPath = found.get();
       }
+
+      logger.debug(
+          "Found graph path with cost {} and {} edges ({} unresolved)",
+          graphPath.dist(),
+          graphPath.edges().size(),
+          graphPath.edges().stream().filter(edge -> !edge.virtualPath().isResolved()).count());
       Tier1Edge<T, D> edge = firstUnsolvedEdge(graphPath);
       if (edge == null) {
         logger.debug("Found all graph edges solved");
@@ -151,9 +160,10 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
               deadlineMillis);
       VirtualPath<T, D> virtualPath = edge.virtualPath();
       logger.debug(
-          "Starting domain-local search from {} to {}",
+          "Starting domain-local search from {} to {}, estimated cost {}",
           edge.virtualPath().fromCell(),
-          edge.virtualPath().targetRegion());
+          edge.virtualPath().targetRegion(),
+          edge.virtualPath().cost(heuristic));
       tier2
           .solve()
           .whenCompleteAsync(

@@ -120,7 +120,7 @@ public final class BoxWorldRegion implements WorldRegion<World, Vector3i> {
   public String toString() {
     return "BoxWorldRegion{"
         + "world="
-        + world
+        + world.key()
         + ", ["
         + minX
         + ", "

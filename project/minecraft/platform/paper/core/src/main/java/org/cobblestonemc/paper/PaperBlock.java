@@ -18,10 +18,10 @@ import org.cobblestonemc.minecraft.MinecraftBlock;
  * A {@link MinecraftBlock} backed by a Bukkit {@link BlockData} from a chunk snapshot — the
  * material→predicate table for Paper.
  *
- * <p>Collision facts use {@link Material#isSolid()} as a coarse proxy (fine for the 1×1×1 model);
- * material-level traits (danger, speed factor, climbable, boat support) use vanilla block tags and
- * a small hand-curated table; break time comes from vanilla hardness with the stone-tool
- * assumption.
+ * <p>Collision facts use {@link Material#isSolid()} as a coarse proxy (fine for the 1×1×1 model),
+ * corrected by {@link #walkThrough} for the flat fittings it misreports; material-level traits
+ * (danger, speed factor, climbable, boat support) use vanilla block tags and a small hand-curated
+ * table; break time comes from vanilla hardness with the stone-tool assumption.
  */
 final class PaperBlock implements MinecraftBlock {
 
@@ -47,6 +47,20 @@ final class PaperBlock implements MinecraftBlock {
   private static final Set<Material> ICE =
       Set.of(Material.ICE, Material.PACKED_ICE, Material.BLUE_ICE, Material.FROSTED_ICE);
 
+  /** Non-colliding fittings without a tag of their own; see {@link #walkThrough}. */
+  private static final Set<Material> FLAT_FURNITURE =
+      Set.of(
+          Material.LEVER,
+          Material.TRIPWIRE,
+          Material.TRIPWIRE_HOOK,
+          Material.REDSTONE_WIRE,
+          Material.TORCH,
+          Material.WALL_TORCH,
+          Material.SOUL_TORCH,
+          Material.SOUL_WALL_TORCH,
+          Material.REDSTONE_TORCH,
+          Material.REDSTONE_WALL_TORCH);
+
   private final BlockData data;
   private final Material material;
 
@@ -62,12 +76,32 @@ final class PaperBlock implements MinecraftBlock {
 
   @Override
   public boolean isPassable() {
-    return material.isAir() || (!material.isSolid() && !isWater() && !isLava());
+    return material.isAir()
+        || walkThrough(material)
+        || (!material.isSolid() && !isWater() && !isLava());
+  }
+
+  /**
+   * Blocks a body walks straight through that {@link Material#isSolid()} nevertheless reports as
+   * solid.
+   *
+   * <p>{@code isSolid()} answers "can this be built upon", not "does this stop movement", and the
+   * two part company for the flat furniture of a redstone build. A pressure plate is the one that
+   * bites: laid in a doorway it made the doorway a wall, so a house with a plate at its threshold
+   * was unreachable — the search would arrive outside and never find a way in.
+   */
+  private static boolean walkThrough(Material material) {
+    return Tag.PRESSURE_PLATES.isTagged(material)
+        || Tag.BUTTONS.isTagged(material)
+        || Tag.RAILS.isTagged(material)
+        || FLAT_FURNITURE.contains(material);
   }
 
   @Override
   public boolean isSolidTop() {
-    return material.isSolid();
+    // The same materials that do not stop a body do not hold one up either: nobody stands on top
+    // of a torch, and a pressure plate is footing for the cell it occupies, not the one above it.
+    return material.isSolid() && !walkThrough(material);
   }
 
   @Override

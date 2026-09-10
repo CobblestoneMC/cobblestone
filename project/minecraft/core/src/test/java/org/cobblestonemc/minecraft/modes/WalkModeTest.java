@@ -68,7 +68,7 @@ class WalkModeTest {
     Movement<MinecraftStepPayload> jump =
         TestModes.from(walk, player, full, new Cell(0, 1, 0)).get(new Cell(1, 2, 0));
     assertEquals(MinecraftStepType.JUMP, jump.payload().stepType());
-    assertEquals(MovementCosts.WALK, jump.cost(), 1e-9);
+    assertEquals(MovementCosts.WALK * MovementCosts.DIAGONAL, jump.cost(), 1e-9);
 
     TestWorld slab =
         TestWorld.builder("w")
@@ -78,7 +78,7 @@ class WalkModeTest {
     Movement<MinecraftStepPayload> step =
         TestModes.from(walk, player, slab, new Cell(0, 1, 0)).get(new Cell(1, 2, 0));
     assertEquals(MinecraftStepType.WALK, step.payload().stepType());
-    assertEquals(MovementCosts.WALK, step.cost(), 1e-9);
+    assertEquals(MovementCosts.WALK * MovementCosts.DIAGONAL, step.cost(), 1e-9);
   }
 
   @Test

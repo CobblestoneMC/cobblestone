@@ -15,6 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.cobblestonemc.api.TraversalState;
 import org.junit.jupiter.api.Test;
 
@@ -24,7 +26,96 @@ class Tier2SearchTest {
 
   private VirtualPath<TestStep, TestDomain> virtualPath(Cell from, Cell target) {
     return new VirtualPath<>(
-        from, DOMAIN, new CellRegion<>(target, DOMAIN), TraversalState.DEFAULT);
+        from, DOMAIN, new CellRegion<>(target, DOMAIN), TraversalState.DEFAULT, 1.0);
+  }
+
+  /**
+   * The deadline is tested inside the search loop, and the loop only runs when something wakes it.
+   * A mode whose blocks never arrive parks the search on a callback that never comes — so without a
+   * timer armed at the deadline the search waits forever instead of timing out. This reproduces
+   * that: a mode that returns a future nobody completes.
+   */
+  @Test
+  void aSearchParkedOnAFutureThatNeverCompletesStillTimesOut() throws Exception {
+    Mode<TestAgent, TestStep, TestDomain> neverCompletes =
+        (agent, from, domain, state, goal) -> FutureOr.ofFuture(new CompletableFuture<>());
+
+    Tier2Search<TestAgent, TestStep, TestDomain> search =
+        new Tier2Search<>(
+            new TestCobblestoneLogger(),
+            new TestAgent(),
+            virtualPath(new Cell(0, 0, 0), new Cell(3, 0, 0)),
+            List.of(neverCompletes),
+            List.of(),
+            Heuristics.zero(),
+            1000,
+            5,
+            1.0,
+            () -> false,
+            Executors.newSingleThreadExecutor(),
+            System.currentTimeMillis() + 100);
+
+    Tier2Result<TestStep, TestDomain> result = search.solve().get(10, TimeUnit.SECONDS);
+
+    assertInstanceOf(Tier2Result.Failed.class, result);
+    assertEquals(
+        Tier2Result.FailureOutcome.TIMED_OUT,
+        ((Tier2Result.Failed<TestStep, TestDomain>) result).outcome());
+  }
+
+  /**
+   * A repair that prunes a node must leave nothing pointing at it.
+   *
+   * <p>Two repairs, in order. First a mode-restricted edge — a mining step an integration forbids —
+   * comes back barred, which strands the dead end it led to and prunes it; its parent survives and
+   * is outside the repaired subtree. Then the cell above that parent is barred, and the second
+   * repair walks the parent's children.
+   *
+   * <p>This used to throw {@link NullPointerException}: the pruned node stayed in its old parent's
+   * child set, because the repair cleared {@code bestParent} before pruning and the removal looks
+   * the parent up through exactly that field. The next repair then found a child with no node
+   * behind it. It needed a restricted edge to reproduce, so only searches with mining enabled ever
+   * hit it.
+   */
+  @Test
+  void aRepairThatPrunesANodeLeavesNoDanglingChildBehind() {
+    CompletableFuture<Boolean> deadEndBarred = new CompletableFuture<>();
+    CompletableFuture<Boolean> cellBarred = new CompletableFuture<>();
+
+    // (0,0,0) → (1,0,0) → (2,0,0) → (3,0,0), the last step restricted; (3,0,0) goes nowhere.
+    // The goal is out past the dead end, so the search never arrives and stays alive on its
+    // outstanding checks while the two verdicts land one at a time.
+    Restriction<TestAgent, TestDomain> barOne =
+        (agent, cell, domain) ->
+            cell.equals(new Cell(1, 0, 0)) ? FutureOr.ofFuture(cellBarred) : FutureOr.of(false);
+    Tier2Search<TestAgent, TestStep, TestDomain> search =
+        new Tier2Search<>(
+            new TestCobblestoneLogger(),
+            new TestAgent(),
+            virtualPath(new Cell(0, 0, 0), new Cell(9, 0, 0)),
+            List.of(new DeadEndMode(3, () -> FutureOr.ofFuture(deadEndBarred))),
+            List.of(barOne),
+            Heuristics.zero(),
+            1000,
+            5,
+            1.0,
+            () -> false,
+            Runnable::run,
+            0);
+
+    CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
+    assertFalse(future.isDone(), "still holding two unresolved checks");
+
+    // First repair: the restricted edge is barred, stranding and pruning (3,0,0).
+    deadEndBarred.complete(true);
+    assertFalse(future.isDone(), "(1,0,0)'s verdict is still outstanding");
+
+    // Second repair: (1,0,0) is impassable, so the repair walks (2,0,0)'s children — which is
+    // where the pruned dead end used to linger.
+    cellBarred.complete(true);
+
+    assertTrue(future.isDone());
+    assertInstanceOf(Tier2Result.Failed.class, future.getNow(null));
   }
 
   @Test

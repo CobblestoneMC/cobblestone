@@ -17,19 +17,19 @@ package org.cobblestonemc.api;
 public final class SearchSettings {
 
   /** Default cap on cells visited within a single Tier-2 A* solve. */
-  public static final int DEFAULT_MAX_CELLS_VISITED = 10_000;
+  public static final int DEFAULT_MAX_CELLS_VISITED = 1_000_000;
 
   /** Default wall-clock budget for the whole search, in milliseconds. */
   public static final long DEFAULT_MAX_WALL_CLOCK_MILLIS = 60_000L;
 
   /** Default Tier-1 recalculation overshoot threshold (1.30 = re-plan at 30% over estimate). */
-  public static final double DEFAULT_TIER1_RECALC_THRESHOLD = 1.30;
+  public static final double DEFAULT_TIER1_RECALC_THRESHOLD = 5.0;
 
   /** Default window width for the running-average heuristic. */
   public static final int DEFAULT_RUNNING_AVERAGE_WIDTH = 5;
 
   /** Default A* heuristic weight (1.0 = admissible/optimal; &gt;1 = faster, weighted A*). */
-  public static final double DEFAULT_HEURISTIC_WEIGHT = 1.0;
+  public static final double DEFAULT_HEURISTIC_WEIGHT = 1.5;
 
   private final int maxCellsVisited;
   private final long maxWallClockMillis;

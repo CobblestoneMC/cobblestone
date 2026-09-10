@@ -70,16 +70,66 @@ class ChunkProviderTest {
   }
 
   @Test
-  void staleChunksAreRefetched() {
+  void anExpiredSnapshotKeepsServingReadsRatherThanRefetchingMidSolve() {
     FakePlatform platform = new FakePlatform();
     ChunkProvider cp = provider(platform, settings(5_000));
 
     cp.block(new Cell(5, 64, 5), world, EAST).future().join();
     assertEquals(1, platform.fetchCount(0, 0));
 
+    // A search outliving the staleness window must not re-load its own working set: evicting on
+    // read made re-fetches the large majority of all chunk loads, each one stalling the search.
     clock.set(5_001);
+    FutureOr<MinecraftBlock> block = cp.block(new Cell(5, 64, 5), world, EAST);
+    assertTrue(block.isImmediate(), "an expired snapshot still answers immediately");
+    assertEquals(1, platform.fetchCount(0, 0), "and is not fetched again on read");
+  }
+
+  /**
+   * A chunk a search keeps touching is never the least-recently-used entry, so nothing else would
+   * ever drop it — a block broken in it would go unseen until the server restarted.
+   */
+  @Test
+  void invalidatingAChunkMakesTheNextReadFetchItAgain() {
+    FakePlatform platform = new FakePlatform();
+    ChunkProvider cp = provider(platform, settings(10_000));
+
+    cp.block(new Cell(5, 64, 5), world, EAST).future().join();
+    assertEquals(1, platform.fetchCount(0, 0));
+    assertTrue(cp.block(new Cell(5, 64, 5), world, EAST).isImmediate(), "cached");
+
+    cp.invalidateBlock(world.key(), 5, 5);
+
     cp.block(new Cell(5, 64, 5), world, EAST);
-    assertEquals(2, platform.fetchCount(0, 0), "an expired snapshot is fetched again");
+    assertEquals(2, platform.fetchCount(0, 0), "the changed chunk is read again");
+    assertEquals(1, cp.stats().invalidations());
+  }
+
+  @Test
+  void invalidatingAChunkNothingHasCachedIsHarmless() {
+    FakePlatform platform = new FakePlatform();
+    ChunkProvider cp = provider(platform, settings(10_000));
+
+    cp.invalidateBlock(world.key(), 5, 5);
+
+    assertEquals(0, cp.stats().invalidations());
+    assertEquals(0, platform.fetchCount(0, 0));
+  }
+
+  @Test
+  void anExpiredSnapshotIsDroppedWhenTheCacheNextTakesAnEntry() {
+    FakePlatform platform = new FakePlatform();
+    ChunkProvider cp = provider(platform, settings(5_000));
+
+    cp.block(new Cell(5, 64, 5), world, EAST).future().join();
+    assertEquals(1, platform.fetchCount(0, 0));
+
+    // Expire it, then insert an unrelated chunk: the stale entry is collected on the insert.
+    clock.set(5_001);
+    cp.block(new Cell(5000, 64, 5000), world, EAST).future().join();
+
+    cp.block(new Cell(5, 64, 5), world, EAST);
+    assertEquals(2, platform.fetchCount(0, 0), "the expired snapshot was evicted, so it refetches");
   }
 
   @Test

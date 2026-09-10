@@ -58,7 +58,6 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     ConfigManager config = new ConfigManager(configFile, logger);
     ConfigKeys keys = new ConfigKeys(config, PaperConfigKeys.platform());
     config.load();
-    logger.setLevel(config.get(keys.loggingLevel));
 
     Path databaseFile = getDataFolder().toPath().resolve(config.get(keys.dataFile));
     this.dataStore = DataStores.create(config.get(keys.dataBackend), databaseFile, logger);
@@ -147,6 +146,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     getServer()
         .getPluginManager()
         .registerEvents(new CobblestoneListener(tripManager, searchRegistry), this);
+    // Keep the chunk cache honest: a block changing evicts the snapshot it belongs to.
+    getServer().getPluginManager().registerEvents(new BlockChangeListener(platformApi), this);
     // When another plugin disables, drop everything it registered into our registries.
     getServer()
         .getPluginManager()

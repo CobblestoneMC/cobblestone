@@ -26,9 +26,11 @@ public final class TraversalState {
   public static final TraversalState DEFAULT = new TraversalState(Map.of());
 
   private final Map<TraversalKey<?>, Object> values;
+  private final int hashCode;
 
   private TraversalState(Map<TraversalKey<?>, Object> values) {
     this.values = values;
+    this.hashCode = values.hashCode();
   }
 
   /**
@@ -100,7 +102,7 @@ public final class TraversalState {
 
   @Override
   public int hashCode() {
-    return values.hashCode();
+    return hashCode;
   }
 
   @Override

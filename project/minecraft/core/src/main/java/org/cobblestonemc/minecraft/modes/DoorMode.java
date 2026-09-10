@@ -69,15 +69,22 @@ final class DoorMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
     for (int[] dir : HORIZONTAL) {
       Cell doorway = from.plus(dir[0], 0, dir[1]);
       MinecraftBlock door = view.at(doorway);
-      if (!door.isDoor() || door.isOpen()) {
-        continue; // open doors are plain passable (WalkMode); only handle closed ones
-      }
-      boolean canOpen = door.opensByHand() || standingOnPlate;
-      Cell beyond = from.plus(dir[0] * 2, 0, dir[1] * 2);
-      if (!canOpen
-          || !view.at(doorway, 0, -1, 0).isSolidTop()
-          || !Geometry.standable(view, beyond)) {
+      if (!door.isDoor()) {
         continue;
+      }
+      Cell beyond = from.plus(dir[0] * 2, 0, dir[1] * 2);
+      if (!view.at(doorway, 0, -1, 0).isSolidTop() || !Geometry.standable(view, beyond)) {
+        continue; // no floor under the doorway, or nowhere to land on the far side
+      }
+      if (door.isOpen()) {
+        // An open door still has to be stepped through here, not by WalkMode. Passability is a
+        // material-level fact (see MinecraftBlock), so a door reads impassable whichever way it is
+        // standing — which used to make an open door a permanent wall that no mode would cross.
+        moves.add(move(beyond, MovementCosts.WALK, MinecraftStepType.WALK, state));
+        continue;
+      }
+      if (!canOpenDoor || !(door.opensByHand() || standingOnPlate)) {
+        continue; // shut, and this player has no way to open it
       }
       double cost = MovementCosts.WALK + MovementCosts.OPEN_DOOR;
       moves.add(move(beyond, cost, MinecraftStepType.OPEN_DOOR, state));

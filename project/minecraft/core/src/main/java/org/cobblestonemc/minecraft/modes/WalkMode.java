@@ -79,7 +79,7 @@ final class WalkMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> 
     if (Geometry.standable(view, up) && view.at(from, 0, 2, 0).isPassable()) {
       MinecraftBlock floor = view.at(from.plus(dx, 0, dz));
       boolean half = floor.isHalfHeight();
-      double cost = MovementCosts.WALK / floor.speedFactor();
+      double cost = MovementCosts.WALK / floor.speedFactor() * MovementCosts.DIAGONAL;
       moves.add(move(up, cost, half ? MinecraftStepType.WALK : MinecraftStepType.JUMP, state));
     } else {
       Cell down = from.plus(dx, -1, dz);

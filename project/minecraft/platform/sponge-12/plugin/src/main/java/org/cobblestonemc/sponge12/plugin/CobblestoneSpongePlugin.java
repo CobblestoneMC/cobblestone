@@ -100,7 +100,6 @@ public final class CobblestoneSpongePlugin {
     this.keys = new ConfigKeys(config, SpongeConfigKeys.platform());
     this.spongeKeys = new SpongeConfigKeys(config);
     config.load();
-    cobblestoneLogger.setLevel(config.get(keys.loggingLevel));
 
     Path databaseFile = configDir.resolve(config.get(keys.dataFile));
     this.dataStore =
@@ -170,6 +169,10 @@ public final class CobblestoneSpongePlugin {
                 dataStore.deaths(),
                 navigationService.scheduler(),
                 () -> config.get(keys.deathsTrack)));
+
+    // Keep the chunk cache honest: a block changing evicts the snapshot it belongs to.
+    Sponge.eventManager()
+        .registerListeners(container, new SpongeBlockChangeListener(navigationService));
 
     this.searchRegistry = new SearchRegistry<>();
     this.searchGate = new SearchGate(config.get(keys.searchMaxConcurrentPerPlayer));

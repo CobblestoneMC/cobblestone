@@ -18,11 +18,17 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * A thread-safe, size-bounded (LRU) cache of chunk snapshots, sitting between modes and the
- * platform. A block from a fresh cached chunk is served immediately (a cache hit); a miss triggers
- * a single de-duplicated fetch and is served as a pending {@link FutureOr}. Snapshots older than
- * the staleness window (measured from when they were cached) are discarded on access, and every
- * newly requested block reads ahead along the column of chunks between it and the destination, so
- * that the chunk a search wants next is usually already in hand.
+ * platform. A block from a cached chunk is served immediately (a cache hit); a miss triggers a
+ * single de-duplicated fetch and is served as a pending {@link FutureOr}, and every newly requested
+ * block reads ahead along the column of chunks between it and the destination, so that the chunk a
+ * search wants next is usually already in hand.
+ *
+ * <p><b>Freshness</b> is handled on insert, not on read: a snapshot past the staleness window is
+ * dropped when the cache next takes an entry, so a long-running search keeps the chunks it is
+ * actively walking through instead of re-fetching them mid-solve. (Evicting on read meant a search
+ * outliving the window re-loaded most of its own working set — measured at over 80% of all chunk
+ * fetches, each one stalling the search for a full fetch latency.) Eviction driven by actual block
+ * changes supersedes this window when it lands.
  *
  * <p>Read-ahead is directional on purpose: chunk loading is the throughput bottleneck, and a search
  * advances towards its destination, so chunks behind it are work that would almost never be used.
@@ -48,6 +54,19 @@ public final class ChunkProvider {
   private final Map<ChunkKey, Cached> cache;
   private final Map<ChunkKey, CompletableFuture<MinecraftChunk>> inFlight = new HashMap<>();
 
+  // Counters for ChunkProviderStats. All are read and written under `lock` except the two the
+  // fetch callback touches, which take the lock themselves.
+  private long chunkRequests;
+  private long cacheHits;
+  private long directFetches;
+  private long prefetches;
+  private long prefetchesUsed;
+  private long prefetchesWasted;
+  private long unknownChunks;
+  private long staleEvictions;
+  private long invalidations;
+  private long directFetchMillis;
+
   /**
    * Creates a chunk provider.
    *
@@ -66,9 +85,77 @@ public final class ChunkProvider {
         new LinkedHashMap<>(16, 0.75f, true) {
           @Override
           protected boolean removeEldestEntry(Map.Entry<ChunkKey, Cached> eldest) {
-            return size() > settings.maxCachedChunks();
+            // Staleness is checked here, on insert, and never on a read. A read happens tens of
+            // millions of times per search; an insert happens once per chunk fetched. Checking the
+            // clock per read cost both the clock call itself and — far worse — a re-fetch of a
+            // chunk the running search was still using, since the window is shorter than a search.
+            boolean stale = isStale(eldest.getValue());
+            if (size() <= settings.maxCachedChunks() && !stale) {
+              return false;
+            }
+            if (stale) {
+              staleEvictions++;
+            }
+            if (eldest.getValue().prefetched) {
+              prefetchesWasted++; // read ahead for, then evicted before anything read it
+            }
+            return true;
           }
         };
+  }
+
+  /**
+   * Drops the cached snapshot of one chunk, so the next request re-reads it from the platform.
+   *
+   * <p>This is how a world edit reaches a running server: freshness is otherwise only checked when
+   * the cache takes a new entry, and a chunk a search keeps touching is never the eldest, so a
+   * block broken in it would go unnoticed until a restart. Safe to call from any thread — on Folia
+   * these arrive on region threads.
+   *
+   * @param worldKey the world's namespaced key
+   * @param chunkX the chunk X coordinate
+   * @param chunkZ the chunk Z coordinate
+   */
+  public void invalidate(String worldKey, int chunkX, int chunkZ) {
+    ChunkKey key = new ChunkKey(worldKey, chunkX, chunkZ);
+    synchronized (lock) {
+      if (cache.remove(key) != null) {
+        invalidations++;
+      }
+    }
+  }
+
+  /**
+   * Drops the cached snapshot of the chunk containing a block position.
+   *
+   * @param worldKey the world's namespaced key
+   * @param blockX the block X coordinate
+   * @param blockZ the block Z coordinate
+   */
+  public void invalidateBlock(String worldKey, int blockX, int blockZ) {
+    invalidate(worldKey, blockX >> 4, blockZ >> 4);
+  }
+
+  /**
+   * Returns a reading of the provider-wide counters. Diff two readings to attribute work to one
+   * search; see {@link ChunkProviderStats}.
+   *
+   * @return the current counters
+   */
+  public ChunkProviderStats stats() {
+    synchronized (lock) {
+      return new ChunkProviderStats(
+          chunkRequests,
+          cacheHits,
+          directFetches,
+          prefetches,
+          prefetchesUsed,
+          prefetchesWasted,
+          unknownChunks,
+          staleEvictions,
+          invalidations,
+          directFetchMillis);
+    }
   }
 
   /**
@@ -84,30 +171,47 @@ public final class ChunkProvider {
     if (cell.y() < world.minY() || cell.y() > world.maxY()) {
       return FutureOr.of(UnknownBlock.INSTANCE);
     }
+    return chunk(cell, world, destination)
+        .map(snapshot -> snapshot.block(cell.x() & 15, cell.y(), cell.z() & 15));
+  }
+
+  /**
+   * Returns the snapshot of the chunk containing {@code cell}, immediate on a cache hit or pending
+   * on a miss — the same path {@link #block} takes, without resolving a single block.
+   *
+   * <p>Callers that need many blocks around one point should use this and index the snapshot
+   * directly. A mode's neighborhood is a couple of hundred cells spread over about four chunks, and
+   * resolving each cell separately paid a key allocation, this provider's monitor, and an
+   * access-ordered map relink <i>per block</i> — tens of millions of times per search, for four
+   * distinct answers per expansion.
+   *
+   * @param cell a cell in the wanted chunk
+   * @param world the world
+   * @param destination the destination of the calling process, for read-ahead
+   * @return the snapshot, immediate or pending
+   */
+  public FutureOr<MinecraftChunk> chunk(Cell cell, MinecraftWorld world, Cell destination) {
     int chunkX = cell.x() >> 4;
     int chunkZ = cell.z() >> 4;
     ChunkKey key = new ChunkKey(world.key(), chunkX, chunkZ);
     synchronized (lock) {
+      chunkRequests++;
       Cached cached = cache.get(key);
 
-      // trigger read-ahead around this cell if we have not seen this block requested
+      // trigger read-ahead around this cell if we have not seen this chunk requested
       // or if we have only requested it because it was part of another prefetch
       if (cached == null) {
         triggerReadAhead(cell, world, destination);
       } else {
         if (cached.prefetched) {
           triggerReadAhead(cell, world, destination);
+          prefetchesUsed++; // the read-ahead paid off: this is its first real read
         }
-        if (isStale(cached)) {
-          cache.remove(key);
-        } else {
-          cached.directlyAccessed();
-          return FutureOr.of(cached.chunk.block(cell.x() & 15, cell.y(), cell.z() & 15));
-        }
+        cached.directlyAccessed();
+        cacheHits++;
+        return FutureOr.of(cached.chunk);
       }
-      CompletableFuture<MinecraftChunk> fetch = fetchLocked(key, world, false);
-      return FutureOr.ofFuture(
-          fetch.thenApply(snapshot -> snapshot.block(cell.x() & 15, cell.y(), cell.z() & 15)));
+      return FutureOr.ofFuture(fetchLocked(key, world, false));
     }
   }
 
@@ -121,6 +225,12 @@ public final class ChunkProvider {
     if (pending != null) {
       return pending;
     }
+    if (prefetch) {
+      prefetches++;
+    } else {
+      directFetches++;
+    }
+    long startedAt = clock.getAsLong();
     CompletableFuture<MinecraftChunk> fetch =
         platform.fetchChunk(key.chunkX, key.chunkZ, world, settings.loadPolicy(), !prefetch);
     inFlight.put(key, fetch);
@@ -128,15 +238,28 @@ public final class ChunkProvider {
         (snapshot, error) -> {
           synchronized (lock) {
             inFlight.remove(key);
+            if (!prefetch) {
+              directFetchMillis += clock.getAsLong() - startedAt;
+            }
             if (error != null || snapshot == null) {
               return;
             }
-            if (prefetch && snapshot == MinecraftChunk.Unknown.INSTANCE) {
-              // A read-ahead that came back unknown is not necessarily a fact about the world: a
-              // platform may decline speculative work it would still do when a search is actually
-              // blocked on the chunk. Caching that would answer the later direct request from a
-              // refusal that was only ever about the platform being busy.
-              return;
+            if (snapshot == MinecraftChunk.Unknown.INSTANCE) {
+              unknownChunks++;
+              if (prefetch) {
+                // A read-ahead that came back unknown is not necessarily a fact about the world: a
+                // platform may decline speculative work it would still do when a search is actually
+                // blocked on the chunk. Caching that would answer the later direct request from a
+                // refusal that was only ever about the platform being busy.
+                return;
+              }
+              // A direct fetch that came back unknown IS cached. Under a policy that will not
+              // generate terrain, "this chunk does not exist" is a stable fact, and a search
+              // pressed up against ungenerated terrain touches those chunks constantly — leaving
+              // them out meant re-asking the platform for the same absent chunk over and over, and
+              // parking the whole search for a full fetch latency each time. The entry leaves the
+              // cache the ordinary ways: evicted by the LRU, or dropped as stale on a later
+              // insert. Eviction on actual chunk load will retire it promptly once that lands.
             }
             cache.put(key, new Cached(snapshot, clock.getAsLong(), prefetch));
           }

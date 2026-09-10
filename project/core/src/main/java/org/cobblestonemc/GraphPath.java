@@ -21,7 +21,7 @@ import java.util.List;
  * @param nodes the ordered nodes, source first and goal last (size {@code edges.size() + 1})
  * @param edges the ordered edges between consecutive nodes
  */
-public record GraphPath<N, E>(List<N> nodes, List<E> edges) {
+public record GraphPath<N, E>(List<N> nodes, List<E> edges, double dist) {
 
   /**
    * Constructor for GraphPath, which copies the nodes and edges.

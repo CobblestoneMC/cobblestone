@@ -17,24 +17,32 @@ import org.cobblestonemc.Position;
 public final class TestPlayer implements CobblestonePlayer {
 
   private final boolean canFly;
+  private final boolean canGlide;
   private final boolean hasBoat;
   private final boolean inBoat;
   private final boolean canBreak;
 
-  private TestPlayer(boolean canFly, boolean hasBoat, boolean inBoat, boolean canBreak) {
+  private TestPlayer(
+      boolean canFly, boolean canGlide, boolean hasBoat, boolean inBoat, boolean canBreak) {
     this.canFly = canFly;
+    this.canGlide = canGlide;
     this.hasBoat = hasBoat;
     this.inBoat = inBoat;
     this.canBreak = canBreak;
   }
 
   public static TestPlayer walker() {
-    return new TestPlayer(false, false, false, true);
+    return new TestPlayer(false, false, false, false, true);
+  }
+
+  /** A player wearing an elytra: can glide, but cannot hover or gain height. */
+  public static TestPlayer glider() {
+    return new TestPlayer(false, true, false, false, true);
   }
 
   public static TestPlayer create(
       boolean canFly, boolean hasBoat, boolean inBoat, boolean canBreak) {
-    return new TestPlayer(canFly, hasBoat, inBoat, canBreak);
+    return new TestPlayer(canFly, false, hasBoat, inBoat, canBreak);
   }
 
   @Override
@@ -59,7 +67,7 @@ public final class TestPlayer implements CobblestonePlayer {
 
   @Override
   public boolean canGlide() {
-    return false;
+    return canGlide;
   }
 
   @Override
