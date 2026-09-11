@@ -63,8 +63,8 @@ public final class ConfigKeys {
   /** Wall-clock budget for a whole search, in seconds. Mutable. */
   public final ConfigKey<Long> algorithmMaxWallClockSeconds;
 
-  /** Tier-1 recalculation overshoot threshold (1.30 = re-plan at 30% over estimate). Mutable. */
-  public final ConfigKey<Double> algorithmTier1RecalcThreshold;
+  /** Pessimism factor on an unsolved Tier-1 leg's cost estimate. Mutable. */
+  public final ConfigKey<Double> algorithmTier1UnsolvedPessimism;
 
   /** Window width for the running-average heuristic. Mutable. */
   public final ConfigKey<Integer> algorithmRunningAverageWidth;
@@ -246,7 +246,11 @@ public final class ConfigKeys {
                 "search.algorithm.max_cells_visited",
                 SearchSettings.DEFAULT_MAX_CELLS_VISITED,
                 Codec.ofInt())
-            .comment("Most cells a single A* solve may visit before giving up (a memory guard).")
+            .comment(
+                """
+                Most cells a single A* solve may visit before giving up. This is the memory guard —
+                a solve holds a few hundred bytes per cell it reaches — so lower it on a small
+                heap.""")
             .mutable()
             .register();
     this.algorithmMaxWallClockSeconds =
@@ -258,15 +262,17 @@ public final class ConfigKeys {
             .comment("Wall-clock budget for the whole search, in seconds.")
             .mutable()
             .register();
-    this.algorithmTier1RecalcThreshold =
+    this.algorithmTier1UnsolvedPessimism =
         manager
             .key(
-                "search.algorithm.tier1_recalc_threshold",
-                SearchSettings.DEFAULT_TIER1_RECALC_THRESHOLD,
+                "search.algorithm.tier1_unsolved_pessimism",
+                SearchSettings.DEFAULT_TIER1_UNSOLVED_PESSIMISM,
                 Codec.ofDouble())
             .comment(
-                "Re-plan the coarse route when a leg runs this factor over its estimate (1.30 = 30%"
-                    + " over).")
+                """
+                How much dearer than its straight-line lower bound a route leg is assumed to be
+                before it has been solved. Too low and the coarse route keeps being re-planned as
+                each leg turns out more expensive than promised; 1.0 uses the bound as-is.""")
             .mutable()
             .register();
     this.algorithmRunningAverageWidth =

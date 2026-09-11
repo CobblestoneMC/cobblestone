@@ -77,8 +77,8 @@ class ChunkProviderTest {
     cp.block(new Cell(5, 64, 5), world, EAST).future().join();
     assertEquals(1, platform.fetchCount(0, 0));
 
-    // A search outliving the staleness window must not re-load its own working set: evicting on
-    // read made re-fetches the large majority of all chunk loads, each one stalling the search.
+    // A search outliving the staleness window must not re-load its own working set; each re-fetch
+    // would stall it for a full fetch latency.
     clock.set(5_001);
     FutureOr<MinecraftBlock> block = cp.block(new Cell(5, 64, 5), world, EAST);
     assertTrue(block.isImmediate(), "an expired snapshot still answers immediately");
@@ -219,5 +219,43 @@ class ChunkProviderTest {
     assertTrue(
         platform.fetchCount(neighbourX, 0) > before, "refused read-ahead must not be cached");
     assertNotNull(block);
+  }
+
+  @Test
+  void repeatReadsOfAnUnknownChunkAreAnsweredFromTheCache() {
+    FakePlatform platform = new FakePlatform();
+    platform.setUnknown(true);
+    ChunkProvider cp = provider(platform, settings(10_000));
+
+    cp.block(new Cell(5, 64, 5), world, EAST).future().join();
+    assertEquals(1, platform.fetchCount(0, 0));
+
+    assertTrue(
+        cp.block(new Cell(6, 64, 6), world, EAST).isImmediate(),
+        "a search pressed against absent terrain must not re-ask for every block");
+    assertEquals(1, platform.fetchCount(0, 0));
+  }
+
+  /**
+   * Unknown also means "not loaded yet" — a chunk whose existence scan has not finished, or whose
+   * load timed out. Those become real terrain a moment later, and no block change fires for a chunk
+   * nobody touched, so the answer has to expire on its own.
+   */
+  @Test
+  void anUnknownChunkIsAskedForAgainOnceItsRetryWindowPasses() {
+    FakePlatform platform = new FakePlatform();
+    platform.setUnknown(true);
+    ChunkProvider cp = provider(platform, settings(10_000));
+
+    cp.block(new Cell(5, 64, 5), world, EAST).future().join();
+    assertEquals(1, platform.fetchCount(0, 0));
+
+    clock.set(1_001);
+    platform.setUnknown(false); // the chunk has since loaded
+    cp.block(new Cell(5, 64, 5), world, EAST).future().join();
+    assertEquals(2, platform.fetchCount(0, 0), "the unknown answer expired");
+
+    MinecraftBlock block = cp.block(new Cell(5, 64, 5), world, EAST).value();
+    assertFalse(block.isPassable(), "and the real terrain is what the search now sees");
   }
 }

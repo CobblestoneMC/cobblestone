@@ -7,7 +7,13 @@
 
 package org.cobblestonemc.paper.plugin;
 
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
+import org.bukkit.Bukkit;
+import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -27,6 +33,7 @@ import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.world.StructureGrowEvent;
+import org.bukkit.plugin.Plugin;
 import org.cobblestonemc.paper.PaperNavigationServiceImpl;
 
 /**
@@ -41,17 +48,59 @@ import org.cobblestonemc.paper.PaperNavigationServiceImpl;
  * plugin vetoes never evicts anything. Invalidation is cheap (one map removal) and only ever costs
  * a re-read later, so it is better to drop a chunk needlessly than to miss a change: events that
  * move many blocks at once simply invalidate every chunk they touch.
+ *
+ * <p>Each chunk is dropped twice, now and again next tick. Most of these events fire <i>before</i>
+ * the world is written — {@link BlockBreakEvent}, the explosions, the pistons, the bucket and
+ * growth events — so a search re-reading the chunk in the same tick would re-cache the block as it
+ * still stands, and nothing further would invalidate it. The second pass runs once the change has
+ * landed.
  */
 final class BlockChangeListener implements Listener {
 
+  private final Plugin plugin;
   private final PaperNavigationServiceImpl navigation;
 
-  BlockChangeListener(PaperNavigationServiceImpl navigation) {
+  BlockChangeListener(Plugin plugin, PaperNavigationServiceImpl navigation) {
+    this.plugin = plugin;
     this.navigation = navigation;
   }
 
   private void changed(Block block) {
-    navigation.invalidateBlock(block.getWorld().getKey().asString(), block.getX(), block.getZ());
+    invalidate(block.getWorld(), Set.of(chunkOf(block.getX(), block.getZ())));
+  }
+
+  private void changed(Collection<Block> blocks) {
+    if (blocks.isEmpty()) {
+      return;
+    }
+    Set<Long> chunks = new HashSet<>();
+    for (Block block : blocks) {
+      chunks.add(chunkOf(block.getX(), block.getZ()));
+    }
+    invalidate(blocks.iterator().next().getWorld(), chunks);
+  }
+
+  /** Drops each chunk's snapshot now, and again once the tick's block writes have landed. */
+  private void invalidate(World world, Set<Long> chunks) {
+    String worldKey = world.getKey().asString();
+    for (long packed : chunks) {
+      int chunkX = (int) (packed >> 32);
+      int chunkZ = (int) packed;
+      navigation.invalidate(worldKey, chunkX, chunkZ);
+      Bukkit.getRegionScheduler()
+          .runDelayed(
+              plugin,
+              world,
+              chunkX,
+              chunkZ,
+              ignored -> navigation.invalidate(worldKey, chunkX, chunkZ),
+              1L);
+    }
+  }
+
+  /** Packs a block position's chunk coordinates into one long, so grouping allocates no key. */
+  private static long chunkOf(int blockX, int blockZ) {
+    return ((long) (blockX >> 4) << 32) ^ ((blockZ >> 4) & 0xffffffffL);
   }
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -108,20 +157,22 @@ final class BlockChangeListener implements Listener {
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   void onBlockExplode(BlockExplodeEvent event) {
     changed(event.getBlock());
-    event.blockList().forEach(this::changed);
+    changed(event.blockList());
   }
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   void onEntityExplode(EntityExplodeEvent event) {
-    event.blockList().forEach(this::changed);
+    changed(event.blockList());
   }
 
   /** A tree or mushroom filling in: every block of the structure is new terrain. */
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   void onStructureGrow(StructureGrowEvent event) {
+    Set<Long> chunks = new HashSet<>();
     for (BlockState state : event.getBlocks()) {
-      navigation.invalidateBlock(state.getWorld().getKey().asString(), state.getX(), state.getZ());
+      chunks.add(chunkOf(state.getX(), state.getZ()));
     }
+    invalidate(event.getWorld(), chunks);
   }
 
   // Pistons move a run of blocks, and the destination of the last one is a block beyond the run —
@@ -129,15 +180,22 @@ final class BlockChangeListener implements Listener {
   // the piston and every block it shifts covers it.
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   void onPistonExtend(BlockPistonExtendEvent event) {
-    changed(event.getBlock());
-    event.getBlocks().forEach(this::changed);
-    event.getBlocks().forEach(block -> changed(block.getRelative(event.getDirection())));
+    pistonMoved(event.getBlock(), event.getBlocks(), event.getDirection());
   }
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   void onPistonRetract(BlockPistonRetractEvent event) {
-    changed(event.getBlock());
-    event.getBlocks().forEach(this::changed);
-    event.getBlocks().forEach(block -> changed(block.getRelative(event.getDirection())));
+    pistonMoved(event.getBlock(), event.getBlocks(), event.getDirection());
+  }
+
+  private void pistonMoved(Block piston, Collection<Block> moved, BlockFace face) {
+    Set<Long> chunks = new HashSet<>();
+    chunks.add(chunkOf(piston.getX(), piston.getZ()));
+    for (Block block : moved) {
+      chunks.add(chunkOf(block.getX(), block.getZ()));
+      Block destination = block.getRelative(face);
+      chunks.add(chunkOf(destination.getX(), destination.getZ()));
+    }
+    invalidate(piston.getWorld(), chunks);
   }
 }

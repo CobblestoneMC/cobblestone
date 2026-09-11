@@ -265,9 +265,9 @@ public interface Scheduler {
 ### `SearchSettings`
 ```java
 public final class SearchSettings {
-  int maxCellsVisited;            // default 10_000
+  int maxCellsVisited;            // default 1_000_000
   long maxWallClockMillis;        // default 60_000
-  double tier1RecalcThreshold;    // default 1.30
+  double tier1UnsolvedPessimism;  // default 5.0
   int runningAverageWidth;        // default 5..10 (fast heuristic)
   HeuristicStrategy heuristic;    // pluggable; default = admissible min-cost (03)
   // …

@@ -197,6 +197,13 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   }
 
   /**
+   * How far past the deadline the timer is set. The delay is measured on {@code nanoTime} while
+   * {@link #loop()} compares {@code currentTimeMillis}, whose granularity runs to ~16ms on Windows:
+   * waking a shade early would find the deadline not yet passed, and nothing re-arms the timer.
+   */
+  private static final long DEADLINE_SLACK_MILLIS = 20L;
+
+  /**
    * Schedules a single wake-up at the deadline, so the budget is enforced even while the search is
    * parked.
    *
@@ -212,14 +219,13 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     if (deadlineMillis <= 0) {
       return;
     }
-    long delay = Math.max(1, deadlineMillis - System.currentTimeMillis());
+    long delay = Math.max(1, deadlineMillis - System.currentTimeMillis()) + DEADLINE_SLACK_MILLIS;
     // Hold the solve weakly and the result strongly. A timer task lives until it fires, and a
     // lambda capturing `this` would pin the whole search — every node, every candidate parent, the
-    // open set — for the full budget after the search had already finished, which on a busy server
-    // is gigabytes of finished searches waiting on their own timers. The result future is small and
-    // does not reference the search, so capturing it costs nothing and still guarantees the
-    // timeout: if the solve is still alive we wake it, so it reports the timeout with its stats,
-    // and if it has been collected we complete the result ourselves.
+    // open set — for the full budget after the search finished; on a busy server that is gigabytes
+    // of finished searches waiting on their own timers. The result future is small and does not
+    // reference the search, so capturing it still guarantees the timeout: if the solve is alive we
+    // wake it, so it reports the timeout with its stats, and otherwise we complete the result.
     WeakReference<Tier2Search<A, T, D>> self = new WeakReference<>(this);
     CompletableFuture<Tier2Result<T, D>> pending = result;
     CompletableFuture.runAsync(
@@ -315,7 +321,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       if (cancelled.getAsBoolean()) {
         return; // abandoned; the outer search has already completed with CANCELLED
       }
-      if (deadlineMillis > 0 && System.currentTimeMillis() > deadlineMillis) {
+      if (deadlineMillis > 0 && System.currentTimeMillis() >= deadlineMillis) {
         logger.debug("Timed out; {}", stats());
         result.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.TIMED_OUT));
         return;
@@ -370,8 +376,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       }
       node.closed = true;
       Cell closed = node.key.cell();
-      closestApproach =
-          Math.min(closestApproach, closed.distance(target.nearestBoundaryCell(closed)));
+      Cell goal = target.nearestBoundaryCell(closed);
+      closestApproach = Math.min(closestApproach, closed.distance(goal));
       if (target.contains(node.key.cell())) {
         if (pathConfirmed(node.key)) {
           finishSolved(node.key);
@@ -380,20 +386,25 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         pendingGoal = node.key; // reached optimistically; wait for its path's checks to confirm
         continue;
       }
-      if (expandedCount++ > maxCellsVisited) {
-        logger.debug("Visited cells ({}) > max ({}); {}", expandedCount, maxCellsVisited, stats());
+      // The cap counts cell-states reached, not expansions: it is a memory guard, and what a solve
+      // holds is one Node per reached cell-state (each with its candidate parents and children),
+      // not one per expansion. A 26-neighbourhood mode reaches several cells per expansion, so a
+      // cap on expansions bounds the table only loosely — loosely enough to run out of heap first.
+      if (nodes.size() > maxCellsVisited) {
+        logger.debug("Visited cells ({}) > max ({}); {}", nodes.size(), maxCellsVisited, stats());
         result.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.LIMIT_EXCEEDED));
         return;
       }
-      expand(node);
+      expandedCount++;
+      expand(node, goal);
     }
   }
 
-  private void expand(Node<T> node) {
+  /** Expands one closed node, where {@code goal} is the target cell its modes aim at. */
+  private void expand(Node<T> node, Cell goal) {
     List<FutureOr<Collection<Movement<T>>>> results = new ArrayList<>(modes.size());
     boolean anyPending = false;
     for (Mode<A, T, D> mode : modes) {
-      var goal = target.nearestBoundaryCell(node.key.cell());
       FutureOr<Collection<Movement<T>>> movements =
           mode.step(agent, node.key.cell(), domain, node.key.state(), goal);
       results.add(movements);
@@ -745,20 +756,16 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   }
 
   /**
-   * Whether {@code goal}'s current best path is fully confirmed: every cell has a passable verdict
-   * (for global restrictions) and every edge's mode-scoped restriction has resolved as not-barred.
-   */
-  /**
    * Whether every cell and edge of the best route to {@code goal} is known to be allowed, firing
    * any check that has not run yet.
    *
    * <p>It walks the <b>whole</b> route before answering, rather than stopping at the first
    * unresolved check. Each check an integration owns costs a hop to the server thread and back, so
-   * stopping early confirmed the path one edge per round trip: a route with a few hundred
-   * restricted edges — a mining route through a town, say — spent its entire budget parked, waiting
-   * out those hops one at a time, having reached the destination in seconds. Firing them all at
-   * once turns that into a single wait. The exception is an edge that comes back barred on the
-   * spot: that severs the route and repairs it, so there is nothing left to walk.
+   * stopping early would confirm the path one edge per round trip — a mining route through a town
+   * carries a few hundred restricted edges, and waiting those hops out one at a time spends the
+   * whole budget parked. Firing them all at once turns that into a single wait. The exception is an
+   * edge that comes back barred on the spot: that severs the route and repairs it, so there is
+   * nothing left to walk.
    */
   private boolean pathConfirmed(CellState goal) {
     CellState cursor = goal;

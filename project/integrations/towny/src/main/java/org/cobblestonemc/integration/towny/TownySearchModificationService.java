@@ -143,13 +143,18 @@ final class TownySearchModificationService implements SearchModificationService 
   public BreakChecker computeBreakChecker(Player player) {
     // One cache per search: a search asks about thousands of blocks, and every miss is a hop to the
     // main thread and back — the search parks for the whole round trip each time. Towny's answer,
-    // though, is a property of the town block (a 16x16 column) and the material, not of the
-    // individual block: every stone block in one plot answers the same. So the thousands of
-    // questions a search actually has collapse to a handful of distinct ones.
+    // though, is a property of the town block and the material, not of the individual block: every
+    // stone block in one plot answers the same. So the thousands of questions a search actually has
+    // collapse to a handful of distinct ones.
+    //
+    // The plot size is read here, on the search-initiating thread, so the key can be computed
+    // without touching Towny from a search worker.
     Map<PermissionKey, CompletableFuture<Boolean>> cache = new ConcurrentHashMap<>();
+    int townBlockSize = TownySettings.getTownBlockSize();
     return (breaker, location, block) ->
         cache.computeIfAbsent(
-            PermissionKey.of(location, block.getMaterial()), key -> ask(breaker, location, block));
+            PermissionKey.of(location, block.getMaterial(), townBlockSize),
+            key -> ask(breaker, location, block));
   }
 
   /** Puts one breakability question to Towny on the main thread. */
@@ -163,11 +168,10 @@ final class TownySearchModificationService implements SearchModificationService 
                 future.complete(true); // gone; do not block mining
                 return;
               }
-              // canDestroy, not PlayerCacheUtil.getCachePermission. The latter queries the
-              // player's own movement cache, which is built for wherever the player is standing —
-              // asking it about a house a thousand blocks away answers from the wrong context and
-              // misses trusted residents, so a player who could plainly break there was told they
-              // could not. canDestroy runs Towny's whole decision, event and all.
+              // canDestroy, not PlayerCacheUtil.getCachePermission: the latter answers from the
+              // player's own movement cache, which is built for wherever the player is standing,
+              // not for a house a thousand blocks away. canDestroy runs Towny's whole decision,
+              // event and all.
               future.complete(
                   TownyActionEventExecutor.canDestroy(breaker, location, block.getMaterial()));
             });
@@ -184,11 +188,17 @@ final class TownySearchModificationService implements SearchModificationService 
    * fewer — a plot is the finest granularity Towny itself distinguishes.
    */
   private record PermissionKey(String world, int townBlockX, int townBlockZ, Material material) {
-    static PermissionKey of(Location location, Material material) {
+
+    /**
+     * The key for a location, where {@code townBlockSize} is Towny's configured plot width. It is
+     * not always 16, and a key that assumed so would pool blocks from neighbouring plots under one
+     * verdict.
+     */
+    static PermissionKey of(Location location, Material material, int townBlockSize) {
       return new PermissionKey(
           location.getWorld().getName(),
-          location.getBlockX() >> 4,
-          location.getBlockZ() >> 4,
+          Math.floorDiv(location.getBlockX(), townBlockSize),
+          Math.floorDiv(location.getBlockZ(), townBlockSize),
           material);
     }
   }

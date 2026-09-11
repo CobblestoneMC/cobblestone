@@ -157,6 +157,11 @@ final class SpongeBlock implements MinecraftBlock {
   }
 
   @Override
+  public boolean isTrapdoor() {
+    return type.is(BlockTypeTags.TRAPDOORS);
+  }
+
+  @Override
   public boolean isOpen() {
     return flag(Keys.IS_OPEN);
   }

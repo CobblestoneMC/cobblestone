@@ -69,11 +69,6 @@ final class PaperBlock implements MinecraftBlock {
     this.material = data.getMaterial();
   }
 
-  /** The backing chunk-snapshot block data, handed to integration break checkers. */
-  BlockData data() {
-    return data;
-  }
-
   @Override
   public boolean isPassable() {
     return material.isAir()
@@ -87,8 +82,8 @@ final class PaperBlock implements MinecraftBlock {
    *
    * <p>{@code isSolid()} answers "can this be built upon", not "does this stop movement", and the
    * two part company for the flat furniture of a redstone build. A pressure plate is the one that
-   * bites: laid in a doorway it made the doorway a wall, so a house with a plate at its threshold
-   * was unreachable — the search would arrive outside and never find a way in.
+   * matters: laid in a doorway, treating it as solid walls the doorway off, and a house with a
+   * plate at its threshold has no way in.
    */
   private static boolean walkThrough(Material material) {
     return Tag.PRESSURE_PLATES.isTagged(material)
@@ -173,6 +168,11 @@ final class PaperBlock implements MinecraftBlock {
     return Tag.DOORS.isTagged(material)
         || Tag.TRAPDOORS.isTagged(material)
         || Tag.FENCE_GATES.isTagged(material);
+  }
+
+  @Override
+  public boolean isTrapdoor() {
+    return Tag.TRAPDOORS.isTagged(material);
   }
 
   @Override

@@ -32,8 +32,13 @@ import org.cobblestonemc.minecraft.UnknownBlock;
  * (1,-2,3)}, falling and climbing {@code (1,-1,2)}, and so on — around 215 cells fetched to answer
  * some 70 distinct questions, six times over. So a fill is memoized per expansion (keyed on world
  * and cell, held per thread) and each later mode fetches only the cells nobody has filled yet;
- * usually none. The memo is published only when the whole fill was immediate — a pending fetch
- * resumes on another thread, where this thread's memo would be neither visible nor complete.
+ * usually none.
+ *
+ * <p>A view is only ever memoized while every write into it stays on the filling thread. A pending
+ * chunk completes elsewhere, and the search keeps running the remaining modes synchronously
+ * meanwhile — so a shared view still being written would hand those modes a half-filled box, where
+ * an unwritten cell reads as unknown and therefore impassable. A fill that goes pending drops the
+ * memo instead and keeps its view to itself.
  */
 final class BlockLookup {
 
@@ -66,7 +71,10 @@ final class BlockLookup {
       if (missing == null) {
         return FutureOr.of(memo.view); // every mode after the first usually lands here
       }
-      return fill(world, memo.view, missing, destination, () -> {});
+      // Topping up a memoized view: unpublish it first, and publish it again only if the top-up
+      // turned out to need no fetch, so no later mode can read a view another thread is writing.
+      MEMO.remove();
+      return fill(world, memo.view, missing, destination, () -> MEMO.set(memo));
     }
     BlockView view = BlockView.around(from, SHARED_XZ_RADIUS, SHARED_DY_LOW, SHARED_DY_HIGH);
     List<Cell> missing = missingFrom(view, cells);

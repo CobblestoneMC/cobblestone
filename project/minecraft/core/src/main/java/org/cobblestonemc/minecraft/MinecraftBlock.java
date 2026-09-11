@@ -127,6 +127,18 @@ public interface MinecraftBlock {
     return false;
   }
 
+  /**
+   * whether this is a trapdoor, as opposed to a door or fence gate.
+   *
+   * <p>A trapdoor is the one openable barrier that lies in the horizontal plane: closed it is a
+   * panel at the floor or ceiling of its cell, and open it stands vertically against one face. So
+   * it bars and admits movement the opposite way round from a door, and modes that step through
+   * doorways leave it alone.
+   */
+  default boolean isTrapdoor() {
+    return false;
+  }
+
   /** whether the door/gate/trapdoor is currently open. */
   default boolean isOpen() {
     return false;

@@ -71,11 +71,10 @@ class Tier2SearchTest {
    * is outside the repaired subtree. Then the cell above that parent is barred, and the second
    * repair walks the parent's children.
    *
-   * <p>This used to throw {@link NullPointerException}: the pruned node stayed in its old parent's
-   * child set, because the repair cleared {@code bestParent} before pruning and the removal looks
-   * the parent up through exactly that field. The next repair then found a child with no node
-   * behind it. It needed a restricted edge to reproduce, so only searches with mining enabled ever
-   * hit it.
+   * <p>The order matters: a repair that clears {@code bestParent} before pruning leaves the pruned
+   * node in its old parent's child set, since the removal looks the parent up through exactly that
+   * field — and the second repair then finds a child with no node behind it. It takes a restricted
+   * edge to set up, so only searches with mining enabled reach this shape at all.
    */
   @Test
   void aRepairThatPrunesANodeLeavesNoDanglingChildBehind() {
@@ -110,8 +109,8 @@ class Tier2SearchTest {
     deadEndBarred.complete(true);
     assertFalse(future.isDone(), "(1,0,0)'s verdict is still outstanding");
 
-    // Second repair: (1,0,0) is impassable, so the repair walks (2,0,0)'s children — which is
-    // where the pruned dead end used to linger.
+    // Second repair: (1,0,0) is impassable, so the repair walks (2,0,0)'s children — which must no
+    // longer include the pruned dead end.
     cellBarred.complete(true);
 
     assertTrue(future.isDone());
