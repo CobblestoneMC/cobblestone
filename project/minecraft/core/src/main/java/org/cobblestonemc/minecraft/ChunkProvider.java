@@ -25,10 +25,11 @@ import org.jetbrains.annotations.Nullable;
  *
  * <p><b>Freshness</b> is handled on insert, not on read: a snapshot past the staleness window is
  * dropped when the cache next takes an entry, so a long-running search keeps the chunks it is
- * actively walking through instead of re-fetching them mid-solve. (Evicting on read meant a search
- * outliving the window re-loaded most of its own working set — measured at over 80% of all chunk
- * fetches, each one stalling the search for a full fetch latency.) Eviction driven by actual block
- * changes supersedes this window when it lands.
+ * actively walking through instead of re-fetching them mid-solve. Block-change eviction ({@link
+ * #invalidate}) is what keeps a chunk a search keeps touching honest.
+ *
+ * <p>The one entry read-freshness applies to is an {@linkplain MinecraftChunk.Unknown unknown}
+ * chunk: see {@link #UNKNOWN_RETRY_MILLIS}.
  *
  * <p>Read-ahead is directional on purpose: chunk loading is the throughput bottleneck, and a search
  * advances towards its destination, so chunks behind it are work that would almost never be used.
@@ -45,6 +46,19 @@ public final class ChunkProvider {
    * buffer to have what they ask for next without dragging in chunks they will never touch.
    */
   private static final int PREFETCH_LATERAL_RADIUS = 2;
+
+  /**
+   * How long a cached {@link MinecraftChunk.Unknown} answer is trusted before the platform is asked
+   * again.
+   *
+   * <p>Unknown is not only "this chunk does not exist": a platform also returns it for a chunk that
+   * is merely not loaded yet, whose existence scan has not finished, or whose load timed out. Those
+   * answers turn into terrain a moment later, and no block-change event fires for a chunk nobody
+   * has touched — so an unknown entry that never expired would wall a search off from real ground
+   * for as long as the LRU kept it. A short window is still enough to collapse the storm of repeat
+   * reads a search pressed up against ungenerated terrain makes of the same absent chunk.
+   */
+  private static final long UNKNOWN_RETRY_MILLIS = 1_000L;
 
   private final PlatformApi<?> platform;
   private final ChunkProviderSettings settings;
@@ -85,10 +99,10 @@ public final class ChunkProvider {
         new LinkedHashMap<>(16, 0.75f, true) {
           @Override
           protected boolean removeEldestEntry(Map.Entry<ChunkKey, Cached> eldest) {
-            // Staleness is checked here, on insert, and never on a read. A read happens tens of
-            // millions of times per search; an insert happens once per chunk fetched. Checking the
-            // clock per read cost both the clock call itself and — far worse — a re-fetch of a
-            // chunk the running search was still using, since the window is shorter than a search.
+            // Staleness is checked here, on insert, and never on a read: a read happens tens of
+            // millions of times per search, an insert once per chunk fetched, and the window is
+            // shorter than a search — so reading the clock per read would both cost the call and
+            // re-fetch chunks the running search is still using.
             boolean stale = isStale(eldest.getValue());
             if (size() <= settings.maxCachedChunks() && !stale) {
               return false;
@@ -180,10 +194,9 @@ public final class ChunkProvider {
    * on a miss — the same path {@link #block} takes, without resolving a single block.
    *
    * <p>Callers that need many blocks around one point should use this and index the snapshot
-   * directly. A mode's neighborhood is a couple of hundred cells spread over about four chunks, and
-   * resolving each cell separately paid a key allocation, this provider's monitor, and an
-   * access-ordered map relink <i>per block</i> — tens of millions of times per search, for four
-   * distinct answers per expansion.
+   * directly. A mode's neighborhood is a couple of hundred cells spread over about four chunks, so
+   * resolving it a cell at a time costs a key allocation, this provider's monitor, and an
+   * access-ordered map relink <i>per block</i> — tens of millions of times per search.
    *
    * @param cell a cell in the wanted chunk
    * @param world the world
@@ -197,6 +210,10 @@ public final class ChunkProvider {
     synchronized (lock) {
       chunkRequests++;
       Cached cached = cache.get(key);
+      if (cached != null && cached.chunk == MinecraftChunk.Unknown.INSTANCE && expired(cached)) {
+        cache.remove(key); // stop answering from a "not loaded yet" that may have become terrain
+        cached = null;
+      }
 
       // trigger read-ahead around this cell if we have not seen this chunk requested
       // or if we have only requested it because it was part of another prefetch
@@ -217,6 +234,11 @@ public final class ChunkProvider {
 
   private boolean isStale(Cached cached) {
     return clock.getAsLong() - cached.cachedAt > settings.stalenessMillis();
+  }
+
+  /** Whether an unknown-chunk answer has outlived {@link #UNKNOWN_RETRY_MILLIS}. */
+  private boolean expired(Cached cached) {
+    return clock.getAsLong() - cached.cachedAt > UNKNOWN_RETRY_MILLIS;
   }
 
   private CompletableFuture<MinecraftChunk> fetchLocked(
@@ -247,19 +269,11 @@ public final class ChunkProvider {
             if (snapshot == MinecraftChunk.Unknown.INSTANCE) {
               unknownChunks++;
               if (prefetch) {
-                // A read-ahead that came back unknown is not necessarily a fact about the world: a
-                // platform may decline speculative work it would still do when a search is actually
-                // blocked on the chunk. Caching that would answer the later direct request from a
-                // refusal that was only ever about the platform being busy.
+                // A platform may decline speculative work it would still do for a search actually
+                // blocked on the chunk, so a read-ahead's unknown says nothing about the world.
                 return;
               }
-              // A direct fetch that came back unknown IS cached. Under a policy that will not
-              // generate terrain, "this chunk does not exist" is a stable fact, and a search
-              // pressed up against ungenerated terrain touches those chunks constantly — leaving
-              // them out meant re-asking the platform for the same absent chunk over and over, and
-              // parking the whole search for a full fetch latency each time. The entry leaves the
-              // cache the ordinary ways: evicted by the LRU, or dropped as stale on a later
-              // insert. Eviction on actual chunk load will retire it promptly once that lands.
+              // A direct fetch's unknown is cached, but only briefly; see UNKNOWN_RETRY_MILLIS.
             }
             cache.put(key, new Cached(snapshot, clock.getAsLong(), prefetch));
           }

@@ -9,9 +9,8 @@ package org.cobblestonemc.sponge12.plugin;
 
 import org.cobblestonemc.sponge12.SpongeNavigationServiceImpl;
 import org.spongepowered.api.block.BlockSnapshot;
-import org.spongepowered.api.block.transaction.BlockTransaction;
+import org.spongepowered.api.block.transaction.BlockTransactionReceipt;
 import org.spongepowered.api.event.Listener;
-import org.spongepowered.api.event.Order;
 import org.spongepowered.api.event.block.ChangeBlockEvent;
 import org.spongepowered.math.vector.Vector3i;
 
@@ -24,9 +23,12 @@ import org.spongepowered.math.vector.Vector3i;
  * restarted.
  *
  * <p>Sponge funnels every block change — placement, breakage, explosions, growth, pistons, fluids —
- * through {@link ChangeBlockEvent.All}, so one handler covers what Paper needs a dozen events for.
- * It runs {@link Order#POST} so a change another plugin vetoes never evicts anything. Invalidation
- * only ever costs a re-read later, so dropping a chunk needlessly is the safe direction to err.
+ * through one event, so one handler covers what Paper needs a dozen for. It listens on {@link
+ * ChangeBlockEvent.Post}, which fires after the change has been written and is not cancellable: the
+ * cancellable {@link ChangeBlockEvent.All} fires <i>before</i> the world is modified, so evicting
+ * there would let a search re-read the chunk and cache the block as it still stands, with nothing
+ * left to invalidate it afterwards. Invalidation only ever costs a re-read later, so dropping a
+ * chunk needlessly is the safe direction to err.
  */
 final class SpongeBlockChangeListener {
 
@@ -36,12 +38,12 @@ final class SpongeBlockChangeListener {
     this.navigation = navigation;
   }
 
-  @Listener(order = Order.POST)
-  public void onChangeBlock(ChangeBlockEvent.All event) {
-    for (BlockTransaction transaction : event.transactions()) {
-      BlockSnapshot original = transaction.original();
-      Vector3i position = original.position();
-      navigation.invalidateBlock(original.world().asString(), position.x(), position.z());
+  @Listener
+  public void onChangeBlock(ChangeBlockEvent.Post event) {
+    for (BlockTransactionReceipt receipt : event.receipts()) {
+      BlockSnapshot changed = receipt.finalBlock();
+      Vector3i position = changed.position();
+      navigation.invalidateBlock(changed.world().asString(), position.x(), position.z());
     }
   }
 }

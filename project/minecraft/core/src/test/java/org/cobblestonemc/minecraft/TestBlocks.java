@@ -157,6 +157,41 @@ public final class TestBlocks {
     };
   }
 
+  /** A trapdoor standing open: vertical, and so a wall across the face it is hung on. */
+  public static MinecraftBlock openTrapdoor() {
+    return new MinecraftBlock() {
+      @Override
+      public boolean isPassable() {
+        return false;
+      }
+
+      @Override
+      public boolean isSolidTop() {
+        return false;
+      }
+
+      @Override
+      public boolean isDoor() {
+        return true;
+      }
+
+      @Override
+      public boolean isTrapdoor() {
+        return true;
+      }
+
+      @Override
+      public boolean isOpen() {
+        return true;
+      }
+
+      @Override
+      public boolean opensByHand() {
+        return true;
+      }
+    };
+  }
+
   /**
    * A door standing open. Still impassable — passability is a material-level fact, so a door reads
    * the same whichever way it is standing (see {@code MinecraftBlock}); only {@code DoorMode} can

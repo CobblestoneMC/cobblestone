@@ -36,14 +36,16 @@ class DoorModeTest {
     assertTrue(moves.containsKey(new Cell(2, 1, 0)));
     assertEquals(MinecraftStepType.OPEN_DOOR, moves.get(new Cell(2, 1, 0)).payload().stepType());
     assertEquals(
-        MovementCosts.WALK + MovementCosts.OPEN_DOOR, moves.get(new Cell(2, 1, 0)).cost(), 1e-9);
+        2 * MovementCosts.WALK + MovementCosts.OPEN_DOOR,
+        moves.get(new Cell(2, 1, 0)).cost(),
+        1e-9,
+        "two blocks of ground are covered, plus the opening");
   }
 
   /**
-   * A door left standing open used to be a permanent wall: {@code DoorMode} skipped it as
-   * "WalkMode's job", but a door is impassable at the material level whichever way it stands, so
-   * WalkMode would not cross it either. Nothing could pass — which quietly walls off any building
-   * whose door happens to be open.
+   * An open door is impassable at the material level just like a shut one, so no other mode will
+   * cross it. If this mode skipped it too, any building whose door happens to stand open would be
+   * walled off.
    */
   @Test
   void walksThroughAnOpenDoorToTheFarSide() {
@@ -56,7 +58,11 @@ class DoorModeTest {
 
     assertTrue(moves.containsKey(new Cell(2, 1, 0)), "an open door must be crossable");
     assertEquals(MinecraftStepType.WALK, moves.get(new Cell(2, 1, 0)).payload().stepType());
-    assertEquals(MovementCosts.WALK, moves.get(new Cell(2, 1, 0)).cost(), 1e-9);
+    assertEquals(
+        2 * MovementCosts.WALK,
+        moves.get(new Cell(2, 1, 0)).cost(),
+        1e-9,
+        "a two-block step must not be priced as one");
   }
 
   /** An open door costs no opening time, so it must be cheaper than working a shut one. */
@@ -78,9 +84,7 @@ class DoorModeTest {
             < TestModes.from(door, TestPlayer.walker(), shut, new Cell(0, 1, 0)).get(far).cost());
   }
 
-  /**
-   * {@code -no-open-door} must actually stop the mode opening doors; the flag was being ignored.
-   */
+  /** {@code -no-open-door} must actually stop the mode opening doors. */
   @Test
   void aPlayerForbiddenFromOpeningDoorsCannotWorkAShutOne() {
     DoorMode<CobblestonePlayer> cannotOpen = new DoorMode<>(false);
@@ -129,6 +133,22 @@ class DoorModeTest {
             .set(1, 1, 0, TestBlocks.closedDoor(false))
             .build();
     assertTrue(
+        TestModes.from(door, TestPlayer.walker(), world, new Cell(0, 1, 0))
+            .containsKey(new Cell(2, 1, 0)));
+  }
+
+  /**
+   * A trapdoor is horizontal: open, it stands vertically across the face it is hung on and blocks
+   * the way through. Treating it like an open door would route a player straight through a wall.
+   */
+  @Test
+  void doesNotStepThroughAnOpenTrapdoor() {
+    TestWorld world =
+        TestWorld.builder("w")
+            .floor(0, -1, -1, 3, 1, TestBlocks.solid())
+            .set(1, 1, 0, TestBlocks.openTrapdoor())
+            .build();
+    assertFalse(
         TestModes.from(door, TestPlayer.walker(), world, new Cell(0, 1, 0))
             .containsKey(new Cell(2, 1, 0)));
   }

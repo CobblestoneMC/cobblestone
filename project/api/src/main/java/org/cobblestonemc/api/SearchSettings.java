@@ -16,14 +16,20 @@ package org.cobblestonemc.api;
  */
 public final class SearchSettings {
 
-  /** Default cap on cells visited within a single Tier-2 A* solve. */
+  /**
+   * Default cap on cells visited within a single Tier-2 A* solve.
+   *
+   * <p>This is the memory guard: a solve holds one node per cell it reaches, so the cap bounds the
+   * search tree at roughly a few hundred bytes a cell — a few hundred megabytes at this default.
+   * Lower it on a small heap.
+   */
   public static final int DEFAULT_MAX_CELLS_VISITED = 1_000_000;
 
   /** Default wall-clock budget for the whole search, in milliseconds. */
   public static final long DEFAULT_MAX_WALL_CLOCK_MILLIS = 60_000L;
 
-  /** Default Tier-1 recalculation overshoot threshold (1.30 = re-plan at 30% over estimate). */
-  public static final double DEFAULT_TIER1_RECALC_THRESHOLD = 5.0;
+  /** Default pessimism factor applied to an unsolved Tier-1 leg's estimate. */
+  public static final double DEFAULT_TIER1_UNSOLVED_PESSIMISM = 5.0;
 
   /** Default window width for the running-average heuristic. */
   public static final int DEFAULT_RUNNING_AVERAGE_WIDTH = 5;
@@ -33,14 +39,14 @@ public final class SearchSettings {
 
   private final int maxCellsVisited;
   private final long maxWallClockMillis;
-  private final double tier1RecalcThreshold;
+  private final double tier1UnsolvedPessimism;
   private final int runningAverageWidth;
   private final double heuristicWeight;
 
   private SearchSettings(Builder builder) {
     this.maxCellsVisited = builder.maxCellsVisited;
     this.maxWallClockMillis = builder.maxWallClockMillis;
-    this.tier1RecalcThreshold = builder.tier1RecalcThreshold;
+    this.tier1UnsolvedPessimism = builder.tier1UnsolvedPessimism;
     this.runningAverageWidth = builder.runningAverageWidth;
     this.heuristicWeight = builder.heuristicWeight;
   }
@@ -82,12 +88,19 @@ public final class SearchSettings {
   }
 
   /**
-   * Returns the Tier-1 recalculation overshoot threshold.
+   * Returns the pessimism factor applied to an unsolved Tier-1 leg's cost estimate.
    *
-   * @return the recalc threshold
+   * <p>Tier-1 prices a leg it has not solved yet with an admissible lower bound — straight-line
+   * distance at the cheapest cost per block — which real terrain beats by a wide margin. Taken at
+   * face value, every leg comes back several times dearer than promised, which makes some other
+   * unexplored route look cheaper, so Tier-1 re-plans and works through the alternatives one costly
+   * solve at a time. Scaling the estimate up brings it nearer what a leg actually costs, at the
+   * price of a coarse route chosen on a less optimistic bound. 1.0 leaves the bound untouched.
+   *
+   * @return the unsolved-leg pessimism factor
    */
-  public double tier1RecalcThreshold() {
-    return tier1RecalcThreshold;
+  public double tier1UnsolvedPessimism() {
+    return tier1UnsolvedPessimism;
   }
 
   /**
@@ -114,7 +127,7 @@ public final class SearchSettings {
 
     private int maxCellsVisited = DEFAULT_MAX_CELLS_VISITED;
     private long maxWallClockMillis = DEFAULT_MAX_WALL_CLOCK_MILLIS;
-    private double tier1RecalcThreshold = DEFAULT_TIER1_RECALC_THRESHOLD;
+    private double tier1UnsolvedPessimism = DEFAULT_TIER1_UNSOLVED_PESSIMISM;
     private int runningAverageWidth = DEFAULT_RUNNING_AVERAGE_WIDTH;
     private double heuristicWeight = DEFAULT_HEURISTIC_WEIGHT;
 
@@ -160,16 +173,17 @@ public final class SearchSettings {
     }
 
     /**
-     * Sets the Tier-1 recalculation overshoot threshold.
+     * Sets the pessimism factor applied to an unsolved Tier-1 leg's cost estimate; see {@link
+     * SearchSettings#tier1UnsolvedPessimism()}.
      *
-     * @param value the threshold (must be &gt;= 1.0)
+     * @param value the factor (must be &gt;= 1.0)
      * @return this builder
      */
-    public Builder tier1RecalcThreshold(double value) {
+    public Builder tier1UnsolvedPessimism(double value) {
       if (value < 1.0) {
-        throw new IllegalArgumentException("tier1RecalcThreshold must be >= 1.0: " + value);
+        throw new IllegalArgumentException("tier1UnsolvedPessimism must be >= 1.0: " + value);
       }
-      this.tier1RecalcThreshold = value;
+      this.tier1UnsolvedPessimism = value;
       return this;
     }
 

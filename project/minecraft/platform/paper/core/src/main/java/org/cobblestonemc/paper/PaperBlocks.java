@@ -22,9 +22,13 @@ import org.cobblestonemc.minecraft.MinecraftBlock;
  *
  * <p>That matters because of the volume. Reading a block through {@code getBlockData} allocates a
  * fresh {@code CraftBlockData} — it is a defensive {@code clone()} — plus a wrapper, and a search
- * reads tens of millions of blocks; those allocations were among the largest single costs on the
- * search thread. {@code getBlockType} returns an enum constant and allocates nothing, so the common
- * path now costs an array index.
+ * reads tens of millions of blocks. {@code getBlockType} returns an enum constant and allocates
+ * nothing, so the common path costs an array index.
+ *
+ * <p>Because of that sharing, a cached instance's block data is the material's <em>default</em>
+ * state. Nothing here reads state off it (only openables do, and they are never cached), but a
+ * caller that needs a block's real state — an integration break checker — must read it from the
+ * snapshot rather than from one of these.
  */
 final class PaperBlocks {
 

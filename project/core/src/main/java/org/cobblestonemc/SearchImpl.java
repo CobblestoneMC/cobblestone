@@ -30,8 +30,7 @@ import org.cobblestonemc.api.Step;
  *
  * <p>Phase-2 note: this re-plans after <i>every</i> edge solve rather than only on a threshold
  * overshoot, and solves each edge to completion rather than pausing mid-solve — a simpler, still
- * terminating and still result-optimal realization of the design's recalc loop. The {@code
- * tier1RecalcThreshold} knob is therefore not yet consulted.
+ * terminating and still result-optimal realization of the design's recalc loop.
  *
  * @param <A> the agent type
  * @param <T> the payload type
@@ -87,7 +86,11 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
 
     this.tier1 =
         new Tier1Graph<>(
-            origin, transitions, destination.regions(), heuristic, settings.tier1RecalcThreshold());
+            origin,
+            transitions,
+            destination.regions(),
+            heuristic,
+            settings.tier1UnsolvedPessimism());
     this.deadlineMillis = System.currentTimeMillis() + settings.maxWallClockMillis();
 
     this.logger.debug("Constructed for agent {} and destination {}", agent, destination);

@@ -182,7 +182,7 @@ public final class CobblestoneSpongePlugin {
             SearchSettings.builder()
                 .maxCellsVisited(config.get(keys.algorithmMaxCellsVisited))
                 .maxWallClockMillis(config.get(keys.algorithmMaxWallClockSeconds) * 1000L)
-                .tier1RecalcThreshold(config.get(keys.algorithmTier1RecalcThreshold))
+                .tier1UnsolvedPessimism(config.get(keys.algorithmTier1UnsolvedPessimism))
                 .runningAverageWidth(config.get(keys.algorithmRunningAverageWidth))
                 .heuristicWeight(config.get(keys.algorithmHeuristicWeight))
                 .build();

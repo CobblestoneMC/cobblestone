@@ -147,7 +147,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
         .getPluginManager()
         .registerEvents(new CobblestoneListener(tripManager, searchRegistry), this);
     // Keep the chunk cache honest: a block changing evicts the snapshot it belongs to.
-    getServer().getPluginManager().registerEvents(new BlockChangeListener(platformApi), this);
+    getServer().getPluginManager().registerEvents(new BlockChangeListener(this, platformApi), this);
     // When another plugin disables, drop everything it registered into our registries.
     getServer()
         .getPluginManager()
@@ -160,7 +160,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             SearchSettings.builder()
                 .maxCellsVisited(config.get(keys.algorithmMaxCellsVisited))
                 .maxWallClockMillis(config.get(keys.algorithmMaxWallClockSeconds) * 1000L)
-                .tier1RecalcThreshold(config.get(keys.algorithmTier1RecalcThreshold))
+                .tier1UnsolvedPessimism(config.get(keys.algorithmTier1UnsolvedPessimism))
                 .runningAverageWidth(config.get(keys.algorithmRunningAverageWidth))
                 .heuristicWeight(config.get(keys.algorithmHeuristicWeight))
                 .build();

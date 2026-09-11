@@ -20,6 +20,7 @@ import java.util.List;
  * @param <E> the edge type
  * @param nodes the ordered nodes, source first and goal last (size {@code edges.size() + 1})
  * @param edges the ordered edges between consecutive nodes
+ * @param dist the total cost along the path
  */
 public record GraphPath<N, E>(List<N> nodes, List<E> edges, double dist) {
 

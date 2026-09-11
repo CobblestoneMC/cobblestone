@@ -88,10 +88,10 @@ class HeuristicsTest {
   }
 
   /**
-   * The regression this heuristic exists for: a cell a few blocks into a hillside used to be priced
-   * as if the rest of its two-thousand-block journey were open ground, putting its {@code f} within
-   * a second or two of the cell on the grass beside it — so A* bored a cone into every hill.
-   * Pricing each cell by its own trail has to separate the two decisively.
+   * What this heuristic exists for. Priced at open-ground cost, a cell a few blocks into a hillside
+   * has an {@code f} within a second or two of the cell on the grass beside it across a
+   * two-thousand-block journey, and A* bores a cone into every hill it passes. Pricing each cell by
+   * its own trail has to separate the two decisively.
    */
   @Test
   void diggingIntoAHillIsPricedWellAboveWalkingAroundIt() {

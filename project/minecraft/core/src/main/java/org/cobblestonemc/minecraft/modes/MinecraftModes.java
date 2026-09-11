@@ -94,7 +94,9 @@ public final class MinecraftModes {
         modes.add(new FlyMode<>(1));
       }
     }
-    if (!excluded.contains(MinecraftStepType.BOAT) && player.hasBoatInInventory()
+    // A player already in a boat gets the mode whatever the exclusion says: every other mode
+    // requires no vehicle, so without it they could not move at all.
+    if ((!excluded.contains(MinecraftStepType.BOAT) && player.hasBoatInInventory())
         || player.isInBoat()) {
       modes.add(new BoatMode<>());
     }
@@ -130,8 +132,10 @@ public final class MinecraftModes {
     if (!excluded.contains(MinecraftStepType.HORSE)) {
       cheapest = Math.min(cheapest, MovementCosts.HORSE);
     }
-    if (!excluded.contains(MinecraftStepType.BOAT)
-        && (player.hasBoatInInventory() || player.isInBoat())) {
+    // Mirrors forPlayer's condition exactly: wherever BoatMode is offered, the bound has to admit
+    // its cost, or a boat step comes in under what the heuristic swore was the floor.
+    if ((!excluded.contains(MinecraftStepType.BOAT) && player.hasBoatInInventory())
+        || player.isInBoat()) {
       cheapest = Math.min(cheapest, MovementCosts.BOAT);
     }
     return cheapest;

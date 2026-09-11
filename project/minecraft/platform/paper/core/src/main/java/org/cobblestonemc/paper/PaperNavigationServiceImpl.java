@@ -26,6 +26,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
+import org.cobblestonemc.Cell;
 import org.cobblestonemc.CellRegion;
 import org.cobblestonemc.CobblestoneApi;
 import org.cobblestonemc.CobblestoneLogger;
@@ -44,6 +45,7 @@ import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.ChunkProviderStats;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
+import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
@@ -147,15 +149,15 @@ public final class PaperNavigationServiceImpl
   }
 
   /**
-   * Drops the cached snapshot of the chunk containing a changed block, so searches see the edit.
-   * Wired to the server's block-change events by the plugin layer; safe from any thread.
+   * Drops the cached snapshot of one chunk, so searches see edits made in it. Wired to the server's
+   * block-change events by the plugin layer; safe from any thread.
    *
    * @param worldKey the world's namespaced key
-   * @param blockX the block X coordinate
-   * @param blockZ the block Z coordinate
+   * @param chunkX the chunk X coordinate
+   * @param chunkZ the chunk Z coordinate
    */
-  public void invalidateBlock(String worldKey, int blockX, int blockZ) {
-    chunkProvider.invalidateBlock(worldKey, blockX, blockZ);
+  public void invalidate(String worldKey, int chunkX, int chunkZ) {
+    chunkProvider.invalidate(worldKey, chunkX, chunkZ);
   }
 
   /** Stops the search worker pool; call on plugin disable. */
@@ -288,12 +290,22 @@ public final class PaperNavigationServiceImpl
         return CompletableFuture.completedFuture(true); // cannot evaluate; do not block mining
       }
       Location location = new Location(bukkitWorld, cell.x(), cell.y(), cell.z());
-      BlockData data = block instanceof PaperBlock paperBlock ? paperBlock.data() : null;
-      List<CompletableFuture<Boolean>> results = new ArrayList<>(checkers.size());
-      for (org.cobblestonemc.paper.api.BreakChecker checker : checkers) {
-        results.add(checker.breakable(online, location, data));
-      }
-      return allTrue(results);
+      // Checkers are promised the snapshot's real block state, and the instances modes read are
+      // shared per material — they carry a default state, not this block's. So the state is read
+      // from the chunk here instead: a cache hit, since the mining mode has just read this block,
+      // and only for the few blocks mining actually considers breaking.
+      return world
+          .chunkAt(cell, cell)
+          .toFuture()
+          .thenCompose(
+              chunk -> {
+                BlockData data = snapshotData(chunk, cell);
+                List<CompletableFuture<Boolean>> results = new ArrayList<>(checkers.size());
+                for (org.cobblestonemc.paper.api.BreakChecker checker : checkers) {
+                  results.add(checker.breakable(online, location, data));
+                }
+                return allTrue(results);
+              });
     };
   }
 
@@ -342,6 +354,16 @@ public final class PaperNavigationServiceImpl
   private static World bukkitWorld(String key) {
     NamespacedKey namespacedKey = NamespacedKey.fromString(key);
     return namespacedKey == null ? null : Bukkit.getWorld(namespacedKey);
+  }
+
+  /**
+   * The block state a chunk snapshot holds at {@code cell}, or {@code null} for an absent chunk.
+   */
+  private static BlockData snapshotData(MinecraftChunk chunk, Cell cell) {
+    if (chunk instanceof PaperChunk paperChunk) {
+      return paperChunk.snapshot().getBlockData(cell.x() & 15, cell.y(), cell.z() & 15);
+    }
+    return null;
   }
 
   /**
