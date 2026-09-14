@@ -96,16 +96,15 @@ public final class SearchSettings {
   /**
    * Returns the pessimism factor applied to an unsolved Tier-1 leg's cost estimate.
    *
-   * <p>Tier-1 prices a leg it has not solved yet as straight-line distance at the typical per-block
-   * cost of travel in that world, which real terrain still beats: a route winds, and a leg that
-   * comes back dearer than promised makes some other unexplored route look cheaper, so Tier-1
-   * re-plans and works through the alternatives one costly solve at a time. This factor is the
-   * honest margin on top of that estimate; 1.0 takes it at face value.
+   * <p>Tier-1 prices a leg it has not solved yet at straight-line distance times the cheapest cost
+   * per block the agent could manage, corrected by how much dearer the legs it <i>has</i> solved in
+   * that world actually turned out. This factor is the margin on top of that correction, for the
+   * legs the correction has not seen; 1.0 takes the corrected estimate at face value.
    *
-   * <p>It is deliberately small, because the estimate it scales is already meant to be realistic.
-   * If legs in one dimension keep being re-planned, the per-dimension cost per block is the dial to
-   * reach for first — raising this one instead makes <i>every</i> unsolved leg look dearer, which
-   * biases the route towards whatever happened to be solved first no matter what it cost.
+   * <p>It is deliberately small, because the correction does the real work — raising it makes
+   * <i>every</i> unsolved leg look dearer, which biases the route toward whatever happened to be
+   * solved first no matter what that cost. Raise it only if a search visibly re-plans too much
+   * before its first solves have taught it anything.
    *
    * @return the unsolved-leg pessimism factor
    */

@@ -18,7 +18,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntSupplier;
-import java.util.function.Supplier;
 import org.cobblestonemc.CellRegion;
 import org.cobblestonemc.CobblestoneApi;
 import org.cobblestonemc.CobblestoneLogger;
@@ -32,7 +31,6 @@ import org.cobblestonemc.Restriction;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
-import org.cobblestonemc.minecraft.AverageCostPerBlock;
 import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
@@ -78,7 +76,6 @@ public final class SpongeNavigationServiceImpl
   private final SpongeScheduler scheduler;
   private final SpongePlatformApi platform;
   private final ChunkProvider chunkProvider;
-  private final Supplier<AverageCostPerBlock> averageCosts;
   private final CobblestoneApi core;
   private final Map<String, MinecraftWorld> worldCache = new ConcurrentHashMap<>();
   private final OwnedRegistry<SearchModificationService> searchModifiers = new OwnedRegistry<>();
@@ -95,10 +92,8 @@ public final class SpongeNavigationServiceImpl
       PluginContainer plugin,
       CobblestoneLogger logger,
       ChunkProviderSettings chunkSettings,
-      IntSupplier maxChunkLoadRequests,
-      Supplier<AverageCostPerBlock> averageCosts) {
+      IntSupplier maxChunkLoadRequests) {
     this.logger = logger;
-    this.averageCosts = averageCosts;
     int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
     this.scheduler = new SpongeScheduler(plugin, workerThreads);
     this.platform = new SpongePlatformApi(scheduler, logger, maxChunkLoadRequests);
@@ -226,10 +221,11 @@ public final class SpongeNavigationServiceImpl
     ModesProvider<CobblestonePlayer, MinecraftStepPayload, MinecraftWorld> modes =
         MinecraftModes.providerFor(
             agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
-    // Per dimension, and configured rather than derived: see AverageCostPerBlock for why a
-    // realistic estimate beats an admissible one here.
-    AverageCostPerBlock costs = averageCosts.get();
-    HeuristicStrategy heuristic = Heuristics.runningAverage(costs::forDomain);
+    // Per-player, not a shared constant: the bound has to reflect what this player can actually do,
+    // or Tier-1 prices every route as if they could fly. See MinecraftModes#cheapestCostPerBlock.
+    HeuristicStrategy heuristic =
+        Heuristics.runningAverage(
+            MinecraftModes.cheapestCostPerBlock(agent, settings.excludedModes()));
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
         gatherTransitions(

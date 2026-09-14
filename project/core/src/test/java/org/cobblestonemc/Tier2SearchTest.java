@@ -26,7 +26,7 @@ class Tier2SearchTest {
 
   private VirtualPath<TestStep, TestDomain> virtualPath(Cell from, Cell target) {
     return new VirtualPath<>(
-        from, DOMAIN, new CellRegion<>(target, DOMAIN), TraversalState.DEFAULT, 1.0);
+        from, DOMAIN, new CellRegion<>(target, DOMAIN), TraversalState.DEFAULT);
   }
 
   /**
