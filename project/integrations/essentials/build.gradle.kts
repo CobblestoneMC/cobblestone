@@ -4,8 +4,10 @@
 // Cobblestone's published API and the EssentialsX API, both provided at runtime.
 
 plugins {
-    id("cobblestone.java-conventions")
+    id("cobblestone.paper-plugin-conventions")
 }
+
+version = "0.1.0"
 
 java {
     toolchain {

@@ -1,5 +1,5 @@
 name: CobblestoneBetonQuest
-version: '0.1.0-SNAPSHOT'
+version: '$projectVersion'
 description: Cobblestone integration for BetonQuest — guide players to their quest compass targets.
 author: whimxiqal
 website: https://cobblestonemc.org

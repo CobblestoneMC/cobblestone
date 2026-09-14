@@ -1,5 +1,5 @@
 name: cobblestone
-version: $projectVersion
+version: '$projectVersion'
 description: A Minecraft navigation plugin.
 author: whimxiqal
 website: https://cobblestonemc.org

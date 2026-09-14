@@ -1,5 +1,5 @@
 name: CobblestoneTowny
-version: '0.1.0-SNAPSHOT'
+version: '$projectVersion'
 description: Cobblestone integration for Towny — navigate to towns/plots/outposts, route through spawns, respect build protection.
 author: whimxiqal
 website: https://cobblestonemc.org

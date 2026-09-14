@@ -3,8 +3,10 @@
 // as a breakability check so routes avoid land the player may not dig. A thin, un-shaded jar.
 
 plugins {
-    id("cobblestone.java-conventions")
+    id("cobblestone.paper-plugin-conventions")
 }
+
+version = "0.1.1"
 
 java {
     toolchain {

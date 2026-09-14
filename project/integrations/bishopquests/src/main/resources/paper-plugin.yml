@@ -1,5 +1,5 @@
 name: CobblestoneBishopQuests
-version: '0.1.0-SNAPSHOT'
+version: '$projectVersion'
 description: Cobblestone integration for LMBishop Quests — guide players to their tracked quest objectives.
 author: whimxiqal
 website: https://cobblestonemc.org

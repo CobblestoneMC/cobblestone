@@ -8,8 +8,10 @@
 // (CobblestoneEssentials, CobblestoneCitizens, …) would do.
 
 plugins {
-    id("cobblestone.java-conventions")
+    id("cobblestone.paper-plugin-conventions")
 }
+
+version = "0.1.0"
 
 java {
     // Match the Paper platform toolchain (the server API targets a modern JDK).

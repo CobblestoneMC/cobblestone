@@ -1,5 +1,5 @@
 name: CobblestoneBeautyQuests
-version: '0.1.0-SNAPSHOT'
+version: '$projectVersion'
 description: Cobblestone integration for BeautyQuests — guide players to their quest stages.
 author: whimxiqal
 website: https://cobblestonemc.org
