@@ -4,7 +4,7 @@
 // MavenLibraryResolver at runtime. Adventure and paper-api are provided by the server. (design/07)
 
 plugins {
-    id("cobblestone.java-conventions")
+    id("cobblestone.paper-plugin-conventions")
     alias(libs.plugins.shadow)
 }
 
@@ -46,15 +46,4 @@ tasks.shadowJar {
 // produces every shippable plugin jar without a separate command.
 tasks.named("assemble") {
     dependsOn(tasks.named("shadowJar"))
-}
-
-tasks.processResources {
-    val props = mapOf(
-        "projectVersion" to project.version,
-    )
-
-    inputs.properties(props)
-    filesMatching("**/paper-plugin.yml") {
-        expand(props)
-    }
 }

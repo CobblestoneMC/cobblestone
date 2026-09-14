@@ -1,5 +1,5 @@
 name: CobblestoneWarps
-version: '0.1.0-SNAPSHOT'
+version: '$projectVersion'
 description: Example Cobblestone integration — surfaces named /warp points as navigable routes.
 author: whimxiqal
 website: https://cobblestonemc.org

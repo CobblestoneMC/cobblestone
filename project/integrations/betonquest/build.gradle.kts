@@ -9,8 +9,10 @@
 // carry a GPL-compatible license rather than Cobblestone's MIT.
 
 plugins {
-    id("cobblestone.java-conventions")
+    id("cobblestone.paper-plugin-conventions")
 }
+
+version = "0.1.0"
 
 java {
     toolchain {
@@ -48,5 +50,5 @@ dependencies {
 }
 
 tasks.jar {
-    archiveBaseName.set("CobblestoneBeautyQuests")
+    archiveBaseName.set("CobblestoneBetonQuests")
 }

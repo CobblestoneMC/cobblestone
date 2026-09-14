@@ -1,5 +1,5 @@
 name: CobblestoneCitizens
-version: '0.1.0-SNAPSHOT'
+version: '$projectVersion'
 description: Cobblestone integration for Citizens — navigate to any NPC.
 author: whimxiqal
 website: https://cobblestonemc.org
