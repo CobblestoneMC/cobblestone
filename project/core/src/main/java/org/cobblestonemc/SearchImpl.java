@@ -60,6 +60,9 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
   private final CompletableFuture<NavigationResult<Position<D>, T>> future =
       new CompletableFuture<>();
 
+  /** The solve currently running, so cancelling can wake it instead of leaving it parked. */
+  private volatile Tier2Search<A, T, D> activeSolve;
+
   private GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>> graphPath;
   private boolean
       limitHit; // a Tier-2 solve gave up on the cell limit (memory guard), not a real dead end
@@ -106,6 +109,12 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
   public void cancel() {
     if (cancelled.compareAndSet(false, true)) {
       future.complete(new NavigationResult.Failure<>(FailureReason.CANCELLED));
+      // A parked solve reads the cancellation only when something wakes it, and what it is parked
+      // on may never arrive. Left alone it would hold its whole node table until its deadline.
+      Tier2Search<A, T, D> solve = activeSolve;
+      if (solve != null) {
+        solve.abandon();
+      }
     }
   }
 
@@ -175,10 +184,12 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
               cancelled::get,
               executor,
               deadlineMillis);
+      activeSolve = tier2;
       tier2
           .solve()
           .whenCompleteAsync(
               (result, error) -> {
+                activeSolve = null;
                 if (cancelled.get()) {
                   return;
                 }

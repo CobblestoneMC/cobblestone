@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -160,23 +161,52 @@ final class TownySearchModificationService implements SearchModificationService 
     };
   }
 
-  /** Puts one breakability question to Towny on the main thread. */
+  /**
+   * Puts one breakability question to Towny on the main thread.
+   *
+   * <p><b>This future must always complete.</b> The search parks until its verdict lands, and this
+   * one is cached, so a future that never completes would park the search on every other block of
+   * this material in the plot too, for the rest of its budget. {@code canDestroy} runs an event, so
+   * any listener can throw, and the scheduler itself refuses work once the plugin is disabled —
+   * neither may be allowed to lose the answer. Both failure paths allow the break: Cobblestone has
+   * no standing to forbid mining on the strength of a question Towny never answered.
+   */
   private CompletableFuture<Boolean> ask(Player breaker, Location location, Material material) {
     CompletableFuture<Boolean> future = new CompletableFuture<>();
-    Bukkit.getScheduler()
-        .runTask(
-            plugin,
-            () -> {
-              if (!breaker.isOnline()) {
-                future.complete(true); // gone; do not block mining
-                return;
-              }
-              // canDestroy, not PlayerCacheUtil.getCachePermission: the latter answers from the
-              // player's own movement cache, which is built for wherever the player is standing,
-              // not for a house a thousand blocks away. canDestroy runs Towny's whole decision,
-              // event and all.
-              future.complete(TownyActionEventExecutor.canDestroy(breaker, location, material));
-            });
+    try {
+      Bukkit.getScheduler()
+          .runTask(
+              plugin,
+              () -> {
+                try {
+                  if (!breaker.isOnline()) {
+                    future.complete(true); // gone; do not block mining
+                    return;
+                  }
+                  // canDestroy, not PlayerCacheUtil.getCachePermission: the latter answers
+                  // from the player's own movement cache, which is built for wherever the player
+                  // is standing, not for a house a thousand blocks away. canDestroy runs Towny's
+                  // whole decision, event and all.
+                  future.complete(TownyActionEventExecutor.canDestroy(breaker, location, material));
+                } catch (Throwable throwable) {
+                  plugin
+                      .getLogger()
+                      .log(
+                          Level.WARNING,
+                          "Towny could not decide whether "
+                              + breaker.getName()
+                              + " may break "
+                              + material
+                              + " at "
+                              + location
+                              + "; allowing it.",
+                          throwable);
+                  future.complete(true);
+                }
+              });
+    } catch (Throwable throwable) {
+      future.complete(true); // the scheduler refused the task (disabling, or a region mismatch)
+    }
     return future;
   }
 
