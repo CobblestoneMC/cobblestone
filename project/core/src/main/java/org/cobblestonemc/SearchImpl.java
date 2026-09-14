@@ -52,6 +52,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
   private final ModesProvider<A, T, D> modes;
   private final List<? extends Restriction<A, D>> restrictions;
   private final SearchSettings settings;
+  private final Tier1Estimator estimator;
   private final Tier1Graph<T, D> tier1;
   private final long deadlineMillis;
 
@@ -84,13 +85,8 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
     this.restrictions = List.copyOf(restrictions);
     this.settings = settings;
 
-    this.tier1 =
-        new Tier1Graph<>(
-            origin,
-            transitions,
-            destination.regions(),
-            heuristic,
-            settings.tier1UnsolvedPessimism());
+    this.estimator = new Tier1Estimator(heuristic, settings.tier1UnsolvedPessimism());
+    this.tier1 = new Tier1Graph<>(origin, transitions, destination.regions(), this.estimator);
     this.deadlineMillis = System.currentTimeMillis() + settings.maxWallClockMillis();
 
     this.logger.debug("Constructed for agent {} and destination {}", agent, destination);
@@ -163,7 +159,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
           unsolved,
           virtualPath.fromCell(),
           virtualPath.targetRegion(),
-          virtualPath.cost(heuristic),
+          virtualPath.cost(estimator),
           graphPath.dist());
       Tier2Search<A, T, D> tier2 =
           new Tier2Search<>(
@@ -199,6 +195,13 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
                   }
                   case Tier2Result.Solved<T, D> v -> {
                     virtualPath.solve(v.steps(), v.cost());
+                    // What this leg really cost re-prices every leg still unsolved in its world;
+                    // see Tier1Estimator.
+                    estimator.observe(
+                        virtualPath.fromCell(),
+                        virtualPath.targetRegion(),
+                        virtualPath.state(),
+                        v.cost());
                   }
                 }
                 graphPath = null; // re-plan with the now-known edge cost

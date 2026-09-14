@@ -41,7 +41,6 @@ import org.cobblestonemc.Restriction;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
-import org.cobblestonemc.minecraft.AverageCostPerBlock;
 import org.cobblestonemc.minecraft.BreakChecker;
 import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
@@ -68,7 +67,6 @@ public final class PaperNavigationServiceImpl
   private final CobblestoneLogger logger;
   private final PaperScheduler scheduler;
   private final ChunkProvider chunkProvider;
-  private final Supplier<AverageCostPerBlock> averageCosts;
   private final CobblestoneApi core;
   private final Map<String, MinecraftWorld> worldCache = new ConcurrentHashMap<>();
   private final OwnedRegistry<SearchModificationService> searchModifiers = new OwnedRegistry<>();
@@ -79,16 +77,10 @@ public final class PaperNavigationServiceImpl
    * @param plugin the owning plugin
    * @param logger the logger
    * @param chunkSettings the chunk cache tunables
-   * @param averageCosts the per-dimension cost per block searches price their estimates with, read
-   *     per search so a config reload takes effect without a restart
    */
   public PaperNavigationServiceImpl(
-      Plugin plugin,
-      CobblestoneLogger logger,
-      ChunkProviderSettings chunkSettings,
-      Supplier<AverageCostPerBlock> averageCosts) {
+      Plugin plugin, CobblestoneLogger logger, ChunkProviderSettings chunkSettings) {
     this.logger = logger;
-    this.averageCosts = averageCosts;
     int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
     this.scheduler = new PaperScheduler(plugin, workerThreads);
     PaperPlatformApi platform = new PaperPlatformApi(plugin, scheduler);
@@ -205,10 +197,11 @@ public final class PaperNavigationServiceImpl
     ModesProvider<CobblestonePlayer, MinecraftStepPayload, MinecraftWorld> modes =
         MinecraftModes.providerFor(
             agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
-    // Per dimension, and configured rather than derived: see AverageCostPerBlock for why a
-    // realistic estimate beats an admissible one here.
-    AverageCostPerBlock costs = averageCosts.get();
-    HeuristicStrategy heuristic = Heuristics.runningAverage(costs::forDomain);
+    // Per-player, not a shared constant: the bound has to reflect what this player can actually do,
+    // or Tier-1 prices every route as if they could fly. See MinecraftModes#cheapestCostPerBlock.
+    HeuristicStrategy heuristic =
+        Heuristics.runningAverage(
+            MinecraftModes.cheapestCostPerBlock(agent, settings.excludedModes()));
 
     // Chunk counters are provider-wide, so this delta is only this search's own work when nothing
     // else is searching, and an upper bound otherwise. Per-search counters are issue #8.

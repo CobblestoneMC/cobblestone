@@ -17,7 +17,6 @@ import org.bukkit.entity.Entity;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.cobblestonemc.api.SearchSettings;
-import org.cobblestonemc.minecraft.AverageCostPerBlock;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.paper.PaperNavigationServiceImpl;
 import org.cobblestonemc.paper.api.NavigationService;
@@ -74,10 +73,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     // into it (design/05). Both are reachable to other plugins via the registered plugin API.
     this.platformApi =
         new PaperNavigationServiceImpl(
-            this,
-            logger,
-            ChunkProviderSettings.defaults(config.get(keys.chunksPolicy)),
-            () -> averageCostPerBlock(config, keys));
+            this, logger, ChunkProviderSettings.defaults(config.get(keys.chunksPolicy)));
     PaperIntegrationRegistry integrationRegistry = new PaperIntegrationRegistry();
     getServer()
         .getServicesManager()
@@ -247,14 +243,5 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
       dataStore.close();
     }
     getLogger().info("Cobblestone disabled.");
-  }
-
-  /** The per-dimension cost per block, read fresh so a config reload takes effect at once. */
-  private static AverageCostPerBlock averageCostPerBlock(ConfigManager config, ConfigKeys keys) {
-    return new AverageCostPerBlock(
-        config.get(keys.averageCostOverworld),
-        config.get(keys.averageCostNether),
-        config.get(keys.averageCostEnd),
-        config.get(keys.averageCostCustom));
   }
 }

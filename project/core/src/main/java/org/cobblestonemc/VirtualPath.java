@@ -33,23 +33,16 @@ final class VirtualPath<T, D extends Domain> {
   private final D domain;
   private final DomainRegion<D> targetRegion;
   private final TraversalState state;
-  private final double unsolvedFactor;
 
   private Status status = Status.UNSOLVED;
   private List<RawStep<T, D>> solvedSteps = List.of();
   private double trueCost;
 
-  VirtualPath(
-      Cell fromCell,
-      D domain,
-      DomainRegion<D> targetRegion,
-      TraversalState state,
-      double unsolvedFactor) {
+  VirtualPath(Cell fromCell, D domain, DomainRegion<D> targetRegion, TraversalState state) {
     this.fromCell = fromCell;
     this.domain = domain;
     this.targetRegion = targetRegion;
     this.state = state;
-    this.unsolvedFactor = unsolvedFactor;
   }
 
   Cell fromCell() {
@@ -82,13 +75,13 @@ final class VirtualPath<T, D extends Domain> {
 
   /**
    * Returns the current cost used by Tier-1 Dijkstra: the true cost once solved, {@code +∞} if
-   * infeasible, otherwise the optimistic estimate from {@code heuristic}.
+   * infeasible, otherwise what {@code estimator} assumes a leg like this one costs.
    */
-  double cost(HeuristicStrategy heuristic) {
+  double cost(Tier1Estimator estimator) {
     return switch (status) {
       case SOLVED -> trueCost;
       case INFEASIBLE -> Double.POSITIVE_INFINITY;
-      case UNSOLVED -> heuristic.estimate(fromCell, targetRegion, state) * unsolvedFactor;
+      case UNSOLVED -> estimator.estimate(fromCell, targetRegion, state);
     };
   }
 

@@ -28,20 +28,18 @@ import org.cobblestonemc.api.TraversalState;
  */
 final class Tier1Graph<T, D extends Domain> extends Graph<Tier1Node<T, D>, Tier1Edge<T, D>> {
 
-  private final HeuristicStrategy heuristic;
+  private final Tier1Estimator estimator;
   private final Map<Tier1Node<T, D>, Iterable<Tier1Edge<T, D>>> edgeMap = new HashMap<>();
   private final Map<D, List<Transition<T, D>>> transitionsByOriginDomain = new HashMap<>();
   private final Map<D, List<DomainRegion<D>>> destinationsByDomain = new HashMap<>();
   private final Tier1Node.Source<T, D> originNode;
-  private final double unsolvedFactor;
 
   Tier1Graph(
       Position<D> origin,
       List<? extends Transition<T, D>> transitions,
       Collection<? extends DomainRegion<D>> destinationRegions,
-      HeuristicStrategy heuristic,
-      double unsolvedFactor) {
-    this.heuristic = heuristic;
+      Tier1Estimator estimator) {
+    this.estimator = estimator;
     this.originNode = new Tier1Node.Source<>(origin, TraversalState.DEFAULT);
     for (Transition<T, D> transition : transitions) {
       transitionsByOriginDomain
@@ -51,7 +49,6 @@ final class Tier1Graph<T, D extends Domain> extends Graph<Tier1Node<T, D>, Tier1
     for (DomainRegion<D> region : destinationRegions) {
       destinationsByDomain.computeIfAbsent(region.domain(), key -> new ArrayList<>()).add(region);
     }
-    this.unsolvedFactor = unsolvedFactor;
   }
 
   Tier1Node.Source<T, D> originNode() {
@@ -96,15 +93,14 @@ final class Tier1Graph<T, D extends Domain> extends Graph<Tier1Node<T, D>, Tier1
     for (Transition<T, D> target : transitionTargets) {
       edges.add(
           new Tier1Edge<>(
-              new VirtualPath<>(
-                  fromCell, destinationDomain, target.origin(), state, unsolvedFactor),
+              new VirtualPath<>(fromCell, destinationDomain, target.origin(), state),
               new Tier1Node.AtTransition<>(target, target.apply(state)),
               state));
     }
     for (DomainRegion<D> target : destinationTargets) {
       edges.add(
           new Tier1Edge<>(
-              new VirtualPath<>(fromCell, destinationDomain, target, state, unsolvedFactor),
+              new VirtualPath<>(fromCell, destinationDomain, target, state),
               new Tier1Node.Sink<>(),
               state));
     }
@@ -118,6 +114,6 @@ final class Tier1Graph<T, D extends Domain> extends Graph<Tier1Node<T, D>, Tier1
 
   @Override
   protected double cost(Tier1Edge<T, D> edge) {
-    return edge.virtualPath().cost(heuristic) + edge.target().cost();
+    return edge.virtualPath().cost(estimator) + edge.target().cost();
   }
 }
