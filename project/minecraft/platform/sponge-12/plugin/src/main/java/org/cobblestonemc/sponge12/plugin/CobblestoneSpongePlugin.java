@@ -14,6 +14,7 @@ import java.util.function.Supplier;
 import org.apache.logging.log4j.Logger;
 import org.bstats.sponge.Metrics;
 import org.cobblestonemc.api.SearchSettings;
+import org.cobblestonemc.minecraft.AverageCostPerBlock;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.plugin.LogoutCleanup;
 import org.cobblestonemc.plugin.config.ConfigKeys;
@@ -121,7 +122,8 @@ public final class CobblestoneSpongePlugin {
             container,
             cobblestoneLogger,
             ChunkProviderSettings.defaults(config.get(keys.chunksPolicy)),
-            () -> config.get(spongeKeys.chunksMaxLoadRequests));
+            () -> config.get(spongeKeys.chunksMaxLoadRequests),
+            () -> averageCostPerBlock(config, keys));
     this.navigationService.registerListeners(container);
     CobblestoneCoreApi.install(navigationService, navigationService);
 
@@ -284,5 +286,14 @@ public final class CobblestoneSpongePlugin {
       dataStore.close();
     }
     logger.info("Cobblestone disabled.");
+  }
+
+  /** The per-dimension cost per block, read fresh so a config reload takes effect at once. */
+  private static AverageCostPerBlock averageCostPerBlock(ConfigManager config, ConfigKeys keys) {
+    return new AverageCostPerBlock(
+        config.get(keys.averageCostOverworld),
+        config.get(keys.averageCostNether),
+        config.get(keys.averageCostEnd),
+        config.get(keys.averageCostCustom));
   }
 }

@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 
 class HeuristicsTest {
 
-  private static final double CHEAPEST = 0.08; // the fly cost, as production uses
+  private static final double TYPICAL = 0.5; // the overworld cost per block, as production uses
   private static final double WALK = 0.20;
   private static final double MINE = 0.56; // stone, stone pickaxe
   private static final int WIDTH = 5;
@@ -25,11 +25,12 @@ class HeuristicsTest {
       new CellRegion<>(new Cell(2000, 64, 0), WORLD);
 
   private static SolveHeuristic solve() {
-    return Heuristics.runningAverage(CHEAPEST).newSolve(WIDTH);
+    return Heuristics.runningAverage(TYPICAL).newSolve(WIDTH, GOAL);
   }
 
   private static double estimate(SolveHeuristic heuristic, Cell cell, double trailAverage) {
-    return heuristic.estimate(cell, GOAL, TraversalState.DEFAULT, trailAverage);
+    double distance = cell.distance(GOAL.nearestBoundaryCell(cell));
+    return heuristic.estimate(cell, distance, TraversalState.DEFAULT, trailAverage);
   }
 
   /** Walks {@code steps} one-block steps of the given cost, returning the trail average. */
@@ -42,8 +43,8 @@ class HeuristicsTest {
   }
 
   @Test
-  void seedIsTheGlobalLowerBound() {
-    assertEquals(CHEAPEST, solve().seed());
+  void seedIsTheConfiguredCostForTheDomain() {
+    assertEquals(TYPICAL, solve().seed());
   }
 
   @Test
@@ -121,11 +122,11 @@ class HeuristicsTest {
 
   @Test
   void statelessStrategiesIgnoreTheTrailAverage() {
-    SolveHeuristic heuristic = Heuristics.euclidean(CHEAPEST).newSolve(WIDTH);
+    SolveHeuristic heuristic = Heuristics.euclidean(TYPICAL).newSolve(WIDTH, GOAL);
     Cell cell = new Cell(0, 64, 0);
     double withSeed = estimate(heuristic, cell, heuristic.seed());
     double withNonsense = estimate(heuristic, cell, 99.0);
     assertEquals(withSeed, withNonsense);
-    assertEquals(cell.distance(new Cell(2000, 64, 0)) * CHEAPEST, withSeed, 1e-9);
+    assertEquals(cell.distance(new Cell(2000, 64, 0)) * TYPICAL, withSeed, 1e-9);
   }
 }

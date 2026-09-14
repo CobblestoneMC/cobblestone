@@ -7,6 +7,7 @@
 
 package org.cobblestonemc;
 
+import java.util.function.ToDoubleFunction;
 import org.cobblestonemc.api.TraversalState;
 
 /**
@@ -29,32 +30,39 @@ public final class Heuristics {
   }
 
   /**
-   * An admissible, consistent heuristic: euclidean distance to the region's nearest boundary cell
-   * times a globally-cheapest per-block cost.
+   * Euclidean distance to the region's nearest boundary cell, times a per-domain cost per block.
    *
-   * <p>{@code cheapestCostPerBlock} must be a true lower bound on the cost of moving one block by
-   * any available means (e.g. the fastest mode's per-block cost); using a global lower bound keeps
-   * the estimate admissible for every agent without needing per-agent knowledge here.
+   * <p>Admissible exactly when {@code costPerBlock} is a true lower bound on the cost of moving one
+   * block by any available means. Production tuning deliberately passes a <i>typical</i> cost
+   * instead (see {@link #runningAverage}), which trades admissibility for an estimate that is not
+   * routinely beaten several times over by real terrain.
    *
-   * @param cheapestCostPerBlock a lower bound on per-block traversal cost, in seconds
+   * @param costPerBlock per-block traversal cost, in seconds, for the domain being crossed
    * @return the euclidean heuristic
    */
-  public static HeuristicStrategy euclidean(double cheapestCostPerBlock) {
-    if (cheapestCostPerBlock < 0) {
-      throw new IllegalArgumentException(
-          "cheapestCostPerBlock must be >= 0: " + cheapestCostPerBlock);
-    }
+  public static HeuristicStrategy euclidean(ToDoubleFunction<Domain> costPerBlock) {
     return (from, target, state) ->
-        from.distance(target.nearestBoundaryCell(from)) * cheapestCostPerBlock;
+        from.distance(target.nearestBoundaryCell(from)) * cost(costPerBlock, target);
+  }
+
+  /**
+   * Euclidean distance times one cost per block, the same in every domain.
+   *
+   * @param costPerBlock per-block traversal cost, in seconds
+   * @return the euclidean heuristic
+   */
+  public static HeuristicStrategy euclidean(double costPerBlock) {
+    requireNonNegative(costPerBlock);
+    return euclidean(domain -> costPerBlock);
   }
 
   /**
    * A production heuristic that scales the remaining distance by the average per-block cost of the
    * trail leading to the cell being estimated — so {@code h} tracks the terrain that cell is
    * actually in, and A* explores far fewer cells. The price is admissibility, so paths may be
-   * slightly sub-optimal (weighted-A*-style). Tier-1 still uses the admissible {@link
+   * slightly sub-optimal (weighted-A*-style). Tier-1 still uses {@link
    * HeuristicStrategy#estimate(Cell, DomainRegion, TraversalState)} (distance × {@code
-   * cheapestCostPerBlock}).
+   * averageCostPerBlock}).
    *
    * <p><b>Locality is the point.</b> Consider a cell three blocks inside a hillside, two thousand
    * blocks from the goal. Pricing its remaining journey at the cost of open ground makes its {@code
@@ -62,25 +70,49 @@ public final class Heuristics {
    * hill it passes. Averaging only over the trail behind <i>that</i> cell prices its remaining
    * journey as rock, and the digging branch drops out of contention immediately.
    *
-   * @param cheapestCostPerBlock a lower bound on per-block cost, used to seed a trail and by Tier-1
+   * <p><b>The cost is per domain.</b> A block of nether is not a block of overworld: the terrain is
+   * more broken, the routes wind more, and the same straight-line distance costs more to walk. A
+   * single number across a route that crosses a portal prices one side of it wrongly, so the lookup
+   * is by {@link Domain}.
+   *
+   * @param averageCostPerBlock the typical per-block cost of travel in a domain, in seconds; seeds
+   *     a trail and prices Tier-1's unsolved legs
    * @return the running-average heuristic
    */
-  public static HeuristicStrategy runningAverage(double cheapestCostPerBlock) {
-    if (cheapestCostPerBlock < 0) {
-      throw new IllegalArgumentException(
-          "cheapestCostPerBlock must be >= 0: " + cheapestCostPerBlock);
-    }
+  public static HeuristicStrategy runningAverage(ToDoubleFunction<Domain> averageCostPerBlock) {
     return new HeuristicStrategy() {
       @Override
       public double estimate(Cell from, DomainRegion<?> target, TraversalState state) {
-        return from.distance(target.nearestBoundaryCell(from)) * cheapestCostPerBlock;
+        return from.distance(target.nearestBoundaryCell(from)) * cost(averageCostPerBlock, target);
       }
 
       @Override
-      public SolveHeuristic newSolve(int windowWidth) {
-        return new RunningAverageSolve(cheapestCostPerBlock, windowWidth);
+      public SolveHeuristic newSolve(int windowWidth, DomainRegion<?> target) {
+        return new RunningAverageSolve(cost(averageCostPerBlock, target), windowWidth);
       }
     };
+  }
+
+  /**
+   * The running-average heuristic with one cost per block, the same in every domain.
+   *
+   * @param averageCostPerBlock the typical per-block cost of travel, in seconds
+   * @return the running-average heuristic
+   */
+  public static HeuristicStrategy runningAverage(double averageCostPerBlock) {
+    requireNonNegative(averageCostPerBlock);
+    return runningAverage(domain -> averageCostPerBlock);
+  }
+
+  private static double cost(ToDoubleFunction<Domain> costPerBlock, DomainRegion<?> target) {
+    return requireNonNegative(costPerBlock.applyAsDouble(target.domain()));
+  }
+
+  private static double requireNonNegative(double costPerBlock) {
+    if (!(costPerBlock >= 0)) { // also rejects NaN
+      throw new IllegalArgumentException("costPerBlock must be >= 0: " + costPerBlock);
+    }
+    return costPerBlock;
   }
 
   /**
@@ -94,19 +126,19 @@ public final class Heuristics {
    */
   private static final class RunningAverageSolve implements SolveHeuristic {
 
-    private final double cheapestCostPerBlock;
+    private final double averageCostPerBlock;
 
     /** The weight one block of travel keeps of the previous average; {@code 1 - 1/width}. */
     private final double retention;
 
-    RunningAverageSolve(double cheapestCostPerBlock, int windowWidth) {
-      this.cheapestCostPerBlock = cheapestCostPerBlock;
+    RunningAverageSolve(double averageCostPerBlock, int windowWidth) {
+      this.averageCostPerBlock = averageCostPerBlock;
       this.retention = 1.0 - 1.0 / Math.max(1, windowWidth);
     }
 
     @Override
     public double seed() {
-      return cheapestCostPerBlock;
+      return averageCostPerBlock;
     }
 
     @Override
@@ -121,9 +153,8 @@ public final class Heuristics {
     }
 
     @Override
-    public double estimate(
-        Cell from, DomainRegion<?> target, TraversalState state, double trailAverage) {
-      return from.distance(target.nearestBoundaryCell(from)) * trailAverage;
+    public double estimate(Cell from, double distance, TraversalState state, double trailAverage) {
+      return distance * trailAverage;
     }
   }
 }

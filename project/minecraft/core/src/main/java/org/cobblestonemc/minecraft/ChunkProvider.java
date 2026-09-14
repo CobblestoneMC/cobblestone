@@ -8,9 +8,12 @@
 package org.cobblestonemc.minecraft;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
@@ -23,10 +26,12 @@ import org.jetbrains.annotations.Nullable;
  * block reads ahead along the column of chunks between it and the destination, so that the chunk a
  * search wants next is usually already in hand.
  *
- * <p><b>Freshness</b> is handled on insert, not on read: a snapshot past the staleness window is
- * dropped when the cache next takes an entry, so a long-running search keeps the chunks it is
- * actively walking through instead of re-fetching them mid-solve. Block-change eviction ({@link
- * #invalidate}) is what keeps a chunk a search keeps touching honest.
+ * <p><b>Freshness</b> is not checked per read: a read happens tens of millions of times per search,
+ * and re-fetching mid-solve would cost more than a stale block is worth. Three other things keep
+ * snapshots honest instead. A snapshot past the staleness window is dropped when the cache next
+ * takes an entry; {@link #invalidate} drops one the moment a block in it changes; and a periodic
+ * sweep drops any snapshot older than {@link #MAX_SNAPSHOT_AGE_MILLIS}, which is the backstop for
+ * an edit that fires no block-change event at all.
  *
  * <p>The one entry read-freshness applies to is an {@linkplain MinecraftChunk.Unknown unknown}
  * chunk: see {@link #UNKNOWN_RETRY_MILLIS}.
@@ -60,6 +65,30 @@ public final class ChunkProvider {
    */
   private static final long UNKNOWN_RETRY_MILLIS = 1_000L;
 
+  /**
+   * The oldest a cached snapshot may get before it is dropped regardless of what is using it.
+   *
+   * <p>Neither of the other two paths can bound this. Insert-time eviction only ever inspects the
+   * eldest entry, and with access ordering a chunk a search keeps touching is never the eldest, so
+   * it never expires the very chunks a search walks through — and expires nothing at all while no
+   * new chunk is being fetched. Block-change eviction is prompt but only sees what fires a Bukkit
+   * event, which leaves out {@code /fill} and {@code /setblock}, world-editing plugins with block
+   * events off, a regenerated chunk, and anything written straight through the server internals.
+   *
+   * <p>Deliberately far longer than {@link ChunkProviderSettings#stalenessMillis()}: that window
+   * governs entries nothing is using, while this one is a backstop against an edit nothing told us
+   * about, and enforcing the short window here would have a long search re-loading its own working
+   * set several times over, stalling for a fetch latency each time.
+   */
+  static final long MAX_SNAPSHOT_AGE_MILLIS = 120_000L;
+
+  /**
+   * How often the cache is swept for snapshots past {@link #MAX_SNAPSHOT_AGE_MILLIS}. The sweep
+   * walks at most {@link ChunkProviderSettings#maxCachedChunks()} entries, seconds apart, under a
+   * lock every cache hit already takes.
+   */
+  private static final long STALE_SWEEP_MILLIS = 10_000L;
+
   private final PlatformApi<?> platform;
   private final ChunkProviderSettings settings;
   private final LongSupplier clock;
@@ -68,9 +97,21 @@ public final class ChunkProvider {
   private final Map<ChunkKey, Cached> cache;
   private final Map<ChunkKey, CompletableFuture<MinecraftChunk>> inFlight = new HashMap<>();
 
+  /**
+   * The keys currently in {@link #cache}, mirrored so {@link #invalidate} can tell "nothing cached"
+   * without taking {@link #lock}.
+   *
+   * <p>Every block change on the server invalidates, on the thread that owns the block, while the
+   * lock is held by every chunk lookup a running search makes — tens of thousands a second. Almost
+   * all of those changes are in chunks nothing has ever cached, and this lets those cost a hash
+   * lookup instead of a wait on a monitor whose hold time scales with how many searches are
+   * running. It may trail the cache by an instant, which only ever costs a needless lock.
+   */
+  private final Set<ChunkKey> cachedKeys = ConcurrentHashMap.newKeySet();
+
   // Counters for ChunkProviderStats. All are read and written under `lock` except the two the
   // fetch callback touches, which take the lock themselves.
-  private long chunkRequests;
+  private long chunkLookups;
   private long cacheHits;
   private long directFetches;
   private long prefetches;
@@ -80,6 +121,7 @@ public final class ChunkProvider {
   private long staleEvictions;
   private long invalidations;
   private long directFetchMillis;
+  private long lastSweepAt;
 
   /**
    * Creates a chunk provider.
@@ -95,6 +137,7 @@ public final class ChunkProvider {
     this.platform = platform;
     this.settings = settings;
     this.clock = clock;
+    this.lastSweepAt = clock.getAsLong();
     this.cache =
         new LinkedHashMap<>(16, 0.75f, true) {
           @Override
@@ -113,6 +156,7 @@ public final class ChunkProvider {
             if (eldest.getValue().prefetched) {
               prefetchesWasted++; // read ahead for, then evicted before anything read it
             }
+            cachedKeys.remove(eldest.getKey());
             return true;
           }
         };
@@ -129,13 +173,20 @@ public final class ChunkProvider {
    * @param worldKey the world's namespaced key
    * @param chunkX the chunk X coordinate
    * @param chunkZ the chunk Z coordinate
+   * @return whether a snapshot was actually dropped
    */
-  public void invalidate(String worldKey, int chunkX, int chunkZ) {
+  public boolean invalidate(String worldKey, int chunkX, int chunkZ) {
     ChunkKey key = new ChunkKey(worldKey, chunkX, chunkZ);
+    if (!cachedKeys.contains(key)) {
+      return false; // nothing cached here; do not queue behind the searches holding the lock
+    }
     synchronized (lock) {
-      if (cache.remove(key) != null) {
-        invalidations++;
+      if (cache.remove(key) == null) {
+        return false;
       }
+      cachedKeys.remove(key);
+      invalidations++;
+      return true;
     }
   }
 
@@ -145,9 +196,10 @@ public final class ChunkProvider {
    * @param worldKey the world's namespaced key
    * @param blockX the block X coordinate
    * @param blockZ the block Z coordinate
+   * @return whether a snapshot was actually dropped
    */
-  public void invalidateBlock(String worldKey, int blockX, int blockZ) {
-    invalidate(worldKey, blockX >> 4, blockZ >> 4);
+  public boolean invalidateBlock(String worldKey, int blockX, int blockZ) {
+    return invalidate(worldKey, blockX >> 4, blockZ >> 4);
   }
 
   /**
@@ -159,7 +211,7 @@ public final class ChunkProvider {
   public ChunkProviderStats stats() {
     synchronized (lock) {
       return new ChunkProviderStats(
-          chunkRequests,
+          chunkLookups,
           cacheHits,
           directFetches,
           prefetches,
@@ -208,10 +260,12 @@ public final class ChunkProvider {
     int chunkZ = cell.z() >> 4;
     ChunkKey key = new ChunkKey(world.key(), chunkX, chunkZ);
     synchronized (lock) {
-      chunkRequests++;
+      chunkLookups++;
+      sweepAged();
       Cached cached = cache.get(key);
       if (cached != null && cached.chunk == MinecraftChunk.Unknown.INSTANCE && expired(cached)) {
         cache.remove(key); // stop answering from a "not loaded yet" that may have become terrain
+        cachedKeys.remove(key);
         cached = null;
       }
 
@@ -234,6 +288,31 @@ public final class ChunkProvider {
 
   private boolean isStale(Cached cached) {
     return clock.getAsLong() - cached.cachedAt > settings.stalenessMillis();
+  }
+
+  /**
+   * Drops every snapshot older than {@link #MAX_SNAPSHOT_AGE_MILLIS}, at most once per {@link
+   * #STALE_SWEEP_MILLIS}. Called under {@link #lock}.
+   */
+  private void sweepAged() {
+    long now = clock.getAsLong();
+    if (now - lastSweepAt < STALE_SWEEP_MILLIS) {
+      return;
+    }
+    lastSweepAt = now;
+    Iterator<Map.Entry<ChunkKey, Cached>> entries = cache.entrySet().iterator();
+    while (entries.hasNext()) {
+      Map.Entry<ChunkKey, Cached> entry = entries.next();
+      if (now - entry.getValue().cachedAt <= MAX_SNAPSHOT_AGE_MILLIS) {
+        continue;
+      }
+      entries.remove();
+      cachedKeys.remove(entry.getKey());
+      staleEvictions++;
+      if (entry.getValue().prefetched) {
+        prefetchesWasted++;
+      }
+    }
   }
 
   /** Whether an unknown-chunk answer has outlived {@link #UNKNOWN_RETRY_MILLIS}. */
@@ -275,6 +354,8 @@ public final class ChunkProvider {
               }
               // A direct fetch's unknown is cached, but only briefly; see UNKNOWN_RETRY_MILLIS.
             }
+            // Mirror first: the put may evict, and eviction is what removes from the mirror.
+            cachedKeys.add(key);
             cache.put(key, new Cached(snapshot, clock.getAsLong(), prefetch));
           }
         });

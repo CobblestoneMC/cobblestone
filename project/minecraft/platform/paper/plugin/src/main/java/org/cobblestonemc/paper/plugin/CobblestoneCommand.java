@@ -129,7 +129,7 @@ final class CobblestoneCommand {
                 .executes(ctx -> reload(ctx.getSource().getSender(), config, keys, messages, log)))
         .then(
             Commands.literal("loglevel")
-                .requires(source -> source.getSender().hasPermission(Permissions.ADMIN.value()))
+                .requires(source -> source.getSender().hasPermission(Permissions.LOG_LEVEL.value()))
                 .then(
                     Commands.argument("level", StringArgumentType.word())
                         .suggests(CobblestoneCommand::suggestLogLevels)
@@ -210,19 +210,27 @@ final class CobblestoneCommand {
       return Command.SINGLE_SUCCESS;
     }
     log.setLevel(level);
-    messages.send(sender, locale, CobblestoneMessages.LOG_LEVEL_SET, level.name());
+    messages.send(sender, locale, CobblestoneMessages.LOG_LEVEL_SET, name(level));
     return Command.SINGLE_SUCCESS;
   }
 
   private static CompletableFuture<Suggestions> suggestLogLevels(
       CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
-    String prefix = builder.getRemaining().toUpperCase(Locale.ROOT);
+    String prefix = builder.getRemaining().toLowerCase(Locale.ROOT);
     for (LogLevel level : LogLevel.values()) {
-      if (level.name().startsWith(prefix)) {
-        builder.suggest(level.name());
+      if (name(level).startsWith(prefix)) {
+        builder.suggest(name(level));
       }
     }
     return builder.buildFuture();
+  }
+
+  /**
+   * A log level as an admin types it. Lower case: a command argument reads as shouting otherwise,
+   * and {@code LogLevel.valueOf} is fed the upper-cased input, so either spelling is accepted.
+   */
+  private static String name(LogLevel level) {
+    return level.name().toLowerCase(Locale.ROOT);
   }
 
   private static int showHelp(CommandSender sender, Messages messages) {

@@ -9,6 +9,7 @@ package org.cobblestonemc.plugin.config;
 
 import java.util.List;
 import org.cobblestonemc.api.SearchSettings;
+import org.cobblestonemc.minecraft.AverageCostPerBlock;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.plugin.data.DataBackend;
 
@@ -73,6 +74,18 @@ public final class ConfigKeys {
    * A* heuristic weight (1.0 = optimal; &gt;1 = faster weighted A*, slightly sub-optimal). Mutable.
    */
   public final ConfigKey<Double> algorithmHeuristicWeight;
+
+  /** Typical seconds to travel one block in the overworld. Mutable. */
+  public final ConfigKey<Double> averageCostOverworld;
+
+  /** Typical seconds to travel one block in the nether. Mutable. */
+  public final ConfigKey<Double> averageCostNether;
+
+  /** Typical seconds to travel one block in the end. Mutable. */
+  public final ConfigKey<Double> averageCostEnd;
+
+  /** Typical seconds to travel one block in an unrecognized dimension. Mutable. */
+  public final ConfigKey<Double> averageCostCustom;
 
   /**
    * How far Cobblestone may go to obtain a chunk a search wants to walk through. The accepted
@@ -294,6 +307,69 @@ public final class ConfigKeys {
                 """
                 A* heuristic weight. 1.0 finds optimal paths but explores a lot; higher is much
                 faster and slightly suboptimal (bounded by this factor).""")
+            .mutable()
+            .register();
+
+    manager.section(
+        "search.average_cost_per_block",
+        """
+        What one block of travel typically costs, in seconds. This is what a route leg is priced at
+        before it has been solved, and where the A* estimate starts from before it has walked
+        anywhere — so it decides which coarse route Cobblestone commits to, and how hard it works
+        before changing its mind.
+
+        Typical, not fastest. Fold in both the way players usually travel and how much further a
+        real route winds than the straight line between its ends; a number that is too low makes
+        every leg come back dearer than promised, and the search keeps re-planning around routes
+        that only looked cheaper. The defaults deliberately err high, which favors sticking with
+        the first route found.
+
+        Raise a dimension's cost if routes through it are constantly re-planned; lower it if
+        Cobblestone avoids that dimension when it should not.""");
+    manager.section(
+        "search.average_cost_per_block.dimensions",
+        "Costs by dimension kind, which is how worlds are told apart unless named below.");
+    this.averageCostOverworld =
+        manager
+            .key(
+                "search.average_cost_per_block.dimensions.overworld",
+                AverageCostPerBlock.DEFAULT_OVERWORLD,
+                Codec.ofDouble())
+            .comment("Open ground with hills, water, and the odd building to walk around.")
+            .mutable()
+            .register();
+    this.averageCostNether =
+        manager
+            .key(
+                "search.average_cost_per_block.dimensions.nether",
+                AverageCostPerBlock.DEFAULT_NETHER,
+                Codec.ofDouble())
+            .comment(
+                """
+                Layered, broken terrain: a route through it winds much further than the straight
+                line, so a block of nether is worth more than a block of overworld.""")
+            .mutable()
+            .register();
+    this.averageCostEnd =
+        manager
+            .key(
+                "search.average_cost_per_block.dimensions.the_end",
+                AverageCostPerBlock.DEFAULT_END,
+                Codec.ofDouble())
+            .comment(
+                "The outer islands are close to open space, so a route is nearly a straight line.")
+            .mutable()
+            .register();
+    this.averageCostCustom =
+        manager
+            .key(
+                "search.average_cost_per_block.dimensions.custom",
+                AverageCostPerBlock.DEFAULT_CUSTOM,
+                Codec.ofDouble())
+            .comment(
+                """
+                Any dimension that is none of the above (a modded or custom world). Assumed
+                overworld-like.""")
             .mutable()
             .register();
 

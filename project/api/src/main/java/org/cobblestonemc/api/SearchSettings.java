@@ -19,17 +19,23 @@ public final class SearchSettings {
   /**
    * Default cap on cells visited within a single Tier-2 A* solve.
    *
-   * <p>This is the memory guard: a solve holds one node per cell it reaches, so the cap bounds the
-   * search tree at roughly a few hundred bytes a cell — a few hundred megabytes at this default.
-   * Lower it on a small heap.
+   * <p>This is the memory guard, and a cell is not cheap. A node carries a map of every candidate
+   * parent that ever relaxed it and a set of its children (each retaining the {@code Movement} that
+   * produced it), its cell-state, two map entries indexing it, and at least one entry on the open
+   * set — which holds more entries than there are nodes, since superseded ones are left to be
+   * skipped rather than removed. Call it the better part of a kilobyte per cell, so this default is
+   * a couple of hundred megabytes for one solve that walks all the way into the cap.
+   *
+   * <p>Concurrent searches multiply that: the per-player search budget is a budget on searches, not
+   * on heap. Lower this on a small heap.
    */
-  public static final int DEFAULT_MAX_CELLS_VISITED = 1_000_000;
+  public static final int DEFAULT_MAX_CELLS_VISITED = 200_000;
 
   /** Default wall-clock budget for the whole search, in milliseconds. */
   public static final long DEFAULT_MAX_WALL_CLOCK_MILLIS = 60_000L;
 
   /** Default pessimism factor applied to an unsolved Tier-1 leg's estimate. */
-  public static final double DEFAULT_TIER1_UNSOLVED_PESSIMISM = 5.0;
+  public static final double DEFAULT_TIER1_UNSOLVED_PESSIMISM = 1.5;
 
   /** Default window width for the running-average heuristic. */
   public static final int DEFAULT_RUNNING_AVERAGE_WIDTH = 5;
@@ -90,12 +96,16 @@ public final class SearchSettings {
   /**
    * Returns the pessimism factor applied to an unsolved Tier-1 leg's cost estimate.
    *
-   * <p>Tier-1 prices a leg it has not solved yet with an admissible lower bound — straight-line
-   * distance at the cheapest cost per block — which real terrain beats by a wide margin. Taken at
-   * face value, every leg comes back several times dearer than promised, which makes some other
-   * unexplored route look cheaper, so Tier-1 re-plans and works through the alternatives one costly
-   * solve at a time. Scaling the estimate up brings it nearer what a leg actually costs, at the
-   * price of a coarse route chosen on a less optimistic bound. 1.0 leaves the bound untouched.
+   * <p>Tier-1 prices a leg it has not solved yet as straight-line distance at the typical per-block
+   * cost of travel in that world, which real terrain still beats: a route winds, and a leg that
+   * comes back dearer than promised makes some other unexplored route look cheaper, so Tier-1
+   * re-plans and works through the alternatives one costly solve at a time. This factor is the
+   * honest margin on top of that estimate; 1.0 takes it at face value.
+   *
+   * <p>It is deliberately small, because the estimate it scales is already meant to be realistic.
+   * If legs in one dimension keep being re-planned, the per-dimension cost per block is the dial to
+   * reach for first — raising this one instead makes <i>every</i> unsolved leg look dearer, which
+   * biases the route towards whatever happened to be solved first no matter what it cost.
    *
    * @return the unsolved-leg pessimism factor
    */

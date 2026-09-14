@@ -14,7 +14,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
-import org.bukkit.block.BlockState;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -23,16 +22,13 @@ import org.bukkit.event.block.BlockBurnEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockFadeEvent;
 import org.bukkit.event.block.BlockFormEvent;
-import org.bukkit.event.block.BlockGrowEvent;
 import org.bukkit.event.block.BlockPistonExtendEvent;
 import org.bukkit.event.block.BlockPistonRetractEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
-import org.bukkit.event.block.LeavesDecayEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
-import org.bukkit.event.world.StructureGrowEvent;
 import org.bukkit.plugin.Plugin;
 import org.cobblestonemc.paper.PaperNavigationServiceImpl;
 
@@ -49,11 +45,19 @@ import org.cobblestonemc.paper.PaperNavigationServiceImpl;
  * a re-read later, so it is better to drop a chunk needlessly than to miss a change: events that
  * move many blocks at once simply invalidate every chunk they touch.
  *
- * <p>Each chunk is dropped twice, now and again next tick. Most of these events fire <i>before</i>
- * the world is written — {@link BlockBreakEvent}, the explosions, the pistons, the bucket and
- * growth events — so a search re-reading the chunk in the same tick would re-cache the block as it
+ * <p>A cached chunk is dropped twice, now and again next tick. Most of these events fire
+ * <i>before</i> the world is written — {@link BlockBreakEvent}, the explosions, the pistons, the
+ * bucket events — so a search re-reading the chunk in the same tick would re-cache the block as it
  * still stands, and nothing further would invalidate it. The second pass runs once the change has
- * landed.
+ * landed. It is only queued for a chunk that <i>was</i> cached, since the scheduled task is the
+ * expensive half and a chunk nothing has cached has no search walking through it.
+ *
+ * <p><b>Only changes that can alter a route are listened for.</b> Every handler here runs on the
+ * thread owning the block, on a server where farms, fluids and falling sand fire block events by
+ * the hundred per tick, so the list is deliberately short. Crops are passable before and after they
+ * grow, leaves are solid before and after they decay, and a tree filling in blocks nothing that was
+ * walkable — so growth and decay are not listened for at all. Ice forming and melting is, because
+ * it makes and unmakes bridges.
  */
 final class BlockChangeListener implements Listener {
 
@@ -86,7 +90,9 @@ final class BlockChangeListener implements Listener {
     for (long packed : chunks) {
       int chunkX = (int) (packed >> 32);
       int chunkZ = (int) packed;
-      navigation.invalidate(worldKey, chunkX, chunkZ);
+      if (!navigation.invalidate(worldKey, chunkX, chunkZ)) {
+        continue; // nothing was cached here, so nothing can be re-cached stale a moment from now
+      }
       Bukkit.getRegionScheduler()
           .runDelayed(
               plugin,
@@ -118,23 +124,15 @@ final class BlockChangeListener implements Listener {
     changed(event.getBlock());
   }
 
+  /** Ice melting, mostly: an ice bridge that vanishes leaves a route walking onto open water. */
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   void onFade(BlockFadeEvent event) {
     changed(event.getBlock());
   }
 
+  /** Ice forming, mostly: a frozen ocean is walkable where open water was not. */
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   void onForm(BlockFormEvent event) {
-    changed(event.getBlock());
-  }
-
-  @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-  void onGrow(BlockGrowEvent event) {
-    changed(event.getBlock());
-  }
-
-  @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-  void onLeavesDecay(LeavesDecayEvent event) {
     changed(event.getBlock());
   }
 
@@ -163,16 +161,6 @@ final class BlockChangeListener implements Listener {
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   void onEntityExplode(EntityExplodeEvent event) {
     changed(event.blockList());
-  }
-
-  /** A tree or mushroom filling in: every block of the structure is new terrain. */
-  @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-  void onStructureGrow(StructureGrowEvent event) {
-    Set<Long> chunks = new HashSet<>();
-    for (BlockState state : event.getBlocks()) {
-      chunks.add(chunkOf(state.getX(), state.getZ()));
-    }
-    invalidate(event.getWorld(), chunks);
   }
 
   // Pistons move a run of blocks, and the destination of the last one is a block beyond the run —

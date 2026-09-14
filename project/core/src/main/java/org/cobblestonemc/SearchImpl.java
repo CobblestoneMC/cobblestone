@@ -121,7 +121,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
       finish(new NavigationResult.Failure<>(FailureReason.TIMED_OUT));
       return;
     }
-    logger.debug("Executing search step", Thread.currentThread().getName());
+    logger.trace("Executing search step");
     try {
       if (graphPath == null) {
         Optional<GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>>> found =
@@ -136,17 +136,35 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
         graphPath = found.get();
       }
 
-      logger.debug(
-          "Found graph path with cost {} and {} edges ({} unresolved)",
-          graphPath.dist(),
-          graphPath.edges().size(),
-          graphPath.edges().stream().filter(edge -> !edge.virtualPath().isResolved()).count());
-      Tier1Edge<T, D> edge = firstUnsolvedEdge(graphPath);
-      if (edge == null) {
-        logger.debug("Found all graph edges solved");
+      List<Tier1Edge<T, D>> legs = graphPath.edges();
+      int next = -1;
+      int unsolved = 0;
+      for (int i = 0; i < legs.size(); i++) {
+        if (!legs.get(i).virtualPath().isResolved()) {
+          if (next < 0) {
+            next = i;
+          }
+          unsolved++;
+        }
+      }
+      if (next < 0) {
+        logger.debug("Solved every leg; the {}-leg route costs {}", legs.size(), graphPath.dist());
         finish(new NavigationResult.Success<>(buildPath(graphPath)));
         return;
       }
+      Tier1Edge<T, D> edge = legs.get(next);
+      VirtualPath<T, D> virtualPath = edge.virtualPath();
+      // One line per step, and the only one at DEBUG: which leg of which route, and what the route
+      // is believed to cost while that leg is still an estimate.
+      logger.debug(
+          "Solving leg {}/{} ({} unsolved) from {} to {}; leg estimated at {} of a {} route",
+          next + 1,
+          legs.size(),
+          unsolved,
+          virtualPath.fromCell(),
+          virtualPath.targetRegion(),
+          virtualPath.cost(heuristic),
+          graphPath.dist());
       Tier2Search<A, T, D> tier2 =
           new Tier2Search<>(
               logger,
@@ -161,12 +179,6 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
               cancelled::get,
               executor,
               deadlineMillis);
-      VirtualPath<T, D> virtualPath = edge.virtualPath();
-      logger.debug(
-          "Starting domain-local search from {} to {}, estimated cost {}",
-          edge.virtualPath().fromCell(),
-          edge.virtualPath().targetRegion(),
-          edge.virtualPath().cost(heuristic));
       tier2
           .solve()
           .whenCompleteAsync(
@@ -196,15 +208,6 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
     } catch (Throwable throwable) {
       finish(new NavigationResult.Error<>(throwable));
     }
-  }
-
-  private Tier1Edge<T, D> firstUnsolvedEdge(GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>> path) {
-    for (Tier1Edge<T, D> edge : path.edges()) {
-      if (!edge.virtualPath().isResolved()) {
-        return edge;
-      }
-    }
-    return null;
   }
 
   private Path<Position<D>, T> buildPath(GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>> path) {

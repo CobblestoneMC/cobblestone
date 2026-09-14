@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -40,12 +41,12 @@ import org.cobblestonemc.Restriction;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
+import org.cobblestonemc.minecraft.AverageCostPerBlock;
 import org.cobblestonemc.minecraft.BreakChecker;
 import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.ChunkProviderStats;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
-import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
@@ -64,12 +65,10 @@ import org.joml.Vector3i;
 public final class PaperNavigationServiceImpl
     implements NavigationService, SearchModificationRegistrar, WorldWrapper {
 
-  // The true global-minimum per-block cost (flying, MovementCosts.FLY = 0.08). Used as the
-  // admissible Tier-1 bound and the running-average's cold-start estimate.
-
   private final CobblestoneLogger logger;
   private final PaperScheduler scheduler;
   private final ChunkProvider chunkProvider;
+  private final Supplier<AverageCostPerBlock> averageCosts;
   private final CobblestoneApi core;
   private final Map<String, MinecraftWorld> worldCache = new ConcurrentHashMap<>();
   private final OwnedRegistry<SearchModificationService> searchModifiers = new OwnedRegistry<>();
@@ -78,10 +77,18 @@ public final class PaperNavigationServiceImpl
    * Creates the API for a plugin.
    *
    * @param plugin the owning plugin
+   * @param logger the logger
+   * @param chunkSettings the chunk cache tunables
+   * @param averageCosts the per-dimension cost per block searches price their estimates with, read
+   *     per search so a config reload takes effect without a restart
    */
   public PaperNavigationServiceImpl(
-      Plugin plugin, CobblestoneLogger logger, ChunkProviderSettings chunkSettings) {
+      Plugin plugin,
+      CobblestoneLogger logger,
+      ChunkProviderSettings chunkSettings,
+      Supplier<AverageCostPerBlock> averageCosts) {
     this.logger = logger;
+    this.averageCosts = averageCosts;
     int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
     this.scheduler = new PaperScheduler(plugin, workerThreads);
     PaperPlatformApi platform = new PaperPlatformApi(plugin, scheduler);
@@ -155,9 +162,10 @@ public final class PaperNavigationServiceImpl
    * @param worldKey the world's namespaced key
    * @param chunkX the chunk X coordinate
    * @param chunkZ the chunk Z coordinate
+   * @return whether a snapshot was actually dropped
    */
-  public void invalidate(String worldKey, int chunkX, int chunkZ) {
-    chunkProvider.invalidate(worldKey, chunkX, chunkZ);
+  public boolean invalidate(String worldKey, int chunkX, int chunkZ) {
+    return chunkProvider.invalidate(worldKey, chunkX, chunkZ);
   }
 
   /** Stops the search worker pool; call on plugin disable. */
@@ -197,14 +205,13 @@ public final class PaperNavigationServiceImpl
     ModesProvider<CobblestonePlayer, MinecraftStepPayload, MinecraftWorld> modes =
         MinecraftModes.providerFor(
             agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
-    // Per-player, not a shared constant: the bound has to reflect what this player can actually do,
-    // or Tier-1 prices every route as if they could fly. See MinecraftModes#cheapestCostPerBlock.
-    HeuristicStrategy heuristic =
-        Heuristics.runningAverage(
-            MinecraftModes.cheapestCostPerBlock(agent, settings.excludedModes()));
+    // Per dimension, and configured rather than derived: see AverageCostPerBlock for why a
+    // realistic estimate beats an admissible one here.
+    AverageCostPerBlock costs = averageCosts.get();
+    HeuristicStrategy heuristic = Heuristics.runningAverage(costs::forDomain);
 
-    // Chunk counters are provider-wide, so attribute this search's share by diffing a reading
-    // taken now against one taken when it finishes. See ChunkProviderStats.
+    // Chunk counters are provider-wide, so this delta is only this search's own work when nothing
+    // else is searching, and an upper bound otherwise. Per-search counters are issue #8.
     ChunkProviderStats chunksBefore = chunkProvider.stats();
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
@@ -227,7 +234,8 @@ public final class PaperNavigationServiceImpl
         .thenCompose(SearchHandle::future)
         .whenComplete(
             (result, error) ->
-                logger.debug("Chunks; {}", chunkProvider.stats().since(chunksBefore)));
+                logger.debug(
+                    "Chunks (provider-wide delta); {}", chunkProvider.stats().since(chunksBefore)));
     return new PaperSearchHandle(handleFuture);
   }
 
@@ -292,14 +300,20 @@ public final class PaperNavigationServiceImpl
       Location location = new Location(bukkitWorld, cell.x(), cell.y(), cell.z());
       // Checkers are promised the snapshot's real block state, and the instances modes read are
       // shared per material — they carry a default state, not this block's. So the state is read
-      // from the chunk here instead: a cache hit, since the mining mode has just read this block,
-      // and only for the few blocks mining actually considers breaking.
+      // from the chunk here instead: a cache hit, since the mining mode has just read this block.
+      // Lazily, though: reading it is a clone(), and most checkers decide on location alone.
       return world
           .chunkAt(cell, cell)
           .toFuture()
           .thenCompose(
               chunk -> {
-                BlockData data = snapshotData(chunk, cell);
+                if (!(chunk instanceof PaperChunk paperChunk)) {
+                  // No snapshot to describe the block with — the load policy declined the chunk, or
+                  // it was invalidated between the mode's read and this verdict. Nothing truthful
+                  // to ask a checker, so fail open, exactly as an offline player does above.
+                  return CompletableFuture.completedFuture(true);
+                }
+                Supplier<BlockData> data = lazyBlockData(paperChunk, cell);
                 List<CompletableFuture<Boolean>> results = new ArrayList<>(checkers.size());
                 for (org.cobblestonemc.paper.api.BreakChecker checker : checkers) {
                   results.add(checker.breakable(online, location, data));
@@ -357,13 +371,24 @@ public final class PaperNavigationServiceImpl
   }
 
   /**
-   * The block state a chunk snapshot holds at {@code cell}, or {@code null} for an absent chunk.
+   * The block state a chunk snapshot holds at {@code cell}, read on first use and remembered.
+   *
+   * <p>{@code ChunkSnapshot#getBlockData} is a defensive {@code clone()}, and a mining route asks
+   * about every block it considers breaking, so a checker that never looks at the state must not
+   * pay for one. Confined to one composed verdict, hence no synchronization.
    */
-  private static BlockData snapshotData(MinecraftChunk chunk, Cell cell) {
-    if (chunk instanceof PaperChunk paperChunk) {
-      return paperChunk.snapshot().getBlockData(cell.x() & 15, cell.y(), cell.z() & 15);
-    }
-    return null;
+  private static Supplier<BlockData> lazyBlockData(PaperChunk chunk, Cell cell) {
+    return new Supplier<>() {
+      private BlockData data;
+
+      @Override
+      public BlockData get() {
+        if (data == null) {
+          data = chunk.snapshot().getBlockData(cell.x() & 15, cell.y(), cell.z() & 15);
+        }
+        return data;
+      }
+    };
   }
 
   /**
