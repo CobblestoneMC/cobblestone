@@ -215,11 +215,12 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     // Hold the solve weakly and the result strongly. A timer task lives until it fires, and a
     // lambda capturing `this` would pin the whole search — every node, every candidate parent, the
     // open set — for the full budget after the search finished; on a busy server that is gigabytes
-    // of finished searches waiting on their own timers. The result future is small and does not
-    // reference the search, so capturing it still guarantees the timeout: if the solve is alive we
-    // wake it, so it reports the timeout with its stats, and otherwise we complete the result.
+    // of finished searches waiting on their own timers. The logger and the result future are small
+    // and reference nothing of the search, so they can be held outright.
     WeakReference<Tier2Search<A, T, D>> self = new WeakReference<>(this);
     CompletableFuture<Tier2Result<T, D>> pending = result;
+    CobblestoneLogger timerLogger = logger;
+    BooleanSupplier abandoned = cancelled;
     CompletableFuture.runAsync(
         () -> {
           if (pending.isDone()) {
@@ -227,10 +228,18 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
           }
           Tier2Search<A, T, D> search = self.get();
           if (search != null) {
+            // The normal path: wake it, and let the loop report the timeout with its stats, so
+            // there is exactly one place a solve gives up and one line that says so.
             search.wake();
-          } else {
-            pending.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.TIMED_OUT));
+            return;
           }
+          // Collected before its deadline: nothing was left holding it, so it cannot be woken and
+          // its stats went with it. The result still has to be completed or the search above waits
+          // forever — but say which of the two it was, rather than logging nothing at all.
+          if (!abandoned.getAsBoolean()) {
+            timerLogger.debug("Timed out; the solve was discarded before its deadline");
+          }
+          pending.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.TIMED_OUT));
         },
         CompletableFuture.delayedExecutor(delay, TimeUnit.MILLISECONDS, executor));
   }
@@ -272,6 +281,24 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
 
   private String stats() {
     return metrics.format(nodes.size());
+  }
+
+  /**
+   * Gives up on the budget, reporting where it went. The one place a solve times out: the deadline
+   * timer wakes the search rather than completing it itself, so the report is never skipped.
+   */
+  private void timedOut() {
+    logger.debug("Timed out; {}", stats());
+    result.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.TIMED_OUT));
+  }
+
+  /**
+   * Wakes a solve that has been abandoned, so it unwinds now rather than sitting on its node table
+   * until the deadline. {@link #loop()} sees the cancellation and returns without completing: the
+   * caller that cancelled has already reported the outcome.
+   */
+  void abandon() {
+    wake();
   }
 
   /** Signals that there is work and schedules a single {@link #pump()} run if one is not active. */
@@ -320,8 +347,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         return; // abandoned; the outer search has already completed with CANCELLED
       }
       if (deadlineMillis > 0 && System.currentTimeMillis() >= deadlineMillis) {
-        logger.debug("Timed out; {}", stats());
-        result.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.TIMED_OUT));
+        timedOut();
         return;
       }
       drainVerdicts();
@@ -546,7 +572,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     EdgeRef ref = new EdgeRef(parentKey, childKey);
     FutureOr<Boolean> cached = edgeVerdicts.get(ref);
     if (cached != null) {
-      return cached;
+      return settled(ref, cached);
     }
     FutureOr<Boolean> verdict = restricted.get();
     edgeVerdicts.put(ref, verdict);
@@ -563,7 +589,37 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
                 wake();
               });
     }
-    return verdict;
+    return settled(ref, verdict);
+  }
+
+  /**
+   * Re-reads a memoized verdict whose future has since landed as an immediate one, and remembers it
+   * that way.
+   *
+   * <p>{@link FutureOr#isImmediate()} describes the <i>shape</i> of a verdict, not whether it has
+   * an answer: a {@link FutureOr.Pending} stays pending forever, however long ago its future
+   * completed. Without this, an edge whose check was still in flight the first time it was asked
+   * about would read as unresolved for the rest of the solve — and {@link #pathConfirmed} would
+   * park on it every time it walked the route, no matter how many times the verdict arrived. The
+   * barred case is caught by {@link #edgeMailbox}; this is what makes an <i>allowed</i> one
+   * readable, which is the case every finished mining route depends on.
+   *
+   * <p>A verdict that failed is settled as allowed. The integration could not answer, and the
+   * search has no standing to bar an edge on an exception — the same call that would have said so
+   * is the one that broke.
+   */
+  private FutureOr<Boolean> settled(EdgeRef ref, FutureOr<Boolean> verdict) {
+    if (verdict.isImmediate()) {
+      return verdict;
+    }
+    CompletableFuture<Boolean> future = verdict.future();
+    if (!future.isDone()) {
+      return verdict;
+    }
+    FutureOr<Boolean> answer =
+        FutureOr.of(!future.isCompletedExceptionally() && Boolean.TRUE.equals(future.getNow(null)));
+    edgeVerdicts.put(ref, answer);
+    return answer;
   }
 
   /** Combined verdict over all restrictions: impassable if any bars the cell. */

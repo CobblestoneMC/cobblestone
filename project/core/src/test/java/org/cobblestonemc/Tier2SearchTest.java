@@ -64,6 +64,98 @@ class Tier2SearchTest {
   }
 
   /**
+   * A mining route whose breakability verdicts arrive <i>after</i> the search reached its goal must
+   * still finish.
+   *
+   * <p>This is the shape of every real mining search: an integration answers on the server thread,
+   * so the first time the search asks about an edge the verdict is always in flight. It expands
+   * through optimistically, reaches the goal, and parks on path confirmation until the answers
+   * land. If a landed verdict cannot be read back as an answer, the route can never be confirmed
+   * and the search parks until its deadline instead of returning the path it already has.
+   */
+  @Test
+  void aMiningRouteWhoseVerdictsLandAfterTheGoalIsReachedStillSolves() {
+    CompletableFuture<Boolean> allowed = new CompletableFuture<>();
+    Mode<TestAgent, TestStep, TestDomain> minedCorridor =
+        (agent, from, domain, state, goal) ->
+            FutureOr.of(
+                List.of(
+                    new Movement<>(
+                        from.plus(1, 0, 0),
+                        1.0,
+                        1.0,
+                        TestStep.MOVE,
+                        state,
+                        () -> FutureOr.from(allowed))));
+
+    Tier2Search<TestAgent, TestStep, TestDomain> search =
+        new Tier2Search<>(
+            new TestCobblestoneLogger(),
+            new TestAgent(),
+            virtualPath(new Cell(0, 0, 0), new Cell(2, 0, 0)),
+            List.of(minedCorridor),
+            List.of(),
+            Heuristics.zero(),
+            1000,
+            5,
+            1.0,
+            () -> false,
+            Runnable::run,
+            0);
+
+    CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
+    assertFalse(future.isDone(), "the goal is reached, but its route is unconfirmed");
+
+    allowed.complete(false); // nothing bars breaking these blocks
+
+    assertTrue(future.isDone(), "the verdicts landed; the route is confirmed");
+    assertInstanceOf(Tier2Result.Solved.class, future.getNow(null));
+  }
+
+  /**
+   * An integration that fails outright must not park the search forever. The call that would have
+   * barred the edge is the one that broke, so the edge is allowed and the route stands.
+   */
+  @Test
+  void anEdgeCheckThatFailsIsTreatedAsAllowedRatherThanAwaitedForever() {
+    CompletableFuture<Boolean> broken = new CompletableFuture<>();
+    Mode<TestAgent, TestStep, TestDomain> minedCorridor =
+        (agent, from, domain, state, goal) ->
+            FutureOr.of(
+                List.of(
+                    new Movement<>(
+                        from.plus(1, 0, 0),
+                        1.0,
+                        1.0,
+                        TestStep.MOVE,
+                        state,
+                        () -> FutureOr.from(broken))));
+
+    Tier2Search<TestAgent, TestStep, TestDomain> search =
+        new Tier2Search<>(
+            new TestCobblestoneLogger(),
+            new TestAgent(),
+            virtualPath(new Cell(0, 0, 0), new Cell(2, 0, 0)),
+            List.of(minedCorridor),
+            List.of(),
+            Heuristics.zero(),
+            1000,
+            5,
+            1.0,
+            () -> false,
+            Runnable::run,
+            0);
+
+    CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
+    assertFalse(future.isDone());
+
+    broken.completeExceptionally(new IllegalStateException("the integration threw"));
+
+    assertTrue(future.isDone(), "a failed check must not park the search");
+    assertInstanceOf(Tier2Result.Solved.class, future.getNow(null));
+  }
+
+  /**
    * A repair that prunes a node must leave nothing pointing at it.
    *
    * <p>Two repairs, in order. First a mode-restricted edge — a mining step an integration forbids —
