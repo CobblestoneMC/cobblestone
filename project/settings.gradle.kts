@@ -49,23 +49,23 @@ include(":examples:paper-warps")
 project(":examples:paper-warps").name = "example-warps"
 
 // Real integration plugins live under integrations/ — each connects one third-party plugin to Cobblestone.
-include(":integrations:essentials")
-project(":integrations:essentials").name = "cobblestone-essentials"
-include(":integrations:towny")
-project(":integrations:towny").name = "cobblestone-towny"
-include(":integrations:pikamugquests")
-project(":integrations:pikamugquests").name = "cobblestone-pikamugquests"
-include(":integrations:beautyquests")
-project(":integrations:beautyquests").name = "cobblestone-beautyquests"
-include(":integrations:betonquest")
-project(":integrations:betonquest").name = "cobblestone-betonquest"
+include(":minecraft:integrations:essentials")
+project(":minecraft:integrations:essentials").name = "cobblestone-essentials"
+include(":minecraft:integrations:towny")
+project(":minecraft:integrations:towny").name = "cobblestone-towny"
+include(":minecraft:integrations:pikamugquests")
+project(":minecraft:integrations:pikamugquests").name = "cobblestone-pikamugquests"
+include(":minecraft:integrations:beautyquests")
+project(":minecraft:integrations:beautyquests").name = "cobblestone-beautyquests"
+include(":minecraft:integrations:betonquest")
+project(":minecraft:integrations:betonquest").name = "cobblestone-betonquest"
 
 // disabled until bishop quests provides accessible API via a maven repo
 //include(":integrations:bishopquests")
 //project(":integrations:bishopquests").name = "cobblestone-bishopquests"
 
 // A Typewriter extension (Kotlin), not a Bukkit plugin — built with Typewriter's own module-plugin.
-include(":integrations:typewriter")
-project(":integrations:typewriter").name = "cobblestone-typewriter"
-include(":integrations:citizens")
-project(":integrations:citizens").name = "cobblestone-citizens"
+include(":minecraft:integrations:typewriter")
+project(":minecraft:integrations:typewriter").name = "cobblestone-typewriter"
+include(":minecraft:integrations:citizens")
+project(":minecraft:integrations:citizens").name = "cobblestone-citizens"
