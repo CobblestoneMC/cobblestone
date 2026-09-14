@@ -86,6 +86,45 @@ class ChunkProviderTest {
   }
 
   /**
+   * The backstop for an edit that fires no block-change event at all: /fill, a world editor with
+   * block events off, a regenerated chunk. Nothing else would ever drop a chunk a search keeps
+   * touching, so without this the search reads yesterday's terrain until the server restarts.
+   */
+  @Test
+  void aSnapshotNothingEvictsIsEventuallyDroppedAnyway() {
+    FakePlatform platform = new FakePlatform();
+    ChunkProvider cp = provider(platform, settings(5_000));
+
+    cp.block(new Cell(5, 64, 5), world, EAST).future().join();
+    assertEquals(1, platform.fetchCount(0, 0));
+
+    clock.set(ChunkProvider.MAX_SNAPSHOT_AGE_MILLIS + 1);
+    cp.block(new Cell(5, 64, 5), world, EAST);
+    assertEquals(2, platform.fetchCount(0, 0), "an aged-out snapshot is read again");
+    // The read-ahead column ages out alongside it, so the count is the whole column, not just one.
+    assertTrue(cp.stats().staleEvictions() > 0);
+  }
+
+  /**
+   * Invalidation runs on the thread that owns the block, for every block change on the server,
+   * while the provider's lock is held by every chunk lookup a running search makes. A change in a
+   * chunk nothing has cached must not queue behind those.
+   */
+  @Test
+  void invalidatingAnUncachedChunkReportsThatNothingWasDropped() {
+    FakePlatform platform = new FakePlatform();
+    ChunkProvider cp = provider(platform, settings(10_000));
+
+    assertFalse(cp.invalidateBlock(world.key(), 5, 5), "nothing was cached there");
+    assertEquals(0, cp.stats().invalidations());
+
+    cp.block(new Cell(5, 64, 5), world, EAST).future().join();
+    assertTrue(cp.invalidateBlock(world.key(), 5, 5), "the cached snapshot was dropped");
+    assertFalse(cp.invalidateBlock(world.key(), 5, 5), "and is not there to drop twice");
+    assertEquals(1, cp.stats().invalidations());
+  }
+
+  /**
    * A chunk a search keeps touching is never the least-recently-used entry, so nothing else would
    * ever drop it — a block broken in it would go unseen until the server restarted.
    */

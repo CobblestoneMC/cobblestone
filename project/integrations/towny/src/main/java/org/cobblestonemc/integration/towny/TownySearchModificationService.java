@@ -22,7 +22,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.cobblestonemc.paper.api.BreakChecker;
@@ -151,14 +150,18 @@ final class TownySearchModificationService implements SearchModificationService 
     // without touching Towny from a search worker.
     Map<PermissionKey, CompletableFuture<Boolean>> cache = new ConcurrentHashMap<>();
     int townBlockSize = TownySettings.getTownBlockSize();
-    return (breaker, location, block) ->
-        cache.computeIfAbsent(
-            PermissionKey.of(location, block.getMaterial(), townBlockSize),
-            key -> ask(breaker, location, block));
+    return (breaker, location, block) -> {
+      // Towny's answer turns on the material, so the state has to be read here — but only once
+      // per block, and the cached verdict then answers every other block like it for free.
+      Material material = block.get().getMaterial();
+      return cache.computeIfAbsent(
+          PermissionKey.of(location, material, townBlockSize),
+          key -> ask(breaker, location, material));
+    };
   }
 
   /** Puts one breakability question to Towny on the main thread. */
-  private CompletableFuture<Boolean> ask(Player breaker, Location location, BlockData block) {
+  private CompletableFuture<Boolean> ask(Player breaker, Location location, Material material) {
     CompletableFuture<Boolean> future = new CompletableFuture<>();
     Bukkit.getScheduler()
         .runTask(
@@ -172,8 +175,7 @@ final class TownySearchModificationService implements SearchModificationService 
               // player's own movement cache, which is built for wherever the player is standing,
               // not for a house a thousand blocks away. canDestroy runs Towny's whole decision,
               // event and all.
-              future.complete(
-                  TownyActionEventExecutor.canDestroy(breaker, location, block.getMaterial()));
+              future.complete(TownyActionEventExecutor.canDestroy(breaker, location, material));
             });
     return future;
   }

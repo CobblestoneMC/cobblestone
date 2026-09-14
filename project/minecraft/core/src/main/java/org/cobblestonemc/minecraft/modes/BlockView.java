@@ -103,11 +103,6 @@ final class BlockView {
     return index >= 0 && blocks[index] != null;
   }
 
-  /** Whether this cell is inside the box at all. */
-  boolean covers(Cell cell) {
-    return indexOf(cell.x(), cell.y(), cell.z()) >= 0;
-  }
-
   /** Stores a fetched block. Cells outside the box are dropped — they can only read as unknown. */
   void put(Cell cell, MinecraftBlock block) {
     int index = indexOf(cell.x(), cell.y(), cell.z());

@@ -8,6 +8,7 @@
 package org.cobblestonemc.paper.api;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import org.bukkit.Location;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
@@ -23,6 +24,12 @@ import org.bukkit.entity.Player;
  * CompletableFuture} so a permission lookup may be asynchronous; return {@link
  * CompletableFuture#completedFuture} for a synchronous decision (e.g. a block-type rule), which
  * keeps the search on its fast path.
+ *
+ * <p><b>The block data is behind a {@link Supplier}, and reading it is not free.</b> Bukkit has no
+ * way to hand out a snapshot's {@code BlockData} without a defensive {@code clone()}, and a mining
+ * route puts this question to you for every block it considers breaking, so a checker that decides
+ * on location alone should never call {@link Supplier#get()}. The supplier is memoized per call and
+ * never returns {@code null}; calling it twice costs nothing the second time.
  */
 @FunctionalInterface
 public interface BreakChecker {
@@ -35,8 +42,8 @@ public interface BreakChecker {
    *
    * @param player the navigating player
    * @param location the block's location
-   * @param block the block's data (type and state) from the chunk snapshot
+   * @param block the block's data (type and state) from the chunk snapshot, read on demand
    * @return a future of {@code true} if breaking is permitted
    */
-  CompletableFuture<Boolean> breakable(Player player, Location location, BlockData block);
+  CompletableFuture<Boolean> breakable(Player player, Location location, Supplier<BlockData> block);
 }

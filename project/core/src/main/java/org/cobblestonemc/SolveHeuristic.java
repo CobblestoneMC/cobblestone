@@ -10,11 +10,11 @@ package org.cobblestonemc;
 import org.cobblestonemc.api.TraversalState;
 
 /**
- * A heuristic for a single Tier-2 A* solve, created by {@link HeuristicStrategy#newSolve(int)}.
- * Unlike the stateless {@link HeuristicStrategy} (which Tier-1 uses as an admissible lower bound),
- * a solve heuristic may adapt to the costs actually seen — e.g. the running-average heuristic
- * tightens its estimate toward the real per-block cost of the terrain being crossed, trading
- * admissibility for a far smaller explored frontier.
+ * A heuristic for a single Tier-2 A* solve, created by {@link HeuristicStrategy#newSolve(int,
+ * DomainRegion)}. Unlike the stateless {@link HeuristicStrategy} (which Tier-1 uses as an
+ * admissible lower bound), a solve heuristic may adapt to the costs actually seen — e.g. the
+ * running-average heuristic tightens its estimate toward the real per-block cost of the terrain
+ * being crossed, trading admissibility for a far smaller explored frontier.
  *
  * <p><b>The adaptation is per-cell, not per-solve.</b> Each cell carries a <i>trail average</i>:
  * the average per-block cost of the steps leading to it, which the search inherits down the search
@@ -50,14 +50,19 @@ public interface SolveHeuristic {
   double advance(double trailAverage, double stepCost, double blocks);
 
   /**
-   * Estimates the remaining cost from {@code from} into {@code target} while in {@code state},
+   * Estimates the remaining cost from {@code from} into the solve's target while in {@code state},
    * scaled by the trail average {@code from} carries.
    *
+   * <p>The target was bound when this solve heuristic was created, and {@code distance} is {@code
+   * from} already projected onto it — the search needs that projection for its own weighting, and a
+   * composite region is not cheap to project onto twice per relaxed edge. {@code from} is still
+   * passed for a heuristic whose estimate is a function of position rather than of distance alone.
+   *
    * @param from the current cell
-   * @param target the region being sought
+   * @param distance the euclidean distance from {@code from} to the target's nearest boundary cell
    * @param state the current traversal state
    * @param trailAverage the per-block cost of the trail leading to {@code from}
    * @return a cost estimate in seconds (not necessarily a lower bound)
    */
-  double estimate(Cell from, DomainRegion<?> target, TraversalState state, double trailAverage);
+  double estimate(Cell from, double distance, TraversalState state, double trailAverage);
 }

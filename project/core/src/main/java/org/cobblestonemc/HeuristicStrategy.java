@@ -19,9 +19,9 @@ import org.cobblestonemc.api.TraversalState;
  * the region's geometry via {@link DomainRegion#nearestBoundaryCell(Cell)}.
  *
  * <p>Tier-1 uses {@link #estimate} directly as an admissible edge cost. Tier-2 A* instead obtains a
- * per-solve {@link SolveHeuristic} via {@link #newSolve(int)}, which may adapt to the costs seen
- * along the trail leading to each cell; a plain (stateless) strategy hands back a wrapper that just
- * delegates {@link #estimate} and carries no trail average.
+ * per-solve {@link SolveHeuristic} via {@link #newSolve(int, DomainRegion)}, which may adapt to the
+ * costs seen along the trail leading to each cell; a plain (stateless) strategy hands back a
+ * wrapper that just delegates {@link #estimate} and carries no trail average.
  */
 @FunctionalInterface
 public interface HeuristicStrategy {
@@ -41,10 +41,15 @@ public interface HeuristicStrategy {
    * Creates a per-solve heuristic for one Tier-2 A* solve. The default returns a stateless wrapper
    * over {@link #estimate}; adaptive strategies (e.g. running-average) override this.
    *
+   * <p>A Tier-2 solve seeks one fixed region, so the target is bound here rather than passed on
+   * every estimate: that is what lets the search project a cell onto the region once and hand the
+   * resulting distance to {@link SolveHeuristic#estimate}.
+   *
    * @param windowWidth the sample-window width for adaptive strategies (ignored by stateless ones)
+   * @param target the region this solve is seeking
    * @return a fresh solve heuristic
    */
-  default SolveHeuristic newSolve(int windowWidth) {
+  default SolveHeuristic newSolve(int windowWidth, DomainRegion<?> target) {
     return new SolveHeuristic() {
       @Override
       public double seed() {
@@ -58,7 +63,7 @@ public interface HeuristicStrategy {
 
       @Override
       public double estimate(
-          Cell from, DomainRegion<?> target, TraversalState state, double trailAverage) {
+          Cell from, double distance, TraversalState state, double trailAverage) {
         return HeuristicStrategy.this.estimate(from, target, state);
       }
     };

@@ -95,7 +95,6 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
           .thenComparing(Comparator.comparingDouble(Entry::currentCost).reversed());
 
   private final PriorityQueue<Entry> open = new PriorityQueue<>(BY_ESTIMATE);
-  private int expandedCount;
   private PendingModes<T> pendingModes;
   private CellState pendingGoal; // an optimistically-reached goal awaiting path confirmation
 
@@ -114,22 +113,21 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private final AtomicBoolean signalled = new AtomicBoolean();
 
   private final CompletableFuture<Tier2Result<T, D>> result = new CompletableFuture<>();
-  private final Stopwatch activeStopwatch = new Stopwatch();
-  private long parkTimestamp = System.currentTimeMillis();
 
-  // Parking is what a search does while a mode waits on a block it does not have. Wall time is
-  // essentially activeTime + parkedTime, so these two counters say whether a slow search is
-  // thinking too hard or waiting too long — and the mean park says how long each wait costs.
-  private boolean pumped;
-  private long parks;
-  private long parkedMillis;
+  /** Logging and reporting only; the algorithm never reads it. See {@link Tier2Metrics}. */
+  private final Tier2Metrics metrics;
 
-  // How near the target the search has actually got, against how far it started. This is the one
-  // number that separates the two ways a solve can run out of time: a search grinding slowly along
-  // a route it is following closes the gap, while a search walled in — by terrain, or by chunks the
-  // load policy will not materialize — burns its whole budget without the gap moving.
-  private final double startDistance;
-  private double closestApproach = Double.POSITIVE_INFINITY;
+  /**
+   * The last cell projected onto {@link #target}, and what it projected to.
+   *
+   * <p>Every relaxed edge needs its neighbor projected twice — once to taper the A* weight and once
+   * for the estimate itself — and a {@link DomainRegion} is free to be a composite of boxes whose
+   * nearest-boundary search is not cheap. The two calls are back to back, so a single slot catches
+   * all of it.
+   */
+  private Cell projectedFrom;
+
+  private Cell projectedTo;
 
   /**
    * Within this many blocks of the target, the heuristic weight eases back down towards 1.
@@ -168,7 +166,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     this.modes = modes;
     this.restrictions = restrictions;
     this.hasRestrictions = !restrictions.isEmpty();
-    this.heuristic = heuristic.newSolve(runningAverageWidth);
+    this.heuristic = heuristic.newSolve(runningAverageWidth, this.target);
     this.heuristicWeight = heuristicWeight;
     this.maxCellsVisited = maxCellsVisited;
     this.cancelled = cancelled;
@@ -176,18 +174,12 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     this.deadlineMillis = deadlineMillis;
 
     this.start = new CellState(virtualPath.fromCell(), virtualPath.state());
-    this.startDistance = start.cell().distance(target.nearestBoundaryCell(start.cell()));
+    this.metrics = new Tier2Metrics(distanceToTarget(start.cell()));
     Node<T> startNode = getOrCreate(start);
     startNode.cost = 0.0;
     // `heuristic` here is the strategy parameter; the per-solve instance is the field.
     startNode.trailAverage = this.heuristic.seed();
-    open.add(
-        new Entry(
-            start,
-            0.0,
-            weightAt(start.cell())
-                * this.heuristic.estimate(
-                    start.cell(), target, start.state(), startNode.trailAverage)));
+    offer(start, 0.0, startNode.trailAverage);
   }
 
   CompletableFuture<Tier2Result<T, D>> solve() {
@@ -244,35 +236,42 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   }
 
   /**
-   * The heuristic weight to apply at {@code cell}: the configured weight out in the open, easing to
-   * 1 as the search closes on the target. See {@link #ENDGAME_RADIUS}.
+   * The target's nearest boundary cell to {@code cell}, memoized over the run of repeat queries
+   * about one cell. See {@link #projectedFrom}.
    */
-  private double weightAt(Cell cell) {
-    if (heuristicWeight <= 1.0) {
-      return heuristicWeight;
+  private Cell nearestBoundary(Cell cell) {
+    if (!cell.equals(projectedFrom)) {
+      projectedFrom = cell;
+      projectedTo = target.nearestBoundaryCell(cell);
     }
-    double remaining = cell.distance(target.nearestBoundaryCell(cell));
-    if (remaining >= ENDGAME_RADIUS) {
+    return projectedTo;
+  }
+
+  /** How far {@code cell} is from the target, in blocks. */
+  private double distanceToTarget(Cell cell) {
+    return cell.distance(nearestBoundary(cell));
+  }
+
+  /**
+   * The heuristic weight to apply {@code remaining} blocks out: the configured weight in the open,
+   * easing to 1 as the search closes on the target. See {@link #ENDGAME_RADIUS}.
+   */
+  private double weightAt(double remaining) {
+    if (heuristicWeight <= 1.0 || remaining >= ENDGAME_RADIUS) {
       return heuristicWeight;
     }
     return 1.0 + (heuristicWeight - 1.0) * (remaining / ENDGAME_RADIUS);
   }
 
+  /** Queues a node on the open set at cost {@code g}, pricing its remaining journey. */
+  private void offer(CellState key, double g, double trailAverage) {
+    double remaining = distanceToTarget(key.cell());
+    double estimate = heuristic.estimate(key.cell(), remaining, key.state(), trailAverage);
+    open.add(new Entry(key, g, g + weightAt(remaining) * estimate));
+  }
+
   private String stats() {
-    return ("activeTime:%dms, parkedTime:%dms, parks:%d (mean %.1fms), visited:%d, expanded:%d, "
-            + "approach:%.0f/%.0f blocks (%.0f%%)")
-        .formatted(
-            activeStopwatch.elapsed(),
-            parkedMillis,
-            parks,
-            parks == 0 ? 0.0 : (double) parkedMillis / parks,
-            nodes.size(),
-            expandedCount,
-            startDistance - Math.min(closestApproach, startDistance),
-            startDistance,
-            startDistance <= 0
-                ? 100.0
-                : (1 - Math.min(closestApproach, startDistance) / startDistance) * 100);
+    return metrics.format(nodes.size());
   }
 
   /** Signals that there is work and schedules a single {@link #pump()} run if one is not active. */
@@ -284,24 +283,22 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   }
 
   private void pump() {
+    // The park ends once, here: this run was scheduled after a real release. The loop below re-runs
+    // for a signal that raced into a pump already running, which waited on nothing at all.
+    boolean woke = false;
     try {
       // Consume signals: each pass runs the loop until it hits a wait; re-run while new work
       // arrived.
       while (signalled.compareAndSet(true, false)) {
-        long parked = System.currentTimeMillis() - parkTimestamp;
-        logger.trace("Woke up after {}ms", parked);
-        if (pumped) {
-          // The gap before the very first pump is scheduling latency, not a block wait.
-          parks++;
-          parkedMillis += parked;
+        if (!woke) {
+          woke = true;
+          logger.trace("Woke up after {}ms", metrics.woke());
         }
-        pumped = true;
-        activeStopwatch.resume();
+        metrics.resume();
 
         loop();
 
-        activeStopwatch.pause();
-        parkTimestamp = System.currentTimeMillis();
+        metrics.pause();
         if (result.isDone()) {
           return;
         }
@@ -309,6 +306,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     } catch (Throwable throwable) {
       result.completeExceptionally(throwable);
     } finally {
+      metrics.park();
       scheduled.set(false);
       if (!result.isDone() && signalled.get()) {
         wake(); // a signal raced our release; re-schedule
@@ -376,8 +374,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       }
       node.closed = true;
       Cell closed = node.key.cell();
-      Cell goal = target.nearestBoundaryCell(closed);
-      closestApproach = Math.min(closestApproach, closed.distance(goal));
+      Cell goal = nearestBoundary(closed);
+      metrics.reached(closed.distance(goal));
       if (target.contains(node.key.cell())) {
         if (pathConfirmed(node.key)) {
           finishSolved(node.key);
@@ -395,7 +393,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         result.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.LIMIT_EXCEEDED));
         return;
       }
-      expandedCount++;
+      metrics.expanded();
       expand(node, goal);
     }
   }
@@ -457,14 +455,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         // setBestParent first: it folds this edge into the neighbor's trail average, which is what
         // prices the neighbor's remaining journey.
         setBestParent(neighbor, parentKey, movement, tentative);
-        open.add(
-            new Entry(
-                key,
-                tentative,
-                tentative
-                    + weightAt(cell)
-                        * heuristic.estimate(
-                            cell, target, movement.state(), neighbor.trailAverage)));
+        offer(key, tentative, neighbor.trailAverage);
       }
     }
   }
@@ -651,7 +642,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     if (affected.isEmpty()) {
       return;
     }
-    logger.trace("Repairing {} node(s) after a wall", agent, target, affected.size());
+    logger.trace("Repairing {} node(s) after a wall", affected.size());
 
     // Invalidate the subtree, seed each node from its surviving external parents, and index the
     // internal (affected→affected) edges for the mini-Dijkstra.
@@ -706,13 +697,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       Node<T> node = nodes.get(key);
       setBestParent(node, best.parent(), best.edge(), best.cost());
       if (!node.closed) {
-        open.add(
-            new Entry(
-                key,
-                node.cost,
-                node.cost
-                    + weightAt(key.cell())
-                        * heuristic.estimate(key.cell(), target, key.state(), node.trailAverage)));
+        offer(key, node.cost, node.trailAverage);
       }
       List<CellState> children = internalEdges.get(key);
       if (children == null) {

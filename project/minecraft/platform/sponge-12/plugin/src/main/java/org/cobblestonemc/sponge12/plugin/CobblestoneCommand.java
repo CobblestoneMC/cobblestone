@@ -79,14 +79,14 @@ final class CobblestoneCommand {
             .completer(
                 (ctx, input) ->
                     Stream.of(LogLevel.values())
-                        .map(Enum::name)
-                        .filter(level -> level.startsWith(input.toUpperCase(Locale.ROOT)))
+                        .map(CobblestoneCommand::name)
+                        .filter(level -> level.startsWith(input.toLowerCase(Locale.ROOT)))
                         .map(CommandCompletion::of)
                         .toList())
             .build();
     Command.Parameterized loglevel =
         Command.builder()
-            .permission(Permissions.ADMIN.value())
+            .permission(Permissions.LOG_LEVEL.value())
             .addParameter(logLevel)
             .executor(ctx -> loglevel(ctx, messages, log, logLevel))
             .build();
@@ -203,8 +203,16 @@ final class CobblestoneCommand {
       return CommandResult.success();
     }
     log.setLevel(level);
-    messages.send(audience, locale, CobblestoneMessages.LOG_LEVEL_SET, level.name());
+    messages.send(audience, locale, CobblestoneMessages.LOG_LEVEL_SET, name(level));
     return CommandResult.success();
+  }
+
+  /**
+   * A log level as an admin types it. Lower case: a command argument reads as shouting otherwise,
+   * and {@code LogLevel.valueOf} is fed the upper-cased input, so either spelling is accepted.
+   */
+  private static String name(LogLevel level) {
+    return level.name().toLowerCase(Locale.ROOT);
   }
 
   private static CommandResult reload(

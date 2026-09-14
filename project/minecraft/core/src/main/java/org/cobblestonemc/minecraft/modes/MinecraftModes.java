@@ -104,44 +104,6 @@ public final class MinecraftModes {
   }
 
   /**
-   * Returns a lower bound on what one block of travel can cost this player, for the admissible
-   * Tier-1 edge estimate and the cold-start of the Tier-2 heuristic.
-   *
-   * <p>It has to be per-player, not a global constant. The cheapest movement in the game is flight,
-   * and pricing a walker's routes at the flying rate makes every Tier-1 estimate wildly optimistic:
-   * each leg comes back several times more expensive than promised, which immediately makes some
-   * other unexplored route look cheaper, so Tier-1 re-plans and works through the alternatives one
-   * costly solve at a time.
-   *
-   * <p>Falling is included because it is genuinely cheap per block and available to anyone — the
-   * bound must hold for every path, not just the plausible ones.
-   *
-   * @param player the navigating player
-   * @param excluded step types to leave out
-   * @return the cheapest possible cost of moving one block, in seconds
-   */
-  public static double cheapestCostPerBlock(
-      CobblestonePlayer player, Set<MinecraftStepType> excluded) {
-    double cheapest = MovementCosts.WALK;
-    if (!excluded.contains(MinecraftStepType.FLY) && (player.canFly() || player.canGlide())) {
-      cheapest = Math.min(cheapest, MovementCosts.FLY);
-    }
-    if (!excluded.contains(MinecraftStepType.FALL)) {
-      cheapest = Math.min(cheapest, MovementCosts.FALL_PER_BLOCK);
-    }
-    if (!excluded.contains(MinecraftStepType.HORSE)) {
-      cheapest = Math.min(cheapest, MovementCosts.HORSE);
-    }
-    // Mirrors forPlayer's condition exactly: wherever BoatMode is offered, the bound has to admit
-    // its cost, or a boat step comes in under what the heuristic swore was the floor.
-    if ((!excluded.contains(MinecraftStepType.BOAT) && player.hasBoatInInventory())
-        || player.isInBoat()) {
-      cheapest = Math.min(cheapest, MovementCosts.BOAT);
-    }
-    return cheapest;
-  }
-
-  /**
    * Builds a {@link ModesProvider} for a search: the player's usual modes plus — when the player
    * carries ender pearls — a goal-aware {@link EnderPearlMode} injected with each leg's target, so
    * a floating target (an end gateway) can be reached by throwing a pearl.

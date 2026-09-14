@@ -17,7 +17,9 @@ package org.cobblestonemc.minecraft;
  * exact when one search runs at a time (the case worth measuring on a test server), and an upper
  * bound when several overlap.
  *
- * @param chunkRequests calls to {@link ChunkProvider#block}
+ * @param chunkLookups calls to {@link ChunkProvider#chunk} — once per chunk per caller that wants
+ *     blocks in it, <b>not</b> once per block: a mode resolves its whole neighborhood from a
+ *     handful of snapshots
  * @param cacheHits requests served from a cached snapshot without waiting
  * @param directFetches non-speculative chunk fetches issued (a request had to wait for one)
  * @param prefetches speculative read-ahead fetches issued
@@ -30,7 +32,7 @@ package org.cobblestonemc.minecraft;
  * @param directFetchMillis summed wall-clock latency of the direct fetches
  */
 public record ChunkProviderStats(
-    long chunkRequests,
+    long chunkLookups,
     long cacheHits,
     long directFetches,
     long prefetches,
@@ -49,21 +51,26 @@ public record ChunkProviderStats(
    */
   public ChunkProviderStats since(ChunkProviderStats earlier) {
     return new ChunkProviderStats(
-        chunkRequests - earlier.chunkRequests,
-        cacheHits - earlier.cacheHits,
-        directFetches - earlier.directFetches,
-        prefetches - earlier.prefetches,
-        prefetchesUsed - earlier.prefetchesUsed,
-        prefetchesWasted - earlier.prefetchesWasted,
-        unknownChunks - earlier.unknownChunks,
-        staleEvictions - earlier.staleEvictions,
-        invalidations - earlier.invalidations,
-        directFetchMillis - earlier.directFetchMillis);
+        delta(chunkLookups, earlier.chunkLookups),
+        delta(cacheHits, earlier.cacheHits),
+        delta(directFetches, earlier.directFetches),
+        delta(prefetches, earlier.prefetches),
+        delta(prefetchesUsed, earlier.prefetchesUsed),
+        delta(prefetchesWasted, earlier.prefetchesWasted),
+        delta(unknownChunks, earlier.unknownChunks),
+        delta(staleEvictions, earlier.staleEvictions),
+        delta(invalidations, earlier.invalidations),
+        delta(directFetchMillis, earlier.directFetchMillis));
   }
 
-  /** The share of block requests served without waiting, in {@code [0, 1]}. */
+  /** One counter's delta, clamped at zero so two readings taken out of order read as no work. */
+  private static long delta(long later, long earlier) {
+    return Math.max(0, later - earlier);
+  }
+
+  /** The share of chunk lookups served without waiting, in {@code [0, 1]}. */
   public double hitRatio() {
-    return chunkRequests == 0 ? 0.0 : (double) cacheHits / chunkRequests;
+    return chunkLookups == 0 ? 0.0 : (double) cacheHits / chunkLookups;
   }
 
   /** The share of read-ahead fetches that were never read, in {@code [0, 1]}. */
@@ -79,10 +86,10 @@ public record ChunkProviderStats(
 
   @Override
   public String toString() {
-    return ("chunkRequests:%d, cacheHits:%d (%.1f%%), directFetches:%d (mean %.1fms), "
+    return ("chunkLookups:%d, cacheHits:%d (%.1f%%), directFetches:%d (mean %.1fms), "
             + "prefetches:%d (used:%d, wasted:%d = %.1f%%), unknownChunks:%d, staleEvictions:%d, invalidations:%d")
         .formatted(
-            chunkRequests,
+            chunkLookups,
             cacheHits,
             hitRatio() * 100,
             directFetches,
