@@ -16,7 +16,7 @@ java {
     withJavadocJar()
 }
 
-var apiVersion = "${project.property("apiVersion")}-SNAPSHOT"
+var apiVersion = "0.0-SNAPSHOT"
 
 publishing {
     publications {

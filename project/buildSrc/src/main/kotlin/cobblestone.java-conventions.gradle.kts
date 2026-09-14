@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "org.cobblestonemc"
-version = "${project.property("apiVersion")}.${project.property("patchVersion")}-BETA"
+version = "0.1.0-BETA"
 
 repositories {
     mavenCentral()
