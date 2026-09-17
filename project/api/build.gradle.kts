@@ -2,3 +2,10 @@
 plugins {
     id("cobblestone.publish-conventions")
 }
+
+mavenPublishing {
+    pom {
+        name.set("Cobblestone API")
+        description.set("Cobblestone API")
+    }
+}

@@ -10,3 +10,10 @@ dependencies {
     // Adventure is provided by Paper/Sponge at runtime; only ever compileOnly.
     compileOnly(libs.adventure.api)
 }
+
+mavenPublishing {
+    pom {
+        name.set("Cobblestone Minecraft Plugin API")
+        description.set("Cobblestone Minecraft Plugin API")
+    }
+}

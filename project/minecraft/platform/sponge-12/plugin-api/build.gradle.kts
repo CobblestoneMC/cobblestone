@@ -25,3 +25,10 @@ dependencies {
     compileOnly(libs.spongeapi)
     compileOnly(libs.adventure.api)
 }
+
+mavenPublishing {
+    pom {
+        name.set("Cobblestone Sponge-12 Plugin API")
+        description.set("Cobblestone Sponge-12 Plugin API")
+    }
+}

@@ -10,7 +10,7 @@ repositories {
 dependencies {
     // Marker artifact so the precompiled convention plugins can apply Spotless via `plugins { id(...) }`.
     implementation("com.diffplug.spotless:spotless-plugin-gradle:8.8.0")
-    implementation("org.jreleaser:jreleaser-gradle-plugin:1.25.0")
+    implementation("com.vanniktech:gradle-maven-publish-plugin:0.37.0")
 
     implementation("org.eclipse.jgit:org.eclipse.jgit") {
         version {

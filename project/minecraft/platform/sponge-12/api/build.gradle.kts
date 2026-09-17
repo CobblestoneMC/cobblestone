@@ -22,3 +22,10 @@ dependencies {
     // Provided by the server at runtime; Adventure comes bundled with Sponge.
     compileOnly(libs.spongeapi)
 }
+
+mavenPublishing {
+    pom {
+        name.set("Cobblestone Sponge-12 API")
+        description.set("Cobblestone Sponge-12 API")
+    }
+}
