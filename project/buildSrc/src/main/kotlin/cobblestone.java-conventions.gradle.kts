@@ -1,14 +1,10 @@
-// Base conventions shared by every Cobblestone JVM module: Java 21, checkstyle, license headers,
-// strict-ish compilation, and JUnit 5. Published library modules apply cobblestone.publish-conventions
-// (which itself applies this plugin) instead of applying this one directly.
-
 plugins {
     `java-library`
     id("com.diffplug.spotless")
 }
 
 group = "org.cobblestonemc"
-version = "0.1.0-BETA"
+version = "0.1.0"
 
 repositories {
     mavenCentral()

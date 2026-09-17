@@ -19,3 +19,10 @@ dependencies {
     api(project(":minecraft:minecraft-api"))
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
 }
+
+mavenPublishing {
+    pom {
+        name.set("Cobblestone PaperMC API")
+        description.set("Cobblestone PaperMC API")
+    }
+}

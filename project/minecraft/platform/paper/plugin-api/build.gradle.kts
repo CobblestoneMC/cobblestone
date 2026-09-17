@@ -24,3 +24,10 @@ dependencies {
     // Player/Location come from the server at runtime; Adventure comes bundled with Paper.
     compileOnly(libs.paper.api)
 }
+
+mavenPublishing {
+    pom {
+        name.set("Cobblestone PaperMC Plugin API")
+        description.set("Cobblestone PaperMC Plugin API")
+    }
+}

@@ -1,5 +1,5 @@
 plugins {
-    id("cobblestone.publish-conventions")
+    id("cobblestone.java-conventions")
 }
 
 java {

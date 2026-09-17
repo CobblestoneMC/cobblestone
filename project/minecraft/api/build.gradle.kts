@@ -7,3 +7,10 @@ plugins {
 dependencies {
     api(project(":api"))
 }
+
+mavenPublishing {
+    pom {
+        name.set("Cobblestone Minecraft API")
+        description.set("Cobblestone Minecraft API")
+    }
+}

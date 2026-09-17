@@ -1,5 +1,3 @@
-import org.jreleaser.model.Active
-
 // Applied by library modules that publish to Maven. Extends the base java conventions and wires a
 // standard Maven publication (thin jar + sources). No remote repository / signing yet — that is
 // configured when we first cut a release. See design/01-modules-and-build.md for the published set
@@ -8,82 +6,43 @@ import org.jreleaser.model.Active
 
 plugins {
     id("cobblestone.java-conventions")
-    `maven-publish`
-    id("org.jreleaser")
+    id("com.vanniktech.maven.publish")
 }
 
-java {
-    withJavadocJar()
+//java {
+//    withJavadocJar()
+//}
+
+mavenPublishing {
+    publishToMavenCentral()
+    signAllPublications()
 }
 
-var apiVersion = "0.0-SNAPSHOT"
-
-publishing {
-    publications {
-        create<MavenPublication>("maven") {
-            version = apiVersion
-            from(components["java"])
-
-            pom {
-                name = "Cobblestone"
-                url = "https://github.com/cobblestonemc/cobblestone"
-                description = "A Minecraft server-side navigation tool"
-                licenses {
-                    license {
-                        name.set("The MIT License")
-                        url.set("https://opensource.org/license/mit")
-                    }
-                }
-                developers {
-                    developer {
-                        name.set("whimxiqal")
-                    }
-                }
-                scm {
-                    url.set("https://github.com/cobblestonemc/cobblestone")
-                }
+mavenPublishing {
+    pom {
+        inceptionYear.set("2026")
+        url.set("https://github.com/cobblestonemc/cobblestone/")
+        licenses {
+            license {
+                name.set("MIT")
+                url.set("https://mit-license.org/")
+                distribution.set("https://mit-license.org/")
             }
         }
-    }
-
-    repositories {
-        maven {
-            name = "Staging"
-            url = uri(layout.buildDirectory.dir("staging-deploy"))
-        }
-    }
-}
-
-jreleaser {
-    gitRootSearch = true
-    signing {
-        pgp {
-            active.set(Active.ALWAYS)
-        }
-    }
-
-    deploy {
-        maven {
-            mavenCentral {
-                create("sonatype") {
-                    active.set(Active.RELEASE)
-                    // Configured explicitly to use the modern Central Portal API endpoint
-                    url.set("https://central.sonatype.com/api/v1/publisher")
-                    stagingRepository(layout.buildDirectory.dir("staging-deploy").get().asFile.absolutePath)
-                }
+        developers {
+            developer {
+                id.set("whimxiqal")
+                name.set("whimxiqal")
+                url.set("https://github.com/whimxiqal/")
+                organization.set("CobblestoneMC")
+                organizationUrl.set("https://cobblestonemc.org")
+                roles.add("maintainer")
             }
-            nexus2 {
-                create("snapshot-deploy") {
-                    active.set(Active.SNAPSHOT)
-                    version = apiVersion
-                    snapshotUrl.set("https://central.sonatype.com/repository/maven-snapshots/")
-                    applyMavenCentralRules = true
-                    snapshotSupported = true
-                    closeRepository = true
-                    releaseRepository = true
-                    stagingRepository(layout.buildDirectory.dir("staging-deploy").get().asFile.absolutePath)
-                }
-            }
+        }
+        scm {
+            url.set("https://github.com/username/mylibrary/")
+            connection.set("scm:git:git://github.com/username/mylibrary.git")
+            developerConnection.set("scm:git:ssh://git@github.com/username/mylibrary.git")
         }
     }
 }
