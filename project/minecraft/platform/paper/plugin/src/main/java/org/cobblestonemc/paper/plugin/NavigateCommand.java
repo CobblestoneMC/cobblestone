@@ -67,9 +67,6 @@ import org.joml.Vector3i;
  * helpers (flag parsing, destination resolution).
  */
 final class NavigateCommand {
-  // Above this many destination matches, tab-completion offers nothing — the player must type more
-  // to narrow down. Keeps a huge level the player asked for by name from flooding completion.
-  private static final int MAX_DESTINATION_SUGGESTIONS = DestinationResolver.PROMOTION_LIMIT;
   // A tiny, greedy search for the off-trail "guide" path: bounded and heavily weighted so it's
   // cheap.
   private static final SearchSettings GUIDE_SETTINGS =
@@ -438,10 +435,6 @@ final class NavigateCommand {
               FlagParser.destinationTokens(tokens),
               player::hasPermission,
               canNavigate(player));
-      // Only offer completions once the candidate set is small; otherwise the player narrows first.
-      if (suggestions.size() <= MAX_DESTINATION_SUGGESTIONS) {
-        suggestions.forEach(offset::suggest);
-      }
     }
     return offset.buildFuture();
   }
