@@ -69,9 +69,6 @@ final class NavigateCommand {
   // One key per word position. Distinct keys, all read back in order, so every word lands in the
   // same parse context — which is what lets tab-completion see the words typed before the cursor.
   private static final List<Parameter.Key<String>> WORD_KEYS = wordKeys();
-  // Above this many destination matches, tab-completion offers nothing — the player must type more
-  // to narrow down. Keeps a huge level the player asked for by name from flooding completion.
-  private static final int MAX_DESTINATION_SUGGESTIONS = DestinationResolver.PROMOTION_LIMIT;
   // A tiny, greedy search for the off-trail "guide" path: bounded and heavily weighted so it's
   // cheap.
   private static final SearchSettings GUIDE_SETTINGS =
@@ -474,10 +471,6 @@ final class NavigateCommand {
             FlagParser.destinationTokens(tokens),
             player.get()::hasPermission,
             canNavigate(player.get()));
-    // Only offer completions once the candidate set is small; otherwise the player narrows first.
-    if (suggestions.size() > MAX_DESTINATION_SUGGESTIONS) {
-      return List.of();
-    }
     List<CommandCompletion> completions = new ArrayList<>();
     for (String suggestion : suggestions) {
       completions.add(CommandCompletion.of(suggestion));
