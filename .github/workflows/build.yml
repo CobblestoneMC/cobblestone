@@ -22,6 +22,7 @@ jobs:
   validate-wrapper:
     name: Validate Gradle wrapper
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: gradle/actions/wrapper-validation@v6
@@ -30,7 +31,9 @@ jobs:
 
   format:
     name: Format
+    needs: validate-wrapper
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v5
@@ -42,9 +45,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew spotlessCheck --stacktrace
 
-  test:
-    name: Test
+  build:
+    name: Build
+    needs: validate-wrapper
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v5
@@ -59,30 +64,16 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: test-reports
+          name: test-reports-${{ github.sha }}
           path: project/**/build/reports/tests/
           retention-days: 7
-
-  artifacts:
-    name: Artifacts
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: |
-            21
-            25
-      - uses: gradle/actions/setup-gradle@v6
-      - name: Build
-        run: |
-          ./gradlew build --stacktrace
-      - name: Upload
+      - name: Upload plugin jars
         uses: actions/upload-artifact@v7
         with:
-          name: all-artifacts
+          name: cobblestone-${{ github.sha }}
           path: |
-            **/build
+            project/minecraft/**/build/libs/Cobblestone*.jar
+            !project/**/*-sources.jar
+            !project/**/*-javadoc.jar
           if-no-files-found: error
           retention-days: 7
