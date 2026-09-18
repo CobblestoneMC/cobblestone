@@ -89,10 +89,10 @@ final class Tier2Metrics {
    * @param visited how many cell-states the search is holding
    * @return the summary
    */
-  String format(int visited) {
+  String format(int visited, long currentMemoryUsage) {
     double remaining = Math.min(closestApproach, startDistance);
     return ("activeTime:%dms, parkedTime:%dms, parks:%d (mean %.1fms), visited:%d, expanded:%d, "
-            + "approach:%.0f/%.0f blocks (%.0f%%)")
+            + "approach:%.0f/%.0f blocks (%.0f%%), current mem usage:%d MiB")
         .formatted(
             active.elapsed(),
             parkedMillis,
@@ -102,6 +102,7 @@ final class Tier2Metrics {
             expanded,
             startDistance - remaining,
             startDistance,
-            startDistance <= 0 ? 100.0 : (1 - remaining / startDistance) * 100);
+            startDistance <= 0 ? 100.0 : (1 - remaining / startDistance) * 100,
+            currentMemoryUsage);
   }
 }

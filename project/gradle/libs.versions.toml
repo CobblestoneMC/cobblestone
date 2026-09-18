@@ -1,7 +1,17 @@
 [versions]
 adventure = "4.17.0"
 paper = "26.1.2.build.+"
-sponge = "12.0.0"
+# The Minecraft version the "latest" plugin endpoints target. It names their jars
+# (Cobblestone-Paper-<this>-<version>.jar), so it must track whatever paper-api/paperDevBundle and
+# spongeapi-latest above actually resolve to — that is what decides which server internals compile.
+minecraftLatest = "26.2"
+
+# The SpongeAPI the current-Minecraft plugin builds against. Re-pointed when `latest` moves.
+sponge = "17.0.0-SNAPSHOT"
+# The SpongeAPI floor the shared :minecraft:platform:sponge modules compile against. Every type
+# Cobblestone touches is unchanged through API 17 (no member was removed), so one compilation
+# serves every supported Minecraft version; only the per-version modules pin a newer API.
+sponge12 = "12.0.0"
 snakeyaml = "2.3"
 shadow = "9.0.0"
 h2 = "2.2.224"
@@ -10,7 +20,8 @@ bstats = "3.2.1"
 [libraries]
 adventure-api = { module = "net.kyori:adventure-api", version.ref = "adventure" }
 paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
-spongeapi = { module = "org.spongepowered:spongeapi", version.ref = "sponge" }
+sponge-latest = { module = "org.spongepowered:spongeapi", version.ref = "sponge" }
+sponge-api12 = { module = "org.spongepowered:spongeapi", version.ref = "sponge12" }
 snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
 h2 = { module = "com.h2database:h2", version.ref = "h2" }
 bstats-base = { module = "org.bstats:bstats-base", version.ref = "bstats" }

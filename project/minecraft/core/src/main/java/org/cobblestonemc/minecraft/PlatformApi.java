@@ -36,4 +36,14 @@ public interface PlatformApi<E> {
    */
   CompletableFuture<MinecraftChunk> fetchChunk(
       int chunkX, int chunkZ, MinecraftWorld world, ChunkLoadPolicy policy, boolean urgent);
+
+  /**
+   * Stops issuing new work and calls off whatever the platform can still call off, without waiting
+   * for what is already underway.
+   *
+   * <p>Called at the start of shutdown, before {@link ChunkProvider#awaitInFlight} waits for the
+   * fetches that are left: cancelling first is what keeps that wait short. Platforms that queue
+   * nothing of their own have nothing to do here.
+   */
+  default void shutdown() {}
 }

@@ -183,9 +183,15 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   }
 
   CompletableFuture<Tier2Result<T, D>> solve() {
+    logger.debug("Solved; current mem usage:{} MiB", currentMemoryUsageMiB());
     armDeadline();
     wake();
     return result;
+  }
+
+  long currentMemoryUsageMiB() {
+    var runtime = Runtime.getRuntime();
+    return (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024);
   }
 
   /**
@@ -280,7 +286,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   }
 
   private String stats() {
-    return metrics.format(nodes.size());
+    return metrics.format(nodes.size(), currentMemoryUsageMiB());
   }
 
   /**

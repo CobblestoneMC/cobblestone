@@ -1,5 +1,6 @@
 plugins {
     id("cobblestone.java-conventions")
+    id("io.papermc.paperweight.userdev") version "2.0.0-beta.23"
 }
 
 java {
@@ -20,4 +21,5 @@ dependencies {
     api(project(":minecraft:platform:paper:paper-api"))
     // Provided by the server at runtime; Adventure comes bundled with Paper.
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
+    paperweight.paperDevBundle("26.2.build.+")
 }

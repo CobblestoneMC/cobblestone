@@ -14,6 +14,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.LongSupplier;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
@@ -203,6 +206,46 @@ public final class ChunkProvider {
   }
 
   /**
+   * Waits for the chunk fetches already issued to settle, so shutdown does not walk away from IO
+   * the server is still doing on Cobblestone's behalf.
+   *
+   * <p>This is the whole of what has to be waited for. A search parked on a chunk holds no claim on
+   * it — cancelling a search abandons its pending values and never looks at them again — so the
+   * thing still owed is the fetch, and {@link #inFlight} is already an exact register of those: one
+   * entry per fetch, added when it is issued and removed when it settles. Nothing else needs to
+   * keep a list.
+   *
+   * <p>Bounded, because it cannot be trusted absolutely: a platform whose IO threads are already
+   * gone may never complete what it promised, and a shutdown that hangs on that is worse than one
+   * that gives up on a read. Call {@link PlatformApi#shutdown()} first so that most of what is
+   * outstanding is cancelled rather than waited for.
+   *
+   * @param timeoutMillis how long to wait before giving up
+   * @return {@code true} if everything settled, {@code false} on timeout or interruption
+   */
+  public boolean awaitInFlight(long timeoutMillis) {
+    CompletableFuture<?>[] pending;
+    synchronized (lock) {
+      // Snapshot and release: each fetch removes itself from inFlight under this same lock when it
+      // completes, so waiting while holding it would deadlock against the completion it waits for.
+      pending = inFlight.values().toArray(new CompletableFuture<?>[0]);
+    }
+    if (pending.length == 0) {
+      return true;
+    }
+    try {
+      CompletableFuture.allOf(pending).get(timeoutMillis, TimeUnit.MILLISECONDS);
+      return true;
+    } catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt();
+      return false;
+    } catch (TimeoutException | ExecutionException failed) {
+      // A failed fetch is still a settled one; only the timeout is a real answer of "no".
+      return failed instanceof ExecutionException;
+    }
+  }
+
+  /**
    * Returns a reading of the provider-wide counters. Diff two readings to attribute work to one
    * search; see {@link ChunkProviderStats}.
    *
@@ -333,7 +376,16 @@ public final class ChunkProvider {
     }
     long startedAt = clock.getAsLong();
     CompletableFuture<MinecraftChunk> fetch =
-        platform.fetchChunk(key.chunkX, key.chunkZ, world, settings.loadPolicy(), !prefetch);
+        platform
+            .fetchChunk(key.chunkX, key.chunkZ, world, settings.loadPolicy(), !prefetch)
+            // A failure here means the platform could not source the chunk at all — not that its
+            // fast path missed, which platforms handle themselves by falling back. There is
+            // nothing left to try, so this is exactly the case Unknown already describes: the
+            // search treats the chunk as a wall rather than failing with it. Cached like any
+            // unknown, which is to say for UNKNOWN_RETRY_MILLIS — long enough to collapse a storm
+            // of repeat reads against a chunk that will not load, short enough that a failure
+            // which was only transient is asked about again a second later.
+            .exceptionally(error -> MinecraftChunk.Unknown.INSTANCE);
     inFlight.put(key, fetch);
     fetch.whenComplete(
         (snapshot, error) -> {
