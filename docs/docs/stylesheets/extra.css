@@ -1,0 +1,127 @@
+/* Cobblestone docs theme — brand colors come from the in-game message palette
+   (CobblestoneColors: sky blue #4AA8FF, amber #FFC857). */
+
+:root {
+  --md-primary-fg-color: #2a6fb5;
+  --md-primary-fg-color--light: #4aa8ff;
+  --md-primary-fg-color--dark: #1d4f81;
+  --md-accent-fg-color: #c98a00;
+  --cs-accent: #4aa8ff;
+  --cs-amber: #ffc857;
+  --cs-card-bg: #ffffff;
+  --cs-card-border: rgba(0, 0, 0, 0.08);
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #123048;
+  --md-primary-fg-color--light: #4aa8ff;
+  --md-primary-fg-color--dark: #0d2233;
+  --md-accent-fg-color: #ffc857;
+  --cs-card-bg: rgba(255, 255, 255, 0.04);
+  --cs-card-border: rgba(255, 255, 255, 0.12);
+}
+
+/* --- Home hero ------------------------------------------------------------ */
+
+.cs-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2rem;
+  margin: 1rem 0 2.5rem;
+}
+
+.cs-hero__text {
+  flex: 1 1 18rem;
+}
+
+.cs-hero__text h1 {
+  margin: 0 0 0.4rem;
+  font-weight: 700;
+}
+
+.cs-hero__tagline {
+  font-size: 1.1rem;
+  line-height: 1.5;
+  color: var(--md-default-fg-color--light);
+}
+
+.cs-hero__art {
+  flex: 1 1 18rem;
+  max-width: 26rem;
+}
+
+.cs-hero__art img {
+  width: 100%;
+  height: auto;
+}
+
+/* --- Badges --------------------------------------------------------------- */
+
+.cs-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.8rem 0 0;
+}
+
+.cs-badges img {
+  height: 20px;
+}
+
+/* --- Cards ---------------------------------------------------------------- */
+
+.cs-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.cs-card {
+  display: block;
+  padding: 1.1rem 1.2rem;
+  border: 1px solid var(--cs-card-border);
+  border-radius: 0.5rem;
+  background: var(--cs-card-bg);
+  color: inherit !important;
+  transition: border-color 120ms, transform 120ms;
+}
+
+.cs-card:hover {
+  border-color: var(--cs-accent);
+  transform: translateY(-2px);
+}
+
+.cs-card h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--md-primary-fg-color--light);
+}
+
+.cs-card p {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--md-default-fg-color--light);
+}
+
+/* --- Section illustrations ------------------------------------------------ */
+
+.cs-illustration {
+  display: block;
+  max-width: 22rem;
+  margin: 0 auto 1.5rem;
+}
+
+.cs-illustration img {
+  width: 100%;
+  height: auto;
+}
+
+/* Command cards on the reference pages. */
+.cs-command {
+  border-left: 3px solid var(--cs-accent);
+  padding-left: 0.9rem;
+}
