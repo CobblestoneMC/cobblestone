@@ -17,12 +17,12 @@ import java.util.Objects;
  * accessor (installed when Cobblestone starts, cleared when it stops). Search modifiers and the raw
  * navigation service live one layer down, on {@code CobblestoneCoreAPI} (in the core API).
  */
-public final class CobblestonePluginApi {
+public final class CobblestoneSpongeApi {
 
   private static volatile IntegrationRegistrar registrar;
   private static volatile TripService tripService;
 
-  private CobblestonePluginApi() {}
+  private CobblestoneSpongeApi() {}
 
   /**
    * Publishes the plugin-layer services. Called by the Cobblestone plugin as it starts; not for

@@ -12,7 +12,7 @@ import org.spongepowered.plugin.PluginContainer;
 /**
  * Where a plugin registers the things Cobblestone's {@code /navigate} command surfaces: destination
  * providers (targets) and navigators (display strategies). Cobblestone provides one registrar
- * (obtained via {@link CobblestonePluginApi#registrar()}) and owns the resulting collection.
+ * (obtained via {@link CobblestoneSpongeApi#registrar()}) and owns the resulting collection.
  *
  * <p>Everything an owner registers is dropped automatically when that plugin stops.
  */

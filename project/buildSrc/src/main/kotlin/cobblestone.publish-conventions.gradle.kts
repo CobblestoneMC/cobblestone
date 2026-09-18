@@ -40,9 +40,9 @@ mavenPublishing {
             }
         }
         scm {
-            url.set("https://github.com/username/mylibrary/")
-            connection.set("scm:git:git://github.com/username/mylibrary.git")
-            developerConnection.set("scm:git:ssh://git@github.com/username/mylibrary.git")
+            url.set("https://github.com/cobblestonemc/cobblestone/")
+            connection.set("scm:git:git://github.com/cobblestonemc/cobblestone.git")
+            developerConnection.set("scm:git:ssh://git@github.com/cobblestonemc/cobblestone.git")
         }
     }
 }
