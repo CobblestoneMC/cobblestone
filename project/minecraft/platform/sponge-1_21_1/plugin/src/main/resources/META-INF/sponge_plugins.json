@@ -1,0 +1,35 @@
+{
+  "loader": {
+    "name": "java_plain",
+    "version": "1.0"
+  },
+  "license": "MIT",
+  "global": {
+    "version": "$projectVersion",
+    "links": {
+      "homepage": "https://cobblestonemc.org"
+    },
+    "contributors": [
+      {
+        "name": "whimxiqal",
+        "description": "Author"
+      }
+    ],
+    "dependencies": [
+      {
+        "id": "spongeapi",
+        "version": "$spongeApiVersion",
+        "load-order": "after",
+        "optional": false
+      }
+    ]
+  },
+  "plugins": [
+    {
+      "id": "cobblestone",
+      "name": "Cobblestone",
+      "description": "A Minecraft navigation plugin.",
+      "entrypoint": "org.cobblestonemc.sponge.plugin.CobblestoneSpongePlugin"
+    }
+  ]
+}

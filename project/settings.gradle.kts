@@ -34,14 +34,30 @@ include(":minecraft:platform:paper:plugin-api")
 project(":minecraft:platform:paper:plugin-api").name = "paper-plugin-api"
 include(":minecraft:platform:paper:plugin")
 project(":minecraft:platform:paper:plugin").name = "paper-plugin"
-include(":minecraft:platform:sponge-12:api")
-project(":minecraft:platform:sponge-12:api").name = "sponge-12-api"
-include(":minecraft:platform:sponge-12:core")
-project(":minecraft:platform:sponge-12:core").name = "sponge-12-core"
-include(":minecraft:platform:sponge-12:plugin-api")
-project(":minecraft:platform:sponge-12:plugin-api").name = "sponge-12-plugin-api"
-include(":minecraft:platform:sponge-12:plugin")
-project(":minecraft:platform:sponge-12:plugin").name = "sponge-12-plugin"
+// Sponge is split the way Paper is not (yet) forced to be: everything that does not depend on a
+// particular Minecraft version lives once, in :minecraft:platform:sponge, compiled against the
+// SpongeAPI floor. Each supported Minecraft version then adds only what it must — the server
+// internals it reads chunks with, and a plugin entry point to ship them — under its own directory.
+// `sponge-latest` tracks whatever Minecraft is current and is re-pointed as that moves; a version
+// we pin for the long term gets a directory named after it, like sponge-1_21_1. The jars carry the
+// Minecraft version, so `latest` is never what an admin sees.
+//
+// Those per-version modules hold no code at all — only a build file and plugin metadata. Reading
+// chunks off disk turned out to need nothing from Minecraft's own classes, so the whole plugin
+// compiles once, and what differs between the jars is which SpongeAPI they declare and what they
+// are called. A version that ever does need code of its own gains a source directory then.
+include(":minecraft:platform:sponge:api")
+project(":minecraft:platform:sponge:api").name = "sponge-api"
+include(":minecraft:platform:sponge:core")
+project(":minecraft:platform:sponge:core").name = "sponge-core"
+include(":minecraft:platform:sponge:plugin-api")
+project(":minecraft:platform:sponge:plugin-api").name = "sponge-plugin-api"
+include(":minecraft:platform:sponge:plugin")
+project(":minecraft:platform:sponge:plugin").name = "sponge-plugin"
+include(":minecraft:platform:sponge-latest:plugin")
+project(":minecraft:platform:sponge-latest:plugin").name = "sponge-latest-plugin"
+include(":minecraft:platform:sponge-1_21_1:plugin")
+project(":minecraft:platform:sponge-1_21_1:plugin").name = "sponge-1_21_1-plugin"
 
 // Example integration plugins live under examples/ — self-contained, third-party-style plugins that
 // depend only on Cobblestone's published API to demonstrate extending navigation (design/08).
