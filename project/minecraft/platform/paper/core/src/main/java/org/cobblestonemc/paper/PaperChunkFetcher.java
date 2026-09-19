@@ -23,8 +23,9 @@ import org.cobblestonemc.minecraft.ChunkLoadPolicy;
  *       region scheduler, so Folia is served too), then read freely from search worker threads.
  *   <li><b>Read it off disk.</b> A chunk that is generated but not loaded is decoded from its saved
  *       NBT by {@link NMSChunkReader}, which never puts it in the chunk system at all.
- *   <li><b>Load it through the server.</b> Terrain the policy allows generating, and any chunk the
- *       disk read could not produce, goes through Bukkit's async chunk load.
+ *   <li><b>Load it through the server.</b> A chunk with nothing saved that the policy allows
+ *       generating, and any chunk the disk read could not produce, goes through Bukkit's async
+ *       chunk load.
  * </ol>
  *
  * <p>The second route is an optimization, not a contract — if the read fails, or this server's
@@ -61,19 +62,20 @@ final class PaperChunkFetcher {
       return snapshotLoaded(bukkit, chunkX, chunkZ);
     }
 
-    // Already in memory, or terrain we are allowed to generate: go through the chunk system.
+    // Already in memory: go through the chunk system.
     boolean generate = policy == ChunkLoadPolicy.ALLOW_LOAD_AND_GENERATE;
-    if (bukkit.isChunkLoaded(chunkX, chunkZ)
-        || (generate && !bukkit.isChunkGenerated(chunkX, chunkZ))) {
+    if (bukkit.isChunkLoaded(chunkX, chunkZ)) {
       return loadThroughServer(bukkit, chunkX, chunkZ, generate, urgent);
     }
-    // Generated but not loaded: read the saved blocks without loading the chunk.
+    // Not loaded: read the saved blocks without loading the chunk. Whether there are any is left
+    // to the read to discover — asking Bukkit's isChunkGenerated from this thread would block on
+    // the main thread, which may itself be waiting on the chunk provider this call is made under.
     if (!reader.available()) {
       // This server's internals aren't the ones we were built against (NMSSupport has said so,
       // once). Load the chunk through the server instead — slower and heavier, but correct.
-      return loadThroughServer(bukkit, chunkX, chunkZ, false, urgent);
+      return loadThroughServer(bukkit, chunkX, chunkZ, generate, urgent);
     }
-    return readOffline(bukkit, chunkX, chunkZ, urgent);
+    return readOffline(bukkit, chunkX, chunkZ, generate, urgent);
   }
 
   /**
@@ -111,19 +113,31 @@ final class PaperChunkFetcher {
    *
    * <p>Failing to read the chunk off disk is this class's problem, not the caller's: a failed fast
    * path falls back to the slow one, and the caller never learns there were two.
+   *
+   * <p>Finding nothing saved is an answer about the world, unless {@code generate} allows making
+   * the chunk — then it is the cue to have the server generate it.
    */
   private CompletableFuture<ChunkFetch> readOffline(
-      World bukkit, int chunkX, int chunkZ, boolean urgent) {
+      World bukkit, int chunkX, int chunkZ, boolean generate, boolean urgent) {
     return reader
         .read(chunkX, chunkZ, bukkit, urgent)
         // Nothing saved, or nothing finished. Moonrise serves writes still queued, so this is the
-        // chunk's real state rather than a save that has yet to land: an answer about the world.
-        .<ChunkFetch>thenApply(
-            chunk -> chunk == null ? ChunkFetch.Failed.permanent() : ChunkFetch.success(chunk))
+        // chunk's real state rather than a save that has yet to land. A read cancelled by shutdown
+        // also lands here, and must not turn into a server load.
+        .thenCompose(
+            chunk -> {
+              if (chunk != null) {
+                return CompletableFuture.completedFuture(ChunkFetch.success(chunk));
+              }
+              if (generate && !reader.stopped()) {
+                return loadThroughServer(bukkit, chunkX, chunkZ, true, urgent);
+              }
+              return CompletableFuture.completedFuture(ChunkFetch.Failed.permanent());
+            })
         .exceptionallyCompose(
             error -> {
               reader.reportFailure(error, chunkX, chunkZ, bukkit);
-              return loadThroughServer(bukkit, chunkX, chunkZ, false, urgent);
+              return loadThroughServer(bukkit, chunkX, chunkZ, generate, urgent);
             });
   }
 
@@ -138,11 +152,11 @@ final class PaperChunkFetcher {
       World bukkit, int chunkX, int chunkZ, boolean generate, boolean urgent) {
     return bukkit
         .getChunkAtAsync(chunkX, chunkZ, generate, urgent)
-        .<ChunkFetch>thenApply(
+        .thenApply(
             chunk ->
                 chunk == null
                     ? ChunkFetch.Failed.permanent()
                     : ChunkFetch.success(new LoadedPaperChunk(chunk.getChunkSnapshot())))
-        .exceptionally(error -> ChunkFetch.Failed.transientFailure());
+        .exceptionally(_ -> ChunkFetch.Failed.transientFailure());
   }
 }
