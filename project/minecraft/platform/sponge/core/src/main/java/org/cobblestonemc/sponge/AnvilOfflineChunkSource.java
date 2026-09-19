@@ -101,6 +101,11 @@ public final class AnvilOfflineChunkSource implements OfflineChunkSource {
   }
 
   @Override
+  public void prepare(ServerWorld world) {
+    regionFolder(world);
+  }
+
+  @Override
   public boolean available() {
     return usable && !stopped;
   }
@@ -109,10 +114,9 @@ public final class AnvilOfflineChunkSource implements OfflineChunkSource {
   public CompletableFuture<@Nullable MinecraftChunk> read(
       ServerWorld world, int chunkX, int chunkZ, boolean urgent) {
     CompletableFuture<MinecraftChunk> future = new CompletableFuture<>();
-    // The world's directory is read here, on the caller's thread, because the caller is on the
-    // server thread and the reader threads must not touch the world at all.
-    Path regionFolder =
-        regionFolders.computeIfAbsent(world.key(), ignored -> world.directory().resolve("region"));
+    // Resolved here rather than on a reader thread, which must not touch the world at all. In
+    // practice prepare() has already done it on the server thread and this is a map lookup.
+    Path regionFolder = regionFolder(world);
 
     outstanding.add(future);
     future.whenComplete((chunk, error) -> outstanding.remove(future));
@@ -134,6 +138,11 @@ public final class AnvilOfflineChunkSource implements OfflineChunkSource {
       future.complete(null);
     }
     return future;
+  }
+
+  private Path regionFolder(ServerWorld world) {
+    return regionFolders.computeIfAbsent(
+        world.key(), ignored -> world.directory().resolve("region"));
   }
 
   /** Reads and decodes one chunk, or {@code null} if nothing usable is saved there. */

@@ -9,7 +9,6 @@ package org.cobblestonemc.minecraft;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.atomic.AtomicLong;
@@ -142,26 +141,6 @@ class ChunkProviderTest {
   }
 
   @Test
-  void doesNotCacheUnknownFromReadAhead() {
-    FakePlatform platform = new FakePlatform();
-    platform.setRefuseReadAhead(true);
-    ChunkProvider provider = provider(platform, settings());
-
-    // Reading one cell drags the chunks ahead of it in as read-ahead, and those come back unknown.
-    provider.block(new Cell(8, 64, 8), world, EAST).future().join();
-    int neighbourX = 1;
-
-    // A later urgent read of a refused neighbour must go back to the platform rather than be
-    // answered from the refusal, which was only ever a statement about the read-ahead budget.
-    int before = platform.fetchCount(neighbourX, 0);
-    FutureOr<MinecraftBlock> block =
-        provider.block(new Cell((neighbourX << 4) + 8, 64, 8), world, EAST);
-    assertTrue(
-        platform.fetchCount(neighbourX, 0) > before, "refused read-ahead must not be cached");
-    assertNotNull(block);
-  }
-
-  @Test
   void repeatReadsOfAnUnknownChunkAreAnsweredFromTheCache() {
     FakePlatform platform = new FakePlatform();
     platform.setUnknown(true);
@@ -174,33 +153,6 @@ class ChunkProviderTest {
         cp.block(new Cell(6, 64, 6), world, EAST).isImmediate(),
         "a search pressed against absent terrain must not re-ask for every block");
     assertEquals(1, platform.fetchCount(0, 0));
-  }
-
-  /**
-   * A read-ahead that came back unknown is not cached — it was a statement about the platform's
-   * budget, not about the world — but it must not therefore be asked for speculatively again.
-   *
-   * <p>Read-ahead fires on every cache miss, and the columns of nearby cells overlap heavily, so a
-   * chunk that answers unknown speculatively is otherwise re-read once for every chunk the solve
-   * crosses behind it. Each of those is a disk read for a chunk nothing is waiting on. Remembering
-   * that we asked is not the same as remembering the answer: a solve that actually reaches the
-   * chunk still goes to the platform for it.
-   */
-  @Test
-  void aRefusedReadAheadIsNotAskedForSpeculativelyAgain() {
-    FakePlatform platform = new FakePlatform();
-    platform.setRefuseReadAhead(true);
-    ChunkProvider cp = provider(platform, settings());
-
-    // Chunk [0, 0], heading east: reads ahead over chunks [1, 0] and [2, 0], both refused.
-    cp.block(new Cell(8, 64, 8), world, EAST).future().join();
-    assertEquals(1, platform.fetchCount(2, 0), "read ahead for once");
-
-    // Chunk [1, 0] was refused, so this misses and fetches it directly — and its own read-ahead
-    // column covers [2, 0] again.
-    cp.block(new Cell(24, 64, 8), world, EAST).future().join();
-
-    assertEquals(1, platform.fetchCount(2, 0), "not asked for speculatively a second time");
   }
 
   /**
@@ -235,5 +187,32 @@ class ChunkProviderTest {
 
     assertEquals(1, platform.fetchCount(0, 0), "the chunk asked for");
     assertEquals(0, platform.fetchCount(1, 0), "and nothing ahead of it");
+  }
+
+  /**
+   * Every answer the platform gives is cached, read-ahead included.
+   *
+   * <p>There is no such thing as a speculative unknown: a platform answers a request it was not
+   * blocked on exactly as it answers one it was, resolving its own fallbacks before it replies (see
+   * {@link PlatformApi#fetchChunk}). So an unknown from read-ahead is a fact about the world, and
+   * re-asking would have a solve re-read it for every cell of a frontier pressed against it.
+   */
+  @Test
+  void anUnknownFromReadAheadIsCachedLikeAnyOtherAnswer() {
+    FakePlatform platform = new FakePlatform();
+    platform.setUnknown(true);
+    ChunkProvider cp = provider(platform, settings());
+
+    // Chunk [0, 0], heading east: reads ahead over [1, 0] and [2, 0], all unknown.
+    cp.block(new Cell(8, 64, 8), world, EAST).future().join();
+    assertEquals(1, platform.fetchCount(2, 0), "read ahead for once");
+
+    // Crossing into [1, 0]: already answered by the read-ahead, so it is served without waiting.
+    assertTrue(
+        cp.block(new Cell(24, 64, 8), world, EAST).isImmediate(),
+        "the read-ahead's answer is a cache hit, not a second fetch");
+
+    assertEquals(1, platform.fetchCount(1, 0), "the chunk we walked into was not re-read");
+    assertEquals(1, platform.fetchCount(2, 0), "nor was the one beyond it");
   }
 }

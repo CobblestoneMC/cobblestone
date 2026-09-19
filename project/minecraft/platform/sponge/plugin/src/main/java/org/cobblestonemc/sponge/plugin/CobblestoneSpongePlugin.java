@@ -227,6 +227,9 @@ public final class CobblestoneSpongePlugin {
   @Listener
   public void onStartedEngine(StartedEngineEvent<Server> event) {
     SpongePermissions.register(container);
+    if (navigationService != null) {
+      navigationService.surveyWorlds();
+    }
   }
 
   /** Registers the {@code /cobblestone} and {@code /navigate} commands. */

@@ -24,6 +24,7 @@ import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockState;
 import org.spongepowered.api.event.Listener;
+import org.spongepowered.api.event.world.LoadWorldEvent;
 import org.spongepowered.api.event.world.chunk.ChunkEvent;
 import org.spongepowered.api.util.Ticks;
 import org.spongepowered.api.world.chunk.BlockChunk;
@@ -84,6 +85,7 @@ final class SpongeChunkLoader {
   private final CobblestoneLogger logger;
   private final IntSupplier maxLoadRequests;
   private final OfflineChunkSource offline;
+  private final LoadedChunkIndex loaded;
   private final ChunkExistenceIndex index;
   private final Map<ChunkKey, Parked> pending = new ConcurrentHashMap<>();
 
@@ -100,7 +102,9 @@ final class SpongeChunkLoader {
       SpongeScheduler scheduler,
       CobblestoneLogger logger,
       IntSupplier maxLoadRequests,
-      OfflineChunkSource offline) {
+      OfflineChunkSource offline,
+      LoadedChunkIndex loaded) {
+    this.loaded = loaded;
     this.scheduler = scheduler;
     this.logger = new ScopedCobblestoneLogger(logger, "SpongeChunkLoader");
     this.maxLoadRequests = maxLoadRequests;
@@ -123,6 +127,16 @@ final class SpongeChunkLoader {
   CompletableFuture<MinecraftChunk> fetch(
       ServerWorld world, int chunkX, int chunkZ, ChunkLoadPolicy policy, boolean urgent) {
     CompletableFuture<MinecraftChunk> future = new CompletableFuture<>();
+    // Reaching the world at all means hopping to the server thread, and a hop costs a whole tick —
+    // which for most of what a search asks for would be spent establishing that the chunk is not
+    // loaded, before reading a file that never needed the server thread. So the common case is
+    // decided from the index instead, off-thread, and only a chunk that really is in memory pays.
+    if (policy != ChunkLoadPolicy.LOADED_ONLY
+        && offline.available()
+        && !loaded.isLoaded(world.key().asString(), chunkX, chunkZ)) {
+      readOffline(world, chunkX, chunkZ, policy, urgent, future);
+      return future;
+    }
     // The world may only be touched on the server thread; the block array we come away with is a
     // detached copy that search workers can read freely.
     onServerThread(() -> resolve(world, chunkX, chunkZ, policy, urgent, future));
@@ -168,6 +182,10 @@ final class SpongeChunkLoader {
    * — there is nothing to load — while {@code allow_load_and_generate} still has a ticket to place.
    * And a read that fails says nothing about the chunk at all, only about this path, so the ticket
    * machinery gets its turn exactly as if no offline source existed.
+   *
+   * <p>Reached from either thread: from the server thread by way of {@link #resolve}, or directly
+   * from a caller whose chunk the index said was not loaded. Everything it touches before handing
+   * off to {@link #resolveWithTicket} is thread-safe, and that hand-off hops back.
    */
   private void readOffline(
       ServerWorld world,
@@ -283,6 +301,15 @@ final class SpongeChunkLoader {
    * Records terrain that has just come into existence, so a later {@code allow_load} search does
    * not mistake it for something that would still have to be generated.
    */
+  /**
+   * Takes whatever the offline source needs from a world while we are on the server thread, so its
+   * reads never have to touch the world themselves.
+   */
+  @Listener
+  public void onWorldLoad(LoadWorldEvent event) {
+    offline.prepare(event.world());
+  }
+
   @Listener
   public void onChunkGenerated(ChunkEvent.Generated event) {
     Vector3i position = event.chunkPosition();

@@ -81,6 +81,17 @@ public interface OfflineChunkSource {
       ServerWorld world, int chunkX, int chunkZ, boolean urgent);
 
   /**
+   * Prepares to read a world, on the server thread, before any read is asked for off it.
+   *
+   * <p>Anything an implementation needs from the {@link ServerWorld} itself — where its region
+   * files live, say — is taken here, so that {@link #read} can run on an IO thread without touching
+   * the world at all. Called when a world is registered and when one loads.
+   *
+   * @param world the world about to become readable
+   */
+  default void prepare(ServerWorld world) {}
+
+  /**
    * Stops issuing reads and calls off whatever has not started, without waiting for what has.
    *
    * <p>Called at the start of shutdown. A source that queues nothing of its own has nothing to do.

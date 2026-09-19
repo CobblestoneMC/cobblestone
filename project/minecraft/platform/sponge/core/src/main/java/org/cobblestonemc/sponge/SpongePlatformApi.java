@@ -39,6 +39,8 @@ final class SpongePlatformApi implements PlatformApi<Entity> {
 
   private final OfflineChunkSource offline;
 
+  private final LoadedChunkIndex loaded;
+
   SpongePlatformApi(
       SpongeScheduler scheduler,
       CobblestoneLogger logger,
@@ -46,7 +48,8 @@ final class SpongePlatformApi implements PlatformApi<Entity> {
       OfflineChunkSource offline) {
     this.scheduler = scheduler;
     this.offline = offline;
-    this.chunks = new SpongeChunkLoader(scheduler, logger, maxLoadRequests, offline);
+    this.loaded = new LoadedChunkIndex(logger);
+    this.chunks = new SpongeChunkLoader(scheduler, logger, maxLoadRequests, offline, loaded);
   }
 
   @Override
@@ -56,6 +59,21 @@ final class SpongePlatformApi implements PlatformApi<Entity> {
 
   public void registerListeners(PluginContainer plugin) {
     Sponge.eventManager().registerListeners(plugin, chunks);
+    Sponge.eventManager().registerListeners(plugin, loaded);
+  }
+
+  /**
+   * Takes stock of the worlds already running. Server thread only; call once the engine has
+   * started.
+   *
+   * <p>Events alone only describe what happens from now on, and what is already loaded is exactly
+   * what a search is most likely to reach for first.
+   */
+  public void surveyWorlds() {
+    loaded.seedAll();
+    for (ServerWorld world : Sponge.server().worldManager().worlds()) {
+      offline.prepare(world);
+    }
   }
 
   @Override
