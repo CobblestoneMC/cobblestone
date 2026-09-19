@@ -8,8 +8,10 @@
 package org.cobblestonemc.minecraft;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.LongSupplier;
 import org.cobblestonemc.Cell;
@@ -59,6 +61,20 @@ public final class ChunkProvider {
   private final Object lock = new Object();
   private final Map<ChunkKey, Cached> cache;
   private final Map<ChunkKey, CompletableFuture<MinecraftChunk>> inFlight = new HashMap<>();
+
+  /**
+   * Chunks a read-ahead asked for and got {@link MinecraftChunk.Unknown} back from.
+   *
+   * <p>An unknown answer to a speculative request is not cached — it may say only that the platform
+   * declined the work, and caching it would wall the solve off from a chunk it might really need.
+   * But it must not be asked for speculatively again either: read-ahead fires on every cache miss,
+   * and the columns of nearby cells overlap, so without this the same chunk is re-read once for
+   * every chunk the solve crosses behind it — disk reads for a chunk nothing is waiting on.
+   *
+   * <p>Remembering that we asked is weaker than remembering the answer, which is the point: a solve
+   * that actually reaches this chunk still fetches it for real.
+   */
+  private final Set<ChunkKey> refusedReadAhead = new HashSet<>();
 
   // Counters for ChunkProviderStats, all read and written under `lock`.
   private long chunkLookups;
@@ -185,6 +201,7 @@ public final class ChunkProvider {
       prefetches++;
     } else {
       directFetches++;
+      refusedReadAhead.remove(key); // asked for real now; whatever comes back is the answer
     }
     long startedAt = clock.getAsLong();
     CompletableFuture<MinecraftChunk> fetch =
@@ -210,7 +227,9 @@ public final class ChunkProvider {
               unknownChunks++;
               if (prefetch) {
                 // A platform may decline speculative work it would still do for a solve actually
-                // blocked on the chunk, so a read-ahead's unknown says nothing about the world.
+                // blocked on the chunk, so a read-ahead's unknown says nothing about the world —
+                // it is not cached, only noted, so that read-ahead stops re-asking.
+                refusedReadAhead.add(key);
                 return;
               }
               // A direct fetch's unknown is cached like anything else: within one solve, a chunk
@@ -369,7 +388,7 @@ public final class ChunkProvider {
 
   private void prefetch(int chunkX, int chunkZ, MinecraftWorld world) {
     ChunkKey key = new ChunkKey(world.key(), chunkX, chunkZ);
-    if (!cache.containsKey(key) && !inFlight.containsKey(key)) {
+    if (!cache.containsKey(key) && !inFlight.containsKey(key) && !refusedReadAhead.contains(key)) {
       fetchLocked(key, world, true);
     }
   }

@@ -177,6 +177,33 @@ class ChunkProviderTest {
   }
 
   /**
+   * A read-ahead that came back unknown is not cached — it was a statement about the platform's
+   * budget, not about the world — but it must not therefore be asked for speculatively again.
+   *
+   * <p>Read-ahead fires on every cache miss, and the columns of nearby cells overlap heavily, so a
+   * chunk that answers unknown speculatively is otherwise re-read once for every chunk the solve
+   * crosses behind it. Each of those is a disk read for a chunk nothing is waiting on. Remembering
+   * that we asked is not the same as remembering the answer: a solve that actually reaches the
+   * chunk still goes to the platform for it.
+   */
+  @Test
+  void aRefusedReadAheadIsNotAskedForSpeculativelyAgain() {
+    FakePlatform platform = new FakePlatform();
+    platform.setRefuseReadAhead(true);
+    ChunkProvider cp = provider(platform, settings());
+
+    // Chunk [0, 0], heading east: reads ahead over chunks [1, 0] and [2, 0], both refused.
+    cp.block(new Cell(8, 64, 8), world, EAST).future().join();
+    assertEquals(1, platform.fetchCount(2, 0), "read ahead for once");
+
+    // Chunk [1, 0] was refused, so this misses and fetches it directly — and its own read-ahead
+    // column covers [2, 0] again.
+    cp.block(new Cell(24, 64, 8), world, EAST).future().join();
+
+    assertEquals(1, platform.fetchCount(2, 0), "not asked for speculatively a second time");
+  }
+
+  /**
    * The cache belongs to one solve and is sized to its frontier, so the least recently used chunk
    * goes when a new one arrives. This is the only thing that evicts now: there is no staleness
    * window and no invalidation, because nothing a solve caches outlives the solve.
