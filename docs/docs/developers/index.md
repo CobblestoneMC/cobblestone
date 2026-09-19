@@ -70,14 +70,14 @@ Most integrations should depend on `…-plugin-api`.
 
     dependencies {
         // Provided at runtime by the Cobblestone plugin — never shade it.
-        compileOnly("org.cobblestonemc:sponge-12-plugin-api:0.1.0")
+        compileOnly("org.cobblestonemc:sponge-plugin-api:0.1.0")
     }
     ```
 
     ```xml title="pom.xml"
     <dependency>
       <groupId>org.cobblestonemc</groupId>
-      <artifactId>sponge-12-plugin-api</artifactId>
+      <artifactId>sponge-plugin-api</artifactId>
       <version>0.1.0</version>
       <scope>provided</scope>
     </dependency>
@@ -125,16 +125,16 @@ Services are accessed through two static entry points:
 === "Sponge"
 
     ```java
-    import org.cobblestonemc.sponge12.api.CobblestoneCoreApi;
-    import org.cobblestonemc.sponge12.plugin.api.CobblestonePluginApi;
+    import org.cobblestonemc.sponge.api.CobblestoneCoreApi;
+    import org.cobblestonemc.sponge.plugin.api.CobblestoneSpongeApi;
 
     // …-api: the navigation library
     NavigationService navigation = CobblestoneCoreApi.navigationService();
     SearchModificationRegistrar searches = CobblestoneCoreApi.registrar();
 
     // …-plugin-api: destinations, navigators, trips
-    IntegrationRegistrar integrations = CobblestonePluginApi.registrar();
-    TripService trips = CobblestonePluginApi.tripService();
+    IntegrationRegistrar integrations = CobblestoneSpongeApi.registrar();
+    TripService trips = CobblestoneSpongeApi.tripService();
     ```
 
     Cobblestone populates these holders during its `ConstructPluginEvent`. Access them from
@@ -142,7 +142,7 @@ Services are accessed through two static entry points:
 
 !!! note "Naming"
 
-    The Paper accessor is `CobblestonePaperApi`; the Sponge accessor is `CobblestonePluginApi`.
+    The Paper accessor is `CobblestonePaperApi`; the Sponge accessor is `CobblestoneSpongeApi`.
     The names will be aligned in a future major version.
 
 ## Ownership
@@ -169,7 +169,7 @@ owner's name also determines the destination branch and its permission nodes.
 === "Sponge"
 
     ```java
-    CobblestonePluginApi.registrar().registerDestinations(container, new MyDestinations());
+    CobblestoneSpongeApi.registrar().registerDestinations(container, new MyDestinations());
     ```
 
     Passing your `PluginContainer` registers destinations under your plugin's lower-cased id.
@@ -179,7 +179,7 @@ owner's name also determines the destination branch and its permission nodes.
 
     ```java
     PluginContainer towny = Sponge.pluginManager().plugin("towny").orElseThrow();
-    CobblestonePluginApi.registrar().registerDestinations(towny, new TownyDestinations());
+    CobblestoneSpongeApi.registrar().registerDestinations(towny, new TownyDestinations());
     ```
 
 ## Architecture

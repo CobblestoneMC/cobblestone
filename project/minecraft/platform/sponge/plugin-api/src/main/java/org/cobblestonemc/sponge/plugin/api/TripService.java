@@ -19,7 +19,7 @@ import org.spongepowered.api.world.server.ServerLocation;
 
 /**
  * Starts guided <b>trips</b> for a player — the "actually take me there" half that a search alone
- * doesn't do. Fetch it via {@link CobblestonePluginApi#tripService()}. Two entry points: {@link
+ * doesn't do. Fetch it via {@link CobblestoneSpongeApi#tripService()}. Two entry points: {@link
  * #navigate} (search to a destination, then start a trip if a route is found) and {@link
  * #startTrip} (start a trip along a {@link Path} you already computed).
  *

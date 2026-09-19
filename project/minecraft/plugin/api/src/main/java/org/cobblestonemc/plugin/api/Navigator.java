@@ -11,6 +11,13 @@ import java.util.Optional;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 
+/**
+ * A display strategy for a guided trip: shows the player the path to follow (e.g. a particle trail)
+ * and tracks their progress along it. Cobblestone drives it through {@link #start}, {@link #tick}
+ * and {@link #stop}.
+ *
+ * @param <L> the platform location type
+ */
 public interface Navigator<L> {
 
   /** Called once when the trip begins. */

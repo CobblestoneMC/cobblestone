@@ -38,7 +38,11 @@ public final class TrailNavigatorSettings {
 
   private TrailNavigatorSettings() {}
 
-  /** A builder producing {@link NavigatorSettings} for the trail navigator. */
+  /**
+   * A builder producing {@link NavigatorSettings} for the trail navigator.
+   *
+   * @return a new builder
+   */
   public static Builder builder() {
     return new Builder();
   }
@@ -50,25 +54,44 @@ public final class TrailNavigatorSettings {
 
     private Builder() {}
 
-    /** Sets the particle types the trail draws with. */
+    /**
+     * Sets the particle types the trail draws with.
+     *
+     * @param particles the particle types
+     * @return this builder
+     */
     public Builder particles(List<ParticleType> particles) {
       delegate.set(PARTICLES, List.copyOf(particles));
       return this;
     }
 
-    /** Sets the particle types the trail draws with in highlighted locations. */
+    /**
+     * Sets the particle types the trail draws with in highlighted locations.
+     *
+     * @param particles the particle types
+     * @return this builder
+     */
     public Builder highlightParticles(List<ParticleType> particles) {
       delegate.set(HIGHLIGHT_PARTICLES, List.copyOf(particles));
       return this;
     }
 
-    /** Sets the colors {@code DUST} particles are drawn in. */
+    /**
+     * Sets the colors {@code DUST} particles are drawn in.
+     *
+     * @param colors the colors
+     * @return this builder
+     */
     public Builder colors(List<Color> colors) {
       delegate.set(COLORS, List.copyOf(colors));
       return this;
     }
 
-    /** Builds the settings. */
+    /**
+     * Builds the settings.
+     *
+     * @return the settings
+     */
     public NavigatorSettings build() {
       return delegate.build();
     }

@@ -33,51 +33,97 @@ public final class DestinationTree {
 
   private DestinationTree() {}
 
-  /** Begins a node. Its key is chosen by whoever attaches it — see {@link #subtree}. */
+  /**
+   * Begins a node. Its key is chosen by whoever attaches it — see {@link #subtree}.
+   *
+   * @return a new, empty node builder
+   */
   public static DestinationTree builder() {
     return new DestinationTree();
   }
 
+  /**
+   * A new, mutable, insertion-ordered map of sub-trees, for assembling a node by hand.
+   *
+   * @return an empty sub-tree map
+   */
   public static Map<String, Supplier<PlatformDestinationTree<ServerWorld, Vector3i>>>
       emptySubTrees() {
     return new LinkedHashMap<>();
   }
 
+  /**
+   * A new, mutable, insertion-ordered map of leaves, for assembling a node by hand.
+   *
+   * @return an empty leaf map
+   */
   public static Map<String, Supplier<MinecraftDestination<ServerWorld, Vector3i>>> emptyLeaves() {
     return new LinkedHashMap<>();
   }
 
-  /** Marks this level strict — it may never be omitted in commands (no name-promotion). */
+  /**
+   * Marks this level strict — it may never be omitted in commands (no name-promotion).
+   *
+   * @return this builder
+   */
   public DestinationTree strict() {
     this.strict = true;
     return this;
   }
 
-  /** Adds a leaf destination, built on demand. */
+  /**
+   * Adds a leaf destination, built on demand.
+   *
+   * @param key the leaf's key
+   * @param destination supplies the destination when the leaf is visited
+   * @return this builder
+   */
   public DestinationTree leaf(
       String key, Supplier<MinecraftDestination<ServerWorld, Vector3i>> destination) {
     destinations.put(key, destination);
     return this;
   }
 
-  /** Adds a leaf destination. */
+  /**
+   * Adds a leaf destination.
+   *
+   * @param key the leaf's key
+   * @param destination the destination
+   * @return this builder
+   */
   public DestinationTree leaf(String key, MinecraftDestination<ServerWorld, Vector3i> destination) {
     return leaf(key, () -> destination);
   }
 
-  /** Adds a child sub-tree, built on demand. */
+  /**
+   * Adds a child sub-tree, built on demand.
+   *
+   * @param key the sub-tree's key
+   * @param tree supplies the sub-tree when it is visited
+   * @return this builder
+   */
   public DestinationTree subtree(
       String key, Supplier<PlatformDestinationTree<ServerWorld, Vector3i>> tree) {
     subTrees.put(key, tree);
     return this;
   }
 
-  /** Adds a child sub-tree from another builder, under the given key. */
+  /**
+   * Adds a child sub-tree from another builder, under the given key.
+   *
+   * @param key the sub-tree's key
+   * @param child the builder of the sub-tree, built when it is visited
+   * @return this builder
+   */
   public DestinationTree subtree(String key, DestinationTree child) {
     return subtree(key, child::build);
   }
 
-  /** Builds the immutable tree node. */
+  /**
+   * Builds the immutable tree node.
+   *
+   * @return the tree node
+   */
   public PlatformDestinationTree<ServerWorld, Vector3i> build() {
     return new Node(strict, Map.copyOf(subTrees), Map.copyOf(destinations));
   }

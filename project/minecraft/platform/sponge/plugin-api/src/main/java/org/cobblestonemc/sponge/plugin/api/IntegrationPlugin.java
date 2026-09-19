@@ -12,5 +12,10 @@ import org.spongepowered.plugin.PluginContainer;
 /** A plugin that integrates with Cobblestone, identified by its {@link PluginContainer}. */
 public interface IntegrationPlugin {
 
+  /**
+   * Returns the plugin being integrated with.
+   *
+   * @return the target plugin's container
+   */
   PluginContainer target();
 }

@@ -41,7 +41,7 @@ test reachability, or render a path yourself. To guide a player, use [Trips](tri
     import org.cobblestonemc.api.NavigationResult;
     import org.cobblestonemc.api.SearchHandle;
     import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
-    import org.cobblestonemc.sponge12.api.CobblestoneCoreApi;
+    import org.cobblestonemc.sponge.api.CobblestoneCoreApi;
 
     SearchHandle<ServerLocation, MinecraftStepPayload> handle =
         CobblestoneCoreApi.navigationService().navigatePlayer(player, destination);

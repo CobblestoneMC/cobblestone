@@ -148,7 +148,7 @@ An action-bar compass that displays a bearing:
 === "Sponge"
 
     ```java
-    CobblestonePluginApi.registrar().registerNavigator(container, "compass",
+    CobblestoneSpongeApi.registrar().registerNavigator(container, "compass",
         (player, path, settings) -> new CompassNavigator(player, path));
     ```
 

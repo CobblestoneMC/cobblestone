@@ -28,7 +28,7 @@ import org.cobblestonemc.plugin.trip.TripManager;
 import org.cobblestonemc.sponge.AnvilOfflineChunkSource;
 import org.cobblestonemc.sponge.SpongeNavigationServiceImpl;
 import org.cobblestonemc.sponge.api.CobblestoneCoreApi;
-import org.cobblestonemc.sponge.plugin.api.CobblestonePluginApi;
+import org.cobblestonemc.sponge.plugin.api.CobblestoneSpongeApi;
 import org.cobblestonemc.sponge.plugin.api.TrailNavigatorSettings;
 import org.spongepowered.api.Server;
 import org.spongepowered.api.Sponge;
@@ -205,7 +205,7 @@ public final class CobblestoneSpongePlugin {
             searchGate,
             searchSettings,
             liveIntervalMillis);
-    CobblestonePluginApi.install(integrationRegistry, tripService);
+    CobblestoneSpongeApi.install(integrationRegistry, tripService);
 
     if (config.get(keys.metricsEnabled)) {
       this.metrics =
@@ -291,7 +291,7 @@ public final class CobblestoneSpongePlugin {
     if (navigationService != null) {
       navigationService.shutdown();
     }
-    CobblestonePluginApi.uninstall();
+    CobblestoneSpongeApi.uninstall();
     CobblestoneCoreApi.uninstall();
     if (dataStore != null) {
       dataStore.close();

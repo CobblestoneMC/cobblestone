@@ -26,7 +26,7 @@ Registered services apply to every search:
 === "Sponge"
 
     ```java
-    import org.cobblestonemc.sponge12.api.CobblestoneCoreApi;
+    import org.cobblestonemc.sponge.api.CobblestoneCoreApi;
 
     CobblestoneCoreApi.registrar().register(container, new WarpModifications(store));
     ```

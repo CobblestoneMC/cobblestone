@@ -17,6 +17,9 @@ import java.util.function.Supplier;
  * <p>Children are exposed as {@link Supplier}s so that huge sets — every town, every player home —
  * are not materialized until the node is actually visited during command traversal or
  * tab-completion.
+ *
+ * @param <W> the platform world type
+ * @param <V> the platform block-position type
  */
 public interface PlatformDestinationTree<W, V> {
 

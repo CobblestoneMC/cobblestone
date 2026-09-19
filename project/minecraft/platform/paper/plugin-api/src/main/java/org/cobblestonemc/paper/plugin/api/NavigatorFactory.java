@@ -14,6 +14,7 @@ import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.plugin.api.Navigator;
 import org.cobblestonemc.plugin.api.NavigatorSettings;
 
+/** Builds a {@link Navigator} (a display strategy for a guided trip) for one player and path. */
 public interface NavigatorFactory {
 
   /**

@@ -32,14 +32,26 @@ public final class Destination {
 
   private Destination() {}
 
-  /** A destination at a single location (its block cell), or empty if {@code location} is null. */
+  /**
+   * A destination at a single location (its block cell), or empty if {@code location} is null.
+   *
+   * @param location the location, or null
+   * @param name the display name
+   * @return the destination
+   */
   public static MinecraftDestination<ServerWorld, Vector3i> at(
       ServerLocation location, Component name) {
     return regions(
         location == null ? List::of : () -> List.of(SingleCellWorldRegion.of(location)), name);
   }
 
-  /** A destination covering one region. */
+  /**
+   * A destination covering one region.
+   *
+   * @param region the region
+   * @param name the display name
+   * @return the destination
+   */
   public static MinecraftDestination<ServerWorld, Vector3i> region(
       WorldRegion<ServerWorld, Vector3i> region, Component name) {
     return regions(() -> List.of(region), name);
@@ -47,6 +59,10 @@ public final class Destination {
 
   /**
    * A destination covering a set of regions, re-resolved each search (the nearest one is the goal).
+   *
+   * @param regions supplies the current regions
+   * @param name the display name
+   * @return the destination
    */
   public static MinecraftDestination<ServerWorld, Vector3i> regions(
       Supplier<List<WorldRegion<ServerWorld, Vector3i>>> regions, Component name) {

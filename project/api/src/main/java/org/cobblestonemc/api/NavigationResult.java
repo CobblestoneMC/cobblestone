@@ -27,6 +27,15 @@ public sealed interface NavigationResult<P, T>
    */
   boolean success();
 
+  /**
+   * Returns this result with every position (the path origin and each step) converted by {@code
+   * positionFunc}. A failure or error carries no positions, so it is returned re-typed but
+   * otherwise unchanged.
+   *
+   * @param <L> the new position type
+   * @param positionFunc converts a position to the new type
+   * @return the converted result
+   */
   <L> NavigationResult<L, T> map(Function<P, L> positionFunc);
 
   /**

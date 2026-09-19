@@ -13,11 +13,18 @@ import org.bukkit.World;
 import org.cobblestonemc.minecraft.api.WorldRegion;
 import org.joml.Vector3i;
 
+/** A region covering exactly one block cell in one world. */
 public class SingleCellWorldRegion implements WorldRegion<World, Vector3i> {
 
   private final World world;
   private final Vector3i vector;
 
+  /**
+   * A single-cell region at the given location's block.
+   *
+   * @param location the location whose block cell the region covers
+   * @return the region
+   */
   public static SingleCellWorldRegion of(Location location) {
     return new SingleCellWorldRegion(location);
   }

@@ -9,6 +9,6 @@
  * The Sponge-native plugin-extension surface: register destinations and navigators with the
  * installed Cobblestone plugin ({@link IntegrationRegistrar}) and start guided trips ({@link
  * TripService}), all in native {@code ServerPlayer}/{@code ServerLocation} terms. Reached via
- * {@link CobblestonePluginApi}.
+ * {@link CobblestoneSpongeApi}.
  */
 package org.cobblestonemc.sponge.plugin.api;

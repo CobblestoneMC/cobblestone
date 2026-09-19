@@ -79,7 +79,15 @@ public interface Transition
         MinecraftStepPayload.command(command));
   }
 
-  /** The canonical {@link Transition} implementation returned by {@link Transition#of}. */
+  /**
+   * The canonical {@link Transition} implementation returned by {@link Transition#of}.
+   *
+   * @param origin the origin region the agent must reach
+   * @param destination the arrival location
+   * @param cost the search cost in seconds (may include penalties)
+   * @param time the real traversal time in seconds (player-facing)
+   * @param payload the step payload
+   */
   record Simple(
       WorldRegion<ServerWorld, Vector3i> origin,
       ServerLocation destination,

@@ -9,9 +9,11 @@ plugins {
     id("com.vanniktech.maven.publish")
 }
 
-//java {
-//    withJavadocJar()
-//}
+tasks.javadoc {
+    val options = options as StandardJavadocDocletOptions
+    options.addBooleanOption("Xwerror", true)
+    options.quiet()
+}
 
 mavenPublishing {
     publishToMavenCentral()
@@ -40,9 +42,9 @@ mavenPublishing {
             }
         }
         scm {
-            url.set("https://github.com/username/mylibrary/")
-            connection.set("scm:git:git://github.com/username/mylibrary.git")
-            developerConnection.set("scm:git:ssh://git@github.com/username/mylibrary.git")
+            url.set("https://github.com/cobblestonemc/cobblestone/")
+            connection.set("scm:git:git://github.com/cobblestonemc/cobblestone.git")
+            developerConnection.set("scm:git:ssh://git@github.com/cobblestonemc/cobblestone.git")
         }
     }
 }
