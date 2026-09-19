@@ -22,9 +22,12 @@ import java.util.List;
  *
  * @param <P> the position type
  * @param <T> the payload type
+ * @param origin the position the path starts from
+ * @param steps the ordered steps from origin to destination
  */
 public record Path<P, T>(P origin, List<Step<P, T>> steps) {
 
+  /** Defensively copies {@code steps} so the path is immutable. */
   public Path {
     steps = List.copyOf(steps);
   }

@@ -18,7 +18,9 @@ package org.cobblestonemc.minecraft.api;
 public sealed interface MinecraftInstruction
     permits MinecraftInstruction.None, MinecraftInstruction.CommandInstruction {
 
+  /** No instruction: the step's {@link MinecraftStepType} alone says what to do. */
   enum None implements MinecraftInstruction {
+    /** The singleton instance. */
     INSTANCE
   }
 

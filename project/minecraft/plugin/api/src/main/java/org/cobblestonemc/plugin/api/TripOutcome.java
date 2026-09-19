@@ -15,15 +15,28 @@ import org.cobblestonemc.api.FailureReason;
  */
 public sealed interface TripOutcome {
 
-  /** A trip was started. */
+  /**
+   * A trip was started.
+   *
+   * @param tripId the new trip's id
+   * @param durationSeconds the estimated trip duration in seconds
+   */
   record Started(int tripId, double durationSeconds) implements TripOutcome {}
 
-  /** No route was found (or the search failed). */
+  /**
+   * No route was found (or the search failed).
+   *
+   * @param reason why no trip was started
+   */
   record Failed(FailureReason reason) implements TripOutcome {}
 
   /** The player is already at their trip limit. */
   record TripLimitReached() implements TripOutcome {}
 
-  /** The search or trip start threw. */
+  /**
+   * The search or trip start threw.
+   *
+   * @param throwable what was thrown
+   */
   record Error(Throwable throwable) implements TripOutcome {}
 }

@@ -11,10 +11,6 @@ plugins {
 
 tasks.javadoc {
     val options = options as StandardJavadocDocletOptions
-    // Published javadoc must be warning-free. The "missing" group (no comment / @param / @return,
-    // undocumented default constructors) is noise, so it is off; broken references, bad HTML and
-    // malformed tags still fail the build.
-    options.addBooleanOption("Xdoclint:all,-missing", true)
     options.addBooleanOption("Xwerror", true)
     options.quiet()
 }

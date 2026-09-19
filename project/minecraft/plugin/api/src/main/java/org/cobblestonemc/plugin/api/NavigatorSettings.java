@@ -29,22 +29,41 @@ public final class NavigatorSettings {
     this.values = values;
   }
 
-  /** The default navigator, with no overrides. */
+  /**
+   * The default navigator, with no overrides.
+   *
+   * @return the default settings
+   */
   public static NavigatorSettings defaults() {
     return new NavigatorSettings(null, Map.of());
   }
 
-  /** A builder for the navigator with the given id. */
+  /**
+   * A builder for the navigator with the given id.
+   *
+   * @param navigatorId the navigator id
+   * @return a new builder
+   */
   public static Builder builder(String navigatorId) {
     return new Builder(navigatorId);
   }
 
-  /** The navigator id to display with, or empty for the server's configured default. */
+  /**
+   * The navigator id to display with, or empty for the server's configured default.
+   *
+   * @return the navigator id
+   */
   public Optional<String> navigatorId() {
     return Optional.ofNullable(navigatorId);
   }
 
-  /** The value set for {@code key}, or empty to fall back to the navigator's configured default. */
+  /**
+   * The value set for {@code key}, or empty to fall back to the navigator's configured default.
+   *
+   * @param <T> the value type
+   * @param key the setting key
+   * @return the value, if set
+   */
   @SuppressWarnings("unchecked")
   public <T> Optional<T> get(NavigatorSettingKey<T> key) {
     return Optional.ofNullable((T) values.get(key));
@@ -60,13 +79,24 @@ public final class NavigatorSettings {
       this.navigatorId = navigatorId;
     }
 
-    /** Sets a typed override. */
+    /**
+     * Sets a typed override.
+     *
+     * @param <T> the value type
+     * @param key the setting key
+     * @param value the value
+     * @return this builder
+     */
     public <T> Builder set(NavigatorSettingKey<T> key, T value) {
       values.put(key, value);
       return this;
     }
 
-    /** Builds the immutable settings. */
+    /**
+     * Builds the immutable settings.
+     *
+     * @return the settings
+     */
     public NavigatorSettings build() {
       return new NavigatorSettings(navigatorId, Map.copyOf(values));
     }

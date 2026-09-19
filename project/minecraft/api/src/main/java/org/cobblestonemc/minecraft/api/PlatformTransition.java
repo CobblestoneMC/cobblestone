@@ -9,12 +9,35 @@ package org.cobblestonemc.minecraft.api;
 
 import org.cobblestonemc.api.TraversalState;
 
+/**
+ * A transition in a platform's own types: a jump (teleport, portal, mount, ...) from an entry
+ * region to an arrival position. Platform APIs bind the generics (e.g. Paper's and Sponge's {@code
+ * Transition}).
+ *
+ * @param <R> the origin region type
+ * @param <P> the destination position type
+ */
 public interface PlatformTransition<R, P> {
 
+  /**
+   * Returns the entry area the agent must reach to use this transition.
+   *
+   * @return the origin region
+   */
   R origin();
 
+  /**
+   * Returns the point the agent arrives at after traversing this transition.
+   *
+   * @return the destination position
+   */
   P destination();
 
+  /**
+   * Returns the algorithm traversal cost in seconds (what the search minimizes).
+   *
+   * @return the cost
+   */
   double cost();
 
   /**
@@ -27,8 +50,20 @@ public interface PlatformTransition<R, P> {
     return cost();
   }
 
+  /**
+   * Returns the payload carried through to the resulting steps (e.g. a command to run).
+   *
+   * @return the payload
+   */
   MinecraftStepPayload payload();
 
+  /**
+   * Transforms the incoming traversal state on traversal. The default is the identity (a plain
+   * teleport changes nothing); a horse-mount transition sets the vehicle state, for example.
+   *
+   * @param in the state before traversal
+   * @return the state after traversal
+   */
   default TraversalState apply(TraversalState in) {
     return in;
   }
