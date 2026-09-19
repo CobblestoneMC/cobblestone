@@ -38,12 +38,15 @@ public interface PlatformApi<E> {
       int chunkX, int chunkZ, MinecraftWorld world, ChunkLoadPolicy policy, boolean urgent);
 
   /**
-   * Stops issuing new work and calls off whatever the platform can still call off, without waiting
-   * for what is already underway.
+   * Stops issuing new work, calls off whatever has not started, and waits — bounded — for what has.
    *
-   * <p>Called at the start of shutdown, before {@link ChunkProvider#awaitInFlight} waits for the
-   * fetches that are left: cancelling first is what keeps that wait short. Platforms that queue
-   * nothing of their own have nothing to do here.
+   * <p>Called on plugin disable, before the worker pool stops. Cancelling first is what keeps the
+   * wait short; waiting at all is what stops Cobblestone from walking away from reads the server is
+   * still doing on its behalf, against files it is about to close. Chunk caches belong to a solve
+   * and go away with it, so the platform is the only thing left holding work.
+   *
+   * <p>Must return even if the work never finishes: a read that will never complete must not hold
+   * the server open. Platforms that queue nothing of their own have nothing to do here.
    */
   default void shutdown() {}
 }

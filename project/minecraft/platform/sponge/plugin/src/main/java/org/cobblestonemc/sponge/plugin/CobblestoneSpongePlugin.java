@@ -127,7 +127,10 @@ public final class CobblestoneSpongePlugin {
         new SpongeNavigationServiceImpl(
             container,
             cobblestoneLogger,
-            ChunkProviderSettings.defaults(config.get(keys.chunksPolicy)),
+            new ChunkProviderSettings(
+                config.get(keys.chunksCacheSize),
+                config.get(keys.chunksPrefetchDistance),
+                config.get(keys.chunksPolicy)),
             () -> config.get(spongeKeys.chunksMaxLoadRequests),
             new AnvilOfflineChunkSource(cobblestoneLogger));
     this.navigationService.registerListeners(container);
@@ -179,8 +182,6 @@ public final class CobblestoneSpongePlugin {
                 () -> config.get(keys.deathsTrack)));
 
     // Keep the chunk cache honest: a block changing evicts the snapshot it belongs to.
-    Sponge.eventManager()
-        .registerListeners(container, new SpongeBlockChangeListener(navigationService));
 
     this.searchRegistry = new SearchRegistry<>();
     this.searchGate = new SearchGate(config.get(keys.searchMaxConcurrentPerPlayer));

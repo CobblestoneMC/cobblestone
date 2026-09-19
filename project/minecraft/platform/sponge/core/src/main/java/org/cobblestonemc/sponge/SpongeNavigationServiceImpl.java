@@ -31,7 +31,6 @@ import org.cobblestonemc.Restriction;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
-import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
@@ -75,15 +74,8 @@ public final class SpongeNavigationServiceImpl
   private final CobblestoneLogger logger;
   private final SpongeScheduler scheduler;
   private final SpongePlatformApi platform;
-  private final ChunkProvider chunkProvider;
+  private final ChunkProviderSettings chunkSettings;
   private final CobblestoneApi core;
-
-  /**
-   * How long shutdown waits for chunk fetches it has already issued. Long enough for a queue of
-   * reads to drain on a busy disk, short enough that one that will never complete cannot hold the
-   * server open.
-   */
-  private static final long SHUTDOWN_DRAIN_MILLIS = 5_000L;
 
   private final Map<String, MinecraftWorld> worldCache = new ConcurrentHashMap<>();
   private final OwnedRegistry<SearchModificationService> searchModifiers = new OwnedRegistry<>();
@@ -108,7 +100,7 @@ public final class SpongeNavigationServiceImpl
     int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
     this.scheduler = new SpongeScheduler(plugin, workerThreads);
     this.platform = new SpongePlatformApi(scheduler, logger, maxChunkLoadRequests, offline);
-    this.chunkProvider = new ChunkProvider(platform, chunkSettings);
+    this.chunkSettings = chunkSettings;
     this.core = CobblestoneApi.load();
   }
 
@@ -180,32 +172,14 @@ public final class SpongeNavigationServiceImpl
   }
 
   /**
-   * Drops the cached snapshot of the chunk containing a changed block, so searches see the edit.
-   * Wired to the server's block-change events by the plugin layer; safe from any thread.
-   *
-   * @param worldKey the world's namespaced key
-   * @param blockX the block X coordinate
-   * @param blockZ the block Z coordinate
-   */
-  public void invalidateBlock(String worldKey, int blockX, int blockZ) {
-    chunkProvider.invalidateBlock(worldKey, blockX, blockZ);
-  }
-
-  /**
    * Stops Cobblestone; call on plugin disable.
    *
-   * <p>Cancels the chunk reads the server has queued but not started, waits for the ones it did
-   * start, and only then lets the worker pool go — so Cobblestone owes the server no outstanding IO
-   * by the time it reports that it has stopped. The wait is bounded: a read that will never
-   * complete must not hold the server open.
+   * <p>The platform goes first: it cancels the chunk reads it has queued but not started and waits,
+   * bounded, for the ones it did, so Cobblestone owes the server no outstanding IO by the time it
+   * reports that it has stopped. Only then does the worker pool go away.
    */
   public void shutdown() {
     platform.shutdown();
-    if (!chunkProvider.awaitInFlight(SHUTDOWN_DRAIN_MILLIS)) {
-      logger.warn(
-          "Gave up after {}ms waiting for outstanding chunk fetches to finish; shutting down anyway",
-          SHUTDOWN_DRAIN_MILLIS);
-    }
     scheduler.shutdown();
   }
 
@@ -422,6 +396,6 @@ public final class SpongeNavigationServiceImpl
   @Override
   public MinecraftWorld wrap(ServerWorld world) {
     return worldCache.computeIfAbsent(
-        world.key().asString(), key -> new SpongeWorld(world, chunkProvider));
+        world.key().asString(), key -> new SpongeWorld(world, platform, chunkSettings));
   }
 }
