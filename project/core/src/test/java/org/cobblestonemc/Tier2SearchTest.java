@@ -477,6 +477,107 @@ class Tier2SearchTest {
   }
 
   /**
+   * Three routes into one cell, two of them barred one after the other.
+   *
+   * <p>A node stores its first candidate parent in a field and the rest in a map allocated only
+   * when a second turns up, on the invariant that the field is occupied whenever the node has any
+   * parent at all. Removing the <i>first</i> parent is therefore the interesting case: it has to
+   * promote one of the others into the field. Two removals in a row exercise that twice, once out
+   * of a two-entry overflow and once out of a one-entry overflow, which is the path a fan-in of
+   * exactly two never reaches.
+   */
+  @Test
+  void reParentsTwiceWhenSuccessiveRoutesIntoACellAreBarred() {
+    // A reaches D by three routes of rising cost (B:1, C:2, E:3), then D→G. Bar B→D and C→D.
+    CompletableFuture<Boolean> barBd = new CompletableFuture<>();
+    CompletableFuture<Boolean> barCd = new CompletableFuture<>();
+    Tier2Search<TestAgent, TestStep, TestDomain> search =
+        new Tier2Search<>(
+            new TestCobblestoneLogger(),
+            new TestAgent(),
+            virtualPath(new Cell(0, 0, 0), new Cell(3, 0, 0)),
+            List.of(new TridentMode(barBd, barCd)),
+            List.of(),
+            Heuristics.zero(),
+            1000,
+            5,
+            1.0,
+            () -> false,
+            Runnable::run,
+            0);
+
+    CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
+    assertFalse(future.isDone(), "reached the goal via the cheapest route; awaiting its check");
+
+    barBd.complete(true); // B→D barred; D re-parents to C, whose edge is still unchecked
+    assertFalse(future.isDone(), "now awaiting the C→D check");
+
+    barCd.complete(true); // C→D barred too; only the E route survives
+    assertTrue(future.isDone());
+    Tier2Result<TestStep, TestDomain> result = future.getNow(null);
+    assertInstanceOf(Tier2Result.Solved.class, result);
+    // A→E (1) → D (3) → G (1). Had a promotion dropped the surviving parent, this would have come
+    // back unreachable instead.
+    assertEquals(5.0, ((Tier2Result.Solved<TestStep, TestDomain>) result).cost(), 1e-9);
+    assertEquals(3, ((Tier2Result.Solved<TestStep, TestDomain>) result).steps().size());
+  }
+
+  /**
+   * A fan-in of three: {@code A(0,0,0)} branches to {@code B(1,0,0)}, {@code C(1,1,0)} and {@code
+   * E(1,2,0)} (cost 1 each); all three reach {@code D(2,0,0)} at rising cost (1, 2, 3), and {@code
+   * D→G(3,0,0)} (1). The two cheaper edges into D carry restriction futures.
+   */
+  private static final class TridentMode implements Mode<TestAgent, TestStep, TestDomain> {
+    private final CompletableFuture<Boolean> bdRestricted;
+    private final CompletableFuture<Boolean> cdRestricted;
+
+    TridentMode(CompletableFuture<Boolean> bdRestricted, CompletableFuture<Boolean> cdRestricted) {
+      this.bdRestricted = bdRestricted;
+      this.cdRestricted = cdRestricted;
+    }
+
+    @Override
+    public FutureOr<Collection<Movement<TestStep>>> step(
+        TestAgent agent, Cell from, TestDomain domain, TraversalState state, Cell destination) {
+      Collection<Movement<TestStep>> moves;
+      if (from.equals(new Cell(0, 0, 0))) {
+        moves =
+            List.of(
+                new Movement<>(new Cell(1, 0, 0), 1.0, 1.0, TestStep.MOVE, state),
+                new Movement<>(new Cell(1, 1, 0), 1.0, 1.0, TestStep.MOVE, state),
+                new Movement<>(new Cell(1, 2, 0), 1.0, 1.0, TestStep.MOVE, state));
+      } else if (from.equals(new Cell(1, 0, 0))) {
+        moves =
+            List.of(
+                new Movement<>(
+                    new Cell(2, 0, 0),
+                    1.0,
+                    1.0,
+                    TestStep.MOVE,
+                    state,
+                    () -> FutureOr.from(bdRestricted)));
+      } else if (from.equals(new Cell(1, 1, 0))) {
+        moves =
+            List.of(
+                new Movement<>(
+                    new Cell(2, 0, 0),
+                    2.0,
+                    2.0,
+                    TestStep.MOVE,
+                    state,
+                    () -> FutureOr.from(cdRestricted)));
+      } else if (from.equals(new Cell(1, 2, 0))) {
+        moves = List.of(new Movement<>(new Cell(2, 0, 0), 3.0, 3.0, TestStep.MOVE, state));
+      } else if (from.equals(new Cell(2, 0, 0))) {
+        moves = List.of(new Movement<>(new Cell(3, 0, 0), 1.0, 1.0, TestStep.MOVE, state));
+      } else {
+        moves = List.of();
+      }
+      return FutureOr.of(moves);
+    }
+  }
+
+  /**
    * The {@link DiamondMode} graph, but with a restriction future attached to the {@code B→D} edge.
    */
   private static final class RestrictableDiamondMode
