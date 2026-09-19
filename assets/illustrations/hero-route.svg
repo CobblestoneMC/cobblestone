@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 300" role="img" aria-label="A route drawn across blocky terrain from a start pin to a destination flag">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4aa8ff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#4aa8ff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <ellipse cx="220" cy="262" rx="185" ry="26" fill="url(#sky)"/>
+
+  <!-- terrain: chunky blocks, back to front -->
+  <g>
+    <path d="M120 176l54-31 54 31-54 31z" fill="#8fa8bf"/>
+    <path d="M120 176v28l54 31v-28z" fill="#6b8299"/>
+    <path d="M228 176v28l-54 31v-28z" fill="#5a7089"/>
+
+    <path d="M228 146l54-31 54 31-54 31z" fill="#a8c0d4"/>
+    <path d="M228 146v28l54 31v-28z" fill="#7f97ad"/>
+    <path d="M336 146v28l-54 31v-28z" fill="#6c8299"/>
+
+    <path d="M60 206l54-31 54 31-54 31z" fill="#9db4c8"/>
+    <path d="M60 206v28l54 31v-28z" fill="#74899f"/>
+    <path d="M168 206v28l-54 31v-28z" fill="#62788e"/>
+
+    <path d="M228 206l54-31 54 31-54 31z" fill="#9db4c8"/>
+    <path d="M228 206v28l54 31v-28z" fill="#74899f"/>
+    <path d="M336 206v28l-54 31v-28z" fill="#62788e"/>
+  </g>
+
+  <!-- the route -->
+  <path d="M108 200 C 150 150, 190 200, 232 162 S 300 120, 322 132"
+        fill="none" stroke="#4aa8ff" stroke-width="5" stroke-linecap="round"
+        stroke-dasharray="1 13"/>
+  <path d="M108 200 C 150 150, 190 200, 232 162 S 300 120, 322 132"
+        fill="none" stroke="#4aa8ff" stroke-width="12" stroke-linecap="round"
+        stroke-opacity="0.12"/>
+
+  <!-- start marker -->
+  <g>
+    <circle cx="108" cy="200" r="10" fill="#4aa8ff" fill-opacity="0.25"/>
+    <circle cx="108" cy="200" r="5" fill="#4aa8ff"/>
+  </g>
+
+  <!-- destination flag -->
+  <g>
+    <rect x="320" y="92" width="4" height="44" rx="2" fill="#5a7089"/>
+    <path d="M324 96h34l-9 11 9 11h-34z" fill="#ffc857"/>
+    <circle cx="322" cy="136" r="7" fill="#ffc857" fill-opacity="0.3"/>
+  </g>
+
+  <!-- floating waypoint pins -->
+  <g fill="#4aa8ff" opacity="0.85">
+    <path d="M186 96c0-8 6-14 14-14s14 6 14 14c0 10-14 24-14 24s-14-14-14-24z"/>
+    <circle cx="200" cy="96" r="5" fill="#d9ecff"/>
+  </g>
+  <g fill="#ffc857" opacity="0.8">
+    <path d="M78 122c0-6 5-11 11-11s11 5 11 11c0 8-11 19-11 19s-11-11-11-19z"/>
+    <circle cx="89" cy="122" r="4" fill="#3b2f12"/>
+  </g>
+</svg>
