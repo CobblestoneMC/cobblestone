@@ -12,7 +12,6 @@ import org.cobblestonemc.plugin.Permissions;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.service.permission.PermissionDescription;
 import org.spongepowered.api.service.permission.PermissionService;
-import org.spongepowered.api.util.Tristate;
 import org.spongepowered.plugin.PluginContainer;
 
 /**
@@ -47,7 +46,6 @@ final class SpongePermissions {
         .newDescriptionBuilder(container)
         .id(permission.value())
         .description(Component.text(description))
-        .defaultValue(allowByDefault ? Tristate.TRUE : Tristate.FALSE)
         .assign(
             allowByDefault ? PermissionDescription.ROLE_USER : PermissionDescription.ROLE_ADMIN,
             true)
