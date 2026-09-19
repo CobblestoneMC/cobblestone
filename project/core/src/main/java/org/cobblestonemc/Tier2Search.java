@@ -198,7 +198,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   }
 
   CompletableFuture<Tier2Result<T, D>> solve() {
-    logger.debug("Solved; current mem usage:{} MiB", currentMemoryUsageMiB());
+    logger.debug("Starting; current mem usage:{} MiB", currentMemoryUsageMiB());
     armDeadline();
     wake();
     return result;
@@ -759,7 +759,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     }
 
     PriorityQueue<RepairEntry> queue =
-        new PriorityQueue<>((a, b) -> Double.compare(a.cost(), b.cost()));
+        new PriorityQueue<>(Comparator.comparingDouble(RepairEntry::cost));
     for (Map.Entry<CellState, Repair<T>> seed : tentative.entrySet()) {
       queue.add(new RepairEntry(seed.getKey(), seed.getValue().cost()));
     }
@@ -895,10 +895,6 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     return new ArrayList<>(steps);
   }
 
-  /**
-   * A search node: its cost, its chosen parent, and — the key to correct repair — every candidate
-   * parent.
-   */
   /**
    * One reached cell-state, and the bulk of what a solve costs in memory.
    *
