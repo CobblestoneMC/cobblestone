@@ -11,11 +11,9 @@ package org.cobblestonemc.minecraft;
  * An immutable reading of the {@link ChunkProvider}'s counters, taken with {@link
  * ChunkProvider#stats()}.
  *
- * <p>The counters are provider-wide and monotonic, not per-search: one provider serves every search
- * on the server, and a block request carries no search identity. To attribute work to a single
- * search, take a reading before and after it and {@link #since(ChunkProviderStats) subtract} —
- * exact when one search runs at a time (the case worth measuring on a test server), and an upper
- * bound when several overlap.
+ * <p>A provider belongs to one solve, so these are that solve's own counters — no subtraction
+ * needed to attribute them, and no interference from other searches running at the same time.
+ * {@link #since(ChunkProviderStats)} remains for comparing two readings within a solve.
  *
  * @param chunkLookups calls to {@link ChunkProvider#chunk} — once per chunk per caller that wants
  *     blocks in it, <b>not</b> once per block: a mode resolves its whole neighborhood from a
@@ -27,8 +25,6 @@ package org.cobblestonemc.minecraft;
  * @param prefetchesWasted prefetched snapshots evicted or expired without ever being read
  * @param unknownChunks fetches that resolved to {@link MinecraftChunk.Unknown} — the load policy
  *     declined, the world was gone, or the platform refused; every block in them reads impassable
- * @param staleEvictions cached snapshots dropped for exceeding the staleness window
- * @param invalidations cached snapshots dropped because a block in them actually changed
  * @param directFetchMillis summed wall-clock latency of the direct fetches
  */
 public record ChunkProviderStats(
@@ -39,8 +35,6 @@ public record ChunkProviderStats(
     long prefetchesUsed,
     long prefetchesWasted,
     long unknownChunks,
-    long staleEvictions,
-    long invalidations,
     long directFetchMillis) {
 
   /**
@@ -58,8 +52,6 @@ public record ChunkProviderStats(
         delta(prefetchesUsed, earlier.prefetchesUsed),
         delta(prefetchesWasted, earlier.prefetchesWasted),
         delta(unknownChunks, earlier.unknownChunks),
-        delta(staleEvictions, earlier.staleEvictions),
-        delta(invalidations, earlier.invalidations),
         delta(directFetchMillis, earlier.directFetchMillis));
   }
 
@@ -87,7 +79,7 @@ public record ChunkProviderStats(
   @Override
   public String toString() {
     return ("chunkLookups:%d, cacheHits:%d (%.1f%%), directFetches:%d (mean %.1fms), "
-            + "prefetches:%d (used:%d, wasted:%d = %.1f%%), unknownChunks:%d, staleEvictions:%d, invalidations:%d")
+            + "prefetches:%d (used:%d, wasted:%d = %.1f%%), unknownChunks:%d")
         .formatted(
             chunkLookups,
             cacheHits,
@@ -98,8 +90,6 @@ public record ChunkProviderStats(
             prefetchesUsed,
             prefetchesWasted,
             prefetchWasteRatio() * 100,
-            unknownChunks,
-            staleEvictions,
-            invalidations);
+            unknownChunks);
   }
 }

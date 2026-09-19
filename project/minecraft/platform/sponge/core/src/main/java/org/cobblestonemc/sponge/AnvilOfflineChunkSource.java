@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.cobblestonemc.CobblestoneLogger;
@@ -57,6 +58,9 @@ public final class AnvilOfflineChunkSource implements OfflineChunkSource {
    * competing with the server for the same disk.
    */
   private static final int READ_THREADS = 2;
+
+  /** How long shutdown waits for reads already underway before answering them itself. */
+  private static final long SHUTDOWN_DRAIN_MILLIS = 5_000L;
 
   /** The shortest gap between two read-failure messages; the rest are counted and folded in. */
   private static final long FAILURE_LOG_INTERVAL_MILLIS = 60_000L;
@@ -183,13 +187,22 @@ public final class AnvilOfflineChunkSource implements OfflineChunkSource {
         suppressed);
   }
 
+  /**
+   * Stops issuing reads, waits briefly for the one or two underway, and answers the rest.
+   *
+   * <p>The wait is bounded: a read stuck on a disk that is not answering must not hold the server
+   * open. Whatever is still queued when the pool stops will never run, and something may be parked
+   * on it, so those are answered as "nothing there" rather than left hanging.
+   */
   @Override
   public void shutdown() {
     stopped = true;
     readers.shutdownNow();
-    // Reads still queued when the pool stopped will never run, and something may be waiting on
-    // them: answer them as "nothing there" so the chunk provider's drain is not left hanging on a
-    // task that was dropped.
+    try {
+      readers.awaitTermination(SHUTDOWN_DRAIN_MILLIS, TimeUnit.MILLISECONDS);
+    } catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt();
+    }
     for (CompletableFuture<MinecraftChunk> pending : outstanding) {
       pending.complete(null);
     }

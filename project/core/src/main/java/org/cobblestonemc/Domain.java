@@ -44,4 +44,24 @@ public interface Domain {
   default boolean contains(Cell cell) {
     return cell.y() >= minY() && cell.y() <= maxY();
   }
+
+  /**
+   * Returns a view of this domain for one solve to read the world through.
+   *
+   * <p>The hook exists for caches that should not outlive the solve that filled them. A Minecraft
+   * world returns a copy holding its own chunk cache, so each solve reads a working set sized to
+   * its own frontier instead of several searches evicting each other out of one shared cache; a
+   * domain with nothing to scope returns itself, which is the default.
+   *
+   * <p><b>The returned domain must equal this one.</b> Domains are map keys and participate in
+   * {@link Position} equality, and a solve's results are reported in terms of the original — so a
+   * scoped view that compared unequal would silently split every lookup keyed by domain.
+   * Implementations must also return their own concrete type, since the search casts back to it
+   * (see the single-domain-type rule above).
+   *
+   * @return a domain equal to this one, for the duration of a solve
+   */
+  default Domain scopedForSolve() {
+    return this;
+  }
 }

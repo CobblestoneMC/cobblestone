@@ -35,6 +35,13 @@ import org.cobblestonemc.minecraft.PlatformApi;
  */
 final class PaperPlatformApi implements PlatformApi<Entity> {
 
+  /**
+   * How long shutdown waits for chunk reads already underway. Long enough for a queue of
+   * region-file reads to drain on a busy disk, short enough that one that will never complete
+   * cannot hold the server open.
+   */
+  private static final long SHUTDOWN_DRAIN_MILLIS = 5_000L;
+
   private final Plugin plugin;
   private final PaperScheduler scheduler;
   private final NMSChunkReader reader;
@@ -103,15 +110,9 @@ final class PaperPlatformApi implements PlatformApi<Entity> {
             });
   }
 
-  /**
-   * Stops issuing offline reads and calls off the ones the server has not started.
-   *
-   * <p>Reads already underway are left to finish; {@code ChunkProvider}'s drain is what waits for
-   * those, and it covers every platform fetch rather than only these.
-   */
   @Override
   public void shutdown() {
-    reader.shutdown();
+    reader.shutdown(SHUTDOWN_DRAIN_MILLIS);
   }
 
   private CompletableFuture<MinecraftChunk> loadThroughServer(

@@ -32,15 +32,18 @@ class ChunkProviderTest {
     return new ChunkProvider(platform, settings, clock::get);
   }
 
-  private static ChunkProviderSettings settings(long staleness) {
-    return new ChunkProviderSettings(
-        1024, staleness, PREFETCH_DISTANCE, ChunkLoadPolicy.ALLOW_LOAD);
+  private static ChunkProviderSettings settings() {
+    return settings(1024, PREFETCH_DISTANCE);
+  }
+
+  private static ChunkProviderSettings settings(int capacity, int prefetchDistance) {
+    return new ChunkProviderSettings(capacity, prefetchDistance, ChunkLoadPolicy.ALLOW_LOAD);
   }
 
   @Test
   void secondBlockInCachedChunkIsImmediate() {
     FakePlatform platform = new FakePlatform();
-    ChunkProvider cp = provider(platform, settings(10_000));
+    ChunkProvider cp = provider(platform, settings());
 
     FutureOr<MinecraftBlock> first = cp.block(new Cell(5, 64, 5), world, EAST);
     assertFalse(first.isImmediate(), "a miss is served as pending");
@@ -56,7 +59,7 @@ class ChunkProviderTest {
   void concurrentMissesForOneChunkFetchOnlyOnce() {
     FakePlatform platform = new FakePlatform();
     platform.setImmediate(false);
-    ChunkProvider cp = provider(platform, settings(10_000));
+    ChunkProvider cp = provider(platform, settings());
 
     FutureOr<MinecraftBlock> a = cp.block(new Cell(5, 64, 5), world, EAST);
     FutureOr<MinecraftBlock> b = cp.block(new Cell(6, 64, 6), world, EAST);
@@ -70,111 +73,9 @@ class ChunkProviderTest {
   }
 
   @Test
-  void anExpiredSnapshotKeepsServingReadsRatherThanRefetchingMidSolve() {
-    FakePlatform platform = new FakePlatform();
-    ChunkProvider cp = provider(platform, settings(5_000));
-
-    cp.block(new Cell(5, 64, 5), world, EAST).future().join();
-    assertEquals(1, platform.fetchCount(0, 0));
-
-    // A search outliving the staleness window must not re-load its own working set; each re-fetch
-    // would stall it for a full fetch latency.
-    clock.set(5_001);
-    FutureOr<MinecraftBlock> block = cp.block(new Cell(5, 64, 5), world, EAST);
-    assertTrue(block.isImmediate(), "an expired snapshot still answers immediately");
-    assertEquals(1, platform.fetchCount(0, 0), "and is not fetched again on read");
-  }
-
-  /**
-   * The backstop for an edit that fires no block-change event at all: /fill, a world editor with
-   * block events off, a regenerated chunk. Nothing else would ever drop a chunk a search keeps
-   * touching, so without this the search reads yesterday's terrain until the server restarts.
-   */
-  @Test
-  void aSnapshotNothingEvictsIsEventuallyDroppedAnyway() {
-    FakePlatform platform = new FakePlatform();
-    ChunkProvider cp = provider(platform, settings(5_000));
-
-    cp.block(new Cell(5, 64, 5), world, EAST).future().join();
-    assertEquals(1, platform.fetchCount(0, 0));
-
-    clock.set(ChunkProvider.MAX_SNAPSHOT_AGE_MILLIS + 1);
-    cp.block(new Cell(5, 64, 5), world, EAST);
-    assertEquals(2, platform.fetchCount(0, 0), "an aged-out snapshot is read again");
-    // The read-ahead column ages out alongside it, so the count is the whole column, not just one.
-    assertTrue(cp.stats().staleEvictions() > 0);
-  }
-
-  /**
-   * Invalidation runs on the thread that owns the block, for every block change on the server,
-   * while the provider's lock is held by every chunk lookup a running search makes. A change in a
-   * chunk nothing has cached must not queue behind those.
-   */
-  @Test
-  void invalidatingAnUncachedChunkReportsThatNothingWasDropped() {
-    FakePlatform platform = new FakePlatform();
-    ChunkProvider cp = provider(platform, settings(10_000));
-
-    assertFalse(cp.invalidateBlock(world.key(), 5, 5), "nothing was cached there");
-    assertEquals(0, cp.stats().invalidations());
-
-    cp.block(new Cell(5, 64, 5), world, EAST).future().join();
-    assertTrue(cp.invalidateBlock(world.key(), 5, 5), "the cached snapshot was dropped");
-    assertFalse(cp.invalidateBlock(world.key(), 5, 5), "and is not there to drop twice");
-    assertEquals(1, cp.stats().invalidations());
-  }
-
-  /**
-   * A chunk a search keeps touching is never the least-recently-used entry, so nothing else would
-   * ever drop it — a block broken in it would go unseen until the server restarted.
-   */
-  @Test
-  void invalidatingAChunkMakesTheNextReadFetchItAgain() {
-    FakePlatform platform = new FakePlatform();
-    ChunkProvider cp = provider(platform, settings(10_000));
-
-    cp.block(new Cell(5, 64, 5), world, EAST).future().join();
-    assertEquals(1, platform.fetchCount(0, 0));
-    assertTrue(cp.block(new Cell(5, 64, 5), world, EAST).isImmediate(), "cached");
-
-    cp.invalidateBlock(world.key(), 5, 5);
-
-    cp.block(new Cell(5, 64, 5), world, EAST);
-    assertEquals(2, platform.fetchCount(0, 0), "the changed chunk is read again");
-    assertEquals(1, cp.stats().invalidations());
-  }
-
-  @Test
-  void invalidatingAChunkNothingHasCachedIsHarmless() {
-    FakePlatform platform = new FakePlatform();
-    ChunkProvider cp = provider(platform, settings(10_000));
-
-    cp.invalidateBlock(world.key(), 5, 5);
-
-    assertEquals(0, cp.stats().invalidations());
-    assertEquals(0, platform.fetchCount(0, 0));
-  }
-
-  @Test
-  void anExpiredSnapshotIsDroppedWhenTheCacheNextTakesAnEntry() {
-    FakePlatform platform = new FakePlatform();
-    ChunkProvider cp = provider(platform, settings(5_000));
-
-    cp.block(new Cell(5, 64, 5), world, EAST).future().join();
-    assertEquals(1, platform.fetchCount(0, 0));
-
-    // Expire it, then insert an unrelated chunk: the stale entry is collected on the insert.
-    clock.set(5_001);
-    cp.block(new Cell(5000, 64, 5000), world, EAST).future().join();
-
-    cp.block(new Cell(5, 64, 5), world, EAST);
-    assertEquals(2, platform.fetchCount(0, 0), "the expired snapshot was evicted, so it refetches");
-  }
-
-  @Test
   void readAheadPrefetchesTheColumnTowardsTheDestination() {
     FakePlatform platform = new FakePlatform();
-    ChunkProvider cp = provider(platform, settings(10_000));
+    ChunkProvider cp = provider(platform, settings());
 
     // From the middle of chunk [0, 0], heading due east for 32 blocks: the column covers the two
     // chunks ahead, and — because it is 5 blocks wide — nothing to the north or south of them.
@@ -192,7 +93,7 @@ class ChunkProviderTest {
   @Test
   void readAheadStopsAtTheDestination() {
     FakePlatform platform = new FakePlatform();
-    ChunkProvider cp = provider(platform, settings(10_000));
+    ChunkProvider cp = provider(platform, settings());
 
     // The destination is only 8 blocks away, well short of the read-ahead distance.
     cp.block(new Cell(8, 64, 8), world, new Cell(16, 64, 8)).future().join();
@@ -203,7 +104,7 @@ class ChunkProviderTest {
   @Test
   void readAheadOnADiagonalCoversTheChunksTheColumnCrosses() {
     FakePlatform platform = new FakePlatform();
-    ChunkProvider cp = provider(platform, settings(10_000));
+    ChunkProvider cp = provider(platform, settings());
 
     // Due south-east from the centre of chunk [0, 0]: 32 blocks along the diagonal is ~23 blocks
     // of x and z, so the column crosses [1, 0]/[0, 1] on its way into [1, 1].
@@ -219,7 +120,7 @@ class ChunkProviderTest {
   @Test
   void aBorderCellStillPullsInTheChunkBehindIt() {
     FakePlatform platform = new FakePlatform();
-    ChunkProvider cp = provider(platform, settings(10_000));
+    ChunkProvider cp = provider(platform, settings());
 
     // Sitting on the western border of chunk [0, 0] and heading east: modes read a block or two
     // back, so the chunk just behind is still worth having.
@@ -230,7 +131,7 @@ class ChunkProviderTest {
   @Test
   void withoutADestinationOnlyTheNeighbouringChunksAreRead() {
     FakePlatform platform = new FakePlatform();
-    ChunkProvider cp = provider(platform, settings(10_000));
+    ChunkProvider cp = provider(platform, settings());
 
     cp.block(new Cell(0, 64, 0), world, null).future().join();
     assertEquals(1, platform.fetchCount(-1, -1), "the corner the cell touches");
@@ -244,7 +145,7 @@ class ChunkProviderTest {
   void doesNotCacheUnknownFromReadAhead() {
     FakePlatform platform = new FakePlatform();
     platform.setRefuseReadAhead(true);
-    ChunkProvider provider = provider(platform, settings(10_000L));
+    ChunkProvider provider = provider(platform, settings());
 
     // Reading one cell drags the chunks ahead of it in as read-ahead, and those come back unknown.
     provider.block(new Cell(8, 64, 8), world, EAST).future().join();
@@ -264,7 +165,7 @@ class ChunkProviderTest {
   void repeatReadsOfAnUnknownChunkAreAnsweredFromTheCache() {
     FakePlatform platform = new FakePlatform();
     platform.setUnknown(true);
-    ChunkProvider cp = provider(platform, settings(10_000));
+    ChunkProvider cp = provider(platform, settings());
 
     cp.block(new Cell(5, 64, 5), world, EAST).future().join();
     assertEquals(1, platform.fetchCount(0, 0));
@@ -276,25 +177,36 @@ class ChunkProviderTest {
   }
 
   /**
-   * Unknown also means "not loaded yet" — a chunk whose existence scan has not finished, or whose
-   * load timed out. Those become real terrain a moment later, and no block change fires for a chunk
-   * nobody touched, so the answer has to expire on its own.
+   * The cache belongs to one solve and is sized to its frontier, so the least recently used chunk
+   * goes when a new one arrives. This is the only thing that evicts now: there is no staleness
+   * window and no invalidation, because nothing a solve caches outlives the solve.
    */
   @Test
-  void anUnknownChunkIsAskedForAgainOnceItsRetryWindowPasses() {
+  void theLeastRecentlyUsedChunkIsDroppedOnceTheCacheIsFull() {
     FakePlatform platform = new FakePlatform();
-    platform.setUnknown(true);
-    ChunkProvider cp = provider(platform, settings(10_000));
+    // Capacity two, no read-ahead, so exactly the chunks asked for are the chunks cached.
+    ChunkProvider cp = provider(platform, settings(2, 0));
+
+    cp.block(new Cell(0, 64, 0), world, null).future().join();
+    cp.block(new Cell(16, 64, 0), world, null).future().join();
+    // Touch the first again so the second becomes the least recently used.
+    assertTrue(cp.block(new Cell(0, 64, 0), world, null).isImmediate());
+
+    cp.block(new Cell(32, 64, 0), world, null).future().join();
+
+    assertTrue(cp.block(new Cell(0, 64, 0), world, null).isImmediate(), "recently used, kept");
+    assertFalse(cp.block(new Cell(16, 64, 0), world, null).isImmediate(), "evicted, read again");
+    assertEquals(2, platform.fetchCount(1, 0));
+  }
+
+  @Test
+  void readAheadCanBeSwitchedOff() {
+    FakePlatform platform = new FakePlatform();
+    ChunkProvider cp = provider(platform, settings(1024, 0));
 
     cp.block(new Cell(5, 64, 5), world, EAST).future().join();
-    assertEquals(1, platform.fetchCount(0, 0));
 
-    clock.set(1_001);
-    platform.setUnknown(false); // the chunk has since loaded
-    cp.block(new Cell(5, 64, 5), world, EAST).future().join();
-    assertEquals(2, platform.fetchCount(0, 0), "the unknown answer expired");
-
-    MinecraftBlock block = cp.block(new Cell(5, 64, 5), world, EAST).value();
-    assertFalse(block.isPassable(), "and the real terrain is what the search now sees");
+    assertEquals(1, platform.fetchCount(0, 0), "the chunk asked for");
+    assertEquals(0, platform.fetchCount(1, 0), "and nothing ahead of it");
   }
 }

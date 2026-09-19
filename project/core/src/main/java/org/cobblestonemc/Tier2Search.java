@@ -64,6 +64,16 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private final A agent;
   private final D domain;
 
+  /**
+   * The domain this solve actually reads blocks through: {@link Domain#scopedForSolve()} of {@link
+   * #domain}, so whatever caching it does belongs to this solve and dies with it.
+   *
+   * <p>Kept apart from {@link #domain} so that nothing scoped escapes: results are built from
+   * {@code domain}, and a finished path that carried the scoped view would pin its caches for as
+   * long as anything held the path.
+   */
+  private final D readDomain;
+
   private final DomainRegion<D> target;
   private final List<? extends Mode<A, T, D>> modes;
   private final List<? extends Restriction<A, D>> restrictions;
@@ -162,6 +172,9 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
             "DomainLocal[" + virtualPath.fromCell() + " to " + virtualPath.targetRegion() + "]");
     this.agent = agent;
     this.domain = virtualPath.domain();
+    @SuppressWarnings("unchecked")
+    D scoped = (D) virtualPath.domain().scopedForSolve();
+    this.readDomain = scoped;
     this.target = virtualPath.targetRegion();
     this.modes = modes;
     this.restrictions = restrictions;
@@ -436,7 +449,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     boolean anyPending = false;
     for (Mode<A, T, D> mode : modes) {
       FutureOr<Collection<Movement<T>>> movements =
-          mode.step(agent, node.key.cell(), domain, node.key.state(), goal);
+          mode.step(agent, node.key.cell(), readDomain, node.key.state(), goal);
       results.add(movements);
       anyPending |= !movements.isImmediate();
     }
@@ -632,7 +645,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private FutureOr<Boolean> impassable(Cell cell) {
     List<FutureOr<Boolean>> verdicts = new ArrayList<>(restrictions.size());
     for (Restriction<A, D> restriction : restrictions) {
-      verdicts.add(restriction.impassable(agent, cell, domain));
+      verdicts.add(restriction.impassable(agent, cell, readDomain));
     }
     return FutureOr.all(verdicts).map(list -> list.contains(Boolean.TRUE));
   }

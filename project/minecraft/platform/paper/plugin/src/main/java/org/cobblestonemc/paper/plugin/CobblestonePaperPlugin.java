@@ -73,7 +73,12 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     // into it (design/05). Both are reachable to other plugins via the registered plugin API.
     this.platformApi =
         new PaperNavigationServiceImpl(
-            this, logger, ChunkProviderSettings.defaults(config.get(keys.chunksPolicy)));
+            this,
+            logger,
+            new ChunkProviderSettings(
+                config.get(keys.chunksCacheSize),
+                config.get(keys.chunksPrefetchDistance),
+                config.get(keys.chunksPolicy)));
     PaperIntegrationRegistry integrationRegistry = new PaperIntegrationRegistry();
     getServer()
         .getServicesManager()
@@ -147,7 +152,6 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
         .getPluginManager()
         .registerEvents(new CobblestoneListener(tripManager, searchRegistry), this);
     // Keep the chunk cache honest: a block changing evicts the snapshot it belongs to.
-    getServer().getPluginManager().registerEvents(new BlockChangeListener(this, platformApi), this);
     // When another plugin disables, drop everything it registered into our registries.
     getServer()
         .getPluginManager()

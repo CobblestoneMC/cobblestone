@@ -10,6 +10,7 @@ package org.cobblestonemc.plugin.config;
 import java.util.List;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
+import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.plugin.data.DataBackend;
 
 /**
@@ -80,6 +81,12 @@ public final class ConfigKeys {
    * the policy is captured in the chunk provider's settings when the platform API is built.
    */
   public final ConfigKey<ChunkLoadPolicy> chunksPolicy;
+
+  /** How many chunks one search may keep in hand at a time. Requires a restart. */
+  public final ConfigKey<Integer> chunksCacheSize;
+
+  /** How far ahead of itself a search reads chunks, in blocks. Requires a restart. */
+  public final ConfigKey<Integer> chunksPrefetchDistance;
 
   /** Whether Cobblestone discovers vanilla portal links by watching players teleport. Mutable. */
   public final ConfigKey<Boolean> portalsDiscovery;
@@ -310,6 +317,32 @@ public final class ConfigKeys {
                 Codec.ofEnum(ChunkLoadPolicy.class))
             .comment(platform.chunkPolicyComment())
             .permitted(platform.chunkPolicies())
+            .requiresRestart()
+            .register();
+    this.chunksCacheSize =
+        manager
+            .key(
+                "search.chunks.cache_size",
+                ChunkProviderSettings.DEFAULT_MAX_CACHED_CHUNKS,
+                Codec.ofInt())
+            .comment(
+                """
+                How many chunks a single search keeps in hand before it starts forgetting the ones                 it touched longest ago. Each search has its own, so this is not a server-wide                 budget: several players searching at once do not evict each other.
+
+                The point is only to avoid re-reading the same chunk from disk while a search works                 its way across a chunk border, so the useful range is small. A chunk costs roughly                 35 KB, so the default is about a megabyte per running search.""")
+            .requiresRestart()
+            .register();
+    this.chunksPrefetchDistance =
+        manager
+            .key(
+                "search.chunks.prefetch_distance",
+                ChunkProviderSettings.DEFAULT_PREFETCH_DISTANCE,
+                Codec.ofInt())
+            .comment(
+                """
+                How far ahead of itself, in blocks towards the destination, a search reads chunks                 it has not needed yet. The default is a chunk or two, which covers the moment                 between approaching a chunk border and crossing it.
+
+                Set to 0 to turn read-ahead off entirely, which is worth trying: it earned a long                 reach when a miss meant loading a chunk through the server, and reads now come off                 disk.""")
             .requiresRestart()
             .register();
 

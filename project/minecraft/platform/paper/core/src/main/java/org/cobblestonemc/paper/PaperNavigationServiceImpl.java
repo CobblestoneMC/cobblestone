@@ -42,9 +42,7 @@ import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.minecraft.BreakChecker;
-import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
-import org.cobblestonemc.minecraft.ChunkProviderStats;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -64,17 +62,10 @@ import org.joml.Vector3i;
 public final class PaperNavigationServiceImpl
     implements NavigationService, SearchModificationRegistrar, WorldWrapper {
 
-  /**
-   * How long shutdown waits for chunk reads it has already asked the server for. Long enough for a
-   * queue of region-file reads to drain on a busy disk, short enough that a read that will never
-   * complete cannot hold the server open.
-   */
-  private static final long SHUTDOWN_DRAIN_MILLIS = 5_000L;
-
   private final CobblestoneLogger logger;
   private final PaperScheduler scheduler;
   private final PaperPlatformApi platform;
-  private final ChunkProvider chunkProvider;
+  private final ChunkProviderSettings chunkSettings;
   private final CobblestoneApi core;
   private final Map<String, MinecraftWorld> worldCache = new ConcurrentHashMap<>();
   private final OwnedRegistry<SearchModificationService> searchModifiers = new OwnedRegistry<>();
@@ -92,7 +83,7 @@ public final class PaperNavigationServiceImpl
     int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
     this.scheduler = new PaperScheduler(plugin, workerThreads);
     this.platform = new PaperPlatformApi(plugin, scheduler, logger);
-    this.chunkProvider = new ChunkProvider(platform, chunkSettings);
+    this.chunkSettings = chunkSettings;
     this.core = CobblestoneApi.load();
   }
 
@@ -156,36 +147,15 @@ public final class PaperNavigationServiceImpl
   }
 
   /**
-   * Drops the cached snapshot of one chunk, so searches see edits made in it. Wired to the server's
-   * block-change events by the plugin layer; safe from any thread.
-   *
-   * @param worldKey the world's namespaced key
-   * @param chunkX the chunk X coordinate
-   * @param chunkZ the chunk Z coordinate
-   * @return whether a snapshot was actually dropped
-   */
-  public boolean invalidate(String worldKey, int chunkX, int chunkZ) {
-    return chunkProvider.invalidate(worldKey, chunkX, chunkZ);
-  }
-
-  /**
    * Stops Cobblestone; call on plugin disable.
    *
-   * <p>Order matters, and the middle step is the one that is easy to skip. Cancelling first calls
-   * off the chunk reads the server has queued but not started, then the drain waits for the ones it
-   * did start — because those are reads against region files the server is about to close, and
-   * abandoning them mid-shutdown is what makes stopping a server during a search go badly. Only
-   * once Cobblestone owes the server no more IO does the worker pool go away.
-   *
-   * <p>The wait is bounded: a read that will never complete must not hold the server open.
+   * <p>The platform goes first: it cancels the chunk reads the server has queued but not started
+   * and waits, bounded, for the ones it did — those are reads against region files the server is
+   * about to close, and abandoning them mid-shutdown is what makes stopping a server during a
+   * search go badly. Only once Cobblestone owes the server no more IO does the worker pool go away.
    */
   public void shutdown() {
     platform.shutdown();
-    if (!chunkProvider.awaitInFlight(SHUTDOWN_DRAIN_MILLIS)) {
-      logger.warn(
-          "Gave up after {}ms waiting for outstanding chunk reads to finish; shutting down anyway",
-          SHUTDOWN_DRAIN_MILLIS);
-    }
     scheduler.shutdown();
   }
 
@@ -227,10 +197,6 @@ public final class PaperNavigationServiceImpl
         Heuristics.runningAverage(
             MinecraftModes.cheapestCostPerBlock(agent, settings.excludedModes()));
 
-    // Chunk counters are provider-wide, so this delta is only this search's own work when nothing
-    // else is searching, and an upper bound otherwise. Per-search counters are issue #8.
-    ChunkProviderStats chunksBefore = chunkProvider.stats();
-
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
         gatherTransitions(
                 modifiers, player, settings.excludedWorlds(), settings.excludedDimensions())
@@ -247,12 +213,6 @@ public final class PaperNavigationServiceImpl
                         restrictions,
                         heuristic,
                         settings.settings()));
-    handleFuture
-        .thenCompose(SearchHandle::future)
-        .whenComplete(
-            (result, error) ->
-                logger.debug(
-                    "Chunks (provider-wide delta); {}", chunkProvider.stats().since(chunksBefore)));
     return new PaperSearchHandle(handleFuture);
   }
 
@@ -447,6 +407,6 @@ public final class PaperNavigationServiceImpl
   @Override
   public MinecraftWorld wrap(World world) {
     return worldCache.computeIfAbsent(
-        world.getKey().asString(), key -> new PaperWorld(world, chunkProvider));
+        world.getKey().asString(), key -> new PaperWorld(world, platform, chunkSettings));
   }
 }

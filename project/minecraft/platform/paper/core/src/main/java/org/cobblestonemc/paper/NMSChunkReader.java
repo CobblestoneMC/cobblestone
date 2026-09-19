@@ -15,6 +15,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import net.minecraft.server.level.ServerLevel;
 import org.bukkit.World;
 import org.bukkit.craftbukkit.CraftWorld;
@@ -169,20 +171,40 @@ final class NMSChunkReader {
   }
 
   /**
-   * Stops issuing reads and cancels the ones the server has not started yet.
-   *
-   * <p>Returns as soon as the cancellations are in; reads already underway settle on their own, and
-   * waiting for those is the chunk provider's drain, which covers every platform fetch rather than
-   * only these.
+   * Stops issuing reads, cancels the ones the server has not started, and waits for the rest.
    *
    * <p>A cancelled read completes as though nothing were saved there, so it resolves to an unknown
    * chunk rather than falling back to a server load. That is the point: a server on its way down
    * should not start loading chunks for a search that is also on its way down.
+   *
+   * <p>The wait is bounded. Moonrise's IO threads may already be gone by the time this runs, in
+   * which case the reads they held will never complete, and hanging on them would be worse than
+   * giving up on a chunk nobody is going to use.
+   *
+   * @param timeoutMillis how long to wait for reads already underway
    */
-  void shutdown() {
+  void shutdown(long timeoutMillis) {
     stopped = true;
-    for (PendingRead pending : outstanding) {
-      pending.cancel();
+    // Snapshot before cancelling: a cancelled read completes, which removes it from the set.
+    CompletableFuture<?>[] pending =
+        outstanding.stream().map(read -> read.future).toArray(CompletableFuture<?>[]::new);
+    for (PendingRead read : outstanding) {
+      read.cancel();
+    }
+    if (pending.length == 0) {
+      return;
+    }
+    try {
+      CompletableFuture.allOf(pending).get(timeoutMillis, TimeUnit.MILLISECONDS);
+    } catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt();
+    } catch (TimeoutException timedOut) {
+      logger.warn(
+          "Gave up after {}ms waiting for {} outstanding chunk reads; shutting down anyway",
+          timeoutMillis,
+          pending.length);
+    } catch (ExecutionException failed) {
+      // A failed read is a settled one; nothing is waiting on it any more.
     }
   }
 
