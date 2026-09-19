@@ -272,7 +272,7 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     }
     guideSteps = List.copyOf(guide.steps());
     List<Vec3> pts = new ArrayList<>(guideSteps.size());
-    for (Step<L, MinecraftStepPayload> step : guideSteps) {
+    for (var step : guideSteps) {
       pts.add(renderPoint(step.position()));
     }
     guideWorld = worldKey(guideSteps.getFirst().position());
@@ -345,7 +345,7 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   private void renderTrail(Vec3 playerVec, String playerWorld, ThreadLocalRandom random) {
     int end = Math.min(steps.size(), foremost + bufferCells);
     for (int i = foremost; i < end; i++) {
-      Step<L, MinecraftStepPayload> step = steps.get(i);
+      var step = steps.get(i);
       if (!sameWorld(playerWorld, worldKey(step.position()))) {
         continue;
       }
@@ -387,8 +387,8 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     if (index < 0 || index + 1 >= steps.size()) {
       return false;
     }
-    Step<L, MinecraftStepPayload> arriving = steps.get(index);
-    Step<L, MinecraftStepPayload> leaving = steps.get(index + 1);
+    var arriving = steps.get(index);
+    var leaving = steps.get(index + 1);
     return !arriving.payload().stepType().isAction()
         && !leaving.payload().stepType().isAction()
         && Objects.equals(worldKey(arriving.position()), worldKey(leaving.position()));
