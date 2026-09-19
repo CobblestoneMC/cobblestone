@@ -26,9 +26,11 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.cobblestonemc.api.TraversalState;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * A single-domain A* solve for one {@link VirtualPath}, run cooperatively so it never blocks a
@@ -491,7 +493,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       }
       CellState key = new CellState(cell, movement.state());
       Node<T> neighbor = getOrCreate(key);
-      neighbor.parents.put(parentKey, movement); // retained candidate parent
+      neighbor.putParent(parentKey, movement); // retained candidate parent
       // A mode-scoped edge restriction (mining breakability, pearl ballistics) is checked lazily —
       // when this node is popped, not here — so its supplier fires only for edges we commit to.
       // Use the parent's current g: a repair may have raised it while these modes were pending.
@@ -509,7 +511,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     if (node.bestParent != null) {
       Node<T> old = nodes.get(node.bestParent);
       if (old != null) {
-        old.children.remove(node.key);
+        old.removeChild(node.key);
       }
     }
     node.cost = g;
@@ -517,7 +519,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     node.bestEdge = edge;
     Node<T> parent = nodes.get(parentKey);
     if (parent != null) {
-      parent.children.add(node.key);
+      parent.addChild(node.key);
       node.trailAverage =
           heuristic.advance(
               parent.trailAverage, edge.cost(), parentKey.cell().distance(node.key.cell()));
@@ -549,7 +551,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     if (node.bestParent != null) {
       Node<T> parent = nodes.get(node.bestParent);
       if (parent != null) {
-        parent.children.remove(key);
+        parent.removeChild(key);
       }
     }
   }
@@ -675,7 +677,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     for (CellState root : new ArrayList<>(roots)) {
       Node<T> node = nodes.get(root);
       if (node != null) {
-        seeds.addAll(node.children); // its dependents lose their best route
+        node.collectChildren(seeds); // its dependents lose their best route
       }
       removeNode(root);
     }
@@ -685,7 +687,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   /** Drops one mode-scoped edge; if it was the child's best route, repairs the child's subtree. */
   private void removeEdge(CellState parentKey, CellState childKey) {
     Node<T> child = nodes.get(childKey);
-    if (child == null || child.parents.remove(parentKey) == null) {
+    if (child == null || child.removeParent(parentKey) == null) {
       return; // already gone
     }
     if (parentKey.equals(child.bestParent)) {
@@ -712,7 +714,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       if (!affected.add(key)) {
         continue;
       }
-      frontier.addAll(node.children);
+      node.collectChildren(frontier);
     }
     if (affected.isEmpty()) {
       return;
@@ -735,25 +737,25 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       if (node.bestParent != null) {
         Node<T> oldParent = nodes.get(node.bestParent);
         if (oldParent != null) {
-          oldParent.children.remove(key);
+          oldParent.removeChild(key);
         }
       }
-      node.children.clear();
+      node.clearChildren();
       node.cost = Double.POSITIVE_INFINITY;
       node.bestParent = null;
       node.bestEdge = null;
-      for (Map.Entry<CellState, Movement<T>> candidate : node.parents.entrySet()) {
-        CellState parentKey = candidate.getKey();
-        if (affected.contains(parentKey)) {
-          internalEdges.computeIfAbsent(parentKey, k -> new ArrayList<>()).add(key);
-          continue;
-        }
-        Node<T> parent = nodes.get(parentKey);
-        if (parent == null || parent.cost == Double.POSITIVE_INFINITY) {
-          continue; // removed, dangling, or not itself reachable
-        }
-        relaxRepair(tentative, key, parentKey, candidate.getValue(), parent.cost);
-      }
+      node.forEachParent(
+          (parentKey, edge) -> {
+            if (affected.contains(parentKey)) {
+              internalEdges.computeIfAbsent(parentKey, k -> new ArrayList<>()).add(key);
+              return;
+            }
+            Node<T> parent = nodes.get(parentKey);
+            if (parent == null || parent.cost == Double.POSITIVE_INFINITY) {
+              return; // removed, dangling, or not itself reachable
+            }
+            relaxRepair(tentative, key, parentKey, edge, parent.cost);
+          });
     }
 
     PriorityQueue<RepairEntry> queue =
@@ -782,7 +784,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         if (settled.contains(childKey)) {
           continue;
         }
-        Movement<T> edge = nodes.get(childKey).parents.get(key);
+        Movement<T> edge = nodes.get(childKey).parentEdge(key);
         if (edge != null && relaxRepair(tentative, childKey, key, edge, node.cost)) {
           queue.add(new RepairEntry(childKey, node.cost + edge.cost()));
         }
@@ -897,6 +899,27 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
    * A search node: its cost, its chosen parent, and — the key to correct repair — every candidate
    * parent.
    */
+  /**
+   * One reached cell-state, and the bulk of what a solve costs in memory.
+   *
+   * <p>A node remembers more than its best route: every candidate parent that ever relaxed it (with
+   * the {@link Movement} that would get there) and every child currently routed through it. That is
+   * what lets a cell turning out to be impassable repair the affected subtree in place rather than
+   * restart the solve — see {@link #repairFrom}.
+   *
+   * <p><b>Both are stored one-entry-first.</b> Held as a {@code HashMap} and a {@code HashSet} they
+   * cost around 400 bytes per node before a single entry goes in — an empty map is some 48 bytes
+   * and allocates an 80-byte table on first use — which for a solve allowed 200,000 cells is most
+   * of the couple of hundred megabytes it can reach. The great majority of nodes have exactly one
+   * parent and no more than one child, so the first of each lives in a field and a collection is
+   * allocated only if a second arrives, small. Nothing about the search changes: it is the same
+   * information, stored for what it usually is rather than for its worst case.
+   *
+   * <p>Slot zero is not privileged: it is simply the first place looked at, and emptying it does
+   * not shuffle the overflow up. The accessors therefore consult both, which costs one extra lookup
+   * on the rare path where a node has several parents and buys back not having to maintain — or
+   * test — an ordering invariant between a field and a collection.
+   */
   private static final class Node<T> {
     final CellState key;
     double cost = Double.POSITIVE_INFINITY;
@@ -911,12 +934,135 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
 
     CellState bestParent;
     Movement<T> bestEdge;
-    final Map<CellState, Movement<T>> parents = new HashMap<>();
-    final Set<CellState> children = new HashSet<>();
     boolean closed;
+
+    /** The first candidate parent; {@code null} when this node has none. */
+    private @Nullable CellState parentKey0;
+
+    /** The edge from {@link #parentKey0}. */
+    private @Nullable Movement<T> parentEdge0;
+
+    /** Candidate parents beyond the first; {@code null} until a second one turns up. */
+    private @Nullable Map<CellState, Movement<T>> moreParents;
+
+    /** The first child; {@code null} when nothing is routed through this node. */
+    private @Nullable CellState child0;
+
+    /** Children beyond the first; {@code null} until a second one turns up. */
+    private @Nullable Set<CellState> moreChildren;
 
     Node(CellState key) {
       this.key = key;
+    }
+
+    /** Records a candidate parent, replacing the edge if that parent is already known. */
+    void putParent(CellState parent, Movement<T> edge) {
+      if (parent.equals(parentKey0)) {
+        parentEdge0 = edge;
+        return;
+      }
+      // Check the overflow before claiming an empty slot zero, or a parent already held there
+      // would end up recorded twice and only half of it removed later.
+      if (moreParents != null && moreParents.containsKey(parent)) {
+        moreParents.put(parent, edge);
+        return;
+      }
+      if (parentKey0 == null) {
+        parentKey0 = parent;
+        parentEdge0 = edge;
+        return;
+      }
+      if (moreParents == null) {
+        moreParents = new HashMap<>(4);
+      }
+      moreParents.put(parent, edge);
+    }
+
+    /** Forgets a candidate parent, returning the edge it held, or {@code null} if unknown. */
+    @Nullable
+    Movement<T> removeParent(CellState parent) {
+      if (parent.equals(parentKey0)) {
+        Movement<T> removed = parentEdge0;
+        parentKey0 = null;
+        parentEdge0 = null;
+        return removed;
+      }
+      if (moreParents == null) {
+        return null;
+      }
+      Movement<T> removed = moreParents.remove(parent);
+      if (moreParents.isEmpty()) {
+        moreParents = null;
+      }
+      return removed;
+    }
+
+    /** Returns the edge from a candidate parent, or {@code null} if it is not one. */
+    @Nullable
+    Movement<T> parentEdge(CellState parent) {
+      if (parent.equals(parentKey0)) {
+        return parentEdge0;
+      }
+      return moreParents == null ? null : moreParents.get(parent);
+    }
+
+    /**
+     * Runs an action over every candidate parent.
+     *
+     * <p>The action must not add or remove parents of <i>this</i> node; any other node is fair
+     * game, which is what the repair pass needs.
+     */
+    void forEachParent(BiConsumer<CellState, Movement<T>> action) {
+      if (parentKey0 != null) {
+        action.accept(parentKey0, parentEdge0);
+      }
+      if (moreParents != null) {
+        moreParents.forEach(action);
+      }
+    }
+
+    /** Records that a child is routed through this node. */
+    void addChild(CellState child) {
+      if (child.equals(child0) || (moreChildren != null && moreChildren.contains(child))) {
+        return;
+      }
+      if (child0 == null) {
+        child0 = child;
+        return;
+      }
+      if (moreChildren == null) {
+        moreChildren = new HashSet<>(4);
+      }
+      moreChildren.add(child);
+    }
+
+    /** Forgets a child, if it was one. */
+    void removeChild(CellState child) {
+      if (child.equals(child0)) {
+        child0 = null;
+        return;
+      }
+      if (moreChildren != null) {
+        moreChildren.remove(child);
+        if (moreChildren.isEmpty()) {
+          moreChildren = null;
+        }
+      }
+    }
+
+    void clearChildren() {
+      child0 = null;
+      moreChildren = null;
+    }
+
+    /** Adds every child of this node to {@code sink}. */
+    void collectChildren(Collection<CellState> sink) {
+      if (child0 != null) {
+        sink.add(child0);
+      }
+      if (moreChildren != null) {
+        sink.addAll(moreChildren);
+      }
     }
   }
 
