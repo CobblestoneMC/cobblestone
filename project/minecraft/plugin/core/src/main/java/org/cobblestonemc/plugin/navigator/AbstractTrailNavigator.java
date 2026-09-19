@@ -15,12 +15,16 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import net.kyori.adventure.audience.Audience;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.api.Step;
 import org.cobblestonemc.minecraft.api.MinecraftInstruction;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.cobblestonemc.plugin.api.Navigator;
+import org.cobblestonemc.plugin.message.CobblestoneColors;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Messages;
 
@@ -321,11 +325,19 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     lastPromptedInstruction = instruction;
     // Only command instructions prompt; other kinds (e.g. None) render silently.
     if (instruction instanceof MinecraftInstruction.CommandInstruction commandInstruction) {
-      messages.send(
-          audience(),
-          locale,
-          CobblestoneMessages.NAV_TRAIL_PROMPT_COMMAND,
-          commandInstruction.command());
+      String command = commandInstruction.command();
+      // The whole line is clickable, so the player can run the command without typing it.
+      audience()
+          .sendMessage(
+              messages
+                  .render(locale, CobblestoneMessages.NAV_TRAIL_PROMPT_COMMAND, command)
+                  .clickEvent(ClickEvent.runCommand(command))
+                  .hoverEvent(
+                      HoverEvent.showText(
+                          Component.text(
+                              messages.raw(
+                                  locale, CobblestoneMessages.NAV_TRAIL_PROMPT_COMMAND_HOVER.key()),
+                              CobblestoneColors.INFO))));
     }
   }
 

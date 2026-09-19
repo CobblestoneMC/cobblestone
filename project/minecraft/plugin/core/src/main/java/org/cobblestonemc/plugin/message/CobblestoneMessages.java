@@ -86,6 +86,10 @@ public final class CobblestoneMessages {
   public static final Message1 NAV_TRAIL_PROMPT_COMMAND =
       Message1.info("navigator.trail.prompt.command");
 
+  /** Hover tooltip on a command prompt, telling the player they can click it to run the command. */
+  public static final Message0 NAV_TRAIL_PROMPT_COMMAND_HOVER =
+      Message0.info("navigator.trail.prompt.command.hover");
+
   /** Prompts the player to perform the highlighted action to continue along the trail. */
   public static final Message0 NAV_TRAIL_PROMPT_ACTION =
       Message0.info("navigator.trail.prompt.action");
