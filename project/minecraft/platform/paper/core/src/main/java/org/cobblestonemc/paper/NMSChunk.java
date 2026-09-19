@@ -12,17 +12,20 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
+import org.bukkit.Material;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.craftbukkit.util.CraftMagicNumbers;
 import org.cobblestonemc.minecraft.MinecraftBlock;
-import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.UnknownBlock;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * A {@link MinecraftChunk} decoded straight from a saved chunk's NBT, without loading the chunk
- * into the server.
+ * A {@link PaperChunk} decoded straight from a saved chunk's NBT, without loading the chunk into
+ * the server.
  *
  * <p>This is the whole point of the class: a search that sweeps a few thousand chunks would
  * otherwise drag every one of them into the chunk system — full deserialization into a {@code
@@ -39,12 +42,12 @@ import org.jetbrains.annotations.Nullable;
  * <em>saved</em> chunk means edits made since it was last written are not visible — Moonrise's IO
  * does serve pending writes, so a chunk that was recently unloaded reads current, but one still
  * dirty in memory does not. Callers must therefore only take this path for chunks that aren't
- * loaded, which {@link PaperPlatformApi} does, snapshotting loaded chunks through Bukkit instead.
+ * loaded, which {@link PaperChunkFetcher} does, snapshotting loaded chunks through Bukkit instead.
  *
  * <p>Instances are immutable once built and safe to read from any thread: {@link
  * PalettedContainer#get} takes no lock, and nothing here ever writes.
  */
-final class NMSChunk implements MinecraftChunk {
+final class NMSChunk extends PaperChunk {
 
   /** Section containers indexed by {@code sectionY - minSectionY}; {@code null} means all air. */
   private final PalettedContainer<BlockState>[] sections;
@@ -110,14 +113,38 @@ final class NMSChunk implements MinecraftChunk {
 
   @Override
   public MinecraftBlock block(int localX, int y, int localZ) {
+    if (!inBuildHeight(y)) {
+      return UnknownBlock.INSTANCE;
+    }
+    return super.block(localX, y, localZ);
+  }
+
+  @Override
+  Material blockType(int localX, int y, int localZ) {
+    BlockState state = state(localX, y, localZ);
+    return state == null ? Material.AIR : CraftMagicNumbers.getMaterial(state.getBlock());
+  }
+
+  @Override
+  BlockData blockData(int localX, int y, int localZ) {
+    BlockState state = state(localX, y, localZ);
+    return state == null ? Material.AIR.createBlockData() : state.asBlockData();
+  }
+
+  /**
+   * The block state at a position, or {@code null} for air in a section the file left empty.
+   * Outside the build height there is nothing, which vanilla calls void air.
+   */
+  private @Nullable BlockState state(int localX, int y, int localZ) {
+    if (!inBuildHeight(y)) {
+      return Blocks.VOID_AIR.defaultBlockState();
+    }
+    PalettedContainer<BlockState> section = sections[(y >> 4) - minSectionY];
+    return section == null ? null : section.get(localX & 15, y & 15, localZ & 15);
+  }
+
+  private boolean inBuildHeight(int y) {
     int index = (y >> 4) - minSectionY;
-    if (index < 0 || index >= sections.length) {
-      return UnknownBlock.INSTANCE; // outside the build height
-    }
-    PalettedContainer<BlockState> section = sections[index];
-    if (section == null) {
-      return NMSBlocks.AIR;
-    }
-    return NMSBlocks.of(section.get(localX & 15, y & 15, localZ & 15));
+    return index >= 0 && index < sections.length;
   }
 }

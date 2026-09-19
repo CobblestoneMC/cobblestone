@@ -27,8 +27,11 @@ import org.spongepowered.api.world.server.ServerWorld;
  * path did not work — a region file that will not open, an internal that moved — and the caller
  * answers it by falling back to the ticket machinery, so nothing above ever learns there were two
  * ways to get a chunk. A future completing with {@code null} is a different statement: the chunk is
- * genuinely not saved, which is an answer rather than a failure, and the caller resolves it against
- * the load policy (nothing to load, or terrain to generate).
+ * genuinely not saved — or its terrain was never finished — which is an answer rather than a
+ * failure, and the caller resolves it against the load policy (nothing to load, or terrain to
+ * generate). A chunk that <em>is</em> saved but that this source cannot decode, such as one written
+ * before 1.18, must fail the future instead: answering {@code null} would wall off a chunk the
+ * server can load.
  *
  * <p>Implementations must be safe to call from any thread and must not require the server thread:
  * the point of this path is that it never queues behind a tick.
@@ -92,9 +95,9 @@ public interface OfflineChunkSource {
   default void prepare(ServerWorld world) {}
 
   /**
-   * Stops issuing reads and calls off whatever has not started, without waiting for what has.
+   * Stops issuing reads, calls off whatever has not started, and waits, bounded, for what has.
    *
-   * <p>Called at the start of shutdown. A source that queues nothing of its own has nothing to do.
+   * <p>Called during shutdown. A source that queues nothing of its own has nothing to do.
    */
   default void shutdown() {}
 }

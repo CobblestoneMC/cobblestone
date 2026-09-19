@@ -27,7 +27,6 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
-import org.cobblestonemc.Cell;
 import org.cobblestonemc.CellRegion;
 import org.cobblestonemc.CobblestoneApi;
 import org.cobblestonemc.CobblestoneLogger;
@@ -275,22 +274,22 @@ public final class PaperNavigationServiceImpl
         return CompletableFuture.completedFuture(true); // cannot evaluate; do not block mining
       }
       Location location = new Location(bukkitWorld, cell.x(), cell.y(), cell.z());
-      // Checkers are promised the snapshot's real block state, and the instances modes read are
-      // shared per material — they carry a default state, not this block's. So the state is read
-      // from the chunk here instead: a cache hit, since the mining mode has just read this block.
-      // Lazily, though: reading it is a clone(), and most checkers decide on location alone.
+      // Checkers are promised the block's real state, which the block a mode read cannot give them;
+      // see LazyBlockData. The chunk is a cache hit, since the mining mode has just read this
+      // block,
+      // and whether it was snapshotted from memory or read off disk makes no difference here.
       return world
           .chunkAt(cell, cell)
           .toFuture()
           .thenCompose(
               chunk -> {
                 if (!(chunk instanceof PaperChunk paperChunk)) {
-                  // No snapshot to describe the block with — the load policy declined the chunk, or
-                  // it was invalidated between the mode's read and this verdict. Nothing truthful
-                  // to ask a checker, so fail open, exactly as an offline player does above.
+                  // No chunk to describe the block with — the load policy declined it, or it could
+                  // not be read. Nothing truthful to ask a checker, so fail open, exactly as an
+                  // offline player does above.
                   return CompletableFuture.completedFuture(true);
                 }
-                Supplier<BlockData> data = lazyBlockData(paperChunk, cell);
+                Supplier<BlockData> data = new LazyBlockData(paperChunk, cell);
                 List<CompletableFuture<Boolean>> results = new ArrayList<>(checkers.size());
                 for (org.cobblestonemc.paper.api.BreakChecker checker : checkers) {
                   results.add(checker.breakable(online, location, data));
@@ -345,27 +344,6 @@ public final class PaperNavigationServiceImpl
   private static World bukkitWorld(String key) {
     NamespacedKey namespacedKey = NamespacedKey.fromString(key);
     return namespacedKey == null ? null : Bukkit.getWorld(namespacedKey);
-  }
-
-  /**
-   * The block state a chunk snapshot holds at {@code cell}, read on first use and remembered.
-   *
-   * <p>{@code ChunkSnapshot#getBlockData} is a defensive {@code clone()}, and a mining route asks
-   * about every block it considers breaking, so a checker that never looks at the state must not
-   * pay for one. Confined to one composed verdict, hence no synchronization.
-   */
-  private static Supplier<BlockData> lazyBlockData(PaperChunk chunk, Cell cell) {
-    return new Supplier<>() {
-      private BlockData data;
-
-      @Override
-      public BlockData get() {
-        if (data == null) {
-          data = chunk.snapshot().getBlockData(cell.x() & 15, cell.y(), cell.z() & 15);
-        }
-        return data;
-      }
-    };
   }
 
   /**

@@ -67,7 +67,7 @@ final class NMSChunkReader {
    * <p>The future <b>fails</b> if the chunk cannot be read — a region file that will not open, a
    * decode error, an internal that moved between server versions. That failure means only that the
    * <em>fast</em> path did not work, which is why it is reported rather than absorbed: {@link
-   * PaperPlatformApi} answers it by loading the chunk through the server instead, so nothing above
+   * PaperChunkFetcher} answers it by loading the chunk through the server instead, so nothing above
    * it ever learns there were two ways to get a chunk.
    *
    * <p>A chunk that simply is not there — never generated, or generated but not finished — is not a
@@ -131,10 +131,10 @@ final class NMSChunkReader {
    * Notes that a read failed, and decides whether the offline path stays open.
    *
    * <p>A {@link LinkageError} means an internal moved under us and every later read would fail
-   * identically, so it closes the path for the session — after which {@link PaperPlatformApi} stops
-   * trying it at all. Anything else is an ordinary IO or decode failure that says nothing about the
-   * server version, so it is logged sparingly and changes nothing. Either way the message is
-   * rationed; see {@link NMSSupport}.
+   * identically, so it closes the path for the session — after which {@link PaperChunkFetcher}
+   * stops trying it at all. Anything else is an ordinary IO or decode failure that says nothing
+   * about the server version, so it is logged sparingly and changes nothing. Either way the message
+   * is rationed; see {@link NMSSupport}.
    *
    * @param error the failure, as a future handed it over (a completion wrapper is unwrapped here)
    * @param chunkX the chunk X

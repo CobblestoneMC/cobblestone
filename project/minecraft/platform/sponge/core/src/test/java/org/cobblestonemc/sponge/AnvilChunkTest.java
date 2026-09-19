@@ -187,12 +187,17 @@ class AnvilChunkTest {
   }
 
   @Test
-  void declinesChunksOlderThanTheLayoutItUnderstands() throws IOException {
+  void refusesChunksOlderThanTheLayoutItUnderstands() {
     Map<String, Object> tag =
         chunk(new ArrayList<>(List.of(section(0, List.of(paletteEntry("stone")), null))));
     tag.put("DataVersion", 2000); // a 1.16 world that was never upgraded
 
-    assertNull(AnvilChunk.decode(tag, resolver));
+    // Thrown rather than answered with null: the chunk exists, and null would read as "never
+    // generated" and wall it off, where the server could upgrade and load it.
+    UnsupportedChunkVersionException refused =
+        assertThrows(
+            UnsupportedChunkVersionException.class, () -> AnvilChunk.decode(tag, resolver));
+    assertEquals(2000, refused.dataVersion());
   }
 
   @Test

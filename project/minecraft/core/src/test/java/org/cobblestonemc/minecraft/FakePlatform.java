@@ -20,16 +20,22 @@ import java.util.concurrent.CompletableFuture;
 final class FakePlatform implements PlatformApi<Object> {
 
   private final List<long[]> fetched = new ArrayList<>();
-  private final Map<Long, CompletableFuture<MinecraftChunk>> deferred = new HashMap<>();
+  private final Map<Long, CompletableFuture<ChunkFetch>> deferred = new HashMap<>();
   private boolean immediate = true;
-  private boolean unknown;
+  private ChunkFetch.Failed failure;
+  private boolean throwing;
 
   /**
-   * Makes every fetch — urgent ones included — come back unknown, the way a platform whose chunk is
-   * not loaded yet, or whose load timed out, would.
+   * Makes every fetch — urgent ones included — come back with this failure, or succeed again when
+   * {@code null}.
    */
-  void setUnknown(boolean unknown) {
-    this.unknown = unknown;
+  void setFailure(ChunkFetch.Failed failure) {
+    this.failure = failure;
+  }
+
+  /** Makes every fetch complete exceptionally, the way a platform with a bug in it would. */
+  void setThrowing(boolean throwing) {
+    this.throwing = throwing;
   }
 
   void setImmediate(boolean immediate) {
@@ -41,7 +47,7 @@ final class FakePlatform implements PlatformApi<Object> {
   }
 
   void completeFetch(int chunkX, int chunkZ) {
-    deferred.get(key(chunkX, chunkZ)).complete(new FakeChunk(chunkX, chunkZ));
+    deferred.get(key(chunkX, chunkZ)).complete(ChunkFetch.success(new FakeChunk(chunkX, chunkZ)));
   }
 
   @Override
@@ -50,16 +56,19 @@ final class FakePlatform implements PlatformApi<Object> {
   }
 
   @Override
-  public CompletableFuture<MinecraftChunk> fetchChunk(
+  public CompletableFuture<ChunkFetch> fetchChunk(
       int chunkX, int chunkZ, MinecraftWorld world, ChunkLoadPolicy policy, boolean urgent) {
     fetched.add(new long[] {chunkX, chunkZ});
-    if (unknown) {
-      return CompletableFuture.completedFuture(MinecraftChunk.Unknown.INSTANCE);
+    if (throwing) {
+      return CompletableFuture.failedFuture(new IllegalStateException("the platform broke"));
+    }
+    if (failure != null) {
+      return CompletableFuture.completedFuture(failure);
     }
     if (immediate) {
-      return CompletableFuture.completedFuture(new FakeChunk(chunkX, chunkZ));
+      return CompletableFuture.completedFuture(ChunkFetch.success(new FakeChunk(chunkX, chunkZ)));
     }
-    CompletableFuture<MinecraftChunk> future = new CompletableFuture<>();
+    CompletableFuture<ChunkFetch> future = new CompletableFuture<>();
     deferred.put(key(chunkX, chunkZ), future);
     return future;
   }

@@ -23,8 +23,11 @@ package org.cobblestonemc.minecraft;
  * @param prefetches speculative read-ahead fetches issued
  * @param prefetchesUsed prefetched snapshots that a later request actually read
  * @param prefetchesWasted prefetched snapshots evicted or expired without ever being read
- * @param unknownChunks fetches that resolved to {@link MinecraftChunk.Unknown} — the load policy
- *     declined, the world was gone, or the platform refused; every block in them reads impassable
+ * @param unknownChunks chunks cached as {@link MinecraftChunk.Unknown} — a permanent failure (the
+ *     load policy declined, the world was gone, nothing was saved), or one given up on after
+ *     repeated transient failures; every block in them reads impassable
+ * @param transientFailures fetches that failed in a way worth retrying (see {@link
+ *     ChunkFetch.Failed#transientFailure()}), whether or not the chunk was later given up on
  * @param directFetchMillis summed wall-clock latency of the direct fetches
  */
 public record ChunkProviderStats(
@@ -35,6 +38,7 @@ public record ChunkProviderStats(
     long prefetchesUsed,
     long prefetchesWasted,
     long unknownChunks,
+    long transientFailures,
     long directFetchMillis) {
 
   /**
@@ -52,6 +56,7 @@ public record ChunkProviderStats(
         delta(prefetchesUsed, earlier.prefetchesUsed),
         delta(prefetchesWasted, earlier.prefetchesWasted),
         delta(unknownChunks, earlier.unknownChunks),
+        delta(transientFailures, earlier.transientFailures),
         delta(directFetchMillis, earlier.directFetchMillis));
   }
 
@@ -79,7 +84,7 @@ public record ChunkProviderStats(
   @Override
   public String toString() {
     return ("chunkLookups:%d, cacheHits:%d (%.1f%%), directFetches:%d (mean %.1fms), "
-            + "prefetches:%d (used:%d, wasted:%d = %.1f%%), unknownChunks:%d")
+            + "prefetches:%d (used:%d, wasted:%d = %.1f%%), unknownChunks:%d, transientFailures:%d")
         .formatted(
             chunkLookups,
             cacheHits,
@@ -90,6 +95,7 @@ public record ChunkProviderStats(
             prefetchesUsed,
             prefetchesWasted,
             prefetchWasteRatio() * 100,
-            unknownChunks);
+            unknownChunks,
+            transientFailures);
   }
 }

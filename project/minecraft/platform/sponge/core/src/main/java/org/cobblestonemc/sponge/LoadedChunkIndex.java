@@ -10,6 +10,8 @@ package org.cobblestonemc.sponge;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongSupplier;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.ScopedCobblestoneLogger;
 import org.spongepowered.api.Sponge;
@@ -46,18 +48,47 @@ import org.spongepowered.math.vector.Vector3i;
  * started — spawn chunks, anything a player was standing in — and those would read stale from disk
  * for the rest of the session rather than for a moment. Each world is therefore enumerated once on
  * the server thread when it is registered.
+ *
+ * <p><b>And the recently departed.</b> A chunk that has just unloaded is not quite on disk yet: its
+ * save is written a moment after it leaves memory. So the index also remembers when each chunk
+ * unloaded, for {@link #SAVE_GRACE_MILLIS}, which lets a disk read that comes back empty for such a
+ * chunk be told apart from one for a chunk that was never generated. See {@link #recentlyUnloaded}.
  */
 final class LoadedChunkIndex {
 
+  /**
+   * How long after a chunk unloads its save may still be on its way to disk.
+   *
+   * <p>Vanilla serializes a chunk as it unloads and hands the bytes to a background writer, so the
+   * region file catches up a moment later — normally well under a second, longer on a busy disk.
+   * Generous on purpose: the only cost of overestimating is that a chunk which really was never
+   * saved gets retried a few times before a search gives up on it.
+   */
+  static final long SAVE_GRACE_MILLIS = 30_000L;
+
   private final CobblestoneLogger logger;
+  private final LongSupplier clock;
 
   /**
    * Loaded chunk positions by world, packed as {@code x} in the high word and {@code z} the low.
    */
   private final Map<String, Set<Long>> byWorld = new ConcurrentHashMap<>();
 
+  /**
+   * When each recently unloaded chunk unloaded, by world, packed as in {@link #byWorld}. Entries
+   * older than {@link #SAVE_GRACE_MILLIS} are dead weight and are swept out now and then.
+   */
+  private final Map<String, Map<Long, Long>> unloadedAt = new ConcurrentHashMap<>();
+
+  private final AtomicLong lastSweptAt = new AtomicLong();
+
   LoadedChunkIndex(CobblestoneLogger logger) {
+    this(logger, System::currentTimeMillis);
+  }
+
+  LoadedChunkIndex(CobblestoneLogger logger, LongSupplier clock) {
     this.logger = new ScopedCobblestoneLogger(logger, "LoadedChunkIndex");
+    this.clock = clock;
   }
 
   /**
@@ -73,18 +104,60 @@ final class LoadedChunkIndex {
     return loaded != null && loaded.contains(pack(chunkX, chunkZ));
   }
 
-  /** Records a chunk as loaded. */
-  void markLoaded(String worldKey, int chunkX, int chunkZ) {
-    byWorld
-        .computeIfAbsent(worldKey, key -> ConcurrentHashMap.newKeySet())
-        .add(pack(chunkX, chunkZ));
+  /**
+   * Returns whether a chunk unloaded so recently that its save may not have reached disk yet. Safe
+   * from any thread.
+   *
+   * <p>A disk read that finds nothing for such a chunk is not evidence the chunk does not exist,
+   * only that the write is still in flight.
+   *
+   * @param worldKey the world's key
+   * @param chunkX the chunk X
+   * @param chunkZ the chunk Z
+   * @return {@code true} if the chunk unloaded within the last {@link #SAVE_GRACE_MILLIS}
+   */
+  boolean recentlyUnloaded(String worldKey, int chunkX, int chunkZ) {
+    Map<Long, Long> unloaded = unloadedAt.get(worldKey);
+    if (unloaded == null) {
+      return false;
+    }
+    Long at = unloaded.get(pack(chunkX, chunkZ));
+    return at != null && clock.getAsLong() - at < SAVE_GRACE_MILLIS;
   }
 
-  /** Records a chunk as no longer loaded. */
+  /** Records a chunk as loaded. */
+  void markLoaded(String worldKey, int chunkX, int chunkZ) {
+    long packed = pack(chunkX, chunkZ);
+    byWorld.computeIfAbsent(worldKey, key -> ConcurrentHashMap.newKeySet()).add(packed);
+    Map<Long, Long> unloaded = unloadedAt.get(worldKey);
+    if (unloaded != null) {
+      unloaded.remove(packed);
+    }
+  }
+
+  /** Records a chunk as no longer loaded, and when. */
   void markUnloaded(String worldKey, int chunkX, int chunkZ) {
+    long packed = pack(chunkX, chunkZ);
     Set<Long> loaded = byWorld.get(worldKey);
     if (loaded != null) {
-      loaded.remove(pack(chunkX, chunkZ));
+      loaded.remove(packed);
+    }
+    long now = clock.getAsLong();
+    unloadedAt.computeIfAbsent(worldKey, key -> new ConcurrentHashMap<>()).put(packed, now);
+    sweep(now);
+  }
+
+  /**
+   * Drops unload times too old to matter, at most once per {@link #SAVE_GRACE_MILLIS}, so the map
+   * holds no more than the chunks unloaded across about two grace periods.
+   */
+  private void sweep(long now) {
+    long last = lastSweptAt.get();
+    if (now - last < SAVE_GRACE_MILLIS || !lastSweptAt.compareAndSet(last, now)) {
+      return;
+    }
+    for (Map<Long, Long> unloaded : unloadedAt.values()) {
+      unloaded.values().removeIf(at -> now - at >= SAVE_GRACE_MILLIS);
     }
   }
 
@@ -120,6 +193,7 @@ final class LoadedChunkIndex {
   @Listener
   public void onWorldUnload(UnloadWorldEvent event) {
     byWorld.remove(event.world().key().asString());
+    unloadedAt.remove(event.world().key().asString());
   }
 
   @Listener

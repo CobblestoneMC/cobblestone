@@ -130,6 +130,7 @@ public final class CobblestoneSpongePlugin {
             new ChunkProviderSettings(
                 config.get(keys.chunksCacheSize),
                 config.get(keys.chunksPrefetchDistance),
+                config.get(keys.chunksFetchAttempts),
                 config.get(keys.chunksPolicy)),
             () -> config.get(spongeKeys.chunksMaxLoadRequests),
             new AnvilOfflineChunkSource(cobblestoneLogger));

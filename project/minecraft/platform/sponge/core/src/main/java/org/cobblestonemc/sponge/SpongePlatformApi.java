@@ -11,8 +11,8 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.IntSupplier;
 import org.cobblestonemc.CobblestoneLogger;
+import org.cobblestonemc.minecraft.ChunkFetch;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
-import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.PlatformApi;
@@ -54,6 +54,7 @@ final class SpongePlatformApi implements PlatformApi<Entity> {
 
   @Override
   public void shutdown() {
+    chunks.shutdown(); // first, so reads the source calls off are not handed to the tickets
     offline.shutdown();
   }
 
@@ -82,12 +83,12 @@ final class SpongePlatformApi implements PlatformApi<Entity> {
   }
 
   @Override
-  public CompletableFuture<MinecraftChunk> fetchChunk(
+  public CompletableFuture<ChunkFetch> fetchChunk(
       int chunkX, int chunkZ, MinecraftWorld world, ChunkLoadPolicy policy, boolean urgent) {
     Optional<ServerWorld> resolved =
         Sponge.server().worldManager().world(ResourceKey.resolve(world.key()));
     if (resolved.isEmpty()) {
-      return CompletableFuture.completedFuture(MinecraftChunk.Unknown.INSTANCE);
+      return CompletableFuture.completedFuture(ChunkFetch.Failed.permanent());
     }
     return chunks.fetch(resolved.get(), chunkX, chunkZ, policy, urgent);
   }
