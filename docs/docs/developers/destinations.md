@@ -1,15 +1,14 @@
 ---
 title: Destinations
-description: Offer places players can reach with /navigate.
+description: Register destinations for /navigate.
 ---
 
 # Destinations
 
-A **destination** is a named place `/navigate` can route to. You supply them with a
-`DestinationService`, which Cobblestone calls **per player, per search** — so what you offer can
-depend on who is asking and on the state of your plugin right now.
+A **destination** is a named location that `/navigate` can route to. Destinations are supplied by a
+`DestinationService`, which is queried per player, per search.
 
-## The shape of it
+## Structure
 
 ```mermaid
 flowchart LR
@@ -21,9 +20,9 @@ flowchart LR
     E --> F["regions() — where it actually is"]
 ```
 
-## A minimal provider
+## Minimal example
 
-Offer one place, a shop at a fixed location:
+A single destination at a fixed location:
 
 === "Paper"
 
@@ -62,17 +61,17 @@ Offer one place, a shop at a fixed location:
     }
     ```
 
-If your plugin is called `Shops`, that destination's address is `shops market` and players reach it
-with `/nav market` (or `/nav shops market` when something else also offers a `market`).
+For a plugin named `Shops`, the address is `shops market`. Players may use `/nav market`, or
+`/nav shops market` if the name is ambiguous.
 
-!!! note "Don't name a level after yourself"
+!!! note
 
-    Cobblestone already files your tree under your plugin's name. Build the levels *below* that —
-    a `warp` sub-tree, not a `myplugin` sub-tree.
+    The tree is already registered under the owner plugin's name. Do not add a top-level node for
+    it.
 
-## Building a tree
+## Trees
 
-`DestinationTree.builder()` gives you leaves and sub-trees, both keyed by string:
+`DestinationTree.builder()` creates leaves and subtrees, each keyed by a string:
 
 === "Paper"
 
@@ -87,8 +86,7 @@ with `/nav market` (or `/nav shops market` when something else also offers a `ma
         .build();
     ```
 
-    1. A strict level can never be omitted by the player: they must type
-       `/nav dungeon crypt`, not `/nav crypt`.
+    1. A strict level cannot be omitted: `/nav dungeon crypt` is valid; `/nav crypt` is not.
 
 === "Sponge"
 
@@ -103,23 +101,18 @@ with `/nav market` (or `/nav shops market` when something else also offers a `ma
         .build();
     ```
 
-    1. A strict level can never be omitted by the player: they must type
-       `/nav dungeon crypt`, not `/nav crypt`.
+    1. A strict level cannot be omitted: `/nav dungeon crypt` is valid; `/nav crypt` is not.
 
-Rules worth knowing:
+Rules:
 
-- **Keys** are single tokens. Upper case is allowed, special characters aren't, spaces are allowed
-  but strongly discouraged — the key ends up in a command and in a permission node.
-- **Children are suppliers.** Nothing below a level is evaluated until a player actually walks into
-  it, so a tree with ten thousand towns costs nothing until someone types `town `.
-- **Return `null`** from `provide` when you have nothing for this player. An empty tree is dropped
-  too, rather than being offered as a dead end.
-- **Mark big levels `strict()`.** Besides forcing the player to be explicit, it stops Cobblestone
-  from even visiting the level while computing suggestions.
+- **Keys** are single tokens. Upper case is permitted; special characters are not. Spaces are
+  permitted but discouraged, since keys appear in commands and permission nodes.
+- **Children are suppliers**, evaluated only when traversed.
+- **Return `null`** from `provide` when there are no destinations for the player. Empty trees are
+  omitted.
+- **Mark large levels `strict()`.** Strict levels are skipped when computing suggestions.
 
 ### Lazy levels
-
-The supplier form is the point. Only materialize when asked:
 
 === "Paper"
 
@@ -147,9 +140,9 @@ The supplier form is the point. Only materialize when asked:
     }
     ```
 
-## What a destination is
+## Destination types
 
-`Destination` builds the common shapes for you:
+`Destination` provides factories for common cases:
 
 === "Paper"
 
@@ -184,12 +177,12 @@ The supplier form is the point. Only materialize when asked:
         () -> town.claims().stream().map(this::toRegion).toList(), Component.text("Riverwood"));
     ```
 
-A destination with **no** regions is legal and simply has nowhere to go — that's how an integration
-handles "the world this home is in isn't loaded" without breaking the tree.
+A destination with no regions is valid and unreachable. Use this when the target is temporarily
+unavailable, such as when its world is unloaded.
 
 ### Moving targets
 
-Implement `MinecraftDestination` yourself when you need `isMobile()`:
+Implement `MinecraftDestination` directly to override `isMobile()`:
 
 ```java
 public record NpcDestination(NPC npc) implements MinecraftDestination<World, Vector3i> {
@@ -218,28 +211,20 @@ public record NpcDestination(NPC npc) implements MinecraftDestination<World, Vec
 }
 ```
 
-`isMobile()` only sets the **default** for liveness; the player can still override it with `-live`
-or `-no-live`.
+`isMobile()` sets the default for live trips. Players may override it with `-live` or `-no-live`.
 
 ## Permissions
 
-Two separate things:
+- **Destination node**: `cobblestone.navigate.<address>`. Generated automatically, default allow,
+  and managed by server admins.
+- **`permissions()`**: Additional required permissions, all of which the player must hold. Use for
+  access control only. Cobblestone's own destinations declare none.
 
-- **Cobblestone's gate** — `cobblestone.navigate.<your address>`, generated automatically,
-  default-allow, and entirely the admin's business. You don't have to do anything for this.
-- **`permissions()` on your destination** — hard requirements, *all* of which the player must hold.
-  Reserve it for genuine access control ("this dungeon is unlocked at rank 3"), not for
-  "admins might want to hide this". Cobblestone's own destinations declare none.
+## Addressing
 
-## Addressing, from your side
+Players may omit leading words of an address if the remainder is unambiguous.
 
-Players may omit leading words of an address as long as the result is unambiguous, so your key
-choices are part of the user interface:
-
-- The **last** key is always required.
-- A `strict()` level is always required.
-- Keys that collide across plugins (two `home`s) still work — Cobblestone reports the ambiguity and
-  lists the full addresses, and the player picks.
-
-Case is folded when matching, so registering both `quest` and `Quest` is a collision, not two
-branches.
+- The final key is always required.
+- `strict()` levels are always required.
+- Keys that collide across plugins are resolved by the player using the full address.
+- Matching is case-insensitive; `quest` and `Quest` collide.

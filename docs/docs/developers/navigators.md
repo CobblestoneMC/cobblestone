@@ -1,15 +1,14 @@
 ---
 title: Navigators
-description: Draw a route your own way — a compass, a hologram, an NPC that walks ahead.
+description: Implement custom route rendering.
 ---
 
 # Navigators
 
-A **navigator** is how a trip is shown to the player. Cobblestone ships one, `trail`, which draws a
-ribbon of particles along the path. Register your own and players select it with
-`/navigate <destination> -navigator <id>`, or your plugin picks it when it starts a trip.
+A **navigator** renders a trip. The built-in `trail` navigator draws particles along the path.
+Players select a navigator with `-navigator <id>`; plugins select one when starting a trip.
 
-## The contract
+## Interface
 
 ```java
 public interface Navigator<L> {
@@ -27,15 +26,15 @@ public interface Navigator<L> {
 }
 ```
 
-`tick()` is called **every server tick** while the trip lives, on the scheduler Cobblestone uses for
-that player (a region task on Folia). Keep it cheap and don't block.
+`tick()` runs every server tick on the player's scheduler (a region task on Folia). It must not
+block.
 
-`isComplete()` returning `true` ends the trip. Cobblestone does not decide arrival for you —
-"close enough" is a display decision, and the built-in trail uses two blocks.
+The trip ends when `isComplete()` returns `true`. Arrival is determined by the navigator; the
+built-in trail uses a two-block radius.
 
-## A minimal navigator
+## Example
 
-An action-bar compass: no particles, just a bearing and a distance.
+An action-bar compass that displays a bearing:
 
 === "Paper"
 
@@ -137,7 +136,7 @@ An action-bar compass: no particles, just a bearing and a distance.
     }
     ```
 
-## Register it
+## Registration
 
 === "Paper"
 
@@ -153,14 +152,13 @@ An action-bar compass: no particles, just a bearing and a distance.
         (player, path, settings) -> new CompassNavigator(player, path));
     ```
 
-Ids are lower-case and first registration wins, so pick something specific. The node
-`cobblestone.navigator.compass` gates it (default allow), and everything you registered is dropped
-when your plugin disables.
+Ids are lower-case. The first registration of an id takes precedence. The navigator is gated by
+`cobblestone.navigator.<id>` (default allow) and removed when the owner disables.
 
 ## Settings
 
-The `NavigatorSettings` handed to your factory carries per-trip overrides. Declare typed keys for
-whatever your navigator understands:
+`NavigatorSettings` carries per-trip overrides. Declare typed keys for the settings your navigator
+supports:
 
 ```java
 public final class CompassSettings {
@@ -175,8 +173,7 @@ public final class CompassSettings {
 }
 ```
 
-Read them in the factory, falling back to your own config when unset — that's the contract the
-built-in trail follows:
+Read them in the factory, falling back to configuration when unset:
 
 ```java
 boolean showDistance = settings.get(CompassSettings.SHOW_DISTANCE).orElse(config.showDistance());
@@ -184,8 +181,8 @@ boolean showDistance = settings.get(CompassSettings.SHOW_DISTANCE).orElse(config
 
 ## Reading the path
 
-A `Path` is an origin plus an ordered list of `Step`s. Each step carries the position reached, its
-`cost` and `time` in seconds, and a `MinecraftStepPayload`:
+A `Path` is an origin and an ordered list of `Step`s. Each step has a position, `cost` and `time` in
+seconds, and a `MinecraftStepPayload`:
 
 ```java
 for (Step<Location, MinecraftStepPayload> step : path.steps()) {
@@ -194,13 +191,12 @@ for (Step<Location, MinecraftStepPayload> step : path.steps()) {
 }
 ```
 
-`path.duration()` is the estimated real travel time, `path.cost()` the metric the search minimized.
+`path.duration()` is the estimated travel time; `path.cost()` is the value minimized by the search.
 
-### Prompting on action steps
+### Action steps
 
-Some step types are things the player must *do* rather than walk: `OPEN_DOOR`, `PLACE_BOAT`,
-`MOUNT_HORSE`, `TELEPORT`. `MinecraftStepType#isAction()` tells you which, and a step may also carry
-an instruction:
+`OPEN_DOOR`, `PLACE_BOAT`, `MOUNT_HORSE`, and `TELEPORT` require player action.
+`MinecraftStepType#isAction()` identifies them. A step may also carry an instruction:
 
 ```java
 if (step.payload().instruction()
@@ -211,18 +207,15 @@ if (step.payload().instruction()
 }
 ```
 
-A navigator that silently walks a player into a step they have to trigger themselves will look
-broken. Say something.
+Navigators should notify the player at action steps.
 
-## Straying (optional)
+## Straying
 
-Two optional hooks let a navigator ask the trip for help when the player wanders off:
+Two optional hooks handle players who leave the route:
 
-- **`consumeRecalcRequest()`** — return `true` and the trip runs a fresh search from wherever the
-  player now is, then calls your `update(newPath)`. The built-in trail does this once per second at
-  most, past a configured distance.
-- **`consumeGuideRequest()`** — return a target and Cobblestone computes a short path from the
-  player back to it, handing it to `setGuidePath`. That's how the trail draws a real route back to
-  itself rather than a straight line through a wall.
+- **`consumeRecalcRequest()`**: Return `true` to re-search from the player's position. The new
+  path is passed to `update`.
+- **`consumeGuideRequest()`**: Return a target to compute a short path from the player to it. The
+  result is passed to `setGuidePath`.
 
-Both default to "never", so ignore them until you want them.
+Both default to no request.

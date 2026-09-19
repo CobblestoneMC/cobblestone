@@ -1,11 +1,11 @@
 ---
 title: Commands
-description: Every Cobblestone command, its arguments, its permission, and what it prints.
+description: Command reference.
 ---
 
 # Commands
 
-Cobblestone registers two command trees. Both behave identically on Paper and Sponge.
+Cobblestone registers two commands. Both behave identically on Paper and Sponge.
 
 | Command | Aliases |
 | --- | --- |
@@ -18,13 +18,13 @@ Cobblestone registers two command trees. Both behave identically on Paper and Sp
 
 **Permission:** `cobblestone.navigate` (default allow) · **Players only**
 
-Resolves the destination, runs a search, and — if a route is found — starts a trip that draws it.
-Called with no arguments it prints its own usage.
+Resolves the destination, runs a search, and starts a trip if a route is found. With no arguments,
+prints usage.
 
 ### Destination
 
-The destination is one or more words naming a place in the destination tree. Every provider
-contributes a branch, keyed by the plugin that registered it:
+One or more words identifying a node in the destination tree. Each provider contributes a branch
+keyed by the name of the plugin that registered it:
 
 ```
 cobblestone location private home
@@ -37,9 +37,9 @@ citizens npc <name>
 essentials home <name>
 ```
 
-Players may omit leading words as long as what remains is unambiguous (`/nav home`), except for the
-final word and any level the provider marked strict. Ambiguity is reported with the candidate
-addresses rather than guessed at. Matching is case-insensitive.
+Leading words may be omitted if the remainder is unambiguous (`/nav home`). The final word and any
+level marked strict by its provider are always required. Ambiguous input is rejected with a list of
+candidates. Matching is case-insensitive.
 
 ### Flags
 
@@ -55,9 +55,9 @@ addresses rather than guessed at. Matching is case-insensitive.
 
 Mode words: `walk`, `swim`, `fly`, `mine`, `fall`, `climb`, `boat`, `horse`, `door`.
 
-Liveness defaults per destination: a destination that can move (another player) is live; everything
-else is not. A live trip re-searches every `trips.live_interval_ticks` and yields to
-`search.max_concurrent_per_player` — a manual `/navigate` always wins over a live re-search.
+Trips to moving destinations (players) are live by default; all others are not. A live trip
+re-searches every `trips.live_interval_ticks` and yields to `search.max_concurrent_per_player`. A
+manual `/navigate` takes priority over a live re-search.
 
 ### Examples
 
@@ -86,37 +86,35 @@ else is not. A live trip re-searches every `trips.live_interval_ticks` and yield
 
 ## `/cobblestone`
 
-Prints the help listing. Every subcommand below is also reachable through `/stone`.
+Prints help. All subcommands are also available under `/stone`.
 
 ### `/cobblestone location set <name> [-global]`
 
 **Permission:** `cobblestone.location`; `-global` additionally needs
 `cobblestone.admin.location.global` · **Players only**
 
-Saves the caller's current block position under `name`. Personal by default; `-global` stores it
-server-wide, where every player can navigate to it.
+Saves the caller's current block position under `name`. Personal by default; `-global` makes it
+available to all players.
 
 ```
 /stone location set home
 /stone location set spawn -global
 ```
 
-Names are single words. Personal names are scoped to the player, so two players may both have
-`home`; a personal and a global location may share a name too, and are told apart by address
-(`location private home` versus `location global home`).
+Names are single words. Personal names are scoped per player. A personal and a global location may
+share a name; they are distinguished by address (`location private home`, `location global home`).
 
 ### `/cobblestone location unset <name> [-global]`
 
 **Permission:** `cobblestone.location`; `-global` needs `cobblestone.admin.location.global`
 
-Removes one of the caller's locations, or — with `-global` — the server-wide one. Tab-completion
-offers the caller's names, plus the global ones if they hold the global permission.
+Removes a personal location, or a global location with `-global`.
 
 ### `/cobblestone location list`
 
 **Permission:** `cobblestone.location` · **Players only**
 
-Lists the caller's locations and all global ones, with coordinates. Global entries are marked.
+Lists the caller's personal locations and all global locations.
 
 ```
 Locations (3):
@@ -129,7 +127,7 @@ spawn - minecraft:overworld 0, 64, 0 (global)
 
 **Permission:** `cobblestone.navigate` · **Players only**
 
-Lists the caller's active trips with their id, destination, and live remaining-time estimate.
+Lists the caller's active trips with id, destination, and estimated remaining time.
 
 ```
 Active trips (2):
@@ -141,15 +139,14 @@ Active trips (2):
 
 **Permission:** `cobblestone.navigate` · **Players only**
 
-Cancels one trip by id, or — with `all`, or with no argument — every trip **and** every search the
-player still has running.
+Cancels a trip by id. With `all` or no argument, cancels all trips and pending searches.
 
 ### `/cobblestone reload`
 
 **Permission:** `cobblestone.admin.reload`
 
-Re-reads `config.yml`. Settings marked mutable take effect at once. Settings that require a restart
-are reported back and the old values are kept:
+Reloads `config.yml`. Live settings apply immediately. Changes to restart-only settings are reported
+and not applied:
 
 ```
 Cobblestone configuration reloaded.
@@ -160,8 +157,7 @@ Some settings changed but need a server restart to apply: data.backend, search.c
 
 **Permission:** `cobblestone.admin.portals`
 
-Deletes every portal link Cobblestone has learned. Use this after rebuilding portals, or if a link
-was learned while the world was in an odd state. Links are relearned as players travel.
+Deletes all learned portal links. Links are relearned as players use portals.
 
 ```
 Cleared 42 discovered portal transitions.
@@ -171,9 +167,6 @@ Cleared 42 discovered portal transitions.
 
 **Permission:** `cobblestone.admin.loglevel`
 
-Sets console verbosity for Cobblestone until the next restart: `trace`, `debug`, `info`, `warn`,
-`error`. Deliberately not a config setting — it's a debugging dial, and it resets on restart so a
-server is never left running at `trace` forever.
+Sets Cobblestone's console log level until restart: `trace`, `debug`, `info`, `warn`, or `error`.
 
-`debug` logs one line per search with its outcome, step count and timing, which is the fastest way
-to find out why a player's `/navigate` is failing.
+At `debug`, each search logs its outcome, step count, and timing.

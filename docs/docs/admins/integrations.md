@@ -1,67 +1,48 @@
 ---
 title: Integrations
-description: The companion plugins that connect Cobblestone to Towny, EssentialsX, Citizens, quest plugins and Typewriter.
+description: Companion plugins for Towny, EssentialsX, Citizens, quest plugins, and Typewriter.
 ---
 
 # Integrations
 
-Each integration is a small separate plugin. Install only the ones you use; each needs both
-Cobblestone and its target plugin present, and disables itself with a log line if the target is
-missing.
+Each integration is a separate plugin, available on
+[Modrinth](https://modrinth.com/plugin/cobblestoneplugin). An integration requires both Cobblestone
+and its target plugin, and disables itself if the target is absent.
 
-They are downloaded from the same [Modrinth page](https://modrinth.com/plugin/cobblestoneplugin) as
-Cobblestone itself.
+The integrations listed here are Paper builds.
 
-!!! note "Paper builds"
-
-    The integrations published from this repository are built against Paper. Cobblestone's
-    integration API exists on both platforms — nothing about it is Paper-specific — but the
-    companion plugins here target the Paper versions of Towny, EssentialsX, Citizens and the quest
-    plugins.
-
-An integration adds destinations to `/navigate` under its **target plugin's** name, so the
-permission nodes read `cobblestone.navigate.towny.…`, not `…cobblestonetowny…`. See
-[Permissions](permissions.md#the-per-destination-gate).
-
----
+Integration destinations are registered under the target plugin's name. Permission nodes therefore
+take the form `cobblestone.navigate.towny.…`, not `cobblestone.navigate.cobblestonetowny.…`. See
+[Permissions](permissions.md#destination-nodes).
 
 ## Towny
 
 **CobblestoneTowny** · requires Towny
 
-Destinations:
-
 ```
-/nav town <town> home            # the town's spawn
+/nav town <town> home            # town spawn
 /nav town <town> outpost <name>
-/nav town <town> plot <name>     # named plots
+/nav town <town> plot <name>     # named plot
 /nav town <town> type <name>     # plots by type (shop, farm, …)
-/nav resident                    # your own town
+/nav resident                    # the player's own town
 ```
 
-Town names are a strict level, so they can't be skipped — `/nav town riverwood home`, never just
-`/nav riverwood home`.
+The `town` level is strict: `/nav town riverwood home` is valid; `/nav riverwood home` is not.
 
-It also teaches the search two things:
-
-- **Teleports as routes.** `/town spawn`, `/nation spawn` and `/town outpost` become edges the
-  search may take, offered only when that player could actually run the command (Towny's own
-  permission, plus the public/own/nation/ally, outlaw and enemy rules). The route then prompts the
-  player to run it.
-- **Build protection.** Towny decides whether a player may break a given block, so routes that
-  involve mining avoid land they can't build on.
+- **Teleport route steps.** `/town spawn`, `/nation spawn`, and `/town outpost` are offered as route
+  steps when the player is permitted to use them under Towny's rules.
+- **Build protection.** Routes do not mine through blocks the player may not break.
 
 ## EssentialsX
 
-**CobblestoneEssentials** · requires EssentialsX (EssentialsSpawn optional)
+**CobblestoneEssentials** · requires EssentialsX; EssentialsSpawn optional
 
 ```
-/nav home <name>     # one of the player's own Essentials homes
-/nav spawn           # server spawn, if EssentialsSpawn is installed
+/nav home <name>     # an Essentials home
+/nav spawn           # server spawn (requires EssentialsSpawn)
 ```
 
-`/home` and `/spawn` also become route steps where the player is allowed to use them, so a long
-journey may start with "run `/home cabin`" and continue on foot from there.
+`/home` and `/spawn` are offered as route steps when the player is permitted to use them.
 
 ## Citizens
 
@@ -71,25 +52,24 @@ journey may start with "run `/home cabin`" and continue on foot from there.
 /nav npc <name>
 ```
 
-Every NPC on the server, resolved live so a moved NPC is routed to where it now stands. The `npc`
-level is strict — with hundreds of NPCs, name-promotion would be unusable.
+NPC positions are resolved at search time. The `npc` level is strict.
 
 ## BetonQuest
 
-**CobblestoneBetonQuest** · requires BetonQuest · **GPL-3.0**
+**CobblestoneBetonQuest** · requires BetonQuest · GPL-3.0
 
 ```
 /nav compass <name>
 ```
 
-Each of the player's active quest compasses is a destination. When a player sets their quest
-compass, a guided trip can start automatically.
+Each active quest compass is a destination. Setting a compass target can start a trip
+automatically.
 
-Config (`plugins/CobblestoneBetonQuest/config.yml`):
+`plugins/CobblestoneBetonQuest/config.yml`:
 
 ```yaml
 auto-navigate: true      # start a trip when a compass target is set
-navigator: trail         # display style for those trips
+navigator: trail
 particles: [DUST, GLOW]
 colors: [FFD54F, 4FC3F7]
 compasses:               # per-compass overrides, keyed by compass id
@@ -97,10 +77,7 @@ compasses:               # per-compass overrides, keyed by compass id
     enabled: false
 ```
 
-!!! warning "License"
-
-    This module links against BetonQuest and is therefore distributed under the **GPL-3.0**, unlike
-    the rest of Cobblestone (MIT). It ships its own LICENSE file.
+This module links against BetonQuest and is licensed under GPL-3.0.
 
 ## BeautyQuests
 
@@ -110,11 +87,10 @@ compasses:               # per-compass overrides, keyed by compass id
 /nav quest <name>
 ```
 
-Each started quest's current locatable stage is a destination, and advancing to a new locatable
-stage can start a trip automatically.
+The current locatable stage of each started quest is a destination. Advancing to a locatable stage
+can start a trip automatically.
 
-Config (`plugins/CobblestoneBeautyQuests/config.yml`) mirrors the BetonQuest one, with per-quest
-overrides keyed by the quest's numeric id:
+`plugins/CobblestoneBeautyQuests/config.yml` (per-quest overrides keyed by numeric quest id):
 
 ```yaml
 auto-navigate: true
@@ -132,8 +108,8 @@ quests:
 /nav quest <name>
 ```
 
-The player's current objectives, with the same auto-navigate behaviour. Per-quest overrides are
-keyed by the quest id (its file name):
+Current objectives are destinations, with the same automatic trip behavior. Per-quest overrides are
+keyed by quest id:
 
 ```yaml
 quests:
@@ -141,30 +117,22 @@ quests:
     enabled: false
 ```
 
-Because PikaMug's plugin is named `Quests`, its destinations live under `quests` and its permission
-nodes read `cobblestone.navigate.quests.quest.<name>`.
+The plugin is named `Quests`, so its nodes take the form `cobblestone.navigate.quests.quest.<name>`.
 
 ## Typewriter
 
-**cobblestone-typewriter** · a Typewriter extension, not a Bukkit plugin
+**cobblestone-typewriter** · Typewriter extension
 
-Adds a **Navigate Player** action entry. Drop it into a sequence and the triggering player is sent
-on a Cobblestone trip to the location you configure — for pointing a player at the objective right
-after they accept a quest.
+Adds a **Navigate Player** action entry, which starts a trip for the triggering player to a
+configured location. Install it as a Typewriter extension, not in `plugins/`.
 
-Install it the way you install any Typewriter extension, not by dropping it into `plugins/`.
+## Name collisions
 
----
+Multiple integrations may offer the same name, such as `home`. Destinations remain distinct by full
+address (`essentials home cabin`, `towny town riverwood home`). Ambiguous player input is rejected
+with a list of candidates.
 
-## Two integrations, one destination name
+## Custom integrations
 
-Nothing stops EssentialsX and Towny both offering a `home`. Cobblestone keeps them apart by
-address (`essentials home cabin` versus `towny town riverwood home`) and only complains when a
-player's shorthand is genuinely ambiguous — at which point it lists the candidates and asks them to
-be more specific.
-
-## Writing your own
-
-Everything these integrations do is public API: register destinations, add route edges, constrain
-where a player may dig, or supply your own display. See the
-[developer documentation](../developers/index.md) — the Towny integration is about 200 lines.
+All integration functionality is available through the public API. See the
+[developer documentation](../developers/index.md).

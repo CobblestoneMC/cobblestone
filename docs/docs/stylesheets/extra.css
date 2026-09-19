@@ -8,8 +8,7 @@
   --md-accent-fg-color: #c98a00;
   --cs-accent: #4aa8ff;
   --cs-amber: #ffc857;
-  --cs-card-bg: #ffffff;
-  --cs-card-border: rgba(0, 0, 0, 0.08);
+  --md-typeset-a-color: #1f64a8;
 }
 
 [data-md-color-scheme="slate"] {
@@ -17,8 +16,8 @@
   --md-primary-fg-color--light: #4aa8ff;
   --md-primary-fg-color--dark: #0d2233;
   --md-accent-fg-color: #ffc857;
-  --cs-card-bg: rgba(255, 255, 255, 0.04);
-  --cs-card-border: rgba(255, 255, 255, 0.12);
+  /* The slate primary is too dark to read as link text on the slate background. */
+  --md-typeset-a-color: #6cb8ff;
 }
 
 /* --- Home hero ------------------------------------------------------------ */
@@ -69,44 +68,6 @@
   height: 20px;
 }
 
-/* --- Cards ---------------------------------------------------------------- */
-
-.cs-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-  gap: 1rem;
-  margin: 1.5rem 0 2rem;
-}
-
-.cs-card {
-  display: block;
-  padding: 1.1rem 1.2rem;
-  border: 1px solid var(--cs-card-border);
-  border-radius: 0.5rem;
-  background: var(--cs-card-bg);
-  color: inherit !important;
-  transition: border-color 120ms, transform 120ms;
-}
-
-.cs-card:hover {
-  border-color: var(--cs-accent);
-  transform: translateY(-2px);
-}
-
-.cs-card h3 {
-  margin: 0 0 0.35rem;
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--md-primary-fg-color--light);
-}
-
-.cs-card p {
-  margin: 0;
-  font-size: 0.75rem;
-  line-height: 1.5;
-  color: var(--md-default-fg-color--light);
-}
-
 /* --- Section illustrations ------------------------------------------------ */
 
 .cs-illustration {
@@ -120,8 +81,22 @@
   height: auto;
 }
 
-/* Command cards on the reference pages. */
-.cs-command {
-  border-left: 3px solid var(--cs-accent);
-  padding-left: 0.9rem;
+/* --- External nav links ---------------------------------------------------- */
+
+/* Download and Stats leave the site; mark them with an "open in new" icon. */
+.md-tabs__link[href^="http"]::after,
+.md-nav__link[href^="http"]::after {
+  content: "";
+  display: inline-block;
+  width: 0.75em;
+  height: 0.75em;
+  margin-left: 0.25em;
+  vertical-align: -0.05em;
+  background-color: currentColor;
+  -webkit-mask: var(--cs-external-icon) center / contain no-repeat;
+  mask: var(--cs-external-icon) center / contain no-repeat;
+}
+
+:root {
+  --cs-external-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3m-2 16H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7Z"/></svg>');
 }

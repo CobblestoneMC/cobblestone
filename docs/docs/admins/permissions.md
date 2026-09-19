@@ -1,43 +1,37 @@
 ---
 title: Permissions
-description: Cobblestone's permission nodes, and the per-destination gate that decides where each player may navigate.
+description: Command nodes and per-destination permission nodes.
 ---
 
 # Permissions
 
-Cobblestone has two kinds of permission: a small fixed set for its commands, and a generated node
-for every destination and navigator on the server.
+Cobblestone defines a fixed set of command nodes and generates a node for every destination and
+navigator.
 
 ## Command nodes
 
 | Node | Default | Grants |
 | --- | --- | --- |
-| `cobblestone.navigate` | allow | `/navigate`, and the trip commands that manage its results (`/cobblestone trips`, `/cobblestone cancel`) |
-| `cobblestone.location` | allow | `/cobblestone location set/unset/list` for the player's own locations |
-| `cobblestone.navigator` | allow | parent of the per-navigator nodes |
-| `cobblestone.admin.location.global` | op | creating and deleting `-global` locations |
+| `cobblestone.navigate` | allow | `/navigate`, `/cobblestone trips`, `/cobblestone cancel` |
+| `cobblestone.location` | allow | `/cobblestone location set/unset/list` for personal locations |
+| `cobblestone.navigator` | allow | Parent of the per-navigator nodes |
+| `cobblestone.admin.location.global` | op | Creating and deleting global locations |
 | `cobblestone.admin.reload` | op | `/cobblestone reload` |
 | `cobblestone.admin.portals` | op | `/cobblestone portals clear` |
 | `cobblestone.admin.loglevel` | op | `/cobblestone loglevel` |
 
 === "Paper"
 
-    Declared in the plugin's `paper-plugin.yml`, so a permission plugin sees them with the defaults
-    above without any setup.
+    Declared in `paper-plugin.yml` with the defaults above.
 
 === "Sponge"
 
-    Described to the permission service on server start, with the same defaults, assigned to
-    Sponge's `USER` role for the player-facing nodes and `ADMIN` for the rest. A node that is not
-    described has no default and permission plugins deny it, which is why Cobblestone describes all
-    of them explicitly.
+    Registered with the permission service on startup. Player nodes are assigned to the `USER`
+    role and admin nodes to the `ADMIN` role.
 
----
+## Destination nodes
 
-## The per-destination gate
-
-Every destination in the `/navigate` tree has a **canonical address** — the full key path to it.
-Each address maps to a permission node under `cobblestone.navigate`:
+Each destination has a canonical address, which maps to a node under `cobblestone.navigate`:
 
 | Address | Node |
 | --- | --- |
@@ -47,97 +41,77 @@ Each address maps to a permission node under `cobblestone.navigate`:
 | `towny town riverwood home` | `cobblestone.navigate.towny.town.riverwood.home` |
 | `citizens npc Blacksmith` | `cobblestone.navigate.citizens.npc.Blacksmith` |
 
-The first element is the registering plugin's name, lower-cased: Cobblestone's own destinations sit
-under `cobblestone`, and an integration's sit under the plugin it integrates with (`towny`,
-`citizens`, `essentials`, `betonquest`, …) — not under the companion plugin's name.
+The first segment is the lower-cased name of the owning plugin. Integrations register under the
+plugin they integrate with (`towny`, `citizens`, `essentials`, `betonquest`, …), not under the
+name of the companion plugin.
 
-!!! info "Default allow"
+### Evaluation
 
-    A destination is navigable **unless its node is explicitly set to false**. An unset node is a
-    yes. This has to work that way: nobody can declare a node per town, per NPC or per player up
-    front, so an undeclared node must not read as a denial.
-
-!!! warning "Only the exact node is checked"
-
-    Cobblestone tests the destination's own full node — it does not walk up the address looking for
-    a denied ancestor. Denying `cobblestone.navigate.towny` therefore blocks nothing. To deny a
-    whole branch, use a wildcard your permission plugin expands (LuckPerms does):
+- **Default allow.** A destination is permitted unless its node is explicitly set to `false`.
+- **Exact node only.** Parent nodes are not consulted, so denying `cobblestone.navigate.towny` has
+  no effect. Deny a branch with a wildcard that your permission plugin expands:
 
     ```
     /lp group default permission set cobblestone.navigate.towny.* false
     ```
 
-    Because your permission plugin resolves the node, its own specificity rules apply: a broad deny
-    plus a narrow grant still grants.
+    The permission plugin's own precedence rules apply, so a narrower grant overrides a broader
+    deny.
 
-### Worked examples
+- **Tab completion.** Denied destinations are omitted from suggestions.
 
-Stop everyone from navigating to other players:
+### Examples
+
+Deny navigation to players:
 
 ```
 /lp group default permission set cobblestone.navigate.cobblestone.player.* false
 ```
 
-Hide the death destination from one rank, but keep it for donors:
+Deny the death destination except for one group:
 
 ```
 /lp group default permission set cobblestone.navigate.cobblestone.death false
 /lp group donor permission set cobblestone.navigate.cobblestone.death true
 ```
 
-Hide one town, leaving the rest navigable:
+Deny a single town:
 
 ```
 /lp group default permission set cobblestone.navigate.towny.town.riverwood.* false
 ```
 
-Turn the whole Citizens branch off except one NPC:
+Deny all Citizens NPCs except one:
 
 ```
 /lp group default permission set cobblestone.navigate.citizens.* false
 /lp group default permission set cobblestone.navigate.citizens.npc.Blacksmith true
 ```
 
-!!! tip "Denied destinations disappear"
+### Navigation and teleportation
 
-    The gate is applied to tab-completion as well as to the command, so a player never sees a
-    destination they are not allowed to route to.
+Destination nodes control only whether a player may be routed to a destination. Teleport commands
+such as `/home`, `/town spawn`, and `/warp` remain governed by their own plugins' permissions.
+Integrations offer a teleport as a route step only when the player may run the command.
 
-### Navigating is not teleporting
+### Provider permissions
 
-This gate answers "may this player be *shown the way* there?" — nothing else. Whether they may
-`/home`, `/town spawn` or `/warp` there is that plugin's own permission, and Cobblestone never
-overrides it: an integration only offers a teleport as a route step when the player could run the
-command themselves.
+A provider may attach additional required permissions to a destination
+(`MinecraftDestination#permissions`). The player must hold all of them. Cobblestone's own
+destinations declare none.
 
-That separation is useful in both directions. You can let players route to a town's gates without
-letting them teleport in, or let them teleport to a spawn while hiding it from navigation.
+## Navigator nodes
 
-!!! note "A provider may also require its own permissions"
-
-    Besides the gate, a destination can carry hard requirements from the plugin that registered it
-    (`MinecraftDestination#permissions`), all of which the player must hold. Those are for genuine
-    access control — Cobblestone's own destinations use none.
-
----
-
-## The navigator gate
-
-A non-default navigator is gated by `cobblestone.navigator.<id>`:
+Non-default navigators are gated by `cobblestone.navigator.<id>`:
 
 ```
 /lp group default permission set cobblestone.navigator.guide false
 ```
 
-Same semantics as the destination gate: default allow, checked only when the player actually asks
-for that navigator with `-navigator <id>`. The built-in `trail` navigator is the default and is
-covered by `cobblestone.navigate` alone.
+These nodes default to allow and are checked only when `-navigator <id>` is used. The default
+`trail` navigator requires only `cobblestone.navigate`.
 
----
+## Case sensitivity
 
-## A note on names in nodes
-
-Destination keys become node segments verbatim, so an NPC called `Blacksmith` yields
-`…citizens.npc.Blacksmith`. Most permission plugins fold case when matching, but not all do
-consistently — if a targeted deny seems to do nothing, try the lower-cased spelling. Names with
-spaces make awkward nodes; that's one reason providers are asked to avoid them.
+Destination keys are used verbatim as node segments (`…citizens.npc.Blacksmith`). If a deny has no
+effect, try the lower-cased form; not all permission plugins fold case consistently.

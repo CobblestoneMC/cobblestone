@@ -4,15 +4,12 @@
 
 # Cobblestone
 
-**Turn-by-turn navigation for Minecraft servers.**
-Ask for a place, follow the trail, get there — no map mod, no client install, no teleporting.
+**Server-side navigation for Minecraft.**
 
-[![Build](https://img.shields.io/github/actions/workflow/status/CobblestoneMC/cobblestone/build.yml?branch=main&label=build)](https://github.com/CobblestoneMC/cobblestone/actions/workflows/build.yml)
 [![Modrinth](https://img.shields.io/modrinth/v/cobblestoneplugin?label=modrinth)](https://modrinth.com/plugin/cobblestoneplugin)
 [![Downloads](https://img.shields.io/modrinth/dt/cobblestoneplugin?label=downloads)](https://modrinth.com/plugin/cobblestoneplugin)
-[![Servers](https://img.shields.io/bstats/servers/33624?label=servers%20%28paper%29)](https://bstats.org/plugin/bukkit/Cobblestone/33624)
-<!-- Sponge bStats badge — fill in the Sponge plugin id once it is registered:
-[![Servers (Sponge)](https://img.shields.io/bstats/servers/SPONGE_ID?label=servers%20%28sponge%29)](https://bstats.org/plugin/sponge/Cobblestone/SPONGE_ID) -->
+[![Servers (Paper)](https://img.shields.io/bstats/servers/33624?label=servers%20%28paper%29)](https://bstats.org/plugin/bukkit/Cobblestone/33624)
+[![Servers (Sponge)](https://img.shields.io/bstats/servers/33625?label=servers%20%28sponge%29)](https://bstats.org/plugin/sponge/Cobblestone/33625)
 [![Maven Central](https://img.shields.io/maven-central/v/org.cobblestonemc/paper-plugin-api?label=api)](https://central.sonatype.com/namespace/org.cobblestonemc)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -26,35 +23,36 @@ Ask for a place, follow the trail, get there — no map mod, no client install, 
 
 ## Quickstart
 
-1. Drop the jar into `plugins/` (Paper) or your plugin folder (Sponge).
+1. Place the jar in `plugins/` (Paper) or `mods/` (Sponge).
 2. Start the server.
 3. Try it:
 
 ```
-/stone location set home     # remember where you are
-/nav home                    # …then walk back to it from anywhere
+/stone location set home     # save the current position
+/nav home                    # navigate back to it
 ```
 
-Cobblestone runs a real pathfinding search over your live world and draws the route as a particle
-trail. Paper 1.21+ on Java 25+ (Folia included), or Sponge API 12 on Java 21+.
+Cobblestone runs an A* search over the live world and renders the route as a particle trail.
+
+| Platform | Minecraft | Java |
+| --- | --- | --- |
+| Paper | 26.1+ | 25+ |
+| Sponge | 1.21.1 | 21+ |
+| Sponge | 26.1+ | 25+ |
 
 ## For admins
 
-Cobblestone accentuates the server you already run.
+- **Core**: Personal and global saved locations, death locations, players, worlds, and learned
+  nether and End portal links.
+- **Towny**: Towns, outposts, and plots as destinations; `/town spawn` and `/nation spawn` as route
+  steps; build protection.
+- **EssentialsX**: Homes and spawn as destinations; `/home` and `/spawn` as route steps.
+- **Citizens, BetonQuest, BeautyQuests, Quests, Typewriter**: NPCs and quest objectives as
+  destinations, with optional automatic trips.
 
-- **Vanilla SMP** — personal and server-wide saved locations, `/nav death` back to your things,
-  routes to other players and other worlds, and nether/end portal links learned by watching players
-  use them.
-- **Towny** — every town, outpost and plot becomes a destination; `/town spawn` and `/nation spawn`
-  become route steps; build protection is respected, so routes never tell players to dig where they
-  can't.
-- **RPG servers** — quest objectives (BetonQuest, BeautyQuests, Quests) and Citizens NPCs become
-  destinations, and a trip can start automatically when a player accepts a quest. Typewriter gets a
-  "navigate player" action.
+Integrations are distributed as separate plugins.
 
-Integrations are separate jars — install only what you use.
-
-Permissions default to allow for players and op for admins, so a fresh install needs no setup:
+Player permissions default to allow; admin permissions default to op.
 
 | Node | Default | Grants |
 | --- | --- | --- |
@@ -63,8 +61,7 @@ Permissions default to allow for players and op for admins, so a fresh install n
 | `cobblestone.navigator` | everyone | non-default navigators |
 | `cobblestone.admin.*` | op | `reload`, `portals`, `loglevel`, `-global` locations |
 
-Every destination also has its own node built from its address, default-allow, so you can hide one
-town or one NPC:
+Each destination also has a node derived from its address:
 
 ```
 /lp group default permission set cobblestone.navigate.towny.town.riverwood.* false
@@ -75,23 +72,23 @@ town or one NPC:
 ## For players
 
 ```
-/nav home                       # a place you saved
-/nav death                      # where you died
-/nav player Steve               # a friend (keeps up as they move)
-/nav town riverwood home        # a Towny town, if the server has it
-/nav npc Blacksmith             # a Citizens NPC
+/nav home                       # saved location
+/nav death                      # death location
+/nav player Steve               # player
+/nav town riverwood home        # Towny town
+/nav npc Blacksmith             # Citizens NPC
 
-/stone location set home        # save where you're standing
+/stone location set home        # save the current position
 /stone location set spawn -global
 /stone location unset home
 /stone location list
 
-/stone trips                    # what you have running
-/stone cancel all               # stop everything
+/stone trips                    # list active trips
+/stone cancel all               # cancel all trips
 ```
 
-Add `-no-swim`, `-no-mine`, `-no-world <world>`, `-live` or `-navigator <id>` to shape a route.
-Tab-completion knows everything you're allowed to go to.
+Flags: `-no-<mode>`, `-no-world <world>`, `-no-dimension <dimension>`, `-live`, `-no-live`,
+`-navigator <id>`.
 
 → [Player documentation](https://cobblestonemc.org/players/)
 
@@ -108,7 +105,7 @@ dependencies {
 }
 ```
 
-**Offer destinations** — they appear under `/navigate`, filed under your plugin's name:
+**Register destinations** under your plugin's name:
 
 ```java
 CobblestonePaperApi.registrar().registerDestinations(this, player ->
@@ -117,14 +114,14 @@ CobblestonePaperApi.registrar().registerDestinations(this, player ->
         .build());
 ```
 
-**Send a player somewhere** — search, trip and trail in one call:
+**Start a trip:**
 
 ```java
 CobblestonePaperApi.tripService()
     .navigate(player, objective, NavigatorSettings.defaults(), "Lost Lantern");
 ```
 
-**Teach the search new routes, or constrain it** — warps, pads, claim protection:
+**Add transitions and restrict breaking:**
 
 ```java
 CobblestoneCoreApi.registrar().register(this, new SearchModificationService() {
@@ -142,15 +139,14 @@ CobblestoneCoreApi.registrar().register(this, new SearchModificationService() {
 });
 ```
 
-You can also register your own navigator (how a route is drawn) or run a search yourself and read
-the `Path`. A complete example plugin lives in
-[`project/examples/paper-warps`](project/examples/paper-warps).
+Custom navigators and direct searches are also supported. See
+[`project/examples/paper-warps`](project/examples/paper-warps) for a complete example.
 
 → [Developer documentation](https://cobblestonemc.org/developers/)
 
 ## Contributing
 
-Bug reports, integrations and doc fixes are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

@@ -1,17 +1,14 @@
 ---
 title: Searching
-description: Run a pathfinding search yourself and read the result.
+description: Run a search and read the resulting path.
 ---
 
 # Searching
 
-`NavigationService` is the navigation library underneath everything else: give it a player and a
-place, get back a path. Use it when you want the route as *data* — to measure a distance, to decide
-whether somewhere is reachable, or to render it yourself.
+`NavigationService` computes a path from a player to a destination. Use it to measure distance,
+test reachability, or render a path yourself. To guide a player, use [Trips](trips.md) instead.
 
-If you just want the player guided there, use [Trips](trips.md) instead; it runs the search for you.
-
-## Run a search
+## Running a search
 
 === "Paper"
 
@@ -63,34 +60,31 @@ If you just want the player guided there, use [Trips](trips.md) instead; it runs
     });
     ```
 
-The search is always **from the player**, because where a player can go depends on the player:
-their world, their permissions, whether they may fly, what other plugins say about the ground in
-front of them.
+Searches always originate at a player, since traversability depends on the player's world,
+permissions, and abilities.
 
-### To a region instead of a point
+### Regions
 
-When "anywhere in this box will do" — a town, an arena, a building — give two opposite corners:
+To target any cell within a box, pass two opposite corners:
 
 ```java
 navigationService.navigatePlayerToRegion(player, corner1, corner2);
 ```
 
-The search heads for the cheapest reachable cell of that box rather than one exact block, which is
-both friendlier and faster.
+The search targets the cheapest reachable cell in the box.
 
-## Cancel
+## Cancellation
 
 ```java
 handle.cancel();
 ```
 
-Idempotent. The future completes with `FailureReason.CANCELLED` if the search hadn't already
-finished. Always cancel searches you no longer need — they cost CPU until they finish or hit their
-limits.
+Idempotent. If the search is still running, the future completes with `FailureReason.CANCELLED`.
+Cancel searches that are no longer needed.
 
 ## Settings
 
-`MinecraftSearchSettings` bundles the algorithm limits with the Minecraft-specific exclusions:
+`MinecraftSearchSettings` combines algorithm limits with Minecraft-specific exclusions:
 
 ```java
 MinecraftSearchSettings settings = new MinecraftSearchSettings(
@@ -106,53 +100,49 @@ MinecraftSearchSettings settings = new MinecraftSearchSettings(
 navigationService.navigatePlayer(player, destination, settings);
 ```
 
-`MinecraftSearchSettings.defaults()` uses the library defaults — note that these are *not* the
-admin's `config.yml` values, which Cobblestone's own commands apply. A short, bounded search of
-your own (the sort you'd run to answer "is this reachable?") should set its own smaller limits
-rather than inherit a 60-second budget.
+`MinecraftSearchSettings.defaults()` uses library defaults, not the values in `config.yml`. Short
+queries, such as reachability checks, should set smaller limits.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `maxCellsVisited` | 200 000 | memory guard; a few hundred bytes per cell |
-| `maxWallClockMillis` | 60 000 | total time budget |
-| `heuristicWeight` | 1.5 | 1.0 is optimal and slow; higher is faster and bounded-suboptimal |
-| `tier1UnsolvedPessimism` | 1.5 | margin on route legs not yet solved |
-| `runningAverageWidth` | 5 | heuristic smoothing window |
+| `maxCellsVisited` | 200 000 | Cell limit; a few hundred bytes per cell |
+| `maxWallClockMillis` | 60 000 | Time limit |
+| `heuristicWeight` | 1.5 | `1.0` is optimal; higher is faster and bounded-suboptimal |
+| `tier1UnsolvedPessimism` | 1.5 | Cost multiplier for unsolved route legs |
+| `runningAverageWidth` | 5 | Heuristic smoothing window |
 
-## Reading a path
+## Paths
 
 ```java
 record Path<P, T>(P origin, List<Step<P, T>> steps) { }
 record Step<P, T>(P position, double cost, double time, T payload) { }
 ```
 
-- **`origin`** — where the player was when the search ran.
-- **`steps`** — every position reached, in order. The last one is the destination.
-- **`cost` / `time`** — per step, not cumulative. `path.cost()` and `path.duration()` sum them, so
-  cache the result rather than calling them in a loop.
-- **`payload`** — a `MinecraftStepPayload`: the `MinecraftStepType` (`WALK`, `SWIM`, `FLY`, `MINE`,
-  `FALL`, `CLIMB`, `BOAT`, `HORSE`, `OPEN_DOOR`, `PLACE_BOAT`, `MOUNT_HORSE`, `TELEPORT`) plus a
-  `MinecraftInstruction` for the few steps that carry one.
+- **`origin`**: The player's position when the search ran.
+- **`steps`**: Positions in order. The last is the destination.
+- **`cost`, `time`**: Per step, not cumulative. `path.cost()` and `path.duration()` compute sums;
+  cache the results.
+- **`payload`**: A `MinecraftStepPayload` containing the `MinecraftStepType` (`WALK`, `SWIM`, `FLY`,
+  `MINE`, `FALL`, `CLIMB`, `BOAT`, `HORSE`, `OPEN_DOOR`, `PLACE_BOAT`, `MOUNT_HORSE`, `TELEPORT`)
+  and an optional `MinecraftInstruction`.
 
-A path can cross worlds: a `TELEPORT` step is where it goes through a portal, a pad, or a command.
-Don't assume every step is in the same world as the one before it.
+Paths may cross worlds at `TELEPORT` steps.
 
 ## Threading
 
-- `navigatePlayer` is called from the server thread and returns immediately.
-- The future completes on a Cobblestone worker thread. Schedule back before touching server state.
-- Cobblestone reads world data on the threads the platform requires, so you don't have to
-  pre-load anything.
+- Call `navigatePlayer` from the server thread. It returns immediately.
+- The future completes on a Cobblestone worker thread.
+- World data is read on the threads the platform requires; no preloading is needed.
 
 ## Failure reasons
 
 | Reason | Meaning |
 | --- | --- |
-| `NO_ROUTE` | Nothing connects the origin to the destination. |
-| `DESTINATION_UNREACHABLE` | A route exists at the graph level, but the destination itself couldn't be reached. |
-| `LIMIT_EXCEEDED` | Ran out of cells before finding a path. |
-| `TIMED_OUT` | Ran out of wall-clock time. |
-| `CANCELLED` | Someone called `cancel()`, or the player logged off. |
+| `NO_ROUTE` | No route connects the origin to the destination. |
+| `DESTINATION_UNREACHABLE` | The destination itself is not reachable. |
+| `LIMIT_EXCEEDED` | The cell limit was reached. |
+| `TIMED_OUT` | The time limit was reached. |
+| `CANCELLED` | `cancel()` was called, or the player disconnected. |
 
-`LIMIT_EXCEEDED` and `TIMED_OUT` mean *"not with this budget"*, not *"impossible"* — worth
-distinguishing in whatever you tell the player.
+`LIMIT_EXCEEDED` and `TIMED_OUT` indicate that no route was found within the limits, not that none
+exists.

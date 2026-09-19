@@ -1,20 +1,19 @@
 ---
 title: Search modification
-description: Teach the search new routes, and constrain where it may dig or walk.
+description: Add transitions and restrict breaking and movement.
 ---
 
 # Search modification
 
-A `SearchModificationService` is the single hook for changing what a search may do. It does three
-independent things, all optional:
+A `SearchModificationService` modifies searches through three optional methods:
 
-| Method | Answers |
+| Method | Purpose |
 | --- | --- |
-| `computeTransitions` | "There are routes here pathfinding can't see." |
-| `computeBreakChecker` | "This player may not break *that*." |
-| `computePassChecker` | "This player may not enter *there*." |
+| `computeTransitions` | Adds edges, such as teleports. |
+| `computeBreakChecker` | Restricts which blocks may be broken. |
+| `computePassChecker` | Restricts which cells may be entered. |
 
-Register one and Cobblestone folds it into every search:
+Registered services apply to every search:
 
 === "Paper"
 
@@ -32,22 +31,18 @@ Register one and Cobblestone folds it into every search:
     CobblestoneCoreApi.registrar().register(container, new WarpModifications(store));
     ```
 
-As with destinations, the owner you pass is what the registration is dropped with when that plugin
-disables.
+The registration is removed when the owner disables.
 
-!!! info "Threading, briefly"
-
-    The three `compute*` methods run **once per search**, on the thread that starts it (normally the
-    main thread), so reading server state in them is safe. The checkers they return run **during**
-    the search, possibly off the main thread, and answer with futures. Complete the future straight
-    away when you can — that keeps the search on its fast path.
+The `compute*` methods run once per search on the calling thread, normally the main thread. The
+returned checkers run during the search, possibly off the main thread. See
+[Threading](index.md#threading).
 
 ---
 
-## Transitions: new ways to travel
+## Transitions
 
-A `Transition` is an edge in the graph that isn't walking: **from anywhere in this region, you can
-get to this exact location, for this cost**.
+A `Transition` is an edge from any cell in an origin region to a destination location, at a given
+cost.
 
 ```java
 Transition.of(origin, destination, costSeconds, payload);
@@ -55,19 +50,16 @@ Transition.of(origin, destination, costSeconds, timeSeconds, payload);
 Transition.command(player, destination, costSeconds, "/warp market");
 ```
 
-- **`origin`** is a `WorldRegion` — `SingleCellWorldRegion.of(loc)`, `BoxWorldRegion.of(a, b)`,
-  `BoxWorldRegion.around(centre, radius)`, or `WholeWorldRegion.of(world)`.
-- **`cost`** is what the search minimizes, in seconds; **`time`** is what the player is told. They
-  differ when you want to discourage a route without lying about how long it takes — a
-  30-second-cost hop that really takes 3 seconds will be used only when it genuinely helps.
-- **`payload`** says what kind of step it is: `MinecraftStepPayload.portal()` for "walk in and you
-  are teleported", `MinecraftStepPayload.command("/warp market")` for "run this", or
-  `MinecraftStepPayload.of(type)`.
+- **`origin`**: A `WorldRegion`: `SingleCellWorldRegion.of(loc)`, `BoxWorldRegion.of(a, b)`,
+  `BoxWorldRegion.around(center, radius)`, or `WholeWorldRegion.of(world)`.
+- **`cost`**: The value minimized by the search, in seconds. **`time`**: The travel time reported to
+  the player. Set `cost` above `time` to discourage a transition without misreporting its duration.
+- **`payload`**: The step type: `MinecraftStepPayload.portal()`,
+  `MinecraftStepPayload.command("/warp market")`, or `MinecraftStepPayload.of(type)`.
 
-### Two shapes that cover most cases
+### Command transitions
 
-A **command warp** works from anywhere, so its origin is the whole world the player is in — the
-search can take it immediately and prompt the player to type it:
+A command can be run from anywhere, so its origin is the player's entire world:
 
 === "Paper"
 
@@ -86,8 +78,8 @@ search can take it immediately and prompt the player to type it:
     }
     ```
 
-    1. Offer a teleport only when the player could actually run it. Cobblestone gates
-       *navigation*, never *teleportation* — that stays your permission to check.
+    1. Offer a teleport only if the player may use it. Cobblestone does not check teleport
+       permissions.
 
 === "Sponge"
 
@@ -106,11 +98,12 @@ search can take it immediately and prompt the player to type it:
     }
     ```
 
-    1. Offer a teleport only when the player could actually run it. Cobblestone gates
-       *navigation*, never *teleportation* — that stays your permission to check.
+    1. Offer a teleport only if the player may use it. Cobblestone does not check teleport
+       permissions.
 
-A **portal pad** teleports whoever walks into it, so its origin is the pad's box and the player is
-routed to walk in:
+### Portal transitions
+
+A portal pad teleports players on entry, so its origin is the pad's bounding box:
 
 === "Paper"
 
@@ -126,18 +119,14 @@ routed to walk in:
     transitions.add(Transition.of(pad, exitLocation, 1.0, MinecraftStepPayload.portal()));
     ```
 
-!!! tip "Skip what isn't usable"
-
-    Worlds unload, destinations get deleted, permissions change. Returning fewer transitions is
-    always safe — just leave out the ones that can't be taken right now, as the built-in
-    integrations do.
+Omit transitions that are currently unusable, such as those into unloaded worlds.
 
 ---
 
-## BreakChecker: what may be dug through
+## Break checkers
 
-Cobblestone can route a player through blocks they're able to mine. A break checker constrains that
-— this is how the Towny integration keeps routes out of other people's land.
+Routes may mine through blocks. A break checker restricts which blocks may be broken; the Towny
+integration uses one to enforce build protection.
 
 === "Paper"
 
@@ -153,8 +142,8 @@ Cobblestone can route a player through blocks they're able to mine. A break chec
     }
     ```
 
-    The block is supplied lazily (`Supplier<BlockData>`) — don't call it unless your decision
-    actually depends on the block type, because reading it may cost a chunk lookup.
+    The block is supplied lazily (`Supplier<BlockData>`). Call it only if needed; it may require a
+    chunk lookup.
 
 === "Sponge"
 
@@ -170,8 +159,7 @@ Cobblestone can route a player through blocks they're able to mine. A break chec
     }
     ```
 
-If your answer needs the main thread — because it fires an event, as Towny's does — schedule it and
-complete the future from there:
+If the check requires the main thread, schedule it and complete the future there:
 
 ```java
 return (p, location, block) -> {
@@ -181,14 +169,13 @@ return (p, location, block) -> {
 };
 ```
 
-And cache. A single search asks thousands of times, usually about the same few plots and materials;
-every built-in integration that does main-thread checks memoizes per search.
+A search may invoke the checker thousands of times. Cache results per search.
 
 ---
 
-## PassChecker: where the player may go at all
+## Pass checkers
 
-Same shape, coarser question — may this player enter this cell?
+A pass checker restricts which cells the player may enter.
 
 === "Paper"
 
@@ -212,18 +199,14 @@ Same shape, coarser question — may this player enter this cell?
     }
     ```
 
-Blocking a region here doesn't just hide it — the search genuinely won't route through it, so a
-player is never told to walk somewhere they'd be bounced out of.
+Searches do not route through denied cells.
 
-`BreakChecker.ALLOW` and `PassChecker.ALLOW` are the defaults; override only the method you care
-about.
+`BreakChecker.ALLOW` and `PassChecker.ALLOW` are the defaults.
 
 ---
 
-## A complete example
+## Example plugin
 
-The repository ships a working example plugin,
-[`examples/paper-warps`](https://github.com/CobblestoneMC/cobblestone/tree/main/project/examples/paper-warps):
-named warps reachable with `/warp`, plus portal pads that teleport on entry, both surfaced to
-Cobblestone by a single `SearchModificationService`. It compiles against the published API only and
-is about as small as a real integration gets.
+[`examples/paper-warps`](https://github.com/CobblestoneMC/cobblestone/tree/main/project/examples/paper-warps)
+implements `/warp` commands and portal pads with a single `SearchModificationService`, using only the
+published API.

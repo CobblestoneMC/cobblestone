@@ -1,8 +1,8 @@
 site_name: Cobblestone
 site_url: https://cobblestonemc.org
 site_description: >-
-  Cobblestone is a server-side Minecraft navigation plugin: it finds a real, walkable
-  route to anywhere on your server and draws it for the player.
+  Server-side navigation for Minecraft. Cobblestone computes a walkable route to a
+  destination and renders it for the player.
 site_author: whimxiqal
 repo_url: https://github.com/CobblestoneMC/cobblestone
 repo_name: Source
@@ -58,7 +58,10 @@ extra:
       name: Download
     - icon: material/chart-box
       link: https://bstats.org/plugin/bukkit/Cobblestone/33624
-      name: Stats
+      name: Stats (Paper)
+    - icon: material/chart-box-outline
+      link: https://bstats.org/plugin/sponge/Cobblestone/33625
+      name: Stats (Sponge)
 
 markdown_extensions:
   - abbr

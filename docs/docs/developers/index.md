@@ -1,38 +1,34 @@
 ---
-title: For developers
-description: Depend on Cobblestone's API, find its services, and hook your plugin into navigation.
+title: Developers
+description: Depend on the Cobblestone API and access its services.
 ---
 
 <div class="cs-illustration">
 <img src="../assets/illustrations/developer-api.svg" alt="">
 </div>
 
-# For developers
+# Developers
 
-Cobblestone is extensible in four places. Pick the one that matches what you want:
-
-| I want to… | Use |
+| Task | Page |
 | --- | --- |
-| Offer places players can navigate to | [Destinations](destinations.md) |
-| Send a player somewhere right now, from my own code | [Trips](trips.md) |
-| Teach the search about a warp, a pad, a `/home` | [Search modification](search-modification.md) |
-| Stop routes digging or walking where they shouldn't | [Search modification](search-modification.md) |
-| Draw a route my own way | [Navigators](navigators.md) |
-| Run a search and read the path myself | [Searching](searching.md) |
+| Register destinations | [Destinations](destinations.md) |
+| Start a trip for a player | [Trips](trips.md) |
+| Add teleports and other transitions to searches | [Search modification](search-modification.md) |
+| Restrict where searches may break or pass | [Search modification](search-modification.md) |
+| Render routes with a custom navigator | [Navigators](navigators.md) |
+| Run a search and read the path | [Searching](searching.md) |
 
-!!! tip "Every code block on this site is tabbed"
+Platform-specific code blocks are tabbed. Selecting **Paper** or **Sponge** applies site-wide.
 
-    Pick **Paper** or **Sponge** once and the whole site follows.
+## Dependency
 
-## Depend on Cobblestone
+Two artifacts are published per platform:
 
-There are two published artifacts per platform:
+- **`…-api`**: The navigation library: searches and search modifications.
+- **`…-plugin-api`**: Plugin features: destinations, navigators, and trips. Includes `…-api`
+  transitively.
 
-- **`…-api`** — the navigation library: run a search, modify a search. No plugin opinions.
-- **`…-plugin-api`** — what the Cobblestone *plugin* adds: destinations, navigators, trips. It
-  depends on `…-api`, so depending on this one gives you both.
-
-Most integrations want `…-plugin-api`.
+Most integrations should depend on `…-plugin-api`.
 
 === "Paper"
 
@@ -56,7 +52,7 @@ Most integrations want `…-plugin-api`.
     </dependency>
     ```
 
-    Then declare the dependency so Cobblestone loads first:
+    Declare the dependency so that Cobblestone loads first:
 
     ```yaml title="paper-plugin.yml"
     dependencies:
@@ -87,7 +83,7 @@ Most integrations want `…-plugin-api`.
     </dependency>
     ```
 
-    Then declare the dependency so Cobblestone loads first:
+    Declare the dependency so that Cobblestone loads first:
 
     ```json title="META-INF/sponge_plugins.json"
     "dependencies": [
@@ -95,19 +91,18 @@ Most integrations want `…-plugin-api`.
     ]
     ```
 
-!!! warning "compileOnly / provided, always"
+!!! warning "Do not shade the API"
 
-    The API classes live inside the Cobblestone plugin jar at runtime. Bundling your own copy
-    splits the type identity across class loaders and everything fails with confusing
-    `ClassCastException`s.
+    The API is provided at runtime by the Cobblestone plugin. A shaded copy causes
+    `ClassCastException`s across class loaders.
 
-The latest published version is on the badge:
+Latest version:
 [![Maven Central](https://img.shields.io/maven-central/v/org.cobblestonemc/paper-plugin-api?label=org.cobblestonemc)](https://central.sonatype.com/namespace/org.cobblestonemc).
-Cobblestone is 0.x — the API may change between minor versions.
+The API is pre-1.0 and may change between minor versions.
 
-## Find the services
+## Services
 
-Two entry points, each a static accessor:
+Services are accessed through two static entry points:
 
 === "Paper"
 
@@ -124,8 +119,8 @@ Two entry points, each a static accessor:
     TripService trips = CobblestonePaperApi.tripService();
     ```
 
-    Both look up Bukkit's `ServicesManager`, so call them from `onEnable()` (with the
-    `load: BEFORE` dependency declared) or later — never from your constructor.
+    Both query Bukkit's `ServicesManager`. Call them from `onEnable()` or later, not from a
+    constructor.
 
 === "Sponge"
 
@@ -142,21 +137,18 @@ Two entry points, each a static accessor:
     TripService trips = CobblestonePluginApi.tripService();
     ```
 
-    Sponge has no service manager, so Cobblestone installs itself into these holders during its own
-    `ConstructPluginEvent`. Fetch them from `StartingEngineEvent` or later, with the dependency
-    declared — not during construction.
+    Cobblestone populates these holders during its `ConstructPluginEvent`. Access them from
+    `StartingEngineEvent` or later.
 
 !!! note "Naming"
 
-    The Paper accessor is `CobblestonePaperApi` and the Sponge one is `CobblestonePluginApi`. The
-    inconsistency is unfortunate and is kept because the artifacts are already published; it is
-    slated to change in a future major version.
+    The Paper accessor is `CobblestonePaperApi`; the Sponge accessor is `CobblestonePluginApi`.
+    The names will be aligned in a future major version.
 
-## Register with an owner
+## Ownership
 
-Everything is registered on behalf of an **owner plugin**, and everything an owner registered is
-dropped automatically when that plugin disables. This is also what names your branch of the
-destination tree, and therefore the permission nodes under it.
+Every registration has an **owner plugin**. Registrations are removed when the owner disables. The
+owner's name also determines the destination branch and its permission nodes.
 
 === "Paper"
 
@@ -164,10 +156,10 @@ destination tree, and therefore the permission nodes under it.
     CobblestonePaperApi.registrar().registerDestinations(this, new MyDestinations());
     ```
 
-    Passing `this` files your destinations under your own plugin's name, lower-cased.
+    Passing `this` registers destinations under your plugin's lower-cased name.
 
-    An integration for *another* plugin usually passes **that** plugin instead, so the tree reads
-    `/nav town riverwood home` rather than `/nav cobblestonetowny town riverwood home`:
+    An integration for another plugin should pass that plugin, so that the address is
+    `town riverwood home` rather than `cobblestonetowny town riverwood home`:
 
     ```java
     Plugin towny = getServer().getPluginManager().getPlugin("Towny");
@@ -180,17 +172,17 @@ destination tree, and therefore the permission nodes under it.
     CobblestonePluginApi.registrar().registerDestinations(container, new MyDestinations());
     ```
 
-    Passing your own `PluginContainer` files your destinations under your plugin's id, lower-cased.
+    Passing your `PluginContainer` registers destinations under your plugin's lower-cased id.
 
-    An integration for *another* plugin usually passes **that** plugin's container instead, so the
-    tree reads `/nav town riverwood home` rather than `/nav cobblestonetowny town riverwood home`:
+    An integration for another plugin should pass that plugin's container, so that the address is
+    `town riverwood home` rather than `cobblestonetowny town riverwood home`:
 
     ```java
     PluginContainer towny = Sponge.pluginManager().plugin("towny").orElseThrow();
     CobblestonePluginApi.registrar().registerDestinations(towny, new TownyDestinations());
     ```
 
-## How the pieces fit
+## Architecture
 
 ```mermaid
 flowchart TB
@@ -210,21 +202,20 @@ flowchart TB
     CALL -->|NavigationService| SEARCH
 ```
 
-- A **destination** is a place a player can ask for by name.
-- A **search** turns "this player, that destination" into a `Path`.
-- **Search modifications** change what the search may do: extra edges, and what may be broken or
-  walked through.
-- A **trip** is a path being followed, ticked by Cobblestone.
-- A **navigator** is how a trip is drawn.
+- **Destination**: A named location that players can navigate to.
+- **Search**: Computes a `Path` from a player to a destination.
+- **Search modification**: Adds transitions and restricts which blocks may be broken or entered.
+- **Trip**: A path being followed by a player, ticked by Cobblestone.
+- **Navigator**: Renders a trip.
 
 ## Threading
 
-- **Searches are asynchronous.** `SearchHandle.future()` completes on a Cobblestone thread. Hop
-  back to the main thread (or a region thread on Folia) before touching most server state.
-- **`computeTransitions`, `computeBreakChecker` and `computePassChecker` run once per search**, on
-  the thread that started it — normally the main thread — so reading server state there is safe.
-- **The checkers they return run during the search**, possibly off the main thread. They answer
-  with a `CompletableFuture`, so a check that needs the main thread (as Towny's build check does)
-  schedules the work and completes the future from there.
-- **Keep the checkers cheap.** They run inside the search's hot loop, thousands of times per solve.
-  An already-completed future keeps the search on its fast path; cache per search where you can.
+- `SearchHandle.future()` completes on a Cobblestone thread. Return to the main thread (or region
+  thread on Folia) before accessing server state.
+- `computeTransitions`, `computeBreakChecker`, and `computePassChecker` run once per search on the
+  calling thread, normally the main thread.
+- The returned checkers run during the search, possibly off the main thread, and return a
+  `CompletableFuture`. Checks that require the main thread must schedule work there and complete
+  the future.
+- Checkers are invoked thousands of times per search. Return completed futures where possible and
+  cache results per search.

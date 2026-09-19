@@ -1,18 +1,14 @@
 ---
 title: Trips
-description: Send a player on a guided journey from your own code.
+description: Start trips programmatically.
 ---
 
 # Trips
 
-A **trip** is a journey in progress: a solved path, a navigator drawing it, and the bookkeeping that
-recalculates when the player strays and ends it when they arrive. `TripService` is the shortest path
-from "I know where this player should go" to "the player is being shown the way".
+A **trip** is a path being followed by a player, rendered by a navigator. Trips recompute when the
+player strays and end on arrival. `TripService` starts trips programmatically.
 
-This is what quest integrations and NPC guides use. If all you want is *go there*, you want this
-page and nothing else.
-
-## Send a player somewhere
+## Starting a trip
 
 === "Paper"
 
@@ -34,10 +30,9 @@ page and nothing else.
         .navigate(player, objectiveLocation, NavigatorSettings.defaults(), "Lost Lantern");
     ```
 
-That one call runs the search, starts the trip, and draws the trail. The `label` is what
-`/cobblestone trips` shows the player; pass it whenever you have a human-readable name.
+This runs the search and starts the trip. The label is displayed in `/cobblestone trips`.
 
-## Handle the outcome
+## Outcomes
 
 `navigate` returns a `CompletableFuture<TripOutcome>`:
 
@@ -48,11 +43,11 @@ tripService.navigate(player, objective, NavigatorSettings.defaults(), "Lost Lant
         case TripOutcome.Started started ->
             log("trip {} started, about {}s", started.tripId(), started.durationSeconds());
         case TripOutcome.Failed failed ->
-            player.sendMessage("I can't find a way there right now.");   // failed.reason()
+            player.sendMessage("No route found.");   // failed.reason()
         case TripOutcome.TripLimitReached ignored ->
             player.sendMessage("Finish or cancel a trip first.");
         case TripOutcome.Error error ->
-            log.warn("navigation blew up", error.throwable());
+            log.warn("navigation failed", error.throwable());
       }
     });
 ```
@@ -60,22 +55,22 @@ tripService.navigate(player, objective, NavigatorSettings.defaults(), "Lost Lant
 `FailureReason` is one of `NO_ROUTE`, `DESTINATION_UNREACHABLE`, `LIMIT_EXCEEDED`, `TIMED_OUT`,
 `CANCELLED`.
 
-If all you care about is the failure, there's a shorthand that ignores success:
+An overload accepts only a failure callback:
 
 ```java
 tripService.navigate(player, objective, NavigatorSettings.defaults(),
     reason -> player.sendMessage("No route: " + reason));
 ```
 
-!!! warning "The future completes off the main thread"
+!!! warning
 
-    Searches are asynchronous. Schedule back onto the server (or region) thread before touching
-    most server state in the callback.
+    The future completes off the main thread. Return to the server or region thread before
+    accessing server state.
 
-## Style the trip
+## Navigator settings
 
-`NavigatorSettings` picks the navigator and overrides its appearance for this trip only. Anything
-you don't set falls back to the server's config.
+`NavigatorSettings` selects the navigator and overrides its appearance for a single trip. Unset
+values fall back to the server configuration.
 
 === "Paper"
 
@@ -109,19 +104,18 @@ you don't set falls back to the server's config.
     tripService.navigate(player, objective, settings, "Lost Lantern");
     ```
 
-To use a different navigator entirely — yours, or another plugin's — build settings for its id:
+To use another navigator, build settings for its id:
 
 ```java
 NavigatorSettings.builder("guide").build();
 ```
 
-And `NavigatorSettings.defaults()` means "the server's default navigator, unstyled", which is
-usually the polite choice: it respects whatever the admin configured.
+`NavigatorSettings.defaults()` selects the server's default navigator with its configured
+appearance.
 
-## Start a trip from a path you already have
+## Starting a trip from a path
 
-If you ran the search yourself (see [Searching](searching.md)) and want Cobblestone to render the
-result:
+To render a path from a search you ran (see [Searching](searching.md)):
 
 === "Paper"
 
@@ -151,13 +145,11 @@ result:
     });
     ```
 
-A trip started this way is **not live** — it renders the path you gave it. For a route that keeps
-itself up to date, use `navigate`, which owns the re-search.
+Trips started this way are not live. Use `navigate` for trips that re-search.
 
-## What the player can do about it
+## Lifecycle
 
-Trips you start are ordinary trips: they appear in `/cobblestone trips`, count toward
-`trips.max_active_per_player`, and can be cancelled with `/cobblestone cancel <id>`. Respect that —
-don't restart a trip the player just cancelled.
+Programmatic trips appear in `/cobblestone trips`, count toward `trips.max_active_per_player`, and
+can be cancelled by the player. Do not restart a trip the player has cancelled.
 
-Trips end when the player arrives, cancels, or disconnects.
+Trips end on arrival, cancellation, or disconnect.
