@@ -1,6 +1,111 @@
 site_name: Cobblestone
 site_url: https://cobblestonemc.org
+site_description: >-
+  Server-side navigation for Minecraft. Cobblestone computes a walkable route to a
+  destination and renders it for the player.
+site_author: whimxiqal
+repo_url: https://github.com/CobblestoneMC/cobblestone
+repo_name: Source
+edit_uri: edit/main/docs/docs/
+copyright: Cobblestone is MIT licensed.
+
 theme:
   name: material
   logo: assets/logo.png
   favicon: assets/logo.png
+  icon:
+    repo: material/github
+  features:
+    # Tabs with the same label switch together everywhere, so picking "Sponge" in one
+    # code block switches every code block on the site.
+    - content.tabs.link
+    - content.code.copy
+    - content.code.annotate
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: material/github
+      link: https://github.com/CobblestoneMC/cobblestone
+      name: Source
+    - icon: material/download
+      link: https://modrinth.com/plugin/cobblestoneplugin
+      name: Download
+    - icon: material/chart-box
+      link: https://bstats.org/plugin/bukkit/Cobblestone/33624
+      name: Stats (Paper)
+    - icon: material/chart-box-outline
+      link: https://bstats.org/plugin/sponge/Cobblestone/33625
+      name: Stats (Sponge)
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+
+nav:
+  - Home: index.md
+  - Players: players.md
+  - Admins:
+      - admins/index.md
+      - Commands: admins/commands.md
+      - Permissions: admins/permissions.md
+      - Configuration: admins/config.md
+      - Integrations: admins/integrations.md
+  - Developers:
+      - developers/index.md
+      - Destinations: developers/destinations.md
+      - Navigators: developers/navigators.md
+      - Trips: developers/trips.md
+      - Searching: developers/searching.md
+      - Search modification: developers/search-modification.md
+  - Contributing: contributing.md
+  - Download: https://modrinth.com/plugin/cobblestoneplugin
+  - Stats: https://bstats.org/plugin/bukkit/Cobblestone/33624
