@@ -108,6 +108,18 @@ public final class SpongeNavigationServiceImpl
     this.platform.registerListeners(plugin);
   }
 
+  /**
+   * Takes stock of the worlds already running. Server thread only; call once the engine has
+   * started.
+   *
+   * <p>Cobblestone decides how to obtain a chunk by first asking whether it is already loaded, and
+   * that question is answered from an index kept up to date by events. Events only describe what
+   * happens from now on, so what was loaded before Cobblestone started has to be counted once.
+   */
+  public void surveyWorlds() {
+    platform.surveyWorlds();
+  }
+
   @Override
   public SearchHandle<ServerLocation, MinecraftStepPayload> navigatePlayer(
       ServerPlayer player, ServerLocation destination, MinecraftSearchSettings settings) {
