@@ -34,7 +34,7 @@ import org.cobblestonemc.CobblestoneLogger;
  * collapses them to one message per {@link #FAILURE_LOG_INTERVAL_MILLIS} with a count of what it
  * swallowed.
  *
- * <p>Disabling is not a loss of function: {@link PaperPlatformApi} falls back to loading the chunk
+ * <p>Disabling is not a loss of function: {@link PaperChunkFetcher} falls back to loading the chunk
  * through Bukkit, which is what it did before any of this existed. The search still answers
  * correctly; it just costs the server what it used to cost.
  */
@@ -63,6 +63,8 @@ final class NMSSupport {
     {"net.minecraft.world.level.chunk.PalettedContainer", "get"},
     {"net.minecraft.world.level.chunk.status.ChunkStatus", "FULL"},
     {"net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase", "asBlockData"},
+    {"net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase", "getBlock"},
+    {"org.bukkit.craftbukkit.util.CraftMagicNumbers", "getMaterial"},
     {"net.minecraft.nbt.CompoundTag", "getListOrEmpty"},
   };
 

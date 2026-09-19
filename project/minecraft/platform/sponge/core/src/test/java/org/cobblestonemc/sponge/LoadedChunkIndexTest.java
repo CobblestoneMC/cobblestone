@@ -10,6 +10,7 @@ package org.cobblestonemc.sponge;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.concurrent.atomic.AtomicLong;
 import org.cobblestonemc.CobblestoneLogger;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +27,8 @@ class LoadedChunkIndexTest {
   private static final String WORLD = "minecraft:overworld";
   private static final String NETHER = "minecraft:the_nether";
 
-  private final LoadedChunkIndex index = new LoadedChunkIndex(new SilentLogger());
+  private final AtomicLong clock = new AtomicLong(1_000_000L);
+  private final LoadedChunkIndex index = new LoadedChunkIndex(new SilentLogger(), clock::get);
 
   @Test
   void remembersAChunkItWasToldAbout() {
@@ -103,6 +105,51 @@ class LoadedChunkIndexTest {
     index.markUnloaded(WORLD, 1, 1);
 
     assertTrue(index.isLoaded(WORLD, 2, 2));
+  }
+
+  @Test
+  void aChunkThatJustUnloadedIsRecentlyUnloaded() {
+    index.markLoaded(WORLD, -95, -6);
+    index.markUnloaded(WORLD, -95, -6);
+
+    assertTrue(index.recentlyUnloaded(WORLD, -95, -6), "its save may not be on disk yet");
+    assertFalse(index.recentlyUnloaded(WORLD, -95, -5));
+    assertFalse(index.recentlyUnloaded(NETHER, -95, -6));
+  }
+
+  @Test
+  void aChunkStopsBeingRecentlyUnloadedOnceTheGracePeriodPasses() {
+    index.markUnloaded(WORLD, 4, 9);
+
+    clock.addAndGet(LoadedChunkIndex.SAVE_GRACE_MILLIS - 1);
+    assertTrue(index.recentlyUnloaded(WORLD, 4, 9));
+
+    clock.addAndGet(1);
+    assertFalse(index.recentlyUnloaded(WORLD, 4, 9), "long enough for any save to have landed");
+  }
+
+  @Test
+  void aChunkThatLoadsAgainIsNoLongerRecentlyUnloaded() {
+    index.markUnloaded(WORLD, 4, 9);
+    index.markLoaded(WORLD, 4, 9);
+
+    assertFalse(index.recentlyUnloaded(WORLD, 4, 9));
+    assertTrue(index.isLoaded(WORLD, 4, 9));
+  }
+
+  @Test
+  void aChunkNeverSeenIsNotRecentlyUnloaded() {
+    assertFalse(index.recentlyUnloaded(WORLD, 0, 0));
+  }
+
+  @Test
+  void oldUnloadsAreSweptWithoutForgettingRecentOnes() {
+    index.markUnloaded(WORLD, 1, 1);
+    clock.addAndGet(LoadedChunkIndex.SAVE_GRACE_MILLIS);
+    index.markUnloaded(WORLD, 2, 2); // triggers a sweep
+
+    assertFalse(index.recentlyUnloaded(WORLD, 1, 1));
+    assertTrue(index.recentlyUnloaded(WORLD, 2, 2));
   }
 
   /** A logger that discards everything; these tests are about the index, not its narration. */

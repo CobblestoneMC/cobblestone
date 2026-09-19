@@ -78,6 +78,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             new ChunkProviderSettings(
                 config.get(keys.chunksCacheSize),
                 config.get(keys.chunksPrefetchDistance),
+                config.get(keys.chunksFetchAttempts),
                 config.get(keys.chunksPolicy)));
     PaperIntegrationRegistry integrationRegistry = new PaperIntegrationRegistry();
     getServer()

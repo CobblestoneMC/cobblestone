@@ -20,8 +20,8 @@ import org.jetbrains.annotations.Nullable;
  * A small, size-bounded (LRU) cache of chunk snapshots belonging to <b>one solve</b>. A block from
  * a cached chunk is served immediately (a cache hit); a miss triggers a single de-duplicated fetch
  * and is served as a pending {@link FutureOr}, and every newly requested block reads ahead along
- * the column of chunks between it and the destination, so that the chunk a solve wants next is
- * usually already in hand.
+ * the column of chunks between it and the destination (see {@link ReadAheadColumn}), so that the
+ * chunk a solve wants next is usually already in hand.
  *
  * <p><b>One per solve, and nothing is remembered past it.</b> This used to be a single large cache
  * shared by every search on the server, which made sense when a miss meant loading a chunk through
@@ -35,22 +35,20 @@ import org.jetbrains.annotations.Nullable;
  * the solve holding it, which is seconds. A block broken mid-solve may be missed, and is not worth
  * a lock on every read to catch.
  *
- * <p>Read-ahead is directional on purpose: a solve advances towards its destination, so chunks
- * behind it are work that would almost never be used. See {@link #triggerReadAhead}.
+ * <p><b>Failures.</b> A fetch that fails reads as {@link MinecraftChunk.Unknown} — a wall — to
+ * whoever was waiting on it. A {@linkplain ChunkFetch.Failed#permanent() permanent} failure is
+ * cached like any other answer, since asking again would get the same one. A {@linkplain
+ * ChunkFetch.Failed#transientFailure() transient} failure is not, at first: the next request for
+ * that chunk fetches it again. After {@link ChunkProviderSettings#maxFetchAttempts()} of them the
+ * provider stops asking and caches the wall, so that a solve pressed against a chunk that keeps
+ * failing routes around it rather than re-reading it for every cell of its frontier.
  *
  * <p>A world implementation delegates {@link MinecraftWorld#blockAt(Cell, Cell)} to {@link
  * #block(Cell, MinecraftWorld, Cell)}. It is still internally synchronized — a fetch completes on
  * whatever thread the platform finished its IO on, and the solve reads from its worker — but the
- * lock is now uncontended in the ordinary case, since only one solve can reach it.
+ * lock is uncontended in the ordinary case, since only one solve can reach it.
  */
 public final class ChunkProvider {
-
-  /**
-   * Lateral half-width, in blocks, of the prefetched column. Most modes read a block or so to
-   * either side of the cell they are expanding from, so a five-block-wide column is enough of a
-   * buffer to have what they ask for next without dragging in chunks they will never touch.
-   */
-  private static final int PREFETCH_LATERAL_RADIUS = 2;
 
   private final PlatformApi<?> platform;
   private final ChunkProviderSettings settings;
@@ -60,6 +58,9 @@ public final class ChunkProvider {
   private final Map<ChunkKey, Cached> cache;
   private final Map<ChunkKey, CompletableFuture<MinecraftChunk>> inFlight = new HashMap<>();
 
+  /** Transient failures so far, by chunk, for chunks not yet given up on or obtained. */
+  private final Map<ChunkKey, Integer> transientFailuresByChunk = new HashMap<>();
+
   // Counters for ChunkProviderStats, all read and written under `lock`.
   private long chunkLookups;
   private long cacheHits;
@@ -68,6 +69,7 @@ public final class ChunkProvider {
   private long prefetchesUsed;
   private long prefetchesWasted;
   private long unknownChunks;
+  private long transientFailures;
   private long directFetchMillis;
 
   /**
@@ -115,6 +117,7 @@ public final class ChunkProvider {
           prefetchesUsed,
           prefetchesWasted,
           unknownChunks,
+          transientFailures,
           directFetchMillis);
     }
   }
@@ -161,7 +164,10 @@ public final class ChunkProvider {
       // trigger read-ahead around this cell if we have not seen this chunk requested
       // or if we have only requested it because it was part of another prefetch
       if (cached == null) {
+        // first fetch needed chunk before readahead for priority
+        var future = FutureOr.ofFuture(fetchLocked(key, world, false));
         triggerReadAhead(cell, world, destination);
+        return future;
       } else {
         if (cached.prefetched) {
           triggerReadAhead(cell, world, destination);
@@ -171,7 +177,6 @@ public final class ChunkProvider {
         cacheHits++;
         return FutureOr.of(cached.chunk);
       }
-      return FutureOr.ofFuture(fetchLocked(key, world, false));
     }
   }
 
@@ -190,177 +195,56 @@ public final class ChunkProvider {
     CompletableFuture<MinecraftChunk> fetch =
         platform
             .fetchChunk(key.chunkX, key.chunkZ, world, settings.loadPolicy(), !prefetch)
-            // A failure here means the platform could not source the chunk at all — not that its
-            // fast path missed, which platforms handle themselves by falling back. There is
-            // nothing left to try, so this is exactly the case Unknown already describes: the
-            // solve treats the chunk as a wall rather than failing with it.
-            .exceptionally(error -> MinecraftChunk.Unknown.INSTANCE);
-    inFlight.put(key, fetch);
-    fetch.whenComplete(
-        (snapshot, error) -> {
-          synchronized (lock) {
-            inFlight.remove(key);
-            if (!prefetch) {
-              directFetchMillis += clock.getAsLong() - startedAt;
-            }
-            if (error != null || snapshot == null) {
-              return;
-            }
-            if (snapshot == MinecraftChunk.Unknown.INSTANCE) {
-              unknownChunks++;
-              // Cached like any other answer, read-ahead included. A platform answers a speculative
-              // request exactly as it answers a blocked one (see PlatformApi#fetchChunk), so an
-              // unknown is a fact about the world rather than a refusal to look — and re-asking
-              // would mean re-reading it for every cell of a frontier pressed against it.
-            }
-            cache.put(key, new Cached(snapshot, clock.getAsLong(), prefetch));
-          }
-        });
+            // A platform is meant to fold its own failures into a Failed answer. One that throws
+            // anyway has said nothing about the chunk, so it counts as the kind worth retrying.
+            .exceptionally(error -> ChunkFetch.Failed.transientFailure())
+            .thenApply(
+                outcome -> {
+                  // Settled before anyone waiting on the fetch sees it, so a caller that reacts by
+                  // asking for the chunk again finds the cache already up to date.
+                  synchronized (lock) {
+                    inFlight.remove(key);
+                    if (!prefetch) {
+                      directFetchMillis += clock.getAsLong() - startedAt;
+                    }
+                    settleLocked(key, outcome, prefetch);
+                  }
+                  return outcome.chunkOrUnknown();
+                });
+    if (!fetch.isDone()) {
+      // A fetch that completed synchronously has settled already; registering it now would leave
+      // an entry nothing will remove.
+      inFlight.put(key, fetch);
+    }
     return fetch;
   }
 
-  /**
-   * Prefetches the chunks a search is about to want: those intersecting a column of radius {@link
-   * #PREFETCH_LATERAL_RADIUS} running from {@code cell} towards {@code destination}, as far as the
-   * configured {@link ChunkProviderSettings#prefetchDistance()} (or as far as the destination, if
-   * it is nearer).
-   *
-   * <p>The column starts a lateral radius <em>behind</em> the cell so that a cell sitting right on
-   * a chunk border still pulls in the chunk it just came out of, whose blocks its own expansion may
-   * read. With no destination to aim at, the column degenerates to a disc around the cell: enough
-   * to cover a border cell's neighbors, and nothing speculative beyond that.
-   */
+  /** Records what a fetch came back with: cached, or counted towards giving up on the chunk. */
+  private void settleLocked(ChunkKey key, ChunkFetch outcome, boolean prefetch) {
+    if (outcome instanceof ChunkFetch.Failed failed) {
+      if (failed.isTransient()) {
+        transientFailures++;
+        int failures = transientFailuresByChunk.merge(key, 1, Integer::sum);
+        if (failures < settings.maxFetchAttempts()) {
+          return; // not cached: the next request for this chunk asks again
+        }
+      }
+      unknownChunks++;
+    }
+    transientFailuresByChunk.remove(key);
+    cache.put(key, new Cached(outcome.chunkOrUnknown(), clock.getAsLong(), prefetch));
+  }
+
+  /** Prefetches the chunks the solve is about to want; see {@link ReadAheadColumn}. */
   private void triggerReadAhead(Cell cell, MinecraftWorld world, @Nullable Cell destination) {
     if (settings.prefetchDistance() <= 0) {
       return; // read-ahead switched off
     }
-    double radius = PREFETCH_LATERAL_RADIUS;
-    // Block centers: a cell's coordinates name the lower corner of a unit cube.
-    double startX = cell.x() + 0.5;
-    double startZ = cell.z() + 0.5;
-    double endX = startX;
-    double endZ = startZ;
-    if (destination != null) {
-      double deltaX = destination.x() - cell.x();
-      double deltaZ = destination.z() - cell.z();
-      double distance = Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);
-      if (distance > 1e-6) {
-        double unitX = deltaX / distance;
-        double unitZ = deltaZ / distance;
-        double reach = Math.min(distance, settings.prefetchDistance());
-        endX = startX + unitX * reach;
-        endZ = startZ + unitZ * reach;
-        startX -= unitX * radius;
-        startZ -= unitZ * radius;
-      }
-    }
-
-    int centerChunkX = cell.x() >> 4;
-    int centerChunkZ = cell.z() >> 4;
-    int minChunkX = Math.floorDiv((int) Math.floor(Math.min(startX, endX) - radius), 16);
-    int maxChunkX = Math.floorDiv((int) Math.floor(Math.max(startX, endX) + radius), 16);
-    int minChunkZ = Math.floorDiv((int) Math.floor(Math.min(startZ, endZ) - radius), 16);
-    int maxChunkZ = Math.floorDiv((int) Math.floor(Math.max(startZ, endZ) + radius), 16);
-    for (int cx = minChunkX; cx <= maxChunkX; cx++) {
-      for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
-        if (cx == centerChunkX && cz == centerChunkZ) {
-          continue; // the caller fetches the cell's own chunk itself, as a direct (urgent) fetch
-        }
-        if (columnTouchesChunk(startX, startZ, endX, endZ, radius, cx, cz)) {
-          prefetch(cx, cz, world);
-        }
-      }
-    }
-  }
-
-  /**
-   * Returns whether the column — every point within {@code radius} of the segment from ({@code
-   * startX}, {@code startZ}) to ({@code endX}, {@code endZ}) — reaches into the given chunk's
-   * square footprint.
-   */
-  private static boolean columnTouchesChunk(
-      double startX, double startZ, double endX, double endZ, double radius, int cx, int cz) {
-    double minX = cx << 4;
-    double minZ = cz << 4;
-    double maxX = minX + 16;
-    double maxZ = minZ + 16;
-    if (segmentTouchesBox(startX, startZ, endX, endZ, minX, minZ, maxX, maxZ)) {
-      return true;
-    }
-    // The segment misses the square, so the two are disjoint convex shapes and their nearest pair
-    // of points involves a vertex of one of them: measuring both segment ends against the square
-    // and all four corners against the segment covers every case.
-    double radiusSquared = radius * radius;
-    if (pointToBoxSquared(startX, startZ, minX, minZ, maxX, maxZ) <= radiusSquared
-        || pointToBoxSquared(endX, endZ, minX, minZ, maxX, maxZ) <= radiusSquared) {
-      return true;
-    }
-    return pointToSegmentSquared(minX, minZ, startX, startZ, endX, endZ) <= radiusSquared
-        || pointToSegmentSquared(maxX, minZ, startX, startZ, endX, endZ) <= radiusSquared
-        || pointToSegmentSquared(minX, maxZ, startX, startZ, endX, endZ) <= radiusSquared
-        || pointToSegmentSquared(maxX, maxZ, startX, startZ, endX, endZ) <= radiusSquared;
-  }
-
-  /** Liang-Barsky: whether a segment enters an axis-aligned box at all. */
-  private static boolean segmentTouchesBox(
-      double startX,
-      double startZ,
-      double endX,
-      double endZ,
-      double minX,
-      double minZ,
-      double maxX,
-      double maxZ) {
-    double deltaX = endX - startX;
-    double deltaZ = endZ - startZ;
-    double[] edgeDirections = {-deltaX, deltaX, -deltaZ, deltaZ};
-    double[] edgeDistances = {startX - minX, maxX - startX, startZ - minZ, maxZ - startZ};
-    double enter = 0;
-    double exit = 1;
-    for (int i = 0; i < edgeDirections.length; i++) {
-      double direction = edgeDirections[i];
-      double distance = edgeDistances[i];
-      if (direction == 0) {
-        if (distance < 0) {
-          return false; // parallel to this edge, and wholly outside it
-        }
-        continue;
-      }
-      double t = distance / direction;
-      if (direction < 0) {
-        enter = Math.max(enter, t);
-      } else {
-        exit = Math.min(exit, t);
-      }
-      if (enter > exit) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /** The squared distance from a point to the nearest point of an axis-aligned box. */
-  private static double pointToBoxSquared(
-      double x, double z, double minX, double minZ, double maxX, double maxZ) {
-    double dx = Math.max(0, Math.max(minX - x, x - maxX));
-    double dz = Math.max(0, Math.max(minZ - z, z - maxZ));
-    return dx * dx + dz * dz;
-  }
-
-  /** The squared distance from a point to the nearest point of a segment. */
-  private static double pointToSegmentSquared(
-      double x, double z, double startX, double startZ, double endX, double endZ) {
-    double deltaX = endX - startX;
-    double deltaZ = endZ - startZ;
-    double lengthSquared = deltaX * deltaX + deltaZ * deltaZ;
-    double t = 0;
-    if (lengthSquared > 0) {
-      double projection = ((x - startX) * deltaX + (z - startZ) * deltaZ) / lengthSquared;
-      t = Math.max(0, Math.min(1, projection));
-    }
-    double dx = x - (startX + t * deltaX);
-    double dz = z - (startZ + t * deltaZ);
-    return dx * dx + dz * dz;
+    ReadAheadColumn.forEachChunk(
+        cell,
+        destination,
+        settings.prefetchDistance(),
+        (chunkX, chunkZ) -> prefetch(chunkX, chunkZ, world));
   }
 
   private void prefetch(int chunkX, int chunkZ, MinecraftWorld world) {

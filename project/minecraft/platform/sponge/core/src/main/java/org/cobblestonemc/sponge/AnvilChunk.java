@@ -49,21 +49,25 @@ final class AnvilChunk implements MinecraftChunk {
   /**
    * Decodes a saved chunk.
    *
-   * <p>Answers {@code null} for a chunk that is saved but has nothing to say about blocks — terrain
-   * that was never finished, or a chunk written by a Minecraft too old for this layout, which
-   * Cobblestone declines rather than guesses at because it has no data fixers of its own. Both mean
-   * the caller should get the chunk some other way.
+   * <p>Answers {@code null} for a chunk that is saved but has nothing to say about blocks yet —
+   * terrain that was never finished, so what is saved is not what a player would walk on.
+   *
+   * <p>A chunk written by a Minecraft too old for this layout is different: its blocks are real,
+   * and only Cobblestone cannot read them, having no data fixers of its own. That throws {@link
+   * UnsupportedChunkVersionException} so the caller gets the chunk some other way instead.
    *
    * @param tag the chunk's root tag
    * @param blocks how to turn a palette entry into a block
    * @return the decoded chunk, or {@code null} if it holds no usable block data
+   * @throws UnsupportedChunkVersionException if the chunk was saved before the 1.18 layout
    * @throws IOException if the tag is present but malformed
    */
   static @Nullable AnvilChunk decode(Map<String, Object> tag, PaletteResolver blocks)
       throws IOException {
-    if (Nbt.integer(tag, "DataVersion", 0) < MIN_SUPPORTED_DATA_VERSION) {
-      return null; // an un-upgraded chunk from before 1.18; only the server's data fixers can read
-      // it
+    int dataVersion = Nbt.integer(tag, "DataVersion", 0);
+    if (dataVersion < MIN_SUPPORTED_DATA_VERSION) {
+      // An un-upgraded chunk from before 1.18; only the server's data fixers can read it.
+      throw new UnsupportedChunkVersionException(dataVersion);
     }
     String status = Nbt.string(tag, "Status");
     if (status == null || !(status.equals("minecraft:full") || status.equals("full"))) {

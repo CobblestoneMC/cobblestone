@@ -17,6 +17,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.cobblestonemc.CobblestoneLogger;
@@ -77,6 +78,7 @@ public final class AnvilOfflineChunkSource implements OfflineChunkSource {
 
   private final AtomicLong lastFailureLoggedAt = new AtomicLong();
   private final AtomicLong suppressedFailures = new AtomicLong();
+  private final AtomicBoolean legacyChunksReported = new AtomicBoolean();
 
   private volatile boolean usable = true;
   private volatile boolean stopped;
@@ -163,8 +165,25 @@ public final class AnvilOfflineChunkSource implements OfflineChunkSource {
    * server, not of the chunk: every later read would fail identically, so the source closes and
    * {@link SpongeChunkLoader} goes back to tickets for good. Anything else — a torn read of a chunk
    * the server was saving, a damaged file — says nothing about the next chunk, and changes nothing.
+   *
+   * <p>A chunk saved before 1.18 is neither. It is expected on an upgraded world, it is handled
+   * correctly by loading it through the server, and it will keep happening until every such chunk
+   * has been re-saved — so it is mentioned once, as information, and never as an error.
    */
   private void reportFailure(Throwable error, int chunkX, int chunkZ, ServerWorld world) {
+    if (stopped) {
+      return; // a read cut short by shutdown, which is not worth an admin's attention
+    }
+    if (error instanceof UnsupportedChunkVersionException) {
+      if (legacyChunksReported.compareAndSet(false, true)) {
+        logger.info(
+            "World {} has chunks saved by a Minecraft older than 1.18, which Cobblestone cannot"
+                + " read directly; those chunks are loaded through the server instead, which"
+                + " upgrades them. This message is not repeated.",
+            world.key());
+      }
+      return;
+    }
     String message = error.getMessage();
     if (message != null && message.contains("which Cobblestone cannot read")) {
       if (usable) {
@@ -199,17 +218,23 @@ public final class AnvilOfflineChunkSource implements OfflineChunkSource {
   /**
    * Stops issuing reads, waits briefly for the one or two underway, and answers the rest.
    *
-   * <p>The wait is bounded: a read stuck on a disk that is not answering must not hold the server
-   * open. Whatever is still queued when the pool stops will never run, and something may be parked
-   * on it, so those are answered as "nothing there" rather than left hanging.
+   * <p>Reads still queued see {@link #stopped} and answer "nothing there" without touching the
+   * disk, and reads already underway are left to finish rather than interrupted — an interrupted
+   * file read fails, and a failure is not what shutting down should look like. Only if the wait
+   * runs out is the pool interrupted: a read stuck on a disk that is not answering must not hold
+   * the server open. Whatever has not settled by then is answered as "nothing there" rather than
+   * left hanging.
    */
   @Override
   public void shutdown() {
     stopped = true;
-    readers.shutdownNow();
+    readers.shutdown();
     try {
-      readers.awaitTermination(SHUTDOWN_DRAIN_MILLIS, TimeUnit.MILLISECONDS);
+      if (!readers.awaitTermination(SHUTDOWN_DRAIN_MILLIS, TimeUnit.MILLISECONDS)) {
+        readers.shutdownNow();
+      }
     } catch (InterruptedException interrupted) {
+      readers.shutdownNow();
       Thread.currentThread().interrupt();
     }
     for (CompletableFuture<MinecraftChunk> pending : outstanding) {

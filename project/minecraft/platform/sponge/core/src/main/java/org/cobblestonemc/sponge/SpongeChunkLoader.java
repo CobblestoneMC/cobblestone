@@ -18,6 +18,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.IntSupplier;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.ScopedCobblestoneLogger;
+import org.cobblestonemc.minecraft.ChunkFetch;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.spongepowered.api.ResourceKey;
@@ -54,11 +55,12 @@ import org.spongepowered.math.vector.Vector3i;
  *
  * <p><b>Answer everything.</b> A fetch asks what a chunk is made of, and that question has an
  * answer whether or not the loader is busy right now: a request that cannot be served immediately
- * waits in line rather than being refused. {@link MinecraftChunk.Unknown} is reserved for the cases
- * where the content genuinely cannot be known — the policy forbids the load that would reveal it,
- * Sponge refuses the ticket, or the chunk never turns up. The load budget therefore bounds latency,
- * never correctness, and the caller's {@code urgent} flag (which matters on platforms whose chunk
- * API takes a priority) is ignored here.
+ * waits in line rather than being refused. A {@link ChunkFetch.Failed failure} is reserved for the
+ * cases where the content cannot be known, and each says whether that could change: the policy
+ * forbidding the load that would reveal it, or nothing being saved, is permanent; Sponge refusing
+ * the ticket, the chunk never turning up, or the existence scan not having finished yet is
+ * transient. The load budget therefore bounds latency, never correctness, and the caller's {@code
+ * urgent} flag (which matters on platforms whose chunk API takes a priority) is ignored here.
  *
  * <p><b>Generation.</b> Because a ticket generates terrain that does not exist, {@code allow_load}
  * consults the {@link ChunkExistenceIndex} first and declines to ticket anything that is not
@@ -66,7 +68,7 @@ import org.spongepowered.math.vector.Vector3i;
  */
 final class SpongeChunkLoader {
 
-  /** How long a parked fetch waits for its load event before giving up (unknown). */
+  /** How long a parked fetch waits for its load event before giving up (a transient failure). */
   private static final long PENDING_TIMEOUT_MILLIS = 10_000L;
 
   /**
@@ -98,6 +100,9 @@ final class SpongeChunkLoader {
   /** Built on first use: the builder needs a constructed game. Server thread only. */
   private TicketType<Vector3i> ticketType;
 
+  /** Set at shutdown: from then on nothing new is read or loaded, and every fetch is answered. */
+  private volatile boolean stopped;
+
   SpongeChunkLoader(
       SpongeScheduler scheduler,
       CobblestoneLogger logger,
@@ -122,11 +127,15 @@ final class SpongeChunkLoader {
    * @param urgent whether a search is blocked on this chunk, as opposed to reading ahead; passed to
    *     the offline source, and ignored on the ticket path, where Sponge takes no priority and
    *     every fetch is answered either way
-   * @return the snapshot, or {@link MinecraftChunk.Unknown} if the chunk's content cannot be known
+   * @return a future of the outcome, which does not fail
    */
-  CompletableFuture<MinecraftChunk> fetch(
+  CompletableFuture<ChunkFetch> fetch(
       ServerWorld world, int chunkX, int chunkZ, ChunkLoadPolicy policy, boolean urgent) {
-    CompletableFuture<MinecraftChunk> future = new CompletableFuture<>();
+    CompletableFuture<ChunkFetch> future = new CompletableFuture<>();
+    if (stopped) {
+      future.complete(ChunkFetch.Failed.transientFailure());
+      return future;
+    }
     // Reaching the world at all means hopping to the server thread, and a hop costs a whole tick —
     // which for most of what a search asks for would be spent establishing that the chunk is not
     // loaded, before reading a file that never needed the server thread. So the common case is
@@ -144,6 +153,15 @@ final class SpongeChunkLoader {
   }
 
   /**
+   * Stops reading and loading chunks. Fetches already underway are answered as transient failures
+   * rather than handed on to the ticket machinery: a server on its way down should not start
+   * loading chunks for a search that is also on its way down.
+   */
+  void shutdown() {
+    stopped = true;
+  }
+
+  /**
    * Resolves a fetch on the server thread: copy now, read it off disk, or fall through to a ticket.
    *
    * <p>The order is the interesting part. A loaded chunk is free, so it goes first. Then, if this
@@ -158,13 +176,13 @@ final class SpongeChunkLoader {
       int cz,
       ChunkLoadPolicy policy,
       boolean urgent,
-      CompletableFuture<MinecraftChunk> future) {
+      CompletableFuture<ChunkFetch> future) {
     if (world.isChunkLoaded(cx, 0, cz, false)) {
       future.complete(copy(world, cx, cz));
       return;
     }
     if (policy == ChunkLoadPolicy.LOADED_ONLY) {
-      future.complete(MinecraftChunk.Unknown.INSTANCE);
+      future.complete(ChunkFetch.Failed.permanent());
       return;
     }
     if (offline.available()) {
@@ -178,10 +196,13 @@ final class SpongeChunkLoader {
    * Answers a fetch from the chunk's saved blocks, falling back to a ticket if that cannot be done.
    *
    * <p>Three outcomes, and they are not the same. A chunk that reads back is the answer. A chunk
-   * that is <em>not</em> saved has never been generated, so {@code allow_load} is finished with it
-   * — there is nothing to load — while {@code allow_load_and_generate} still has a ticket to place.
-   * And a read that fails says nothing about the chunk at all, only about this path, so the ticket
-   * machinery gets its turn exactly as if no offline source existed.
+   * that is <em>not</em> saved has, as a rule, never been generated, so {@code allow_load} is
+   * finished with it — there is nothing to load — while {@code allow_load_and_generate} still has a
+   * ticket to place. The exception is a chunk that was in memory moments ago: the server saves a
+   * chunk as it unloads it, but the write lands on disk a little later, so for a chunk unloaded
+   * that recently "not saved" means "not saved <em>yet</em>", a failure worth retrying. And a read
+   * that fails says nothing about the chunk at all, only about this path, so the ticket machinery
+   * gets its turn exactly as if no offline source existed.
    *
    * <p>Reached from either thread: from the server thread by way of {@link #resolve}, or directly
    * from a caller whose chunk the index said was not loaded. Everything it touches before handing
@@ -193,19 +214,27 @@ final class SpongeChunkLoader {
       int cz,
       ChunkLoadPolicy policy,
       boolean urgent,
-      CompletableFuture<MinecraftChunk> future) {
+      CompletableFuture<ChunkFetch> future) {
     offline
         .read(world, cx, cz, urgent)
         .whenComplete(
             (chunk, error) -> {
               if (error == null && chunk != null) {
                 index.markPresent(world.key(), cx, cz);
-                future.complete(chunk);
+                future.complete(ChunkFetch.success(chunk));
+                return;
+              }
+              if (stopped) {
+                // Shutting down: the read was called off, or failed because its pool went away.
+                future.complete(ChunkFetch.Failed.transientFailure());
                 return;
               }
               if (error == null && policy == ChunkLoadPolicy.ALLOW_LOAD) {
                 // Nothing is saved here, and this policy may not generate it.
-                future.complete(MinecraftChunk.Unknown.INSTANCE);
+                future.complete(
+                    loaded.recentlyUnloaded(world.key().asString(), cx, cz)
+                        ? ChunkFetch.Failed.transientFailure()
+                        : ChunkFetch.Failed.permanent());
                 return;
               }
               // Either the read failed, or the chunk must be generated. Both land on the tickets,
@@ -221,17 +250,30 @@ final class SpongeChunkLoader {
       int cz,
       ChunkLoadPolicy policy,
       boolean urgent,
-      CompletableFuture<MinecraftChunk> future) {
+      CompletableFuture<ChunkFetch> future) {
+    if (stopped) {
+      future.complete(ChunkFetch.Failed.transientFailure());
+      return;
+    }
     if (world.isChunkLoaded(cx, 0, cz, false)) {
       future.complete(copy(world, cx, cz)); // loaded while the offline read was in flight
       return;
     }
-    if (policy == ChunkLoadPolicy.ALLOW_LOAD
-        && index.presence(world, cx, cz) != ChunkExistenceIndex.Presence.PRESENT) {
-      // Either the chunk has never been generated, or the world's scan has not finished. Both mean
-      // "loading this would generate terrain, as far as we can tell", which this policy forbids.
-      future.complete(MinecraftChunk.Unknown.INSTANCE);
-      return;
+    if (policy == ChunkLoadPolicy.ALLOW_LOAD) {
+      switch (index.presence(world, cx, cz)) {
+        case ABSENT -> {
+          // Loading this would generate terrain, which this policy forbids.
+          future.complete(ChunkFetch.Failed.permanent());
+          return;
+        }
+        case UNKNOWN -> {
+          // The world's scan has not finished, so we cannot yet tell loading from generating. Ask
+          // again later; by then it may have.
+          future.complete(ChunkFetch.Failed.transientFailure());
+          return;
+        }
+        case PRESENT -> {}
+      }
     }
 
     ChunkKey key = new ChunkKey(world.key(), cx, cz);
@@ -249,7 +291,7 @@ final class SpongeChunkLoader {
     Optional<Ticket<Vector3i>> ticket = requestTicket(world, cx, cz);
     if (ticket.isEmpty()) {
       releaseSlot();
-      future.complete(MinecraftChunk.Unknown.INSTANCE);
+      future.complete(ChunkFetch.Failed.transientFailure());
       return;
     }
     Parked parked = new Parked(world, ticket.get());
@@ -268,7 +310,7 @@ final class SpongeChunkLoader {
         () -> {
           if (pending.get(key) == parked) {
             logger.debug("Timed out waiting for chunk [{}, {}] to load", cx, cz);
-            deliver(key, MinecraftChunk.Unknown.INSTANCE);
+            deliver(key, ChunkFetch.Failed.transientFailure());
           }
         },
         PENDING_TIMEOUT_MILLIS);
@@ -298,10 +340,6 @@ final class SpongeChunkLoader {
   }
 
   /**
-   * Records terrain that has just come into existence, so a later {@code allow_load} search does
-   * not mistake it for something that would still have to be generated.
-   */
-  /**
    * Takes whatever the offline source needs from a world while we are on the server thread, so its
    * reads never have to touch the world themselves.
    */
@@ -310,6 +348,10 @@ final class SpongeChunkLoader {
     offline.prepare(event.world());
   }
 
+  /**
+   * Records terrain that has just come into existence, so a later {@code allow_load} search does
+   * not mistake it for something that would still have to be generated.
+   */
   @Listener
   public void onChunkGenerated(ChunkEvent.Generated event) {
     Vector3i position = event.chunkPosition();
@@ -317,16 +359,16 @@ final class SpongeChunkLoader {
   }
 
   /** Hands a result to everyone parked on a chunk and lets go of its ticket. */
-  private void deliver(ChunkKey key, MinecraftChunk chunk) {
+  private void deliver(ChunkKey key, ChunkFetch outcome) {
     logger.trace("Delivered chunk at {},{}, outstanding requests {}", key.cx, key.cz, outstanding);
     Parked parked = pending.remove(key);
     if (parked == null) {
       return;
     }
-    for (CompletableFuture<MinecraftChunk> waiter : parked.waiters) {
-      waiter.complete(chunk);
+    for (CompletableFuture<ChunkFetch> waiter : parked.waiters) {
+      waiter.complete(outcome);
     }
-    if (chunk != MinecraftChunk.Unknown.INSTANCE) {
+    if (outcome instanceof ChunkFetch.Success) {
       // We just read it, so it exists — worth knowing even if the scan has not reached it yet.
       index.markPresent(key.world(), key.cx(), key.cz());
     }
@@ -402,12 +444,12 @@ final class SpongeChunkLoader {
   /**
    * Snapshots one loaded chunk's block states into an array (server thread only).
    *
-   * @return the snapshot, or unknown if the chunk turned out not to be loaded after all
+   * @return the snapshot, or a transient failure if the chunk turned out not to be loaded after all
    */
-  private MinecraftChunk copy(ServerWorld world, int cx, int cz) {
+  private ChunkFetch copy(ServerWorld world, int cx, int cz) {
     WorldChunk chunk = world.chunk(cx, 0, cz);
     if (chunk.isEmpty()) {
-      return MinecraftChunk.Unknown.INSTANCE; // not actually loaded: treat the chunk as unavailable
+      return ChunkFetch.Failed.transientFailure(); // unloaded between the check and the copy
     }
     return copy(chunk, cx, cz);
   }
@@ -423,7 +465,7 @@ final class SpongeChunkLoader {
    * weak reference and {@code VolumeElement} per block — a quarter of a server tick for one
    * full-height column. Block entities, biomes and entities are never read by the search.
    */
-  private MinecraftChunk copy(BlockVolume volume, int cx, int cz) {
+  private ChunkFetch copy(BlockVolume volume, int cx, int cz) {
     int baseX = cx << 4;
     int baseZ = cz << 4;
     int minY = volume.min().y();
@@ -442,9 +484,10 @@ final class SpongeChunkLoader {
       }
     } catch (Exception e) {
       logger.error("Sponge could not copy chunk [{}, {}]", e, cx, cz);
-      return MinecraftChunk.Unknown.INSTANCE;
+      return ChunkFetch.Failed.transientFailure();
     }
-    return new SpongeChunk(states, minY, height);
+    MinecraftChunk chunk = new SpongeChunk(states, minY, height);
+    return ChunkFetch.success(chunk);
   }
 
   private record ChunkKey(ResourceKey world, int cx, int cz) {}
@@ -454,7 +497,7 @@ final class SpongeChunkLoader {
 
     private final ServerWorld world;
     private final Ticket<Vector3i> ticket;
-    private final List<CompletableFuture<MinecraftChunk>> waiters = new CopyOnWriteArrayList<>();
+    private final List<CompletableFuture<ChunkFetch>> waiters = new CopyOnWriteArrayList<>();
 
     private Parked(ServerWorld world, Ticket<Vector3i> ticket) {
       this.world = world;

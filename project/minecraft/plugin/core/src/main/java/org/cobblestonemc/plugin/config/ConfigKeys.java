@@ -88,6 +88,12 @@ public final class ConfigKeys {
   /** How far ahead of itself a search reads chunks, in blocks. Requires a restart. */
   public final ConfigKey<Integer> chunksPrefetchDistance;
 
+  /**
+   * How many transient failures one search tolerates for a chunk before treating it as a wall.
+   * Requires a restart.
+   */
+  public final ConfigKey<Integer> chunksFetchAttempts;
+
   /** Whether Cobblestone discovers vanilla portal links by watching players teleport. Mutable. */
   public final ConfigKey<Boolean> portalsDiscovery;
 
@@ -327,9 +333,13 @@ public final class ConfigKeys {
                 Codec.ofInt())
             .comment(
                 """
-                How many chunks a single search keeps in hand before it starts forgetting the ones                 it touched longest ago. Each search has its own, so this is not a server-wide                 budget: several players searching at once do not evict each other.
+                How many chunks a single search keeps in hand before it starts forgetting the ones
+                it touched longest ago. Each search has its own, so this is not a server-wide
+                budget: several players searching at once do not evict each other.
 
-                The point is only to avoid re-reading the same chunk from disk while a search works                 its way across a chunk border, so the useful range is small. A chunk costs roughly                 35 KB, so the default is about a megabyte per running search.""")
+                The point is only to avoid re-reading the same chunk from disk while a search works
+                its way across a chunk border, so the useful range is small. A chunk costs roughly
+                35 KB, so the default is about a megabyte per running search.""")
             .requiresRestart()
             .register();
     this.chunksPrefetchDistance =
@@ -340,9 +350,27 @@ public final class ConfigKeys {
                 Codec.ofInt())
             .comment(
                 """
-                How far ahead of itself, in blocks towards the destination, a search reads chunks                 it has not needed yet. The default is a chunk or two, which covers the moment                 between approaching a chunk border and crossing it.
+                How far ahead of itself, in blocks towards the destination, a search reads chunks
+                it has not needed yet. The default is a chunk or two, which covers the moment
+                between approaching a chunk border and crossing it.
 
-                Set to 0 to turn read-ahead off entirely, which is worth trying: it earned a long                 reach when a miss meant loading a chunk through the server, and reads now come off                 disk.""")
+                Set to 0 to turn read-ahead off entirely, which is worth trying: it earned a long
+                reach when a miss meant loading a chunk through the server, and reads now come off
+                disk.""")
+            .requiresRestart()
+            .register();
+    this.chunksFetchAttempts =
+        manager
+            .key(
+                "search.chunks.fetch_attempts",
+                ChunkProviderSettings.DEFAULT_MAX_FETCH_ATTEMPTS,
+                Codec.ofInt())
+            .comment(
+                """
+                How many times a single search tries to get a chunk whose read failed for a reason
+                that might pass — a disk read that errored, a load that timed out, a chunk whose
+                save had not reached disk yet — before treating it as impassable. Chunks that
+                simply cannot be had, such as ones never generated, are not retried at all.""")
             .requiresRestart()
             .register();
 

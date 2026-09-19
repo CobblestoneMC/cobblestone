@@ -9,6 +9,7 @@ package org.cobblestonemc.minecraft;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.atomic.AtomicLong;
@@ -20,6 +21,9 @@ class ChunkProviderTest {
 
   /** Two chunks' worth of read-ahead, so the prefetched column spans more than one neighbour. */
   private static final int PREFETCH_DISTANCE = 32;
+
+  /** How many transient failures a chunk may have before the provider gives up on it. */
+  private static final int MAX_ATTEMPTS = 3;
 
   private final AtomicLong clock = new AtomicLong(0);
   private final TestWorld world = TestWorld.builder("w").build();
@@ -36,7 +40,8 @@ class ChunkProviderTest {
   }
 
   private static ChunkProviderSettings settings(int capacity, int prefetchDistance) {
-    return new ChunkProviderSettings(capacity, prefetchDistance, ChunkLoadPolicy.ALLOW_LOAD);
+    return new ChunkProviderSettings(
+        capacity, prefetchDistance, MAX_ATTEMPTS, ChunkLoadPolicy.ALLOW_LOAD);
   }
 
   @Test
@@ -141,9 +146,9 @@ class ChunkProviderTest {
   }
 
   @Test
-  void repeatReadsOfAnUnknownChunkAreAnsweredFromTheCache() {
+  void repeatReadsOfAPermanentlyUnknownChunkAreAnsweredFromTheCache() {
     FakePlatform platform = new FakePlatform();
-    platform.setUnknown(true);
+    platform.setFailure(ChunkFetch.Failed.permanent());
     ChunkProvider cp = provider(platform, settings());
 
     cp.block(new Cell(5, 64, 5), world, EAST).future().join();
@@ -190,17 +195,18 @@ class ChunkProviderTest {
   }
 
   /**
-   * Every answer the platform gives is cached, read-ahead included.
+   * A permanent failure is cached like any other answer, read-ahead included.
    *
    * <p>There is no such thing as a speculative unknown: a platform answers a request it was not
    * blocked on exactly as it answers one it was, resolving its own fallbacks before it replies (see
-   * {@link PlatformApi#fetchChunk}). So an unknown from read-ahead is a fact about the world, and
-   * re-asking would have a solve re-read it for every cell of a frontier pressed against it.
+   * {@link PlatformApi#fetchChunk}). So a permanent failure from read-ahead is a fact about the
+   * world, and re-asking would have a solve re-read it for every cell of a frontier pressed against
+   * it.
    */
   @Test
-  void anUnknownFromReadAheadIsCachedLikeAnyOtherAnswer() {
+  void aPermanentFailureFromReadAheadIsCachedLikeAnyOtherAnswer() {
     FakePlatform platform = new FakePlatform();
-    platform.setUnknown(true);
+    platform.setFailure(ChunkFetch.Failed.permanent());
     ChunkProvider cp = provider(platform, settings());
 
     // Chunk [0, 0], heading east: reads ahead over [1, 0] and [2, 0], all unknown.
@@ -214,5 +220,76 @@ class ChunkProviderTest {
 
     assertEquals(1, platform.fetchCount(1, 0), "the chunk we walked into was not re-read");
     assertEquals(1, platform.fetchCount(2, 0), "nor was the one beyond it");
+  }
+
+  @Test
+  void aTransientFailureIsAskedAgainOnTheNextRequest() {
+    FakePlatform platform = new FakePlatform();
+    platform.setFailure(ChunkFetch.Failed.transientFailure());
+    ChunkProvider cp = provider(platform, settings(1024, 0));
+
+    MinecraftBlock first = cp.block(new Cell(5, 64, 5), world, EAST).future().join();
+    assertEquals(UnknownBlock.INSTANCE, first, "a failed fetch still answers, as a wall");
+
+    platform.setFailure(null);
+    FutureOr<MinecraftBlock> second = cp.block(new Cell(6, 64, 6), world, EAST);
+    assertFalse(second.isImmediate(), "the failure was not cached, so this is a fresh fetch");
+    assertNotEquals(UnknownBlock.INSTANCE, second.future().join());
+    assertEquals(2, platform.fetchCount(0, 0));
+
+    assertTrue(cp.block(new Cell(7, 64, 7), world, EAST).isImmediate(), "and now it is cached");
+    assertEquals(2, platform.fetchCount(0, 0));
+  }
+
+  @Test
+  void aChunkThatKeepsFailingTransientlyIsGivenUpOnAfterTheConfiguredAttempts() {
+    FakePlatform platform = new FakePlatform();
+    platform.setFailure(ChunkFetch.Failed.transientFailure());
+    ChunkProvider cp = provider(platform, settings(1024, 0));
+
+    for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      FutureOr<MinecraftBlock> block = cp.block(new Cell(5, 64, 5), world, EAST);
+      assertFalse(block.isImmediate(), "attempt " + (attempt + 1) + " goes back to the platform");
+      block.future().join();
+    }
+    assertEquals(MAX_ATTEMPTS, platform.fetchCount(0, 0));
+
+    FutureOr<MinecraftBlock> after = cp.block(new Cell(5, 64, 5), world, EAST);
+    assertTrue(after.isImmediate(), "given up on: the wall is cached");
+    assertEquals(UnknownBlock.INSTANCE, after.value());
+    assertEquals(MAX_ATTEMPTS, platform.fetchCount(0, 0));
+    assertEquals(MAX_ATTEMPTS, cp.stats().transientFailures());
+    assertEquals(1, cp.stats().unknownChunks());
+  }
+
+  @Test
+  void aFetchThatFailsExceptionallyCountsAsTransient() {
+    FakePlatform platform = new FakePlatform();
+    platform.setThrowing(true);
+    ChunkProvider cp = provider(platform, settings(1024, 0));
+
+    assertEquals(
+        UnknownBlock.INSTANCE,
+        cp.block(new Cell(5, 64, 5), world, EAST).future().join(),
+        "a broken platform reads as a wall, not as a failed search");
+    assertFalse(cp.block(new Cell(5, 64, 5), world, EAST).isImmediate(), "and is asked again");
+    assertEquals(2, platform.fetchCount(0, 0));
+  }
+
+  @Test
+  void aTransientFailureFromReadAheadIsReadAgainWhenTheSolveGetsThere() {
+    FakePlatform platform = new FakePlatform();
+    platform.setFailure(ChunkFetch.Failed.transientFailure());
+    ChunkProvider cp = provider(platform, settings());
+
+    // Chunk [0, 0], heading east: reads ahead over [1, 0], which fails.
+    cp.block(new Cell(8, 64, 8), world, EAST).future().join();
+    assertEquals(1, platform.fetchCount(1, 0));
+
+    platform.setFailure(null);
+    FutureOr<MinecraftBlock> arrived = cp.block(new Cell(24, 64, 8), world, EAST);
+    assertFalse(arrived.isImmediate(), "the read-ahead's failure was not remembered");
+    assertNotEquals(UnknownBlock.INSTANCE, arrived.future().join());
+    assertEquals(2, platform.fetchCount(1, 0));
   }
 }
