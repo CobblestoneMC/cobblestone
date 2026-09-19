@@ -23,10 +23,10 @@ player strays and end on arrival. `TripService` starts trips programmatically.
 === "Sponge"
 
     ```java
-    import org.cobblestonemc.sponge12.plugin.api.CobblestonePluginApi;
+    import org.cobblestonemc.sponge.plugin.api.CobblestoneSpongeApi;
     import org.cobblestonemc.plugin.api.NavigatorSettings;
 
-    CobblestonePluginApi.tripService()
+    CobblestoneSpongeApi.tripService()
         .navigate(player, objectiveLocation, NavigatorSettings.defaults(), "Lost Lantern");
     ```
 
@@ -93,7 +93,7 @@ values fall back to the server configuration.
     ```java
     import org.spongepowered.api.effect.particle.ParticleTypes;
     import org.spongepowered.api.util.Color;
-    import org.cobblestonemc.sponge12.plugin.api.TrailNavigatorSettings;
+    import org.cobblestonemc.sponge.plugin.api.TrailNavigatorSettings;
 
     NavigatorSettings settings = TrailNavigatorSettings.builder()
         .particles(List.of(ParticleTypes.DUST.get()))
@@ -139,7 +139,7 @@ To render a path from a search you ran (see [Searching](searching.md)):
 
     handle.future().thenAccept(result -> {
       if (result instanceof NavigationResult.Success<ServerLocation, MinecraftStepPayload> success) {
-        CobblestonePluginApi.tripService()
+        CobblestoneSpongeApi.tripService()
             .startTrip(player, success.path(), NavigatorSettings.defaults());
       }
     });

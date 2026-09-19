@@ -32,7 +32,7 @@ Before opening a pull request:
 | `project/api`, `project/core` | Navigation API and A* engine |
 | `project/core-test` | Tests against synthetic worlds |
 | `project/minecraft/plugin` | Platform-independent plugin code |
-| `project/minecraft/platform/paper`, `…/sponge-12` | Platform implementations |
+| `project/minecraft/platform/paper`, `…/sponge*` | Platform implementations |
 | `project/minecraft/integrations` | Third-party integrations |
 | `project/examples/paper-warps` | Example integration |
 | `docs/` | This site |

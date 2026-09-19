@@ -47,14 +47,14 @@ A single destination at a fixed location:
 
     ```java
     import net.kyori.adventure.text.Component;
-    import org.cobblestonemc.sponge12.plugin.api.CobblestonePluginApi;
-    import org.cobblestonemc.sponge12.plugin.api.Destination;
-    import org.cobblestonemc.sponge12.plugin.api.DestinationService;
-    import org.cobblestonemc.sponge12.plugin.api.DestinationTree;
+    import org.cobblestonemc.sponge.plugin.api.CobblestoneSpongeApi;
+    import org.cobblestonemc.sponge.plugin.api.Destination;
+    import org.cobblestonemc.sponge.plugin.api.DestinationService;
+    import org.cobblestonemc.sponge.plugin.api.DestinationTree;
 
     @Listener
     public void onStartedEngine(StartedEngineEvent<Server> event) {
-      CobblestonePluginApi.registrar().registerDestinations(container, player ->
+      CobblestoneSpongeApi.registrar().registerDestinations(container, player ->
           DestinationTree.builder()
               .leaf("market", () -> Destination.at(marketLocation(), Component.text("Market")))
               .build());
