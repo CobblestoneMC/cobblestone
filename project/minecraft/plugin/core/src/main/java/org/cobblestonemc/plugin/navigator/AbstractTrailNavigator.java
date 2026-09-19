@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import net.kyori.adventure.audience.Audience;
@@ -362,8 +363,10 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
         highlight = true;
       }
       renderBlock(
-          i == 0 ? origin : points.get(i - 1),
+          smoothTrailInto(i - 1) ? trailNode(i - 2) : null,
+          trailNode(i - 1),
           points.get(i),
+          smoothTrailInto(i) ? points.get(i + 1) : null,
           playerVec,
           payload,
           highlight,
@@ -371,9 +374,31 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     }
   }
 
+  /** The start of the trail ({@code -1}, the origin) or the destination of step {@code index}. */
+  private Vec3 trailNode(int index) {
+    return index < 0 ? origin : points.get(index);
+  }
+
+  /**
+   * Whether the corner at the destination of step {@code index} is rounded: only between two walked
+   * steps in the same world, never into or out of an action (e.g. a teleport).
+   */
+  private boolean smoothTrailInto(int index) {
+    if (index < 0 || index + 1 >= steps.size()) {
+      return false;
+    }
+    Step<L, MinecraftStepPayload> arriving = steps.get(index);
+    Step<L, MinecraftStepPayload> leaving = steps.get(index + 1);
+    return !arriving.payload().stepType().isAction()
+        && !leaving.payload().stepType().isAction()
+        && Objects.equals(worldKey(arriving.position()), worldKey(leaving.position()));
+  }
+
   private void renderBlock(
+      Vec3 prev,
       Vec3 from,
       Vec3 to,
+      Vec3 next,
       Vec3 playerVec,
       MinecraftStepPayload payload,
       boolean highlight,
@@ -381,7 +406,7 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     if (playerVec.minus(to).lengthSquared() < NEAR_BUFFER_SQUARED) {
       return; // keep the player's immediate view clear
     }
-    scatter(from, to, random);
+    scatter(prev, from, to, next, random);
     if (highlight) {
       highlight(to, random);
     }
@@ -444,9 +469,15 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     }
     for (int i = 0; i < guidePoints.size(); i++) {
       MinecraftStepPayload payload = guideSteps.get(i).payload();
+      Vec3 prev = null;
+      if (smoothGuideInto(i - 1)) {
+        prev = i == 1 ? playerVec : guidePoints.get(i - 2);
+      }
       renderBlock(
+          prev,
           i == 0 ? playerVec : guidePoints.get(i - 1),
           guidePoints.get(i),
+          smoothGuideInto(i) ? guidePoints.get(i + 1) : null,
           playerVec,
           payload,
           false,
@@ -454,20 +485,29 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     }
   }
 
+  /** Whether the guide path's corner at the destination of guide step {@code index} is rounded. */
+  private boolean smoothGuideInto(int index) {
+    return index >= 0
+        && index + 1 < guideSteps.size()
+        && !guideSteps.get(index).payload().stepType().isAction()
+        && !guideSteps.get(index + 1).payload().stepType().isAction();
+  }
+
   /**
-   * Spawns ~{@code density} Gaussian-scattered particles around a center. A fractional density is
+   * Spawns ~{@code density} Gaussian-scattered particles per block around a random point on the
+   * segment, flowing along it. The segment's corners are rounded by {@link TrailCurve} toward
+   * {@code prev} and {@code next} (either {@code null} for a sharp end). A fractional density is
    * probabilistic (0.7 → 70%).
    */
-  private void scatter(Vec3 from, Vec3 to, ThreadLocalRandom random) {
-    var diff = to.minus(from);
-    var length = diff.length();
-    double floatCount = density * length;
+  private void scatter(Vec3 prev, Vec3 from, Vec3 to, Vec3 next, ThreadLocalRandom random) {
+    double floatCount = density * to.minus(from).length();
     int count = (int) floatCount;
     if (random.nextDouble() < floatCount - count) {
       count++;
     }
-    var center = from.plus(diff.times(random.nextDouble()));
-    var velocity = diff.times(1 / length).times(PARTICLE_FLOW_SPEED);
+    TrailCurve.Sample sample = TrailCurve.sample(prev, from, to, next, random.nextDouble());
+    var center = sample.point();
+    var velocity = sample.direction().times(PARTICLE_FLOW_SPEED);
     for (int p = 0; p < count; p++) {
       spawnTrailParticle(
           center.x() + random.nextGaussian() * SPREAD_HORIZONTAL,
