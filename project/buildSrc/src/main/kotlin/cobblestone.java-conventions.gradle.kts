@@ -55,8 +55,3 @@ tasks.register("formatAndBuild") {
     description = "Run spotlessApply and then build"
     dependsOn("spotlessApply", "build")
 }
-
-tasks.javadoc {
-    // TODO remove this
-    isFailOnError = false
-}
