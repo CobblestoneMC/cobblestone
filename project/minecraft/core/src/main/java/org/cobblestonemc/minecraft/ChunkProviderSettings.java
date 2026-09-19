@@ -30,7 +30,7 @@ public record ChunkProviderSettings(
    * frontier works across a chunk border. A frontier touches a handful of chunks at a time, so a
    * few dozen covers the working set with room to spare.
    */
-  public static final int DEFAULT_MAX_CACHED_CHUNKS = 32;
+  public static final int DEFAULT_MAX_CACHED_CHUNKS = 1024;
 
   /**
    * Default read-ahead distance, in blocks.

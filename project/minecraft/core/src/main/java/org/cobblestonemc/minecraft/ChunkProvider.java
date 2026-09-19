@@ -221,8 +221,8 @@ public final class ChunkProvider {
 
   /** Records what a fetch came back with: cached, or counted towards giving up on the chunk. */
   private void settleLocked(ChunkKey key, ChunkFetch outcome, boolean prefetch) {
-    if (outcome instanceof ChunkFetch.Failed failed) {
-      if (failed.isTransient()) {
+    if (outcome instanceof ChunkFetch.Failed(boolean isTransient)) {
+      if (isTransient) {
         transientFailures++;
         int failures = transientFailuresByChunk.merge(key, 1, Integer::sum);
         if (failures < settings.maxFetchAttempts()) {

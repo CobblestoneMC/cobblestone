@@ -21,6 +21,7 @@ import net.minecraft.server.level.ServerLevel;
 import org.bukkit.World;
 import org.bukkit.craftbukkit.CraftWorld;
 import org.cobblestonemc.CobblestoneLogger;
+import org.cobblestonemc.ScopedCobblestoneLogger;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -32,8 +33,8 @@ import org.jetbrains.annotations.Nullable;
  * Walking away from those at plugin disable is what makes a shutdown mid-search go badly: the reads
  * are still queued against region files the server is about to close. Holding the set of
  * outstanding reads costs one entry per read in flight — bounded by the search's own concurrency,
- * not by how much ground it covers — and it is what lets {@link #shutdown()} cancel what has not
- * started and let the rest finish before Cobblestone reports that it has stopped.
+ * not by how much ground it covers — and it is what lets {@link #shutdown(long)} cancel what has
+ * not started and let the rest finish before Cobblestone reports that it has stopped.
  *
  * <p>Note what is <em>not</em> tracked: the searches parked on these reads. A search abandons a
  * pending value when it is cancelled and never looks at it again, so the thing worth waiting on is
@@ -49,7 +50,7 @@ final class NMSChunkReader {
   private volatile boolean stopped;
 
   NMSChunkReader(CobblestoneLogger logger) {
-    this.logger = logger;
+    this.logger = new ScopedCobblestoneLogger(logger, "NMSChunkReader");
   }
 
   /**
@@ -59,6 +60,16 @@ final class NMSChunkReader {
    */
   boolean available() {
     return NMSSupport.available(logger);
+  }
+
+  /**
+   * Returns whether {@link #shutdown} has begun, after which a {@code null} read may mean only that
+   * the read was called off.
+   *
+   * @return {@code true} once shutdown has begun
+   */
+  boolean stopped() {
+    return stopped;
   }
 
   /**
@@ -86,7 +97,7 @@ final class NMSChunkReader {
     CompletableFuture<NMSChunk> future = new CompletableFuture<>();
     PendingRead pending = new PendingRead(future);
     outstanding.add(pending);
-    future.whenComplete((chunk, error) -> outstanding.remove(pending));
+    future.whenComplete((_, _) -> outstanding.remove(pending));
     if (stopped) {
       future.complete(null);
       return future;
@@ -96,7 +107,8 @@ final class NMSChunkReader {
       ServerLevel level = ((CraftWorld) bukkitWorld).getHandle();
       // The callback can run before loadDataAsync returns, so `pending` is registered above and the
       // cancellation handle is attached after — never the other way round.
-      Cancellable handle =
+      logger.trace("{},{}; reading", chunkX, chunkZ);
+      pending.handle =
           MoonriseRegionFileIO.loadDataAsync(
               level,
               chunkX,
@@ -105,19 +117,22 @@ final class NMSChunkReader {
               (data, throwable) -> {
                 if (throwable != null) {
                   future.completeExceptionally(throwable);
+                  logger.trace("{},{}; error", chunkX, chunkZ);
                 } else if (data == null) {
                   future.complete(null); // never generated
+                  logger.trace("{},{}; not generated", chunkX, chunkZ);
                 } else {
                   try {
                     future.complete(NMSChunk.parse(level, data));
+                    logger.trace("{},{}; loaded", chunkX, chunkZ);
                   } catch (Throwable error) {
                     future.completeExceptionally(error);
+                    logger.trace("{},{}; failed parsing", chunkX, chunkZ);
                   }
                 }
               },
               false,
               urgent ? Priority.NORMAL : Priority.LOW);
-      pending.handle = handle;
       if (stopped) {
         pending.cancel(); // shutdown began while this read was being queued
       }
