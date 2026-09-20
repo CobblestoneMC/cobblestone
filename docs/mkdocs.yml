@@ -62,6 +62,9 @@ extra:
     - icon: material/chart-box-outline
       link: https://bstats.org/plugin/sponge/Cobblestone/33625
       name: Stats (Sponge)
+  analytics:
+    provider: google
+    property: G-Q76LDBF416
 
 markdown_extensions:
   - abbr
