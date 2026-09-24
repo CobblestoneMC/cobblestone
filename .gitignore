@@ -1,2 +1,10 @@
 local/
 .idea/
+# Captured world data and everything derived from it. Captures are large, machine-local, and
+# re-creatable with /copier; each developer captures their own. Scenarios name coordinates in a
+# particular captured world and baselines record numbers measured against it, so neither means
+# anything on a machine that does not have the capture — they stay local with it. A shared team
+# would put capture, scenarios and baselines together on shared storage, as one unit.
+# See designs/stonebrick.md §3.
+project/stonebrick/data/
+project/stonebrick/baselines/

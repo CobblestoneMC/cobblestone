@@ -40,4 +40,17 @@ public interface Scheduler {
    * @return the async executor
    */
   ExecutorService asyncExecutor();
+
+  /**
+   * Returns the clock the search reads, and schedules its wake-ups on.
+   *
+   * <p>The system clock by default, which is what every platform wants. A benchmark harness
+   * overrides it with a virtual clock so that simulated IO delays cost no real time and a run is
+   * reproducible; see {@link TimeSource}.
+   *
+   * @return the time source
+   */
+  default TimeSource time() {
+    return TimeSource.system(this);
+  }
 }

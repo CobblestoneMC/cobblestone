@@ -23,7 +23,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
@@ -85,6 +84,14 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private final int maxCellsVisited;
   private final BooleanSupplier cancelled;
   private final Executor executor;
+  private final TimeSource time;
+
+  /**
+   * Where this solve reports what it did. {@link SearchObserver#none()} unless a recorder asked
+   * otherwise, so production calls empty methods on a monomorphic site and the JIT deletes them.
+   */
+  private final SearchObserver observer;
+
   private final long deadlineMillis;
   private final CellState start;
 
@@ -104,9 +111,32 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
    */
   private static final Comparator<Entry> BY_ESTIMATE =
       Comparator.comparingDouble(Entry::estimatedTotalCost)
-          .thenComparing(Comparator.comparingDouble(Entry::currentCost).reversed());
+          .thenComparing(Comparator.comparingDouble(Entry::currentCost).reversed())
+          .thenComparingLong(Entry::sequence);
 
   private final PriorityQueue<Entry> open = new PriorityQueue<>(BY_ESTIMATE);
+
+  /**
+   * Insertion counter, the final tie-break.
+   *
+   * <p>Entries equal on both {@code f} and {@code g} would otherwise come out in whatever order the
+   * binary heap happens to hold them. That order is deterministic for a given sequence of
+   * operations, but it is <em>unspecified</em> — it is a consequence of {@link PriorityQueue}'s
+   * sift implementation, and a JDK that changed it would silently change which of a huge tie group
+   * this search follows. On a near-uniform lattice those groups are enormous, so that is not a
+   * detail.
+   *
+   * <p>Ordering by insertion pins it down, and picks first-in-first-out within a group rather than
+   * arbitrarily.
+   *
+   * <p><b>It does not, on its own, make a solve reproducible.</b> If the order entries are
+   * <em>inserted</em> in varies — which it does whenever modes complete asynchronously, since
+   * expansion order then depends on which chunk read landed first — the sequence numbers vary with
+   * it and so does the result. Reproducibility comes from running the solve on a deterministic
+   * scheduler; this only removes one further source of drift underneath that.
+   */
+  private long sequence;
+
   private PendingModes<T> pendingModes;
   private CellState pendingGoal; // an optimistically-reached goal awaiting path confirmation
 
@@ -167,6 +197,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       double heuristicWeight,
       BooleanSupplier cancelled,
       Executor executor,
+      TimeSource time,
+      SearchObserver observer,
       long deadlineMillis) {
     this.logger =
         new ScopedCobblestoneLogger(
@@ -186,10 +218,12 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     this.maxCellsVisited = maxCellsVisited;
     this.cancelled = cancelled;
     this.executor = executor;
+    this.time = time;
+    this.observer = observer;
     this.deadlineMillis = deadlineMillis;
 
     this.start = new CellState(virtualPath.fromCell(), virtualPath.state());
-    this.metrics = new Tier2Metrics(distanceToTarget(start.cell()));
+    this.metrics = new Tier2Metrics(distanceToTarget(start.cell()), time);
     Node<T> startNode = getOrCreate(start);
     startNode.cost = 0.0;
     // `heuristic` here is the strategy parameter; the per-solve instance is the field.
@@ -232,7 +266,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     if (deadlineMillis <= 0) {
       return;
     }
-    long delay = Math.max(1, deadlineMillis - System.currentTimeMillis()) + DEADLINE_SLACK_MILLIS;
+    long delay = Math.max(1, deadlineMillis - time.millis()) + DEADLINE_SLACK_MILLIS;
     // Hold the solve weakly and the result strongly. A timer task lives until it fires, and a
     // lambda capturing `this` would pin the whole search — every node, every candidate parent, the
     // open set — for the full budget after the search finished; on a busy server that is gigabytes
@@ -242,7 +276,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     CompletableFuture<Tier2Result<T, D>> pending = result;
     CobblestoneLogger timerLogger = logger;
     BooleanSupplier abandoned = cancelled;
-    CompletableFuture.runAsync(
+    time.schedule(
         () -> {
           if (pending.isDone()) {
             return;
@@ -262,7 +296,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
           }
           pending.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.TIMED_OUT));
         },
-        CompletableFuture.delayedExecutor(delay, TimeUnit.MILLISECONDS, executor));
+        delay);
   }
 
   /**
@@ -297,7 +331,9 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private void offer(CellState key, double g, double trailAverage) {
     double remaining = distanceToTarget(key.cell());
     double estimate = heuristic.estimate(key.cell(), remaining, key.state(), trailAverage);
-    open.add(new Entry(key, g, g + weightAt(remaining) * estimate));
+    double f = g + weightAt(remaining) * estimate;
+    open.add(new Entry(key, g, f, sequence++));
+    observer.opened(key.cell(), g, f);
   }
 
   private String stats() {
@@ -341,6 +377,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         if (!woke) {
           woke = true;
           logger.trace("Woke up after {}ms", metrics.woke());
+          observer.resumed();
         }
         metrics.resume();
 
@@ -355,6 +392,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       result.completeExceptionally(throwable);
     } finally {
       metrics.park();
+      observer.parked();
       scheduled.set(false);
       if (!result.isDone() && signalled.get()) {
         wake(); // a signal raced our release; re-schedule
@@ -367,7 +405,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       if (cancelled.getAsBoolean()) {
         return; // abandoned; the outer search has already completed with CANCELLED
       }
-      if (deadlineMillis > 0 && System.currentTimeMillis() >= deadlineMillis) {
+      if (deadlineMillis > 0 && time.millis() >= deadlineMillis) {
         timedOut();
         return;
       }
@@ -423,6 +461,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       Cell closed = node.key.cell();
       Cell goal = nearestBoundary(closed);
       metrics.reached(closed.distance(goal));
+      observer.closed(closed, node.cost, entry.estimatedTotalCost());
       if (target.contains(node.key.cell())) {
         if (pathConfirmed(node.key)) {
           finishSolved(node.key);
@@ -863,7 +902,14 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
 
   private void finishSolved(CellState goal) {
     logger.debug("Solved; cost: {}; {}", nodes.get(goal).cost, stats());
-    result.complete(new Tier2Result.Solved<>(reconstruct(goal), nodes.get(goal).cost));
+    List<RawStep<T, D>> path = reconstruct(goal);
+    List<Cell> cells = new ArrayList<>(path.size() + 1);
+    cells.add(start.cell());
+    for (RawStep<T, D> step : path) {
+      cells.add(step.position().cell());
+    }
+    observer.solved(cells);
+    result.complete(new Tier2Result.Solved<>(path, nodes.get(goal).cost));
   }
 
   private List<Movement<T>> unwrap(List<FutureOr<Collection<Movement<T>>>> results) {
@@ -1064,7 +1110,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
 
   private record CellState(Cell cell, TraversalState state) {}
 
-  private record Entry(CellState key, double currentCost, double estimatedTotalCost) {}
+  private record Entry(
+      CellState key, double currentCost, double estimatedTotalCost, long sequence) {}
 
   private record RepairEntry(CellState key, double cost) {}
 

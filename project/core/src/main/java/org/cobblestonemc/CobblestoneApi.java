@@ -52,6 +52,54 @@ public interface CobblestoneApi {
    * @param <D> the domain type
    * @return a handle to the in-flight search
    */
+  default <A extends Agent, T, D extends Domain> SearchHandle<Position<D>, T> navigate(
+      CobblestoneLogger logger,
+      Scheduler scheduler,
+      A agent,
+      Position<D> origin,
+      Destination<DomainRegion<D>> destination,
+      ModesProvider<A, T, D> modes,
+      List<? extends Transition<T, D>> transitions,
+      List<? extends Restriction<A, D>> restrictions,
+      HeuristicStrategy heuristic,
+      SearchSettings settings) {
+    return navigate(
+        logger,
+        scheduler,
+        agent,
+        origin,
+        destination,
+        modes,
+        transitions,
+        restrictions,
+        heuristic,
+        settings,
+        SearchObserver.none());
+  }
+
+  /**
+   * Begins a search, reporting what it does to an observer.
+   *
+   * <p>For recording a solve so it can be replayed and looked at afterwards. An observer must not
+   * affect the search, and recording one costs real time, so a run being measured uses {@link
+   * SearchObserver#none()} — which is what the other overload passes.
+   *
+   * @param logger the logger to track logging events
+   * @param scheduler the scheduler of tasks for the algorithm to parallelize work
+   * @param agent the navigating agent
+   * @param origin the starting position
+   * @param destination the goal
+   * @param modes provides the transportation modes available to the agent for a leg
+   * @param transitions the transitions (portals, teleports, mounts, …) available to the agent
+   * @param restrictions the passability restrictions barring the agent from certain cells
+   * @param heuristic the heuristic to use for approaching the destination
+   * @param settings the search limits and knobs
+   * @param observer receives what the search does
+   * @param <A> the agent type
+   * @param <T> the payload type
+   * @param <D> the domain type
+   * @return a handle to the in-flight search
+   */
   <A extends Agent, T, D extends Domain> SearchHandle<Position<D>, T> navigate(
       CobblestoneLogger logger,
       Scheduler scheduler,
@@ -62,5 +110,6 @@ public interface CobblestoneApi {
       List<? extends Transition<T, D>> transitions,
       List<? extends Restriction<A, D>> restrictions,
       HeuristicStrategy heuristic,
-      SearchSettings settings);
+      SearchSettings settings,
+      SearchObserver observer);
 }

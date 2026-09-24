@@ -22,6 +22,37 @@ import org.junit.jupiter.api.Test;
 
 class Tier2SearchTest {
 
+  /**
+   * Runs delayed tasks on a real timer, so a test that sets a deadline still times out.
+   *
+   * <p>Tests that pass {@code 0} for the deadline never schedule anything here at all.
+   */
+  private static final Scheduler DIRECT_SCHEDULER =
+      new Scheduler() {
+        private final java.util.concurrent.ScheduledExecutorService timer =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
+                runnable -> {
+                  Thread thread = new Thread(runnable, "tier2-test-timer");
+                  thread.setDaemon(true);
+                  return thread;
+                });
+
+        @Override
+        public void runAsync(Runnable task) {
+          task.run();
+        }
+
+        @Override
+        public void runAsyncLater(Runnable task, long delayMillis) {
+          timer.schedule(task, delayMillis, TimeUnit.MILLISECONDS);
+        }
+
+        @Override
+        public java.util.concurrent.ExecutorService asyncExecutor() {
+          return timer;
+        }
+      };
+
   private static final TestDomain DOMAIN = new TestDomain("test");
 
   private VirtualPath<TestStep, TestDomain> virtualPath(Cell from, Cell target) {
@@ -53,6 +84,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Executors.newSingleThreadExecutor(),
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             System.currentTimeMillis() + 100);
 
     Tier2Result<TestStep, TestDomain> result = search.solve().get(10, TimeUnit.SECONDS);
@@ -101,6 +134,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -144,6 +179,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -192,6 +229,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -225,6 +264,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -252,6 +293,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -289,6 +332,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
@@ -311,6 +356,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
@@ -338,6 +385,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
@@ -366,6 +415,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -399,6 +450,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -462,6 +515,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -504,6 +559,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -637,6 +694,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
