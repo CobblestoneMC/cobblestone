@@ -57,6 +57,30 @@ public final class CaptureChunks {
    */
   public static MinecraftChunk chunk(Capture capture, ChunkColumn column, String worldKey)
       throws CaptureFormatException {
-    return StonebrickChunk.of(column, capture.traits(), worldKey, capture.missing());
+    return chunk(capture, column, worldKey, capture.missing());
+  }
+
+  /**
+   * Wraps a decoded column, recording reads outside the capture somewhere other than the capture's
+   * own log.
+   *
+   * <p>⚠️ The distinction matters. A <em>search</em> reading past the edge of the capture is
+   * degenerate — it has hit a fabricated wall and its result describes a world that does not exist.
+   * The <em>coarse profiler</em> reading past the edge is not: it is a Dijkstra spreading outward
+   * from the destination, it is expected to reach further than the fine search ever will, and it
+   * already treats an unprofilable section as unknown and falls back. Sharing one log would have
+   * every coarse run declare itself degenerate.
+   *
+   * @param capture the capture
+   * @param column the decoded column
+   * @param worldKey the world key
+   * @param log where to record reads outside the capture
+   * @return the chunk
+   * @throws CaptureFormatException if the trait table does not describe the column's blocks
+   */
+  public static MinecraftChunk chunk(
+      Capture capture, ChunkColumn column, String worldKey, MissingCaptureLog log)
+      throws CaptureFormatException {
+    return StonebrickChunk.of(column, capture.traits(), worldKey, log);
   }
 }

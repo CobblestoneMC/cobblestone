@@ -42,7 +42,7 @@ class BenchPipelineTest {
   }
 
   /** Writes a capture and a scenario over it, returning the corpus root. */
-  private static Path corpus(Path dir, String scenarioId, int destX, int destZ, String io)
+  private static Path corpus(Path dir, String name, int destX, int destZ, String io)
       throws IOException {
     Path root = dir.resolve("corpus");
     BenchTestCapture.flatGround(root.resolve("captures").resolve("flat"), 63, 0, 0, 4, 4);
@@ -50,18 +50,18 @@ class BenchPipelineTest {
     Files.writeString(
         root.resolve(Scenario.FILE_NAME),
         """
-        %s:
-          description: flat ground, corner to corner
-          tier: CI
-          capture: flat
-          tags: [smoke]
-          io: %s
-          world: minecraft:overworld
-          origin: { x: 8, y: 64, z: 8 }
-          destination: { x: %d, y: 64, z: %d }
-          settings: { maxWallClockMillis: 60000 }
+        minecraft:overworld:
+          %s:
+            description: flat ground, corner to corner
+            tier: CI
+            capture: flat
+            tags: [smoke]
+            io: %s
+            origin: { x: 8, y: 64, z: 8 }
+            destination: { x: %d, y: 64, z: %d }
+            settings: { maxWallClockMillis: 60000 }
         """
-            .formatted(scenarioId, io, destX, destZ));
+            .formatted(name, io, destX, destZ));
     return root;
   }
 
@@ -72,7 +72,9 @@ class BenchPipelineTest {
     List<Scenario> scenarios = Scenario.loadAll(root.resolve(Scenario.FILE_NAME));
     assertEquals(1, scenarios.size());
     Scenario scenario = scenarios.get(0);
-    assertEquals("flat-walk", scenario.id());
+    // The world is part of the id, so a name only has to be unique within its dimension.
+    assertEquals("overworld/flat-walk", scenario.id());
+    assertEquals("minecraft:overworld", scenario.world());
     assertEquals(Scenario.Tier.CI, scenario.tier());
     assertTrue(scenario.tags().contains("smoke"));
 
@@ -223,11 +225,11 @@ class BenchPipelineTest {
     Files.writeString(
         root.resolve(Scenario.FILE_NAME),
         """
-        odd:
-          capture: scenarios
-          world: minecraft:overworld
-          origin:      { x: 8, y: 64, z: 8 }
-          destination: { x: 24, y: 64, z: 24 }
+        minecraft:overworld:
+          odd:
+            capture: scenarios
+            origin:      { x: 8, y: 64, z: 8 }
+            destination: { x: 24, y: 64, z: 24 }
         """);
 
     Scenario scenario = Scenario.loadAll(root.resolve(Scenario.FILE_NAME)).get(0);

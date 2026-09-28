@@ -2,23 +2,73 @@
 # grows when a search reaches somewhere new and never shrinks, so that two
 # versions of the algorithm are always compared over the same world.
 # Regenerate the captures it describes with: ./gradlew captureCorpus
-deep-cave:
+overworld/around-mountain:
+  world: minecraft:overworld
+  from: { x: 631, y: 70, z: -317 }
+  to: { x: 517, y: 63, z: -161 }
+  radiusChunks: 5
+overworld/cave-lateral:
+  world: minecraft:overworld
+  from: { x: 96, y: -41, z: -119 }
+  to: { x: 19, y: -32, z: -92 }
+  radiusChunks: 4
+overworld/cave-to-surface:
+  world: minecraft:overworld
+  from: { x: -77, y: 19, z: -65 }
+  to: { x: -34, y: 115, z: -370 }
+  radiusChunks: 23
+overworld/cave-tunnel:
+  world: minecraft:overworld
+  from: { x: 4, y: -11, z: -155 }
+  to: { x: -47, y: 4, z: -133 }
+  radiusChunks: 4
+overworld/cliff-down:
+  world: minecraft:overworld
+  from: { x: 334, y: 146, z: -489 }
+  to: { x: 283, y: 64, z: -479 }
+  radiusChunks: 4
+overworld/cliff-up:
+  world: minecraft:overworld
+  from: { x: 282, y: 70, z: -491 }
+  to: { x: 347, y: 145, z: -493 }
+  radiusChunks: 8
+overworld/deep-cave:
   world: minecraft:overworld
   from: { x: 117, y: 63, z: -58 }
   to: { x: 107, y: -54, z: 12 }
   radiusChunks: 11
-hilly-jungle:
+overworld/hilly-jungle:
   world: minecraft:overworld
   from: { x: 2, y: 64, z: -43 }
   to: { x: 310, y: 104, z: -267 }
-  radiusChunks: 4
-ocean:
+  radiusChunks: 6
+overworld/mixed-biome-surface:
+  world: minecraft:overworld
+  from: { x: 788, y: 72, z: 55 }
+  to: { x: 850, y: 63, z: -869 }
+  radiusChunks: 10
+overworld/mountain-peaks:
+  world: minecraft:overworld
+  from: { x: 7, y: 124, z: -413 }
+  to: { x: 146, y: 127, z: -450 }
+  radiusChunks: 7
+overworld/ocean:
   world: minecraft:overworld
   from: { x: 1103, y: 63, z: -675 }
   to: { x: 1451, y: 64, z: -1123 }
   radiusChunks: 14
-smoke-walk:
-  world: minecraft:overworld
-  from: { x: 13, y: 62, z: -43 }
-  to: { x: 51, y: 69, z: 22 }
+the_nether/around-lava-pool:
+  world: minecraft:the_nether
+  from: { x: 211, y: 81, z: -82 }
+  to: { x: 218, y: 84, z: -263 }
+  radiusChunks: 15
+the_nether/distance:
+  world: minecraft:the_nether
+  from: { x: 286, y: 83, z: -75 }
+  to: { x: 562, y: 49, z: 204 }
+  radiusChunks: 26
+the_nether/vertical-small:
+  world: minecraft:the_nether
+  from: { x: 279, y: 76, z: -232 }
+  to: { x: 238, y: 43, z: -227 }
   radiusChunks: 4

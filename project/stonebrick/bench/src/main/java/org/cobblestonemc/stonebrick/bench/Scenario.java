@@ -44,6 +44,7 @@ import org.yaml.snakeyaml.Yaml;
  * @param onMissingCapture what to do about reads outside the capture
  * @param expectedOutcome the outcome the scenario asserts, or {@code null} to assert nothing
  * @param ungenerated chunks to present as never generated, whatever the capture holds
+ * @param heuristic which estimate the fine search runs on
  */
 public record Scenario(
     String id,
@@ -60,7 +61,17 @@ public record Scenario(
     IoProfile io,
     MissingCapturePolicy onMissingCapture,
     String expectedOutcome,
-    Set<Long> ungenerated) {
+    Set<Long> ungenerated,
+    Heuristic heuristic) {
+
+  /** Which estimate the fine search runs on. */
+  public enum Heuristic {
+    /** Today's production heuristic: remaining distance times the recent per-block cost. */
+    RUNNING_AVERAGE,
+
+    /** The coarse layer's estimate, from a backward search over section profiles. */
+    COARSE
+  }
 
   /** Which corpus a scenario belongs to. */
   public enum Tier {
@@ -125,11 +136,17 @@ public record Scenario(
   /**
    * Reads every scenario from a corpus's {@code scenarios.yml}.
    *
-   * <p>One file rather than one per scenario. Scenarios are small, they are written by a command
-   * rather than by hand, and most of the catalogue varies an agent or a destination over terrain
-   * another scenario already uses — so keeping them together is how the relationship between them
-   * stays visible. The file is rewritten in id order every time, so a mark taken in-game produces a
-   * one-entry diff rather than a reshuffle.
+   * <p>Keyed by world, then by name. Scenarios are grouped by the terrain they touch because that
+   * is how they are thought about and captured — and because a name then only has to be unique
+   * within its world, so two dimensions may each have a {@code deep-cave} without one having to be
+   * renamed for the other's sake.
+   *
+   * <p>A scenario's id is therefore {@code &lt;world&gt;/&lt;name&gt;}: the short world path for
+   * {@code minecraft:}, the full key otherwise. That id is what baselines and the chunk manifest
+   * are keyed by, so it has to be unique and stable, which the world prefix makes it.
+   *
+   * <p>The file is rewritten in world-then-name order every time, so a mark taken in-game produces
+   * a one-entry diff rather than a reshuffle.
    *
    * @param file the scenarios file
    * @return the scenarios, ordered by id
@@ -150,21 +167,77 @@ public record Scenario(
       return List.of();
     }
     List<Scenario> scenarios = new ArrayList<>();
-    for (Map.Entry<String, Object> entry : root.entrySet()) {
-      if (!(entry.getValue() instanceof Map)) {
-        throw new IOException(file + ": '" + entry.getKey() + "' is not a scenario");
+    for (Map.Entry<String, Object> world : root.entrySet()) {
+      if (!(world.getValue() instanceof Map)) {
+        throw new IOException(
+            file + ": '" + world.getKey() + "' should hold scenarios, keyed by name");
       }
-      Map<String, Object> body =
-          new java.util.LinkedHashMap<>((Map<String, Object>) entry.getValue());
-      body.put("id", entry.getKey());
-      try {
-        scenarios.add(from(body, file));
-      } catch (RuntimeException e) {
-        throw new IOException(file + ": " + entry.getKey() + ": " + e.getMessage(), e);
+      for (Map.Entry<String, Object> entry :
+          ((Map<String, Object>) world.getValue()).entrySet()) {
+        if (!(entry.getValue() instanceof Map)) {
+          throw new IOException(file + ": '" + entry.getKey() + "' is not a scenario");
+        }
+        Map<String, Object> body =
+            new java.util.LinkedHashMap<>((Map<String, Object>) entry.getValue());
+        body.put("id", idOf(world.getKey(), entry.getKey()));
+        body.put("world", world.getKey());
+        try {
+          scenarios.add(from(body, file));
+        } catch (RuntimeException e) {
+          throw new IOException(file + ": " + entry.getKey() + ": " + e.getMessage(), e);
+        }
       }
     }
     scenarios.sort(java.util.Comparator.comparing(Scenario::id));
     return scenarios;
+  }
+
+  /**
+   * Returns the id a scenario is known by: {@code &lt;world&gt;/&lt;name&gt;}.
+   *
+   * <p>The namespace is dropped for {@code minecraft:}, which is nearly every world, so the common
+   * case reads as {@code overworld/deep-cave} rather than {@code minecraft:overworld/deep-cave}.
+   *
+   * @param world the world key
+   * @param name the scenario's name within that world
+   * @return the id
+   */
+  public static String idOf(String world, String name) {
+    String prefix = world.startsWith("minecraft:") ? world.substring("minecraft:".length()) : world;
+    return prefix + "/" + name;
+  }
+
+  /**
+   * Returns this scenario run under a different heuristic.
+   *
+   * <p>A variant is an override rather than a second entry in {@code scenarios.yml}, so that the
+   * A/B compares the same route under two estimates instead of two routes that have to be kept in
+   * step by hand.
+   *
+   * @param value the heuristic to run
+   * @return the variant, or this scenario if nothing changed
+   */
+  public Scenario withHeuristic(Heuristic value) {
+    return value == heuristic ? this : new Scenario(id, description, tags, tier, capture, world,
+        origin, destination, destinationRadius, agent, settings, io, onMissingCapture,
+        expectedOutcome, ungenerated, value);
+  }
+
+  /**
+   * Returns this scenario run at a different heuristic weight.
+   *
+   * @param weight the weight to run at
+   * @return the variant, or this scenario if nothing changed
+   */
+  public Scenario withHeuristicWeight(double weight) {
+    if (weight == settings.heuristicWeight()) {
+      return this;
+    }
+    SearchLimits tuned =
+        new SearchLimits(weight, settings.maxCellsVisited(), settings.maxWallClockMillis());
+    return new Scenario(id, description, tags, tier, capture, world, origin, destination,
+        destinationRadius, agent, tuned, io, onMissingCapture, expectedOutcome, ungenerated,
+        heuristic);
   }
 
   private static Scenario from(Map<String, Object> root, Path file) throws IOException {
@@ -211,7 +284,11 @@ public record Scenario(
         MissingCapturePolicy.valueOf(
             string(root, "onMissingCapture", "ERROR").toUpperCase(java.util.Locale.ROOT)),
         string(root, "expect", "success"),
-        ungenerated(root, file));
+        ungenerated(root, file),
+        Heuristic.valueOf(
+            string(root, "heuristic", "RUNNING_AVERAGE")
+                .toUpperCase(java.util.Locale.ROOT)
+                .replace('-', '_')));
   }
 
   /**

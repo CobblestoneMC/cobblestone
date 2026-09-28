@@ -68,8 +68,11 @@ public final class BenchMain {
       case "list" -> list(scenarios);
       case "accept" -> accept(scenarios, options);
       case "run" -> System.exit(run(scenarios, options) ? 0 : 1);
+      case "sweep" ->
+          Sweep.run(scenarios, options, new ScenarioRunner(options.corpusRoot(), new QuietLogger()));
       default -> {
-        System.out.println("Unknown command '" + options.command() + "'. Try run, accept or list.");
+        System.out.println(
+            "Unknown command '" + options.command() + "'. Try run, sweep, accept or list.");
         System.exit(2);
       }
     }
@@ -89,6 +92,16 @@ public final class BenchMain {
     System.out.println("\n" + scenarios.size() + " scenarios.");
   }
 
+  /** Applies the {@code --heuristic} and {@code --weight} overrides, if either was given. */
+  private static Scenario applyOverrides(Scenario scenario, Options options) {
+    Scenario applied =
+        options.heuristic() == null ? scenario : scenario.withHeuristic(options.heuristic());
+    if (options.weights() != null && options.weights().length > 0) {
+      applied = applied.withHeuristicWeight(options.weights()[0]);
+    }
+    return applied;
+  }
+
   private static boolean run(List<Scenario> scenarios, Options options) throws IOException {
     ScenarioRunner runner = new ScenarioRunner(options.corpusRoot(), new QuietLogger());
     Path manifest = options.corpusRoot().resolve(NeededChunks.FILE_NAME);
@@ -101,7 +114,7 @@ public final class BenchMain {
       // ASCII: a Windows console defaults to a code page that renders an ellipsis as a
       // replacement character, and the first thing a benchmark prints should not look broken.
       System.out.println("running " + scenario.id() + "...");
-      RunResult result = runner.run(scenario, SearchObserver.none());
+      RunResult result = runner.run(applyOverrides(scenario, options), SearchObserver.none());
       verdicts.add(
           Comparison.compare(result, Baselines.read(options.baselinesDir(), scenario.id())));
 
@@ -173,7 +186,7 @@ public final class BenchMain {
   }
 
   /** The command line, parsed. */
-  private record Options(
+  record Options(
       String command,
       Path corpusRoot,
       Path scenariosDir,
@@ -181,7 +194,9 @@ public final class BenchMain {
       String scenarioId,
       Scenario.Tier tier,
       String tag,
-      String commit) {
+      String commit,
+      Scenario.Heuristic heuristic,
+      double[] weights) {
 
     static Options parse(String[] args) {
       String command = args.length > 0 && !args[0].startsWith("--") ? args[0] : "run";
@@ -192,6 +207,8 @@ public final class BenchMain {
       Scenario.Tier tier = null;
       String tag = null;
       String commit = "unknown";
+      Scenario.Heuristic heuristic = null;
+      double[] weights = null;
 
       for (int i = 0; i < args.length; i++) {
         switch (args[i]) {
@@ -202,6 +219,9 @@ public final class BenchMain {
           case "--tier" -> tier = Scenario.Tier.valueOf(args[++i].toUpperCase(Locale.ROOT));
           case "--tag" -> tag = args[++i];
           case "--commit" -> commit = args[++i];
+          case "--heuristic" ->
+              heuristic = Scenario.Heuristic.valueOf(args[++i].toUpperCase(Locale.ROOT));
+          case "--weight", "--weights" -> weights = weights(args[++i]);
           default -> {
             // positional command, already taken
           }
@@ -216,7 +236,18 @@ public final class BenchMain {
           id,
           tier,
           tag,
-          commit);
+          commit,
+          heuristic,
+          weights);
+    }
+
+    private static double[] weights(String value) {
+      String[] parts = value.split(",");
+      double[] parsed = new double[parts.length];
+      for (int i = 0; i < parts.length; i++) {
+        parsed[i] = Double.parseDouble(parts[i].strip());
+      }
+      return parsed;
     }
   }
 

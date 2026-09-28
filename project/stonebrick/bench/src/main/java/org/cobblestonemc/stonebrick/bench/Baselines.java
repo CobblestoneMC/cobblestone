@@ -65,7 +65,8 @@ public final class Baselines {
    * @return the file path
    */
   public static Path fileFor(Path dir, String scenarioId) {
-    return dir.resolve(scenarioId + ".json");
+    // A scenario id carries its world, so it contains a separator that cannot go in a file name.
+    return dir.resolve(scenarioId.replace('/', '.').replace(':', '.') + ".json");
   }
 
   /**

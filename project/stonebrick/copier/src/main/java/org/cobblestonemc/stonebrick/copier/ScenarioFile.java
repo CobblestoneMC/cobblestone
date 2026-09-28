@@ -20,9 +20,10 @@ import java.util.TreeMap;
 /**
  * The corpus's single {@code scenarios.yml}, read and rewritten by {@code /copier mark}.
  *
- * <p>One file, keyed by scenario id, <b>rewritten in id order every time</b>. Marking a position
- * in-game then produces a one-entry diff instead of a reshuffle, which is the difference between a
- * file you can review and one you skim past.
+ * <p>Keyed by world, then by name, and <b>rewritten in that order every time</b>. Scenarios are
+ * grouped by the terrain they touch because that is how they are captured and thought about, and
+ * because a name then only has to be unique within its world. Sorting on every write means marking
+ * a position in-game produces a one-entry diff instead of a reshuffle.
  *
  * <p>A mark updates only the position it names and leaves everything else in the entry alone — the
  * agent, the settings, the tier — because those are edited by hand and would be infuriating to lose
@@ -39,9 +40,13 @@ final class ScenarioFile {
 
   private static final String HEADER =
       """
-      # Benchmark scenarios, one per id, kept in alphabetical order.
+      # Benchmark scenarios, grouped by the world they touch and then by name.
       # Positions are written by /copier mark; everything else is edited by hand.
       """;
+
+  // A literal newline rather than the platform separator: this file is committed, and a CRLF
+  // rewrite on one developer's machine would churn every line of the diff.
+  private static final String NL = "\n";
 
   private ScenarioFile() {}
 
@@ -49,7 +54,7 @@ final class ScenarioFile {
    * Records a position for a scenario, creating the entry if it is new.
    *
    * @param file the scenarios file
-   * @param id the scenario id
+   * @param name the scenario's name within its world
    * @param which {@code origin} or {@code dest}
    * @param world the world key
    * @param x the block X
@@ -58,32 +63,26 @@ final class ScenarioFile {
    * @return whether the entry was newly created
    * @throws IOException if the file cannot be read or written
    */
-  static boolean mark(Path file, String id, String which, String world, int x, int y, int z)
+  static boolean mark(Path file, String name, String which, String world, int x, int y, int z)
       throws IOException {
-    Map<String, List<String>> entries = read(file);
-    boolean created = !entries.containsKey(id);
-    List<String> body = entries.computeIfAbsent(id, key -> new ArrayList<>());
+    Map<String, Map<String, List<String>>> worlds = read(file);
+    Map<String, List<String>> entries = worlds.computeIfAbsent(world, key -> new LinkedHashMap<>());
+    boolean created = !entries.containsKey(name);
+    List<String> body = entries.computeIfAbsent(name, key -> new ArrayList<>());
 
     if (created) {
-      body.add("  capture: " + id);
-      body.add("  world: " + world);
-      body.add("  tier: LOCAL");
-      body.add("  io: zero");
+      body.add("    capture: " + name);
+      body.add("    tier: LOCAL");
+      body.add("    io: zero");
     }
-    setWorld(body, world);
-    setPosition(body, which.equals("origin") ? "origin" : "destination", x, y, z);
-
-    write(file, entries);
-    return created;
-  }
-
-  private static void setWorld(List<String> body, String world) {
-    replaceOrAppend(body, "  world:", "  world: " + world);
-  }
-
-  private static void setPosition(List<String> body, String key, int x, int y, int z) {
     replaceOrAppend(
-        body, "  " + key + ":", "  %s: { x: %d, y: %d, z: %d }".formatted(key, x, y, z));
+        body,
+        "    " + (which.equals("origin") ? "origin" : "destination") + ":",
+        "    %s: { x: %d, y: %d, z: %d }"
+            .formatted(which.equals("origin") ? "origin" : "destination", x, y, z));
+
+    write(file, worlds);
+    return created;
   }
 
   private static void replaceOrAppend(List<String> body, String prefix, String line) {
@@ -103,38 +102,55 @@ final class ScenarioFile {
    * — comments included — survive a mark untouched. A round-trip through a model would quietly drop
    * everything the model has no field for.
    */
-  private static Map<String, List<String>> read(Path file) throws IOException {
-    Map<String, List<String>> entries = new LinkedHashMap<>();
+  private static Map<String, Map<String, List<String>>> read(Path file) throws IOException {
+    Map<String, Map<String, List<String>>> worlds = new LinkedHashMap<>();
     if (!Files.isRegularFile(file)) {
-      return entries;
+      return worlds;
     }
+    Map<String, List<String>> entries = null;
     List<String> current = null;
     for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
-      if (line.isBlank() || line.startsWith("#")) {
+      if (line.isBlank() || line.stripLeading().startsWith("#")) {
         continue;
       }
-      if (!Character.isWhitespace(line.charAt(0)) && line.endsWith(":")) {
+      String trimmed = line.stripTrailing();
+      int indent = line.length() - line.stripLeading().length();
+      if (indent == 0 && trimmed.endsWith(":")) {
+        // Only the trailing colon comes off: a world key is namespaced, so the colon inside
+        // "minecraft:overworld" is part of the name.
+        entries = worlds.computeIfAbsent(withoutTrailingColon(trimmed), key -> new LinkedHashMap<>());
+        current = null;
+      } else if (indent == 2 && trimmed.endsWith(":") && entries != null) {
         current = new ArrayList<>();
-        entries.put(line.substring(0, line.length() - 1).trim(), current);
+        entries.put(withoutTrailingColon(trimmed.strip()), current);
       } else if (current != null) {
         current.add(line);
       }
     }
-    return entries;
+    return worlds;
   }
 
-  private static void write(Path file, Map<String, List<String>> entries) throws IOException {
+  private static String withoutTrailingColon(String key) {
+    return key.substring(0, key.length() - 1);
+  }
+
+  private static void write(Path file, Map<String, Map<String, List<String>>> worlds)
+      throws IOException {
     StringBuilder text = new StringBuilder(HEADER);
-    for (Map.Entry<String, List<String>> entry : new TreeMap<>(entries).entrySet()) {
-      text.append('\n').append(entry.getKey()).append(":\n");
-      for (String line : entry.getValue()) {
-        text.append(line).append('\n');
+    for (Map.Entry<String, Map<String, List<String>>> world : new TreeMap<>(worlds).entrySet()) {
+      text.append(NL).append(world.getKey()).append(":").append(NL);
+      for (Map.Entry<String, List<String>> entry : new TreeMap<>(world.getValue()).entrySet()) {
+        text.append("  ").append(entry.getKey()).append(":").append(NL);
+        for (String line : entry.getValue()) {
+          text.append(line).append(NL);
+        }
+        text.append(NL);
       }
     }
     Path parent = file.getParent();
     if (parent != null) {
       Files.createDirectories(parent);
     }
-    Files.writeString(file, text.toString(), StandardCharsets.UTF_8);
+    Files.writeString(file, text.toString().stripTrailing() + NL, StandardCharsets.UTF_8);
   }
 }

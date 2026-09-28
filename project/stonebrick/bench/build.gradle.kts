@@ -24,6 +24,12 @@ application {
     applicationDefaultJvmArgs = listOf("-Xmx8G")
 }
 
+// The bench's default paths are written relative to the repository rather than to this module, so
+// that the same arguments work whether they are typed at a shell or handed to Gradle.
+tasks.named<JavaExec>("run") {
+    workingDir = rootProject.projectDir
+}
+
 // Generates the benchmark corpus by running a real, seeded Minecraft server and capturing from it.
 // Captures are too large for version control, so without this every developer's terrain is whatever
 // they happened to walk to — which makes a baseline meaningless to anyone else. Terrain from a seed

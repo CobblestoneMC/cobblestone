@@ -1,30 +1,102 @@
-# Benchmark scenarios, one per id, kept in alphabetical order.
+# Benchmark scenarios, grouped by the world they touch and then by name.
 # Positions are written by /copier mark; everything else is edited by hand.
 
-deep-cave:
-  capture: deep-cave
-  world: minecraft:overworld
-  tier: LOCAL
-  io: zero
-  origin: { x: 117, y: 63, z: -58 }
-  destination: { x: 107, y: -54, z: 12 }
-  # Raised from the production default of 200k purely to find out whether this route is solvable
-  # at all by the current search. A success here at any cost is the reference the coarse tier has
-  # to beat; a failure would say the route needs more than a bigger budget.
-  settings: { maxCellsVisited: 1000000 }
+minecraft:overworld:
+  around-mountain:
+    capture: around-mountain
+    tier: LOCAL
+    io: zero
+    origin: { x: 631, y: 70, z: -317 }
+    destination: { x: 517, y: 63, z: -161 }
 
-hilly-jungle:
-  capture: jungle
-  world: minecraft:overworld
-  tier: LOCAL
-  io: zero
-  origin: { x: 2, y: 64, z: -43 }
-  destination: { x: 310, y: 104, z: -267 }
+  cave-lateral:
+    capture: cave-lateral
+    tier: LOCAL
+    io: zero
+    origin: { x: 96, y: -41, z: -119 }
+    destination: { x: 19, y: -32, z: -92 }
 
-ocean:
-  capture: ocean
-  world: minecraft:overworld
-  tier: LOCAL
-  io: zero
-  origin: { x: 1103, y: 63, z: -675 }
-  destination: { x: 1451, y: 64, z: -1123 }
+  cave-to-surface:
+    capture: cave-to-surface
+    tier: LOCAL
+    io: zero
+    origin: { x: -77, y: 19, z: -65 }
+    destination: { x: -34, y: 115, z: -370 }
+
+  cave-tunnel:
+    capture: cave-tunnel
+    tier: LOCAL
+    io: zero
+    origin: { x: 4, y: -11, z: -155 }
+    destination: { x: -47, y: 4, z: -133 }
+
+  cliff-down:
+    capture: cliff-down
+    tier: LOCAL
+    io: zero
+    origin: { x: 334, y: 146, z: -489 }
+    destination: { x: 283, y: 64, z: -479 }
+
+  cliff-up:
+    capture: cliff-up
+    tier: LOCAL
+    io: zero
+    origin: { x: 282, y: 70, z: -491 }
+    destination: { x: 347, y: 145, z: -493 }
+
+  deep-cave:
+    capture: deep-cave
+    tier: LOCAL
+    io: zero
+    origin: { x: 117, y: 63, z: -58 }
+    destination: { x: 107, y: -54, z: 12 }
+
+  hilly-jungle:
+    capture: jungle
+    tier: LOCAL
+    io: zero
+    origin: { x: 2, y: 64, z: -43 }
+    destination: { x: 310, y: 104, z: -267 }
+
+  mixed-biome-surface:
+    capture: mixed-biome-surface
+    tier: LOCAL
+    io: zero
+    origin: { x: 788, y: 72, z: 55 }
+    destination: { x: 850, y: 63, z: -869 }
+
+  mountain-peaks:
+    capture: mountain-peaks
+    tier: LOCAL
+    io: zero
+    origin: { x: 7, y: 124, z: -413 }
+    destination: { x: 146, y: 127, z: -450 }
+
+  ocean:
+    capture: ocean
+    tier: LOCAL
+    io: zero
+    origin: { x: 1103, y: 63, z: -675 }
+    destination: { x: 1451, y: 64, z: -1123 }
+
+minecraft:the_nether:
+  around-lava-pool:
+    capture: around-lava-pool
+    tier: LOCAL
+    io: zero
+    origin: { x: 211, y: 81, z: -82 }
+    destination: { x: 218, y: 84, z: -263 }
+
+  distance:
+    capture: distance
+    tier: LOCAL
+    io: zero
+    origin: { x: 286, y: 83, z: -75 }
+    destination: { x: 562, y: 49, z: 204 }
+
+  vertical-small:
+    capture: vertical-small
+    tier: LOCAL
+    io: zero
+    origin: { x: 279, y: 76, z: -232 }
+    destination: { x: 238, y: 43, z: -227 }

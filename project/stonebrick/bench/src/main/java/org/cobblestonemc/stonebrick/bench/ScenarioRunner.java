@@ -113,7 +113,7 @@ public final class ScenarioRunner {
 
       Counting counting = new Counting(observer);
       SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> handle =
-          start(scenario, world, player, scheduler, counting);
+          start(scenario, world, player, scheduler, counting, capture);
 
       long startedAt = System.nanoTime();
       boolean settled = scheduler.drainUntil(() -> handle.future().isDone(), MAX_TASKS);
@@ -175,7 +175,8 @@ public final class ScenarioRunner {
       MinecraftWorld world,
       StonebrickPlayer player,
       DeterministicScheduler scheduler,
-      SearchObserver observer) {
+      SearchObserver observer,
+      Capture capture) {
     Set<MinecraftStepType> excluded = Set.of();
     ModesProvider<CobblestonePlayer, MinecraftStepPayload, MinecraftWorld> modes =
         MinecraftModes.providerFor(player, excluded, null, 0);
@@ -203,13 +204,41 @@ public final class ScenarioRunner {
             cast,
             List.of(),
             List.of(),
-            Heuristics.runningAverage(MinecraftModes.cheapestCostPerBlock(player, excluded)),
+            heuristicFor(scenario, player, excluded, capture),
             SearchSettings.builder()
                 .heuristicWeight(scenario.settings().heuristicWeight())
                 .maxCellsVisited(scenario.settings().maxCellsVisited())
                 .maxWallClockMillis(scenario.settings().maxWallClockMillis())
                 .build(),
             observer);
+  }
+
+  /**
+   * Builds the estimate the scenario asked for.
+   *
+   * <p>Chosen per scenario rather than globally so the two can be compared over identical terrain,
+   * with identical settings, in one run of the suite — which is the only way a difference in
+   * expanded nodes means the heuristic rather than the world.
+   */
+  private static org.cobblestonemc.HeuristicStrategy heuristicFor(
+      Scenario scenario,
+      StonebrickPlayer player,
+      Set<MinecraftStepType> excluded,
+      Capture capture) {
+    if (scenario.heuristic() == Scenario.Heuristic.RUNNING_AVERAGE) {
+      return Heuristics.runningAverage(MinecraftModes.cheapestCostPerBlock(player, excluded));
+    }
+    java.util.EnumSet<org.cobblestonemc.minecraft.lod.Medium> mediums =
+        java.util.EnumSet.copyOf(org.cobblestonemc.minecraft.lod.CoarseCost.survival());
+    if (scenario.agent().canFly()) {
+      mediums.add(org.cobblestonemc.minecraft.lod.Medium.FLY);
+    }
+    if (scenario.agent().hasBoat() || scenario.agent().inBoat()) {
+      mediums.add(org.cobblestonemc.minecraft.lod.Medium.BOAT);
+    }
+    return new org.cobblestonemc.minecraft.lod.CoarseHeuristic(
+        new CaptureProfiles(capture, scenario.world()),
+        org.cobblestonemc.minecraft.lod.CoarseCost.forMediums(mediums));
   }
 
   private static String outcomeOf(
