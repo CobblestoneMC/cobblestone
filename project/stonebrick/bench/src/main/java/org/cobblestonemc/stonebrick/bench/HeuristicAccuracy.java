@@ -58,9 +58,11 @@ public final class HeuristicAccuracy {
    * @param logger where the search logs
    * @throws IOException if the capture cannot be read
    */
-  public static void run(Path corpusRoot, Scenario scenario, CobblestoneLogger logger)
+  public static void run(
+      Path corpusRoot, Scenario scenario, Loadout loadout, CobblestoneLogger logger)
       throws IOException {
-    RunResult result = new ScenarioRunner(corpusRoot, logger).run(scenario, SearchObserver.none());
+    RunResult result =
+        new ScenarioRunner(corpusRoot, logger).run(scenario, loadout, SearchObserver.none());
     if (!"success".equals(result.outcome())) {
       System.out.println(
           "scenario " + scenario.id() + " did not find a path (" + result.outcome() + ")");
@@ -71,7 +73,7 @@ public final class HeuristicAccuracy {
     }
 
     Capture capture = Capture.load(CorpusLayout.at(corpusRoot).capture(scenario.capture()).root());
-    List<Cell> path = pathOf(corpusRoot, scenario, logger);
+    List<Cell> path = pathOf(corpusRoot, scenario, loadout, logger);
     if (path.isEmpty()) {
       System.out.println("no path cells recorded");
       return;
@@ -98,7 +100,7 @@ public final class HeuristicAccuracy {
     for (double fallback :
         new double[] {Medium.WALK.costPerBlock(), 0.4, 0.7, Medium.MINE.costPerBlock(), 2.8}) {
       Profiles profiles = new Profiles(capture, scenario.world());
-      CoarseCost cost = CoarseCost.forMediums(mediumsFor(scenario), fallback);
+      CoarseCost cost = CoarseCost.forMediums(mediumsFor(loadout), fallback);
       CoarseSearch coarse = new CoarseSearch(profiles, cost, scenario.destination());
 
       List<double[]> pairs = new ArrayList<>();
@@ -161,7 +163,8 @@ public final class HeuristicAccuracy {
         100.0 * optimistic / n);
   }
 
-  private static List<Cell> pathOf(Path corpusRoot, Scenario scenario, CobblestoneLogger logger)
+  private static List<Cell> pathOf(
+      Path corpusRoot, Scenario scenario, Loadout loadout, CobblestoneLogger logger)
       throws IOException {
     List<Cell> cells = new ArrayList<>();
     SearchObserver recorder =
@@ -171,16 +174,16 @@ public final class HeuristicAccuracy {
             cells.addAll(path);
           }
         };
-    new ScenarioRunner(corpusRoot, logger).run(scenario, recorder);
+    new ScenarioRunner(corpusRoot, logger).run(scenario, loadout, recorder);
     return cells;
   }
 
-  private static java.util.Set<Medium> mediumsFor(Scenario scenario) {
+  private static java.util.Set<Medium> mediumsFor(Loadout loadout) {
     java.util.EnumSet<Medium> mediums = java.util.EnumSet.copyOf(CoarseCost.survival());
-    if (scenario.agent().canFly()) {
+    if (loadout.agent().canFly()) {
       mediums.add(Medium.FLY);
     }
-    if (scenario.agent().hasBoat() || scenario.agent().inBoat()) {
+    if (loadout.agent().hasBoat() || loadout.agent().inBoat()) {
       mediums.add(Medium.BOAT);
     }
     return mediums;

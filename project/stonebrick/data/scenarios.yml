@@ -2,6 +2,13 @@
 # Positions are written by /copier mark; everything else is edited by hand.
 
 minecraft:overworld:
+  along-river:
+    capture: along-river
+    tier: LOCAL
+    io: zero
+    origin: { x: 398, y: 63, z: 84 }
+    destination: { x: 706, y: 63, z: 155 }
+
   around-mountain:
     capture: around-mountain
     tier: LOCAL
@@ -34,15 +41,15 @@ minecraft:overworld:
     capture: cliff-down
     tier: LOCAL
     io: zero
-    origin: { x: 334, y: 146, z: -489 }
-    destination: { x: 283, y: 64, z: -479 }
+    origin: { x: 780, y: 116, z: 100 }
+    destination: { x: 780, y: 64, z: 101 }
 
   cliff-up:
     capture: cliff-up
     tier: LOCAL
     io: zero
-    origin: { x: 282, y: 70, z: -491 }
-    destination: { x: 347, y: 145, z: -493 }
+    origin: { x: 780, y: 64, z: 101 }
+    destination: { x: 780, y: 116, z: 100 }
 
   deep-cave:
     capture: deep-cave
@@ -58,6 +65,13 @@ minecraft:overworld:
     origin: { x: 2, y: 64, z: -43 }
     destination: { x: 310, y: 104, z: -267 }
 
+  mangrove-small:
+    capture: mangrove-small
+    tier: LOCAL
+    io: zero
+    origin: { x: 1269, y: 63, z: -332 }
+    destination: { x: 1138, y: 63, z: -45 }
+
   mixed-biome-surface:
     capture: mixed-biome-surface
     tier: LOCAL
@@ -72,12 +86,36 @@ minecraft:overworld:
     origin: { x: 7, y: 124, z: -413 }
     destination: { x: 146, y: 127, z: -450 }
 
+  mountain-peaks-2:
+    capture: mountain-peaks-2
+    tier: LOCAL
+    io: zero
+    origin: { x: 761, y: 163, z: -67 }
+    destination: { x: 619, y: 146, z: -235 }
+
   ocean:
     capture: ocean
     tier: LOCAL
     io: zero
     origin: { x: 1103, y: 63, z: -675 }
     destination: { x: 1451, y: 64, z: -1123 }
+
+  savanna-small:
+    capture: savanna-small
+    tier: LOCAL
+    io: zero
+    origin: { x: 1056, y: 63, z: -227 }
+    destination: { x: 1208, y: 64, z: -337 }
+
+
+minecraft:the_end:
+  end-small:
+    capture: end-small
+    tier: LOCAL
+    io: zero
+    origin: { x: 93, y: 57, z: -18 }
+    destination: { x: -95, y: 57, z: 50 }
+
 
 minecraft:the_nether:
   around-lava-pool:
@@ -94,9 +132,30 @@ minecraft:the_nether:
     origin: { x: 286, y: 83, z: -75 }
     destination: { x: 562, y: 49, z: 204 }
 
+  soul-sand-valley:
+    capture: soul-sand-valley
+    tier: LOCAL
+    io: zero
+    origin: { x: -58, y: 63, z: 93 }
+    destination: { x: -206, y: 102, z: 179 }
+
+  through-wart:
+    capture: through-wart
+    tier: LOCAL
+    io: zero
+    origin: { x: 71, y: 85, z: -42 }
+    destination: { x: 231, y: 92, z: -19 }
+
   vertical-small:
     capture: vertical-small
     tier: LOCAL
     io: zero
-    origin: { x: 279, y: 76, z: -232 }
-    destination: { x: 238, y: 43, z: -227 }
+    origin: { x: 80, y: 50, z: -161 }
+    destination: { x: 71, y: 95, z: -174 }
+
+  vertical-small-down:
+    capture: vertical-small-down
+    tier: LOCAL
+    io: zero
+    origin: { x: -168, y: 92, z: 181 }
+    destination: { x: -174, y: 34, z: 197 }

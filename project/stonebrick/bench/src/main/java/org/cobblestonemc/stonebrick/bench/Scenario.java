@@ -23,7 +23,7 @@ import org.cobblestonemc.stonebrick.platform.IoProfile;
 import org.yaml.snakeyaml.Yaml;
 
 /**
- * One benchmark case: a capture, a start, a goal, an agent, and the limits to run under.
+ * One benchmark case: a capture, a start, a goal, and the limits to run under.
  *
  * <p>Scenarios are the cheap half of the corpus — a file — and captures are the expensive half, so
  * most of the catalogue varies the agent or the destination over terrain that has already been paid
@@ -38,7 +38,6 @@ import org.yaml.snakeyaml.Yaml;
  * @param origin where the agent starts
  * @param destination the cell sought
  * @param destinationRadius how far from {@code destination} counts as arrival
- * @param agent the agent's capabilities
  * @param settings the search limits
  * @param io what a chunk read costs
  * @param onMissingCapture what to do about reads outside the capture
@@ -56,7 +55,6 @@ public record Scenario(
     Cell origin,
     Cell destination,
     int destinationRadius,
-    AgentSpec agent,
     SearchLimits settings,
     IoProfile io,
     MissingCapturePolicy onMissingCapture,
@@ -111,7 +109,12 @@ public record Scenario(
     WALL
   }
 
-  /** The agent's capabilities, which decide which modes the search is given. */
+  /**
+   * A traveller's capabilities, which decide which modes the search is given.
+   *
+   * <p>Lives on {@link Loadout} rather than on a scenario: the route and the traveller vary
+   * independently, and every scenario is run under every loadout.
+   */
   public record AgentSpec(
       boolean canFly, boolean canGlide, boolean hasBoat, boolean inBoat, Set<String> permissions) {
 
@@ -219,7 +222,7 @@ public record Scenario(
    */
   public Scenario withHeuristic(Heuristic value) {
     return value == heuristic ? this : new Scenario(id, description, tags, tier, capture, world,
-        origin, destination, destinationRadius, agent, settings, io, onMissingCapture,
+        origin, destination, destinationRadius, settings, io, onMissingCapture,
         expectedOutcome, ungenerated, value);
   }
 
@@ -236,8 +239,21 @@ public record Scenario(
     SearchLimits tuned =
         new SearchLimits(weight, settings.maxCellsVisited(), settings.maxWallClockMillis());
     return new Scenario(id, description, tags, tier, capture, world, origin, destination,
-        destinationRadius, agent, tuned, io, onMissingCapture, expectedOutcome, ungenerated,
+        destinationRadius, tuned, io, onMissingCapture, expectedOutcome, ungenerated,
         heuristic);
+  }
+
+  /**
+   * Returns the id one run is recorded under: {@code <world>/<name>@<loadout>}.
+   *
+   * <p>Separate from {@link #id()} because terrain is shared across loadouts and results are not:
+   * the capture and the needed-chunks capsule are keyed by the route, the baseline by the pair.
+   *
+   * @param loadout the loadout being run
+   * @return the run id
+   */
+  public String runId(Loadout loadout) {
+    return id + "@" + loadout.name();
   }
 
   private static Scenario from(Map<String, Object> root, Path file) throws IOException {
@@ -270,12 +286,6 @@ public record Scenario(
         cell(requireMap(root, "origin", file), file),
         cell(destination, file),
         integer(destination, "radius", 0),
-        new AgentSpec(
-            bool(agent, "canFly", false),
-            bool(agent, "canGlide", false),
-            bool(agent, "hasBoat", false),
-            bool(agent, "inBoat", false),
-            new LinkedHashSet<>(stringList(agent, "permissions"))),
         new SearchLimits(
             number(limits, "heuristicWeight", 1.5),
             integer(limits, "maxCellsVisited", 200_000),

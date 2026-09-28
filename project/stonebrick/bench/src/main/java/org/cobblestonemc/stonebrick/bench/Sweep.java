@@ -43,6 +43,7 @@ final class Sweep {
   /** One scenario run at one (heuristic, weight) point. */
   private record Point(
       String scenario,
+      String loadout,
       Scenario.Heuristic heuristic,
       double weight,
       String outcome,
@@ -63,7 +64,11 @@ final class Sweep {
    * @param runner the runner to solve with
    * @throws IOException if a capture cannot be read
    */
-  static void run(List<Scenario> scenarios, BenchMain.Options options, ScenarioRunner runner)
+  static void run(
+      List<Scenario> scenarios,
+      List<Loadout> loadouts,
+      BenchMain.Options options,
+      ScenarioRunner runner)
       throws IOException {
     double[] weights = options.weights() == null ? DEFAULT_WEIGHTS : options.weights();
     List<Scenario.Heuristic> heuristics =
@@ -73,24 +78,31 @@ final class Sweep {
 
     List<Point> points = new ArrayList<>();
     for (Scenario scenario : scenarios) {
-      for (Scenario.Heuristic heuristic : heuristics) {
-        for (double weight : weights) {
-          Scenario variant = scenario.withHeuristic(heuristic).withHeuristicWeight(weight);
-          System.out.printf(
-              Locale.ROOT, "running %s %s w=%.2f...%n", scenario.id(), heuristic, weight);
-          RunResult result = runner.run(variant, SearchObserver.none());
-          CaptureProfiles profiles = runner.lastCoarseProfiles();
-          points.add(
-              new Point(
-                  scenario.id(),
-                  heuristic,
-                  weight,
-                  result.outcome(),
-                  result.pathCost(),
-                  result.nodesExpanded(),
-                  heuristic == Scenario.Heuristic.COARSE && profiles != null
-                      ? profiles.chunkColumns()
-                      : 0));
+      for (Loadout loadout : loadouts) {
+        for (Scenario.Heuristic heuristic : heuristics) {
+          for (double weight : weights) {
+            Scenario variant = scenario.withHeuristic(heuristic).withHeuristicWeight(weight);
+            System.out.printf(
+                Locale.ROOT,
+                "running %s %s w=%.2f...%n",
+                scenario.runId(loadout),
+                heuristic,
+                weight);
+            RunResult result = runner.run(variant, loadout, SearchObserver.none());
+            CaptureProfiles profiles = runner.lastCoarseProfiles();
+            points.add(
+                new Point(
+                    scenario.runId(loadout),
+                    loadout.name(),
+                    heuristic,
+                    weight,
+                    result.outcome(),
+                    result.pathCost(),
+                    result.nodesExpanded(),
+                    heuristic == Scenario.Heuristic.COARSE && profiles != null
+                        ? profiles.chunkColumns()
+                        : 0));
+          }
         }
       }
     }

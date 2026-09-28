@@ -74,12 +74,14 @@ public final class ScenarioRunner {
   /**
    * Runs a scenario.
    *
-   * @param scenario the scenario
+   * @param scenario the route
+   * @param loadout what the traveller can do about it
    * @param observer receives what the search did; pass {@link SearchObserver#none()} when timing
    * @return what it cost
    * @throws IOException if the capture cannot be loaded
    */
-  public RunResult run(Scenario scenario, SearchObserver observer) throws IOException {
+  public RunResult run(Scenario scenario, Loadout loadout, SearchObserver observer)
+      throws IOException {
     Capture capture = Capture.load(CorpusLayout.at(corpusRoot).capture(scenario.capture()).root());
     try (DeterministicScheduler scheduler = new DeterministicScheduler()) {
       StonebrickPlatformApi platform =
@@ -104,16 +106,16 @@ public final class ScenarioRunner {
 
       StonebrickPlayer player =
           StonebrickPlayer.builder()
-              .canFly(scenario.agent().canFly())
-              .canGlide(scenario.agent().canGlide())
-              .hasBoat(scenario.agent().hasBoat())
-              .inBoat(scenario.agent().inBoat())
-              .permissions(scenario.agent().permissions())
+              .canFly(loadout.agent().canFly())
+              .canGlide(loadout.agent().canGlide())
+              .hasBoat(loadout.agent().hasBoat())
+              .inBoat(loadout.agent().inBoat())
+              .permissions(loadout.agent().permissions())
               .build();
 
       Counting counting = new Counting(observer);
       SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> handle =
-          start(scenario, world, player, scheduler, counting, capture);
+          start(scenario, loadout, world, player, scheduler, counting, capture);
 
       long startedAt = System.nanoTime();
       boolean settled = scheduler.drainUntil(() -> handle.future().isDone(), MAX_TASKS);
@@ -140,7 +142,7 @@ public final class ScenarioRunner {
 
       Runtime runtime = Runtime.getRuntime();
       return new RunResult(
-          scenario.id(),
+          scenario.runId(loadout),
           outcomeOf(result),
           result
                   instanceof
@@ -172,12 +174,16 @@ public final class ScenarioRunner {
 
   private SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> start(
       Scenario scenario,
+      Loadout loadout,
       MinecraftWorld world,
       StonebrickPlayer player,
       DeterministicScheduler scheduler,
       SearchObserver observer,
       Capture capture) {
-    Set<MinecraftStepType> excluded = Set.of();
+    // The exclusions come from the loadout, not from a constant. They used to be empty here, which
+    // with a null break checker meant every scenario ran as a player free to tunnel through
+    // anything -- one point in the space, and not the representative one.
+    Set<MinecraftStepType> excluded = loadout.excludedModes();
     ModesProvider<CobblestonePlayer, MinecraftStepPayload, MinecraftWorld> modes =
         MinecraftModes.providerFor(player, excluded, null, 0);
     @SuppressWarnings("unchecked")
@@ -204,7 +210,7 @@ public final class ScenarioRunner {
             cast,
             List.of(),
             List.of(),
-            heuristicFor(scenario, player, excluded, capture),
+            heuristicFor(scenario, loadout, player, excluded, capture),
             SearchSettings.builder()
                 .heuristicWeight(scenario.settings().heuristicWeight())
                 .maxCellsVisited(scenario.settings().maxCellsVisited())
@@ -235,6 +241,7 @@ public final class ScenarioRunner {
 
   private org.cobblestonemc.HeuristicStrategy heuristicFor(
       Scenario scenario,
+      Loadout loadout,
       StonebrickPlayer player,
       Set<MinecraftStepType> excluded,
       Capture capture) {
@@ -243,10 +250,19 @@ public final class ScenarioRunner {
     }
     java.util.EnumSet<org.cobblestonemc.minecraft.lod.Medium> mediums =
         java.util.EnumSet.copyOf(org.cobblestonemc.minecraft.lod.CoarseCost.survival());
-    if (scenario.agent().canFly()) {
+    // The coarse mediums have to track the loadout's exclusions too, or the estimate prices a
+    // route through terrain the fine search is forbidden to cross.
+    if (excluded.contains(MinecraftStepType.MINE)) {
+      mediums.remove(org.cobblestonemc.minecraft.lod.Medium.MINE);
+    }
+    if (excluded.contains(MinecraftStepType.SWIM)) {
+      mediums.remove(org.cobblestonemc.minecraft.lod.Medium.SWIM);
+    }
+    if (loadout.agent().canFly() && !excluded.contains(MinecraftStepType.FLY)) {
       mediums.add(org.cobblestonemc.minecraft.lod.Medium.FLY);
     }
-    if (scenario.agent().hasBoat() || scenario.agent().inBoat()) {
+    if ((loadout.agent().hasBoat() || loadout.agent().inBoat())
+        && !excluded.contains(MinecraftStepType.BOAT)) {
       mediums.add(org.cobblestonemc.minecraft.lod.Medium.BOAT);
     }
     CaptureProfiles profiles = new CaptureProfiles(capture, scenario.world());
