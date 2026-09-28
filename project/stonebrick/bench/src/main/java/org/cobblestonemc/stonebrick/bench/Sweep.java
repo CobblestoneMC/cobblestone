@@ -47,7 +47,8 @@ final class Sweep {
       double weight,
       String outcome,
       double cost,
-      long nodes) {
+      long nodes,
+      int coarseColumns) {
 
     boolean solved() {
       return outcome.equals("success");
@@ -78,6 +79,7 @@ final class Sweep {
           System.out.printf(
               Locale.ROOT, "running %s %s w=%.2f...%n", scenario.id(), heuristic, weight);
           RunResult result = runner.run(variant, SearchObserver.none());
+          CaptureProfiles profiles = runner.lastCoarseProfiles();
           points.add(
               new Point(
                   scenario.id(),
@@ -85,7 +87,10 @@ final class Sweep {
                   weight,
                   result.outcome(),
                   result.pathCost(),
-                  result.nodesExpanded()));
+                  result.nodesExpanded(),
+                  heuristic == Scenario.Heuristic.COARSE && profiles != null
+                      ? profiles.chunkColumns()
+                      : 0));
         }
       }
     }
@@ -104,7 +109,14 @@ final class Sweep {
         current = point.scenario();
         System.out.printf(Locale.ROOT, "%n%s%n", current);
         System.out.printf(
-            Locale.ROOT, "  %-16s %6s %12s %10s %8s%n", "heuristic", "w", "nodes", "cost", "excess");
+            Locale.ROOT,
+            "  %-16s %6s %12s %10s %8s %8s%n",
+            "heuristic",
+            "w",
+            "nodes",
+            "cost",
+            "excess",
+            "columns");
       }
       Double floor = best.get(point.scenario());
       String excess =
@@ -113,12 +125,13 @@ final class Sweep {
               : "-";
       System.out.printf(
           Locale.ROOT,
-          "  %-16s %6.2f %12d %10s %8s%n",
+          "  %-16s %6.2f %12d %10s %8s %8s%n",
           point.heuristic(),
           point.weight(),
           point.nodes(),
           point.solved() ? String.format(Locale.ROOT, "%.2f", point.cost()) : point.outcome(),
-          excess);
+          excess,
+          point.coarseColumns() == 0 ? "-" : String.valueOf(point.coarseColumns()));
     }
   }
 

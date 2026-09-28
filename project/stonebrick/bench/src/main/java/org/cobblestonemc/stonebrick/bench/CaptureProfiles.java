@@ -75,6 +75,20 @@ public final class CaptureProfiles implements CoarseSearch.SectionProfiles {
     return sections.size();
   }
 
+  /**
+   * Returns how many chunk columns the profiler read.
+   *
+   * <p>The number that decides whether this layer is affordable on a live server. Here the capture
+   * is already in memory, so these reads cost nothing and are deliberately kept out of the IO
+   * model — but in production every one of them is a chunk fetch, paid before the fine search
+   * takes its first step.
+   *
+   * @return the chunk columns read
+   */
+  public int chunkColumns() {
+    return chunks.size();
+  }
+
   @Override
   public SectionProfile at(int sectionX, int sectionY, int sectionZ) {
     long key = CoarseSearch.key(sectionX, sectionY, sectionZ);

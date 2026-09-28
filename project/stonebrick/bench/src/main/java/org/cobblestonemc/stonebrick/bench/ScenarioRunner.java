@@ -220,7 +220,20 @@ public final class ScenarioRunner {
    * with identical settings, in one run of the suite — which is the only way a difference in
    * expanded nodes means the heuristic rather than the world.
    */
-  private static org.cobblestonemc.HeuristicStrategy heuristicFor(
+  /**
+   * The profile source the last run used, or {@code null} if it did not run on the coarse layer.
+   *
+   * <p>Exposed rather than folded into {@link RunResult} because the coarse pass's reads are not
+   * gated: they bypass the IO model entirely, and recording them as a deterministic metric would
+   * imply a rigour they do not have. The sweep prints them so the cost is at least visible.
+   */
+  private @org.jetbrains.annotations.Nullable CaptureProfiles lastCoarseProfiles;
+
+  public @org.jetbrains.annotations.Nullable CaptureProfiles lastCoarseProfiles() {
+    return lastCoarseProfiles;
+  }
+
+  private org.cobblestonemc.HeuristicStrategy heuristicFor(
       Scenario scenario,
       StonebrickPlayer player,
       Set<MinecraftStepType> excluded,
@@ -236,8 +249,10 @@ public final class ScenarioRunner {
     if (scenario.agent().hasBoat() || scenario.agent().inBoat()) {
       mediums.add(org.cobblestonemc.minecraft.lod.Medium.BOAT);
     }
+    CaptureProfiles profiles = new CaptureProfiles(capture, scenario.world());
+    lastCoarseProfiles = profiles;
     return new org.cobblestonemc.minecraft.lod.CoarseHeuristic(
-        new CaptureProfiles(capture, scenario.world()),
+        profiles,
         org.cobblestonemc.minecraft.lod.CoarseCost.forMediums(mediums));
   }
 
