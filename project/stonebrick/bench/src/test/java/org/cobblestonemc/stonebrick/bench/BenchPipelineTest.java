@@ -46,20 +46,20 @@ class BenchPipelineTest {
       throws IOException {
     Path root = dir.resolve("corpus");
     BenchTestCapture.flatGround(root.resolve("captures").resolve("flat"), 63, 0, 0, 4, 4);
-    Path scenarios = root.resolve("scenarios");
-    Files.createDirectories(scenarios);
+    Files.createDirectories(root);
     Files.writeString(
-        scenarios.resolve(scenarioId + ".yml"),
+        root.resolve(Scenario.FILE_NAME),
         """
-        id: %s
-        description: flat ground, corner to corner
-        tier: CI
-        capture: flat
-        tags: [smoke]
-        io: %s
-        origin: { world: minecraft:overworld, x: 8, y: 64, z: 8 }
-        destination: { world: minecraft:overworld, x: %d, y: 64, z: %d }
-        settings: { maxWallClockMillis: 60000 }
+        %s:
+          description: flat ground, corner to corner
+          tier: CI
+          capture: flat
+          tags: [smoke]
+          io: %s
+          world: minecraft:overworld
+          origin: { x: 8, y: 64, z: 8 }
+          destination: { x: %d, y: 64, z: %d }
+          settings: { maxWallClockMillis: 60000 }
         """
             .formatted(scenarioId, io, destX, destZ));
     return root;
@@ -69,7 +69,7 @@ class BenchPipelineTest {
   void aScenarioLoadsRunsAndProducesUsableNumbers(@TempDir Path dir) throws Exception {
     Path root = corpus(dir, "flat-walk", 56, 56, "zero");
 
-    List<Scenario> scenarios = Scenario.loadAll(root.resolve("scenarios"));
+    List<Scenario> scenarios = Scenario.loadAll(root.resolve(Scenario.FILE_NAME));
     assertEquals(1, scenarios.size());
     Scenario scenario = scenarios.get(0);
     assertEquals("flat-walk", scenario.id());
@@ -91,7 +91,7 @@ class BenchPipelineTest {
   @Test
   void twoRunsOfOneScenarioAgreeExactly(@TempDir Path dir) throws Exception {
     Path root = corpus(dir, "flat-walk", 56, 56, "spinning");
-    Scenario scenario = Scenario.loadAll(root.resolve("scenarios")).get(0);
+    Scenario scenario = Scenario.loadAll(root.resolve(Scenario.FILE_NAME)).get(0);
     ScenarioRunner runner = new ScenarioRunner(root, new SilentLogger());
 
     RunResult first = runner.run(scenario, SearchObserver.none());
@@ -105,7 +105,7 @@ class BenchPipelineTest {
   void anAcceptedRunThenMatchesItsBaseline(@TempDir Path dir) throws Exception {
     Path root = corpus(dir, "flat-walk", 56, 56, "nvme");
     Path baselines = dir.resolve("baselines");
-    Scenario scenario = Scenario.loadAll(root.resolve("scenarios")).get(0);
+    Scenario scenario = Scenario.loadAll(root.resolve(Scenario.FILE_NAME)).get(0);
     ScenarioRunner runner = new ScenarioRunner(root, new SilentLogger());
 
     Baselines.accept(baselines, runner.run(scenario, SearchObserver.none()), "testsha");
@@ -121,7 +121,7 @@ class BenchPipelineTest {
   void aChangedNumberFailsAndSaysWhatMoved(@TempDir Path dir) throws Exception {
     Path root = corpus(dir, "flat-walk", 56, 56, "zero");
     Path baselines = dir.resolve("baselines");
-    Scenario scenario = Scenario.loadAll(root.resolve("scenarios")).get(0);
+    Scenario scenario = Scenario.loadAll(root.resolve(Scenario.FILE_NAME)).get(0);
     RunResult real =
         new ScenarioRunner(root, new SilentLogger()).run(scenario, SearchObserver.none());
     Baselines.accept(baselines, real, "testsha");
@@ -142,7 +142,8 @@ class BenchPipelineTest {
             real.ioDelayMicros(),
             real.realMillis(),
             real.peakHeapBytes(),
-            null);
+            null,
+            java.util.Set.of());
 
     Comparison.Verdict verdict =
         Comparison.compare(changed, Baselines.read(baselines, scenario.id()));
@@ -160,7 +161,7 @@ class BenchPipelineTest {
   void wallClockTimeNeverFailsARun(@TempDir Path dir) throws Exception {
     Path root = corpus(dir, "flat-walk", 56, 56, "zero");
     Path baselines = dir.resolve("baselines");
-    Scenario scenario = Scenario.loadAll(root.resolve("scenarios")).get(0);
+    Scenario scenario = Scenario.loadAll(root.resolve(Scenario.FILE_NAME)).get(0);
     RunResult real =
         new ScenarioRunner(root, new SilentLogger()).run(scenario, SearchObserver.none());
     Baselines.accept(baselines, real, "testsha");
@@ -181,7 +182,8 @@ class BenchPipelineTest {
             real.ioDelayMicros(),
             real.realMillis() * 50 + 1000,
             real.peakHeapBytes() * 3,
-            null);
+            null,
+            java.util.Set.of());
 
     assertEquals(
         Comparison.Status.MATCH,
@@ -192,7 +194,7 @@ class BenchPipelineTest {
   void aRunThatLeavesItsCaptureIsRejectedNotCompared(@TempDir Path dir) throws Exception {
     // Destination far outside a capture that is only five chunks square.
     Path root = corpus(dir, "runs-off", 500, 500, "zero");
-    Scenario scenario = Scenario.loadAll(root.resolve("scenarios")).get(0);
+    Scenario scenario = Scenario.loadAll(root.resolve(Scenario.FILE_NAME)).get(0);
 
     RunResult result =
         new ScenarioRunner(root, new SilentLogger()).run(scenario, SearchObserver.none());
@@ -217,17 +219,18 @@ class BenchPipelineTest {
     // would have been a patch on an ambiguity that no longer exists.
     Path root = dir.resolve("corpus");
     BenchTestCapture.flatGround(root.resolve("captures").resolve("scenarios"), 63, 0, 0, 4, 4);
-    Files.createDirectories(root.resolve("scenarios"));
+    Files.createDirectories(root);
     Files.writeString(
-        root.resolve("scenarios").resolve("odd.yml"),
+        root.resolve(Scenario.FILE_NAME),
         """
-        id: odd
-        capture: scenarios
-        origin:      { world: minecraft:overworld, x: 8, y: 64, z: 8 }
-        destination: { world: minecraft:overworld, x: 24, y: 64, z: 24 }
+        odd:
+          capture: scenarios
+          world: minecraft:overworld
+          origin:      { x: 8, y: 64, z: 8 }
+          destination: { x: 24, y: 64, z: 24 }
         """);
 
-    Scenario scenario = Scenario.loadAll(root.resolve("scenarios")).get(0);
+    Scenario scenario = Scenario.loadAll(root.resolve(Scenario.FILE_NAME)).get(0);
     RunResult result =
         new ScenarioRunner(root, new SilentLogger()).run(scenario, SearchObserver.none());
 
@@ -237,7 +240,7 @@ class BenchPipelineTest {
   @Test
   void aMissingBaselineIsReportedAsNewRatherThanAFailure(@TempDir Path dir) throws Exception {
     Path root = corpus(dir, "flat-walk", 56, 56, "zero");
-    Scenario scenario = Scenario.loadAll(root.resolve("scenarios")).get(0);
+    Scenario scenario = Scenario.loadAll(root.resolve(Scenario.FILE_NAME)).get(0);
     RunResult result =
         new ScenarioRunner(root, new SilentLogger()).run(scenario, SearchObserver.none());
 

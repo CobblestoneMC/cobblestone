@@ -89,6 +89,8 @@ public final class ScenarioRunner {
               ChunkProviderSettings.defaults(ChunkLoadPolicy.ALLOW_LOAD),
               scenario.io());
 
+      platform.presentAsUngenerated(scenario.ungenerated());
+
       MinecraftWorld world = platform.world(scenario.world());
       if (world == null) {
         throw new IOException(
@@ -163,7 +165,8 @@ public final class ScenarioRunner {
           platform.ioStats().totalDelayMicros(),
           realMillis,
           runtime.totalMemory() - runtime.freeMemory(),
-          missing);
+          missing,
+          platform.missing().chunks());
     }
   }
 

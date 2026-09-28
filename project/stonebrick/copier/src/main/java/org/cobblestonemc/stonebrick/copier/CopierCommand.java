@@ -128,6 +128,37 @@ final class CopierCommand {
                                             StringArgumentType.getString(ctx, "options"),
                                             estimateOnly)))))
         .then(
+            Commands.literal("capsule")
+                .then(
+                    Commands.argument("x1", IntegerArgumentType.integer())
+                        .then(
+                            Commands.argument("z1", IntegerArgumentType.integer())
+                                .then(
+                                    Commands.argument("x2", IntegerArgumentType.integer())
+                                        .then(
+                                            Commands.argument("z2", IntegerArgumentType.integer())
+                                                .then(
+                                                    Commands.argument(
+                                                            "radius",
+                                                            IntegerArgumentType.integer(0, 4096))
+                                                        .executes(
+                                                            ctx -> capsule(ctx, "", estimateOnly))
+                                                        .then(
+                                                            Commands.argument(
+                                                                    "options",
+                                                                    StringArgumentType
+                                                                        .greedyString())
+                                                                .suggests(
+                                                                    CopierCommand::suggestOptions)
+                                                                .executes(
+                                                                    ctx ->
+                                                                        capsule(
+                                                                            ctx,
+                                                                            StringArgumentType
+                                                                                .getString(
+                                                                                    ctx, "options"),
+                                                                            estimateOnly)))))))))
+        .then(
             Commands.argument("x1", IntegerArgumentType.integer())
                 .then(
                     Commands.argument("z1", IntegerArgumentType.integer())
@@ -166,7 +197,8 @@ final class CopierCommand {
           "--y", "<minY> <maxY> fixed vertical band",
           "--full", "the whole column",
           "--overwrite", "write into a capture that already has this world",
-          "--force", "waive the chunk-count guard");
+          "--force", "waive the chunk-count guard",
+          "--generate", "generate chunks that do not exist yet (seeded corpus worlds only)");
 
   private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>
       suggestOptions(
@@ -188,6 +220,33 @@ final class CopierCommand {
                     io.papermc.paper.command.brigadier.MessageComponentSerializer.message()
                         .serialize(Component.text(entry.getValue()))));
     return offset.buildFuture();
+  }
+
+  /**
+   * Captures every chunk within {@code radius} of the segment from one point to the other.
+   *
+   * <p>The shape {@code needed-chunks.yml} records, taken directly rather than squared off: the
+   * bounding box of a long diagonal capsule holds several times as many chunks as the capsule, and
+   * a capture tool asked for a corridor should not quietly take a field.
+   */
+  private int capsule(
+      com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
+      String rawOptions,
+      boolean estimateOnly) {
+    int x1 = IntegerArgumentType.getInteger(ctx, "x1");
+    int z1 = IntegerArgumentType.getInteger(ctx, "z1");
+    int x2 = IntegerArgumentType.getInteger(ctx, "x2");
+    int z2 = IntegerArgumentType.getInteger(ctx, "z2");
+    int radius = IntegerArgumentType.getInteger(ctx, "radius");
+    return run(
+        ctx.getSource().getSender(),
+        rawOptions,
+        estimateOnly,
+        Math.min(x1, x2) - radius,
+        Math.min(z1, z2) - radius,
+        Math.max(x1, x2) + radius,
+        Math.max(z1, z2) + radius,
+        (x, z) -> Capsule.contains(x1, z1, x2, z2, radius, x, z));
   }
 
   private int rectangle(
@@ -228,6 +287,18 @@ final class CopierCommand {
       int z1,
       int x2,
       int z2) {
+    return run(sender, rawOptions, estimateOnly, x1, z1, x2, z2, (x, z) -> true);
+  }
+
+  private int run(
+      CommandSender sender,
+      String rawOptions,
+      boolean estimateOnly,
+      int x1,
+      int z1,
+      int x2,
+      int z2,
+      CaptureJob.ChunkFilter filter) {
     CopierOptions options;
     try {
       options = CopierOptions.parse(rawOptions, state.defaultCaptureName());
@@ -292,10 +363,12 @@ final class CopierCommand {
             world,
             capture,
             options.vertical(),
+            options.generate(),
             minChunkX,
             minChunkZ,
             maxChunkX,
             maxChunkZ,
+            filter,
             report);
     state.start(job);
     return com.mojang.brigadier.Command.SINGLE_SUCCESS;
@@ -306,31 +379,32 @@ final class CopierCommand {
       return fail(sender, "`mark` records where you are standing, so it needs a player.");
     }
     Location at = player.getLocation();
+    Path file =
+        org.cobblestonemc.stonebrick.format.CorpusLayout.at(state.outputRoot())
+            .root()
+            .resolve(ScenarioFile.FILE_NAME);
     try {
-      Path path =
-          org.cobblestonemc.stonebrick.format.CorpusLayout.at(state.outputRoot()).scenarios();
-      Files.createDirectories(path);
-      Path file = path.resolve(scenario + "." + which + ".txt");
-      Files.writeString(
-          file,
-          "world\t%s\nx\t%d\ny\t%d\nz\t%d\ncanFly\t%s\n"
-              .formatted(
-                  at.getWorld().getKey().asString(),
-                  at.getBlockX(),
-                  at.getBlockY(),
-                  at.getBlockZ(),
-                  player.getAllowFlight()));
-      sender.sendMessage(
-          Component.text(
-              "Marked %s of '%s' at %d, %d, %d in %s"
+      boolean created =
+          ScenarioFile.mark(
+              file,
+              scenario,
+              which,
+              at.getWorld().getKey().asString(),
+              at.getBlockX(),
+              at.getBlockY(),
+              at.getBlockZ());
+      reporter(sender)
+          .accept(
+              "%s %s of '%s' at %d, %d, %d in %s"
                   .formatted(
+                      created ? "Created" : "Marked",
                       which,
                       scenario,
                       at.getBlockX(),
                       at.getBlockY(),
                       at.getBlockZ(),
-                      at.getWorld().getKey())));
-      sender.sendMessage(Component.text("  " + file));
+                      at.getWorld().getKey()));
+      reporter(sender).accept("  " + file);
     } catch (IOException e) {
       return fail(sender, "Could not write the mark: " + e.getMessage());
     }

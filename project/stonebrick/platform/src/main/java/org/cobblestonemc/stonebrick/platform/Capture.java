@@ -39,6 +39,7 @@ public final class Capture {
   private final String name;
   private final CaptureDirectory directory;
   private final TraitTable traits;
+  private final MissingCaptureLog missing = new MissingCaptureLog();
   private final Map<String, WorldData> worlds = new HashMap<>();
 
   private Capture(String name, CaptureDirectory directory, TraitTable traits) {
@@ -116,6 +117,27 @@ public final class Capture {
    */
   public String name() {
     return name;
+  }
+
+  /**
+   * Returns the capture's directory.
+   *
+   * @return the root
+   */
+  public Path root() {
+    return directory.root();
+  }
+
+  /**
+   * Returns the log of reads that fell outside this capture.
+   *
+   * <p>Owned by the capture rather than by a platform, so that a tool reading chunks directly is
+   * held to the same standard as a search: a read past the edge is recorded either way.
+   *
+   * @return the missing-capture log
+   */
+  public MissingCaptureLog missing() {
+    return missing;
   }
 
   /**

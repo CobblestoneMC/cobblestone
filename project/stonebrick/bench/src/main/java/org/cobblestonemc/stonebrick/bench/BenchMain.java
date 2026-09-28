@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.SearchObserver;
 
@@ -22,6 +23,8 @@ import org.cobblestonemc.SearchObserver;
  *   bench run      [--scenario id] [--tier ci|local] [--tag t]   run and compare against baselines
  *   bench accept   [--scenario id] [--tier ci|local]             run and record the results as accepted
  *   bench list                                                   show the corpus
+ *   bench profile  --scenario &lt;capture&gt;                          profile a capture's sections
+ *   bench h3       [--scenario id]                                coarse estimate vs realized cost
  * </pre>
  *
  * <p>Exits non-zero when a gated metric moved, so CI fails on an unexplained change. That failure
@@ -40,6 +43,19 @@ public final class BenchMain {
   public static void main(String[] args) throws IOException {
     Options options = Options.parse(args);
     List<Scenario> scenarios = select(Scenario.loadAll(options.scenariosDir()), options);
+
+    if (options.command().equals("h3")) {
+      for (Scenario scenario : select(Scenario.loadAll(options.scenariosDir()), options)) {
+        HeuristicAccuracy.run(options.corpusRoot(), scenario, new QuietLogger());
+      }
+      return;
+    }
+
+    if (options.command().equals("profile")) {
+      ProfileReport.run(
+          options.corpusRoot(), options.scenarioId() == null ? "smoke" : options.scenarioId());
+      return;
+    }
 
     if (scenarios.isEmpty()) {
       System.out.println(
@@ -75,6 +91,11 @@ public final class BenchMain {
 
   private static boolean run(List<Scenario> scenarios, Options options) throws IOException {
     ScenarioRunner runner = new ScenarioRunner(options.corpusRoot(), new QuietLogger());
+    Path manifest = options.corpusRoot().resolve(NeededChunks.FILE_NAME);
+    Map<String, NeededChunks> needed = new java.util.LinkedHashMap<>(NeededChunks.read(manifest));
+    boolean changed = false;
+    boolean missing = false;
+
     List<Comparison.Verdict> verdicts = new ArrayList<>();
     for (Scenario scenario : scenarios) {
       // ASCII: a Windows console defaults to a code page that renders an ellipsis as a
@@ -83,7 +104,35 @@ public final class BenchMain {
       RunResult result = runner.run(scenario, SearchObserver.none());
       verdicts.add(
           Comparison.compare(result, Baselines.read(options.baselinesDir(), scenario.id())));
+
+      // Whatever the run read outside its capture is precisely what the capture is missing.
+      // Folding it in here is the whole of the discovery loop: nobody picks a radius, the search
+      // reports one.
+      NeededChunks capsule = needed.getOrDefault(scenario.id(), NeededChunks.initial(scenario));
+      NeededChunks grown = capsule;
+      for (long packed : result.missingChunks()) {
+        grown = grown.including((int) (packed >> 32), (int) packed);
+      }
+      if (!grown.equals(capsule) || !needed.containsKey(scenario.id())) {
+        needed.put(scenario.id(), grown);
+        changed = true;
+      }
+      // Recording a scenario for the first time is not the same event as a run running out of
+      // terrain, and saying so either way would cry wolf on every new scenario.
+      missing |= !result.missingChunks().isEmpty();
     }
+
+    if (changed) {
+      NeededChunks.write(manifest, needed);
+      System.out.println();
+      if (missing) {
+        System.out.println("Terrain is missing. " + manifest + " now covers what the runs");
+        System.out.println("reached for; run  ./gradlew captureCorpus  and try again.");
+      } else {
+        System.out.println("Recorded what these scenarios need in " + manifest + ".");
+      }
+    }
+
     System.out.println();
     System.out.print(Comparison.table(verdicts));
     return verdicts.stream().allMatch(Comparison.Verdict::ok);
@@ -162,9 +211,7 @@ public final class BenchMain {
       return new Options(
           command,
           corpus,
-          scenarios == null
-              ? org.cobblestonemc.stonebrick.format.CorpusLayout.at(corpus).scenarios()
-              : scenarios,
+          scenarios == null ? corpus.resolve(Scenario.FILE_NAME) : scenarios,
           baselines,
           id,
           tier,

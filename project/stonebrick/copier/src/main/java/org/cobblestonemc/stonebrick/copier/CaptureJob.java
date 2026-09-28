@@ -48,12 +48,34 @@ final class CaptureJob {
   private final World world;
   private final CaptureDirectory capture;
   private final VerticalMode mode;
+  private final boolean generate;
   private final int minChunkX;
   private final int minChunkZ;
   private final int maxChunkX;
   private final int maxChunkZ;
   private final int total;
+  private final ChunkFilter filter;
   private final Consumer<String> progress;
+
+  /**
+   * Which chunks of the rectangle to actually capture.
+   *
+   * <p>A rectangle is what a person types, but it is not what a route needs. The terrain a search
+   * reaches for is a capsule around its line, and the bounding box of a long diagonal capsule holds
+   * several times as many chunks as the capsule does — all of which would be captured, written and
+   * never read.
+   */
+  @FunctionalInterface
+  interface ChunkFilter {
+    /**
+     * Returns whether a chunk should be captured.
+     *
+     * @param chunkX the chunk X
+     * @param chunkZ the chunk Z
+     * @return {@code true} to capture it
+     */
+    boolean accepts(int chunkX, int chunkZ);
+  }
 
   private final TraitTable.Builder traits = TraitTable.builder();
   private final AtomicInteger requested = new AtomicInteger();
@@ -74,21 +96,33 @@ final class CaptureJob {
       World world,
       CaptureDirectory capture,
       VerticalMode mode,
+      boolean generate,
       int minChunkX,
       int minChunkZ,
       int maxChunkX,
       int maxChunkZ,
+      ChunkFilter filter,
       Consumer<String> progress) {
     this.plugin = plugin;
     this.world = world;
     this.capture = capture;
     this.mode = mode;
+    this.generate = generate;
     this.minChunkX = minChunkX;
     this.minChunkZ = minChunkZ;
     this.maxChunkX = maxChunkX;
     this.maxChunkZ = maxChunkZ;
-    this.total = (maxChunkX - minChunkX + 1) * (maxChunkZ - minChunkZ + 1);
+    this.filter = filter;
     this.progress = progress;
+    int counted = 0;
+    for (int x = minChunkX; x <= maxChunkX; x++) {
+      for (int z = minChunkZ; z <= maxChunkZ; z++) {
+        if (filter.accepts(x, z)) {
+          counted++;
+        }
+      }
+    }
+    this.total = counted;
   }
 
   /** Returns how many chunks this job will visit. */
@@ -151,14 +185,20 @@ final class CaptureJob {
   }
 
   private void request(int index) {
-    int width = maxChunkX - minChunkX + 1;
-    int chunkX = minChunkX + (index % width);
-    int chunkZ = minChunkZ + (index / width);
+    int[] at = nth(index);
+    if (at == null) {
+      completed.incrementAndGet();
+      return;
+    }
+    int chunkX = at[0];
+    int chunkZ = at[1];
     inFlight.incrementAndGet();
-    // `false`: never generate. A capture must record the world as it is, not conjure terrain that
-    // no player has ever seen and that would differ on the next world-gen change.
+    // Generation is off unless asked for. On a seeded corpus world it is exactly what we want —
+    // terrain is a deterministic function of the seed, so generating it is as reproducible as
+    // reading it. On somebody's live server it would silently write new chunks into their save,
+    // which is not a thing a capture tool should do by default.
     world
-        .getChunkAtAsync(chunkX, chunkZ, false)
+        .getChunkAtAsync(chunkX, chunkZ, generate)
         .whenComplete(
             (chunk, error) -> {
               try {
@@ -179,6 +219,19 @@ final class CaptureJob {
                 inFlight.decrementAndGet();
               }
             });
+  }
+
+  /** The {@code index}-th accepted chunk, in row-major order, or {@code null} if there is none. */
+  private int[] nth(int index) {
+    int seen = 0;
+    for (int z = minChunkZ; z <= maxChunkZ; z++) {
+      for (int x = minChunkX; x <= maxChunkX; x++) {
+        if (filter.accepts(x, z) && seen++ == index) {
+          return new int[] {x, z};
+        }
+      }
+    }
+    return null;
   }
 
   private void encodeAndWrite(org.bukkit.ChunkSnapshot snapshot) {

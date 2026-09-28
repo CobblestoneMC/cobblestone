@@ -33,7 +33,8 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
   private final MinecraftScheduler<Object> scheduler;
   private final ChunkProviderSettings settings;
   private final SimulatedChunkIo io;
-  private final MissingCaptureLog missing = new MissingCaptureLog();
+  private final java.util.Set<Long> ungenerated = new java.util.HashSet<>();
+  private final MissingCaptureLog missing;
   private final Map<String, StonebrickWorld> worlds = new HashMap<>();
 
   /**
@@ -65,12 +66,29 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
     this.scheduler = scheduler;
     this.settings = settings;
     this.io = new SimulatedChunkIo(profile, scheduler.time());
+    this.missing = capture.missing();
     for (String key : capture.worldKeys()) {
       worlds.put(
           key,
           new StonebrickWorld(
               this, settings, key, capture.minY(key), capture.maxY(key), capture.environment(key)));
     }
+  }
+
+  /**
+   * Declares chunks to present as never generated, whatever the capture holds.
+   *
+   * <p>A live server meets terrain that does not exist — at a world border, or under a policy that
+   * will not generate it — and a corpus captured from a seeded world would otherwise never exercise
+   * that. Declaring it keeps the captured terrain complete and the case tested.
+   *
+   * <p>These are <b>not</b> recorded as missing capture data: nothing is missing, the scenario
+   * asked for them to be absent.
+   *
+   * @param chunks packed {@code (x &lt;&lt; 32) | z} chunk coordinates
+   */
+  public void presentAsUngenerated(java.util.Set<Long> chunks) {
+    ungenerated.addAll(chunks);
   }
 
   /**
@@ -118,6 +136,9 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
     // Here it changes nothing at all, because there is no queue to prioritise yet; the simulated
     // IO model is what will give it meaning.
     String key = world.key();
+    if (ungenerated.contains(((long) chunkX << 32) | (chunkZ & 0xFFFF_FFFFL))) {
+      return CompletableFuture.completedFuture(ChunkFetch.Failed.permanent());
+    }
     int storedBytes = capture.storedBytes(key, chunkX, chunkZ);
     if (storedBytes < 0) {
       // Not captured. Indistinguishable from ungenerated terrain to everything above, which is

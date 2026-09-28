@@ -1,0 +1,24 @@
+# Terrain each scenario needs, measured by running it. Union only: this file
+# grows when a search reaches somewhere new and never shrinks, so that two
+# versions of the algorithm are always compared over the same world.
+# Regenerate the captures it describes with: ./gradlew captureCorpus
+deep-cave:
+  world: minecraft:overworld
+  from: { x: 117, y: 63, z: -58 }
+  to: { x: 107, y: -54, z: 12 }
+  radiusChunks: 10
+hilly-jungle:
+  world: minecraft:overworld
+  from: { x: 2, y: 64, z: -43 }
+  to: { x: 310, y: 104, z: -267 }
+  radiusChunks: 4
+ocean:
+  world: minecraft:overworld
+  from: { x: 1103, y: 63, z: -675 }
+  to: { x: 1451, y: 64, z: -1123 }
+  radiusChunks: 14
+smoke-walk:
+  world: minecraft:overworld
+  from: { x: 13, y: 62, z: -43 }
+  to: { x: 51, y: 69, z: 22 }
+  radiusChunks: 4

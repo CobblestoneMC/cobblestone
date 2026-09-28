@@ -41,6 +41,7 @@ import org.jetbrains.annotations.Nullable;
  * @param realMillis wall-clock time the run took; advisory only
  * @param peakHeapBytes peak heap during the run; advisory only
  * @param missingCaptureReport a description of reads outside the capture, or {@code null}
+ * @param missingChunks every chunk read outside the capture, packed as {@code (x << 32) | z}
  */
 public record RunResult(
     String scenario,
@@ -56,7 +57,8 @@ public record RunResult(
     long ioDelayMicros,
     long realMillis,
     long peakHeapBytes,
-    @Nullable String missingCaptureReport) {
+    @Nullable String missingCaptureReport,
+    java.util.Set<Long> missingChunks) {
 
   /**
    * Returns whether this run produced a number worth comparing.

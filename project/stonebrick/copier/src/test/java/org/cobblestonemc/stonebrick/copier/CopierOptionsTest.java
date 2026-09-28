@@ -18,13 +18,13 @@ import org.junit.jupiter.api.Test;
 class CopierOptionsTest {
 
   @Test
-  void defaultsAreASurfaceBandIntoTheDefaultCapture() throws Exception {
+  void defaultsAreAFullColumnIntoTheDefaultCapture() throws Exception {
     CopierOptions options = CopierOptions.parse("", "corpus");
 
     assertEquals("corpus", options.captureName());
     assertNull(options.worldKey());
     assertFalse(options.blockCoordinates());
-    assertEquals(new VerticalMode.Surface(24, 24), options.vertical());
+    assertEquals(new VerticalMode.Full(), options.vertical());
   }
 
   @Test

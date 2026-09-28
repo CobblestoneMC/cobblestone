@@ -25,6 +25,7 @@ import org.jetbrains.annotations.Nullable;
  * @param vertical how much of each column to capture
  * @param overwrite whether an existing capture may be written into
  * @param force whether the chunk-count guard is waived
+ * @param generate whether chunks that do not exist yet may be generated
  */
 record CopierOptions(
     String captureName,
@@ -32,7 +33,8 @@ record CopierOptions(
     boolean blockCoordinates,
     VerticalMode vertical,
     boolean overwrite,
-    boolean force) {
+    boolean force,
+    boolean generate) {
 
   /** Thrown when the flags cannot be understood; the message is shown to the sender verbatim. */
   static final class ParseException extends Exception {
@@ -65,6 +67,7 @@ record CopierOptions(
     boolean blocks = false;
     boolean overwrite = false;
     boolean force = false;
+    boolean generate = false;
     VerticalMode vertical = null;
 
     for (int i = 0; i < tokens.size(); i++) {
@@ -75,6 +78,7 @@ record CopierOptions(
         case "--blocks" -> blocks = true;
         case "--overwrite" -> overwrite = true;
         case "--force" -> force = true;
+        case "--generate" -> generate = true;
         case "--full" -> vertical = requireUnsetVertical(vertical, new VerticalMode.Full());
         case "--surface" -> {
           int below = requireInt(tokens, ++i, "--surface needs two numbers: <below> <above>");
@@ -101,7 +105,8 @@ record CopierOptions(
         blocks,
         vertical == null ? VerticalMode.defaultMode() : vertical,
         overwrite,
-        force);
+        force,
+        generate);
   }
 
   private static VerticalMode requireUnsetVertical(

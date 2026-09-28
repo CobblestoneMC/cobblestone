@@ -423,47 +423,94 @@ second is for "does it still work when threads are real".
 
 ---
 
-## 6. Scenarios
+## 6. Scenarios, and capture on demand
 
-A scenario is a JSON file, loaded by the bench, the tests, and the visualizer alike:
+### 6.1 One file, keyed by id
 
-```json
-{
-  "id": "ow-river-orthogonal",
-  "description": "Destination inland; a wide river runs across the straight-line route.",
-  "tags": ["overworld", "water-trap", "tier2", "medium-aware"],
-  "capture": "corpus-2026-09",
-  "origin":      { "world": "minecraft:overworld", "x": 1240, "y": 68, "z": -310 },
-  "destination": { "world": "minecraft:overworld", "x": 2015, "y": 71, "z": -288, "radius": 2 },
-  "agent": { "canFly": false, "canGlide": false, "hasBoat": true, "enderPearls": 0,
-             "permissions": ["cobblestone.mode.mine"] },
-  "excludedSteps": [],
-  "transitions": [],
-  "restrictions": [ { "box": [1500, 60, -350, 1560, 90, -250], "verdict": "deny", "delayMillis": 40 } ],
-  "settings": { "heuristicWeight": 1.5, "maxCellsVisited": 200000, "maxWallClockMillis": 60000 },
-  "io": "sata-ssd",
-  "onMissingCapture": "ERROR",
-  "expect": { "outcome": "success" }
-}
+Every scenario lives in the corpus's `scenarios.yml`, rewritten in id order whenever it changes, so
+that marking a position in-game produces a one-entry diff rather than a reshuffle.
+
+```yaml
+smoke-walk:
+  description: Overworld, mixed walking and swimming
+  capture: smoke
+  world: minecraft:overworld
+  tier: LOCAL
+  io: zero
+  origin:      { x: 13, y: 62, z: -43 }
+  destination: { x: 51, y: 69, z: 22, radius: 1 }
+  agent:    { hasBoat: true }
+  settings: { heuristicWeight: 1.5, maxCellsVisited: 200000 }
+  ungenerated: ["4,-2", "5,-2"]
 ```
 
-**There is no golden reference solve.** A true Dijkstra over these distances is not computable — it
-is the very problem the coarse tier exists to avoid — so a "cost ratio versus optimal" would either
-be unobtainable or restricted to toy scenarios that prove nothing.
+`/copier mark <id> origin|dest` updates only the position it names and leaves the rest of the entry
+alone, so hand-edited fields survive a mistyped command.
 
-Instead, **every result records both `solveMillis` and `pathCost`**, and neither is interpreted
-alone. A change that halves solve time and raises path cost by 30% is not a win, and a change that
-does the reverse may well be; the harness's job is to make both visible in the same row and let a
-human make that call. Regression detection is by comparison against **committed baselines** (§8.4),
-not against an ideal.
+**`ungenerated`** declares chunks the platform presents as never generated, whatever the capture
+holds. A live server does meet terrain that does not exist — at a world border, or under a policy
+that will not generate it — and a corpus captured from a seeded world would otherwise never
+exercise that. Declaring it keeps the terrain complete and the case tested, and it is obvious to a
+reader which run is about that and which is not.
 
-`expect` therefore asserts only what is categorical: the outcome (`success` / `no_route` /
-`timed_out` / `limit_exceeded`). Quality lives in the baseline diff.
+### 6.2 Nobody picks a radius
 
-Tier-1 scenarios declare `transitions` (portal pairs with their costs), so the benchmark exercises
-`SearchImpl`'s whole re-plan loop, not just one fine-grained solve.
+The terrain a scenario needs is **measured, not guessed**:
 
----
+```
+1  a scenario declares only its origin and destination
+2  bench run    the search reads terrain; MissingCaptureLog already records every read
+                outside the capture, so one run discovers the whole gap rather than the
+                first block of it
+3               that region is folded into needed-chunks.yml
+4  captureCorpus boots the seeded server and captures what is missing
+5  repeat until a run touches nothing new — usually two or three rounds
+```
+
+The converged region is exactly what the search reaches for, which is the thing a human guessing a
+radius can only approximate. `MissingCaptureLog` was built as a safety net and turns out to be the
+discovery mechanism.
+
+**A capsule, not a circle.** Every chunk within a radius of the origin-to-destination segment. A
+circle is the same idea and is quadratically wasteful on the routes that matter — a 3 000-block
+route needs an enclosing circle of radius 1 500, some 27 000 chunks, where the corridor the search
+touches is nearer 3 000 — and when the route is short the segment collapses and the capsule *is* a
+circle.
+
+⚠️ **Union only, never pruned.** A better heuristic explores less; shrinking the capture to match
+would mean two versions of the algorithm were measured against different worlds. The needed region
+only ever grows.
+
+⚠️ **A guard on the growth.** A scenario records the chunk count it was accepted at, beside its
+baseline. A run wanting more than twice that aborts *before* the next capture, rather than quietly
+pulling in gigabytes — a search suddenly reaching for ten times its terrain is either a bug or a
+real behavioural change, and either way it wants looking at. A ratio rather than an absolute,
+because an optimality-for-speed trade can legitimately move it either way.
+
+### 6.3 What this buys back
+
+With terrain a deterministic function of a seed, everything except the block data becomes
+shareable again:
+
+| | committed | why |
+|---|---|---|
+| `scenarios.yml` | yes | coordinates in a seeded world |
+| `corpus.yml` — seed, Minecraft version | yes | the identity of the world |
+| `needed-chunks.yml` | yes | derived, small, reproducible |
+| baselines | yes | they now mean the same thing on every machine |
+| `.sbc` captures | no | large, and regenerable from the above |
+
+Which restores shareable baselines, and makes CI gating a choice rather than an impossibility.
+
+### 6.4 No golden solves
+
+A true Dijkstra over these distances is not computable — it is the problem the coarse tier exists to
+avoid — so a "cost ratio versus optimal" would be either unobtainable or restricted to toy cases.
+
+Instead **every result records both `solveMillis` and `pathCost`**, and neither is read alone. A
+change that halves solve time and raises path cost by 30% is not a win; one that does the reverse
+may well be. The harness makes both visible in the same row and leaves the judgement to a human.
+Regression detection is against committed baselines (§8.4), not against an ideal.
 
 ## 7. The capture & scenario catalogue
 

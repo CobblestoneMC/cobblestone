@@ -1,0 +1,26 @@
+# Benchmark scenarios, one per id, kept in alphabetical order.
+# Positions are written by /copier mark; everything else is edited by hand.
+
+deep-cave:
+  capture: deep-cave
+  world: minecraft:overworld
+  tier: LOCAL
+  io: zero
+  origin: { x: 117, y: 63, z: -58 }
+  destination: { x: 107, y: -54, z: 12 }
+
+hilly-jungle:
+  capture: jungle
+  world: minecraft:overworld
+  tier: LOCAL
+  io: zero
+  origin: { x: 2, y: 64, z: -43 }
+  destination: { x: 310, y: 104, z: -267 }
+
+ocean:
+  capture: ocean
+  world: minecraft:overworld
+  tier: LOCAL
+  io: zero
+  origin: { x: 1103, y: 63, z: -675 }
+  destination: { x: 1451, y: 64, z: -1123 }

@@ -43,6 +43,7 @@ import org.yaml.snakeyaml.Yaml;
  * @param io what a chunk read costs
  * @param onMissingCapture what to do about reads outside the capture
  * @param expectedOutcome the outcome the scenario asserts, or {@code null} to assert nothing
+ * @param ungenerated chunks to present as never generated, whatever the capture holds
  */
 public record Scenario(
     String id,
@@ -58,7 +59,8 @@ public record Scenario(
     SearchLimits settings,
     IoProfile io,
     MissingCapturePolicy onMissingCapture,
-    String expectedOutcome) {
+    String expectedOutcome,
+    Set<Long> ungenerated) {
 
   /** Which corpus a scenario belongs to. */
   public enum Tier {
@@ -117,53 +119,56 @@ public record Scenario(
     }
   }
 
+  /** The file every scenario lives in, keyed by id. */
+  public static final String FILE_NAME = "scenarios.yml";
+
   /**
-   * Reads every scenario under a directory, recursively.
+   * Reads every scenario from a corpus's {@code scenarios.yml}.
    *
-   * @param dir the directory
+   * <p>One file rather than one per scenario. Scenarios are small, they are written by a command
+   * rather than by hand, and most of the catalogue varies an agent or a destination over terrain
+   * another scenario already uses — so keeping them together is how the relationship between them
+   * stays visible. The file is rewritten in id order every time, so a mark taken in-game produces a
+   * one-entry diff rather than a reshuffle.
+   *
+   * @param file the scenarios file
    * @return the scenarios, ordered by id
-   * @throws IOException if a file cannot be read or parsed
+   * @throws IOException if the file cannot be read or parsed
    */
-  public static List<Scenario> loadAll(Path dir) throws IOException {
-    List<Scenario> scenarios = new ArrayList<>();
-    if (!Files.isDirectory(dir)) {
-      return scenarios;
+  @SuppressWarnings("unchecked")
+  public static List<Scenario> loadAll(Path file) throws IOException {
+    if (!Files.isRegularFile(file)) {
+      return List.of();
     }
-    try (var paths = Files.walk(dir)) {
-      for (Path file : paths.filter(Scenario::isScenarioFile).sorted().toList()) {
-        scenarios.add(load(file));
+    Map<String, Object> root;
+    try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+      root = new Yaml().load(reader);
+    } catch (RuntimeException e) {
+      throw new IOException(file + ": " + e.getMessage(), e);
+    }
+    if (root == null) {
+      return List.of();
+    }
+    List<Scenario> scenarios = new ArrayList<>();
+    for (Map.Entry<String, Object> entry : root.entrySet()) {
+      if (!(entry.getValue() instanceof Map)) {
+        throw new IOException(file + ": '" + entry.getKey() + "' is not a scenario");
+      }
+      Map<String, Object> body =
+          new java.util.LinkedHashMap<>((Map<String, Object>) entry.getValue());
+      body.put("id", entry.getKey());
+      try {
+        scenarios.add(from(body, file));
+      } catch (RuntimeException e) {
+        throw new IOException(file + ": " + entry.getKey() + ": " + e.getMessage(), e);
       }
     }
     scenarios.sort(java.util.Comparator.comparing(Scenario::id));
     return scenarios;
   }
 
-  private static boolean isScenarioFile(Path path) {
-    String name = path.getFileName().toString();
-    return Files.isRegularFile(path) && (name.endsWith(".yml") || name.endsWith(".yaml"));
-  }
-
-  /**
-   * Reads one scenario.
-   *
-   * @param file the file
-   * @return the scenario
-   * @throws IOException if the file cannot be read, or is missing something required
-   */
-  public static Scenario load(Path file) throws IOException {
-    try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-      Map<String, Object> root = new Yaml().load(reader);
-      if (root == null) {
-        throw new IOException(file + ": empty scenario");
-      }
-      return from(root, file);
-    } catch (RuntimeException e) {
-      throw new IOException(file + ": " + e.getMessage(), e);
-    }
-  }
-
   private static Scenario from(Map<String, Object> root, Path file) throws IOException {
-    String id = string(root, "id", stripExtension(file.getFileName().toString()));
+    String id = string(root, "id", "unnamed");
     Map<String, Object> agent = map(root, "agent");
     Map<String, Object> limits = map(root, "settings");
     Map<String, Object> destination = requireMap(root, "destination", file);
@@ -183,7 +188,12 @@ public record Scenario(
         new LinkedHashSet<>(stringList(root, "tags")),
         Tier.valueOf(string(root, "tier", "CI").toUpperCase(java.util.Locale.ROOT)),
         require(root, "capture", file),
-        string(destination, "world", string(requireMap(root, "origin", file), "world", "")),
+        // Top level first: the world belongs to the scenario, not to one of its endpoints. The
+        // per-position fallbacks are for files written before the format collapsed into one.
+        string(
+            root,
+            "world",
+            string(destination, "world", string(requireMap(root, "origin", file), "world", ""))),
         cell(requireMap(root, "origin", file), file),
         cell(destination, file),
         integer(destination, "radius", 0),
@@ -200,12 +210,40 @@ public record Scenario(
         profile,
         MissingCapturePolicy.valueOf(
             string(root, "onMissingCapture", "ERROR").toUpperCase(java.util.Locale.ROOT)),
-        string(root, "expect", "success"));
+        string(root, "expect", "success"),
+        ungenerated(root, file));
   }
 
-  private static String stripExtension(String name) {
-    int dot = name.lastIndexOf('.');
-    return dot < 0 ? name : name.substring(0, dot);
+  /**
+   * Chunks the scenario declares as ungenerated, packed as {@code (x &lt;&lt; 32) | z}.
+   *
+   * <p>Declared rather than achieved by capturing a region with holes in it. A live server does
+   * meet ungenerated terrain — at a world border, or under a policy that will not generate — and a
+   * corpus that captures everything would never exercise it. Saying so in the scenario keeps the
+   * terrain complete and the case tested, and makes it obvious to a reader which run is about that
+   * and which is not.
+   */
+  private static Set<Long> ungenerated(Map<String, Object> root, Path file) throws IOException {
+    Object value = root.get("ungenerated");
+    if (!(value instanceof List<?> list)) {
+      return Set.of();
+    }
+    Set<Long> chunks = new java.util.LinkedHashSet<>();
+    for (Object item : list) {
+      String text = String.valueOf(item).trim();
+      String[] parts = text.split(",");
+      if (parts.length != 2) {
+        throw new IOException(file + ": ungenerated chunk '" + text + "' is not 'x,z'");
+      }
+      try {
+        chunks.add(
+            ((long) Integer.parseInt(parts[0].trim()) << 32)
+                | (Integer.parseInt(parts[1].trim()) & 0xFFFF_FFFFL));
+      } catch (NumberFormatException e) {
+        throw new IOException(file + ": ungenerated chunk '" + text + "' is not 'x,z'", e);
+      }
+    }
+    return Set.copyOf(chunks);
   }
 
   private static Cell cell(Map<String, Object> node, Path file) throws IOException {

@@ -42,6 +42,14 @@ public final class MissingCaptureLog {
   private volatile String worldKey = "";
 
   /**
+   * Every chunk read outside the capture, packed as {@code (x &lt;&lt; 32) | z}.
+   *
+   * <p>The bounding box is enough to tell a human what went wrong; the set is what lets the capture
+   * manifest widen to exactly what the search reached for, rather than to a rectangle around it.
+   */
+  private final java.util.Set<Long> chunks = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+  /**
    * Records a read of a chunk column the capture does not contain.
    *
    * @param world the world key
@@ -67,6 +75,7 @@ public final class MissingCaptureLog {
 
   private void record(String world, int chunkX, int chunkZ, long lowY, long highY) {
     reads.incrementAndGet();
+    chunks.add(((long) chunkX << 32) | (chunkZ & 0xFFFF_FFFFL));
     worldKey = world;
     minChunkX.accumulateAndGet(chunkX, Math::min);
     maxChunkX.accumulateAndGet(chunkX, Math::max);
@@ -94,6 +103,15 @@ public final class MissingCaptureLog {
    */
   public long reads() {
     return reads.get();
+  }
+
+  /**
+   * Returns every chunk that was read outside the capture.
+   *
+   * @return packed {@code (x &lt;&lt; 32) | z} chunk coordinates
+   */
+  public java.util.Set<Long> chunks() {
+    return java.util.Set.copyOf(chunks);
   }
 
   /**
