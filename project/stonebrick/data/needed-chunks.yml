@@ -6,7 +6,7 @@ deep-cave:
   world: minecraft:overworld
   from: { x: 117, y: 63, z: -58 }
   to: { x: 107, y: -54, z: 12 }
-  radiusChunks: 10
+  radiusChunks: 11
 hilly-jungle:
   world: minecraft:overworld
   from: { x: 2, y: 64, z: -43 }

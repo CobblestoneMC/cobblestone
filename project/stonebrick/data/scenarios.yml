@@ -8,6 +8,10 @@ deep-cave:
   io: zero
   origin: { x: 117, y: 63, z: -58 }
   destination: { x: 107, y: -54, z: 12 }
+  # Raised from the production default of 200k purely to find out whether this route is solvable
+  # at all by the current search. A success here at any cost is the reference the coarse tier has
+  # to beat; a failure would say the route needs more than a bigger budget.
+  settings: { maxCellsVisited: 1000000 }
 
 hilly-jungle:
   capture: jungle

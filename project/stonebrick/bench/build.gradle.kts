@@ -19,6 +19,9 @@ dependencies {
 
 application {
     mainClass = "org.cobblestonemc.stonebrick.bench.BenchMain"
+    // A solve at a raised cell cap holds its whole node table; the default heap is not enough to
+    // find out whether such a route is solvable at all.
+    applicationDefaultJvmArgs = listOf("-Xmx8G")
 }
 
 // Generates the benchmark corpus by running a real, seeded Minecraft server and capturing from it.
