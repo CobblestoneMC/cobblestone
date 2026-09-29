@@ -224,7 +224,7 @@ public final class CoarseSearch {
         continue;
       }
       SectionProfile.Component into = neighbour.whole();
-      if (into.openVolume() == 0 && into.coverage(SectionProfile.Axis.X, Medium.MINE) == 0) {
+      if (into.openVolume() == 0 && into.coverage(SectionProfile.Axis.X, Medium.MINEABLE) == 0) {
         continue; // solid and unbreakable: bedrock, or the bottom of the world
       }
       // Priced forward: the agent will travel neighbour -> here, so it crosses `into` on the way.

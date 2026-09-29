@@ -9,6 +9,7 @@ package org.cobblestonemc.minecraft.lod;
 
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.cobblestonemc.minecraft.lod.SectionProfile.Axis;
 import org.cobblestonemc.minecraft.lod.SectionProfile.Component;
@@ -41,14 +42,107 @@ public final class CoarseCost {
    * coarse layer producing a heuristic that can be wrong without making a solvable route
    * unreachable.
    */
-  public static final double FALLBACK_COST_PER_BLOCK = 2 * Medium.MINE.costPerBlock();
+  public static final double FALLBACK_COST_PER_BLOCK = 2 * Medium.MINEABLE.baseCostPerBlock();
+
+  /** How coverage becomes a price. */
+  public enum Blend {
+    /**
+     * Each medium claims its coverage share, cheapest first, and the shares are summed.
+     *
+     * <p>Reads as the careful choice and measures as a systematic over-estimate. Coverage is a
+     * per-axis marginal, so it cannot tell whether the cheap slices line up along the route; this
+     * rule assumes they do not, and charges the expensive medium for whatever the cheap one does
+     * not cover. On terrain where a cheap medium is present but sparse -- a nether valley floor
+     * with netherrack threading soul sand -- a real path weaves and stays cheap while this prices
+     * it as if it could not.
+     */
+    SHARED,
+
+    /**
+     * The cheapest medium with any coverage prices the whole crossing.
+     *
+     * <p>The optimistic extreme: assumes the cheap slices always line up. Wrong in the direction A*
+     * tolerates -- an estimate below the truth costs expansions, never correctness -- where {@link
+     * #SHARED} is wrong in the direction that silently steers the search away from good routes.
+     */
+    CHEAPEST
+  }
+
+  /** How a diagonal's coverage is read from the axes it spans. */
+  public enum Diagonal {
+    /**
+     * The least-covered axis decides.
+     *
+     * <p>The cautious reading: a medium that carries you east and another that carries you up do
+     * not combine into one that carries you north-east-up, so the weakest component is the honest
+     * summary of whether this medium makes the move at all.
+     */
+    WEAKEST,
+
+    /**
+     * The best-covered axis decides.
+     *
+     * <p>A diagonal is not really one move -- the fine search reaches the same cell by a short
+     * staircase of axis-aligned steps, each of which only needs its own axis covered. Reading the
+     * weakest axis prices a corner as though it had to be taken in one leap, which is what makes
+     * the coarse path unable to cut corners the way a real one does.
+     */
+    STRONGEST
+  }
 
   private final List<Medium> byCost;
+  private final double[] costPerBlock;
   private final double fallbackCostPerBlock;
+  private final Blend blend;
+  private final Diagonal diagonal;
 
-  private CoarseCost(List<Medium> byCost, double fallbackCostPerBlock) {
+  private CoarseCost(
+      List<Medium> byCost,
+      double[] costPerBlock,
+      double fallbackCostPerBlock,
+      Blend blend,
+      Diagonal diagonal) {
     this.byCost = byCost;
+    this.costPerBlock = costPerBlock;
     this.fallbackCostPerBlock = fallbackCostPerBlock;
+    this.blend = blend;
+    this.diagonal = diagonal;
+  }
+
+  /**
+   * Returns the coverage a medium has for a move spanning these axes.
+   *
+   * <p>The one place a diagonal differs from a straight crossing, so the rule lives here rather
+   * than at each of the two call sites that used to spell it out.
+   */
+  private double coverage(Component component, Medium medium, Axis... axes) {
+    double coverage = diagonal == Diagonal.WEAKEST ? 1.0 : 0.0;
+    for (Axis axis : axes) {
+      double axial = component.coverage(axis, medium);
+      coverage =
+          diagonal == Diagonal.WEAKEST ? Math.min(coverage, axial) : Math.max(coverage, axial);
+    }
+    return coverage;
+  }
+
+  /**
+   * Returns this model reading diagonals a different way.
+   *
+   * @param value the rule to use
+   * @return the model
+   */
+  public CoarseCost withDiagonal(Diagonal value) {
+    return new CoarseCost(byCost, costPerBlock, fallbackCostPerBlock, blend, value);
+  }
+
+  /**
+   * Returns this model with a different way of turning coverage into a price.
+   *
+   * @param value the rule to use
+   * @return the model
+   */
+  public CoarseCost withBlend(Blend value) {
+    return new CoarseCost(byCost, costPerBlock, fallbackCostPerBlock, value, diagonal);
   }
 
   /**
@@ -58,7 +152,43 @@ public final class CoarseCost {
    * @return the cost model
    */
   public static CoarseCost forMediums(Set<Medium> available) {
-    return forMediums(available, FALLBACK_COST_PER_BLOCK);
+    return forMediums(available, Map.of(), FALLBACK_COST_PER_BLOCK);
+  }
+
+  /**
+   * Creates a cost model for an agent whose equipment changes what some terrain costs them.
+   *
+   * <p>The seam between a profile and a player. A profile says a section is {@link
+   * Medium#SOUL_SAND}; what that is worth depends on whether the crossing player is wearing Soul
+   * Speed boots, and only the caller knows. Mediums left out of {@code costs} keep {@link
+   * Medium#baseCostPerBlock()}.
+   *
+   * @param available what the agent can cross
+   * @param costs per-block costs for this agent, overriding the base where given
+   * @param fallbackCostPerBlock what to charge for crossing that no medium covers
+   * @return the cost model
+   */
+  public static CoarseCost forMediums(
+      Set<Medium> available, Map<Medium, Double> costs, double fallbackCostPerBlock) {
+    double[] perBlock = new double[Medium.COUNT];
+    for (Medium medium : Medium.ALL) {
+      Double override = costs.get(medium);
+      perBlock[medium.ordinal()] =
+          override == null ? medium.baseCostPerBlock() : Math.max(0, override);
+    }
+    // Sorted by what they cost *this* agent, which is what the blend below claims in order. A
+    // sort on the base costs would have a Soul-Speed player claim soul sand after plain ground
+    // when for them it is the cheaper of the two.
+    List<Medium> sorted =
+        available.stream()
+            .sorted(java.util.Comparator.comparingDouble(m -> perBlock[m.ordinal()]))
+            .toList();
+    // CHEAPEST by default, from measurement rather than taste. Against optimal costs measured by
+    // Dijkstra over eight scenarios, SHARED over-estimated on 45 of 88 sampled cells and by up to
+    // 2.77x; CHEAPEST does so on 22, and by at most 1.35x. Over-estimating is the failure A* cannot
+    // absorb -- it steers the search away from routes that are actually good, and says nothing
+    // while doing it.
+    return new CoarseCost(sorted, perBlock, fallbackCostPerBlock, Blend.CHEAPEST, Diagonal.WEAKEST);
   }
 
   /**
@@ -73,11 +203,7 @@ public final class CoarseCost {
    * @return the cost model
    */
   public static CoarseCost forMediums(Set<Medium> available, double fallbackCostPerBlock) {
-    List<Medium> sorted =
-        available.stream()
-            .sorted(java.util.Comparator.comparingDouble(Medium::costPerBlock))
-            .toList();
-    return new CoarseCost(sorted, fallbackCostPerBlock);
+    return forMediums(available, Map.of(), fallbackCostPerBlock);
   }
 
   /**
@@ -86,7 +212,8 @@ public final class CoarseCost {
    * @return the default medium set
    */
   public static Set<Medium> survival() {
-    return EnumSet.of(Medium.WALK, Medium.SWIM, Medium.CLIMB, Medium.MINE);
+    return EnumSet.of(
+        Medium.WALKABLE, Medium.SOUL_SAND, Medium.SWIMMABLE, Medium.CLIMBABLE, Medium.MINEABLE);
   }
 
   /**
@@ -116,21 +243,26 @@ public final class CoarseCost {
    * @return the cost in seconds
    */
   public double crossingCost(Component component, double blocks, Axis... axes) {
+    if (blend == Blend.CHEAPEST) {
+      for (Medium medium : byCost) {
+        if (coverage(component, medium, axes) > 0) {
+          return blocks * costPerBlock[medium.ordinal()];
+        }
+      }
+      return blocks * fallbackCostPerBlock;
+    }
     double remaining = 1.0;
     double perBlock = 0.0;
     for (Medium medium : byCost) {
       if (remaining <= 0) {
         break;
       }
-      double coverage = 1.0;
-      for (Axis axis : axes) {
-        coverage = Math.min(coverage, component.coverage(axis, medium));
-      }
+      double coverage = coverage(component, medium, axes);
       // Cheapest-first claiming is what makes overlapping coverage behave. Flight can occupy every
       // passable cell, so it overlaps everything; claiming greedily means a flier simply prices the
       // whole crossing at flight rate and a walker's flight coverage never enters the sum.
       double share = Math.min(coverage, remaining);
-      perBlock += share * medium.costPerBlock();
+      perBlock += share * costPerBlock[medium.ordinal()];
       remaining -= share;
     }
     perBlock += remaining * fallbackCostPerBlock;
@@ -146,7 +278,7 @@ public final class CoarseCost {
    * @return the cheapest cost per block
    */
   public double cheapestCostPerBlock() {
-    return byCost.isEmpty() ? fallbackCostPerBlock : byCost.get(0).costPerBlock();
+    return byCost.isEmpty() ? fallbackCostPerBlock : costPerBlock[byCost.get(0).ordinal()];
   }
 
   /**

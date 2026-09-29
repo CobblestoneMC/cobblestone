@@ -115,6 +115,8 @@ final class Verify {
         Locale.ROOT, "  %-22s %10s %10s %8s%n", "cell", "estimate", "optimal", "ratio");
 
     List<Sample> measured = new ArrayList<>();
+    List<Cell> cells = new ArrayList<>();
+    List<Double> optimums = new ArrayList<>();
     for (int i = 0; i < samples; i++) {
       Cell cell = path.get((int) ((long) i * (path.size() - 1) / Math.max(1, samples - 1)));
       // Dijkstra from here: no estimate, no weight, so what comes back is the real thing.
@@ -132,6 +134,10 @@ final class Verify {
       double estimate = coarse.costToGoal(cell, Long.MAX_VALUE);
       Sample sample = new Sample(cell, estimate, truth.pathCost(), truth.outcome());
       measured.add(sample);
+      if (sample.informative()) {
+        cells.add(cell);
+        optimums.add(truth.pathCost());
+      }
       System.out.printf(
           Locale.ROOT,
           "  %-22s %10.2f %10s %8s%n",
@@ -143,6 +149,80 @@ final class Verify {
           sample.informative() ? String.format(Locale.ROOT, "%.3f", sample.ratio()) : "-");
     }
     summarise(measured);
+    sweepFallback(scenario, loadout, capture, cells, optimums);
+  }
+
+  /**
+   * Re-prices the same cells at a range of fallback rates.
+   *
+   * <p>Free, relative to what it is worth: the costly half of this report is the Dijkstra per
+   * sample, and that answer does not depend on the fallback at all. So the optimums are measured
+   * once and every candidate rate is scored against them.
+   *
+   * <p>The rate is what a crossing costs where no medium the agent has reaches -- {@link
+   * CoarseCost} calls it the tuning risk in the whole layer, and it is the first suspect for a
+   * systematically high estimate, since every partly-covered section pays it on the uncovered
+   * share.
+   */
+  private static void sweepFallback(
+      Scenario scenario,
+      Loadout loadout,
+      Capture capture,
+      List<Cell> cells,
+      List<Double> optimums) {
+    if (cells.isEmpty()) {
+      return;
+    }
+    System.out.printf(
+        Locale.ROOT,
+        "  %-10s %-10s %10s %10s %10s%n",
+        "blend",
+        "diagonal",
+        "mean",
+        "worst",
+        "over");
+    for (CoarseCost.Blend rule : CoarseCost.Blend.values()) {
+      for (CoarseCost.Diagonal corner : CoarseCost.Diagonal.values()) {
+        report(scenario, loadout, capture, cells, optimums, rule, corner);
+      }
+    }
+  }
+
+  private static void report(
+      Scenario scenario,
+      Loadout loadout,
+      Capture capture,
+      List<Cell> cells,
+      List<Double> optimums,
+      CoarseCost.Blend rule,
+      CoarseCost.Diagonal corner) {
+    {
+      CoarseSearch coarse =
+          new CoarseSearch(
+              new DirectProfiles(capture, scenario.world()),
+              CoarseCost.forMediums(loadout.mediums()).withBlend(rule).withDiagonal(corner),
+              scenario.destination());
+      double sum = 0;
+      double worst = 0;
+      int over = 0;
+      for (int i = 0; i < cells.size(); i++) {
+        double ratio = coarse.costToGoal(cells.get(i), Long.MAX_VALUE) / optimums.get(i);
+        sum += ratio;
+        worst = Math.max(worst, ratio);
+        if (ratio > 1.0001) {
+          over++;
+        }
+      }
+      System.out.printf(
+          Locale.ROOT,
+          "  %-10s %-10s %10.3f %10.3f %7d/%d%n",
+          rule,
+          corner,
+          sum / cells.size(),
+          worst,
+          over,
+          cells.size());
+    }
   }
 
   private static void summarise(List<Sample> samples) {

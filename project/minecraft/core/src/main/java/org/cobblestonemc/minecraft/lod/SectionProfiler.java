@@ -206,7 +206,7 @@ public final class SectionProfiler {
     int counted = 0;
     for (int cell = 0; cell < VOLUME; cell++) {
       MinecraftBlock block = blocks[cell];
-      if (open(block) || !Medium.MINE.occupies(block)) {
+      if (open(block) || !Medium.MINEABLE.occupies(block)) {
         continue;
       }
       mark(slices, cell);
@@ -238,7 +238,7 @@ public final class SectionProfiler {
           count++;
         }
       }
-      coverage[axis.ordinal() * Medium.COUNT + Medium.MINE.ordinal()] = (byte) count;
+      coverage[axis.ordinal() * Medium.COUNT + Medium.MINEABLE.ordinal()] = (byte) count;
     }
   }
 
@@ -280,12 +280,20 @@ public final class SectionProfiler {
       }
       MinecraftBlock block = blocks[cell];
       for (Medium medium : Medium.ALL) {
-        if (medium == Medium.MINE) {
+        if (medium == Medium.MINEABLE) {
           continue; // measured section-wide
         }
-        if (medium == Medium.WALK
-            ? walkable(cell)
-            : medium == Medium.BOAT ? navigable(cell) : medium.occupies(block)) {
+        boolean occupies =
+            switch (medium) {
+              case WALKABLE -> walkable(cell) && !soulSand(cell);
+              // Exclusive with WALKABLE, not additional to it: a cell stands on one floor, and
+              // counting it under both would let the blend claim the same slice twice and price
+              // soul sand at the cost of ordinary ground.
+              case SOUL_SAND -> walkable(cell) && soulSand(cell);
+              case BOATABLE -> navigable(cell);
+              default -> medium.occupies(block);
+            };
+        if (occupies) {
           markMedium(medium, cell);
         }
       }
@@ -311,7 +319,7 @@ public final class SectionProfiler {
       int stride = SIZE * Medium.COUNT;
       for (SectionProfile.Axis axis : SectionProfile.Axis.ALL) {
         for (Medium medium : Medium.ALL) {
-          if (medium == Medium.MINE) {
+          if (medium == Medium.MINEABLE) {
             continue;
           }
           int count = 0;
@@ -341,6 +349,14 @@ public final class SectionProfiler {
     MinecraftBlock floor = y == 0 ? below[z * SIZE + x] : blocks[index(x, y - 1, z)];
     MinecraftBlock head = y == SIZE - 1 ? above[z * SIZE + x] : blocks[index(x, y + 1, z)];
     return floor.isSolidTop() && head.isPassable();
+  }
+
+  /** Whether the floor under this cell is soul sand or soul soil. */
+  private boolean soulSand(int cell) {
+    int x = cell & 15;
+    int y = (cell >> 8) & 15;
+    int z = (cell >> 4) & 15;
+    return (y == 0 ? below[z * SIZE + x] : blocks[index(x, y - 1, z)]).isSoulSand();
   }
 
   /** Whether a boat floats here: water with something other than water directly above. */

@@ -57,16 +57,16 @@ public record Loadout(
   public java.util.Set<Medium> mediums() {
     java.util.EnumSet<Medium> mediums = java.util.EnumSet.copyOf(CoarseCost.survival());
     if (excludedModes.contains(MinecraftStepType.MINE)) {
-      mediums.remove(Medium.MINE);
+      mediums.remove(Medium.MINEABLE);
     }
     if (excludedModes.contains(MinecraftStepType.SWIM)) {
-      mediums.remove(Medium.SWIM);
+      mediums.remove(Medium.SWIMMABLE);
     }
     if (agent.canFly() && !excludedModes.contains(MinecraftStepType.FLY)) {
-      mediums.add(Medium.FLY);
+      mediums.add(Medium.FLYABLE);
     }
     if ((agent.hasBoat() || agent.inBoat()) && !excludedModes.contains(MinecraftStepType.BOAT)) {
-      mediums.add(Medium.BOAT);
+      mediums.add(Medium.BOATABLE);
     }
     return mediums;
   }

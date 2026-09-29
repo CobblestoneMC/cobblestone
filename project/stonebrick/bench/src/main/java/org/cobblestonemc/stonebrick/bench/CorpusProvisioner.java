@@ -148,7 +148,10 @@ public final class CorpusProvisioner {
       }
       CaptureDirectory capture = CorpusLayout.at(corpusRoot).capture(scenario.capture());
       int missing = countMissing(capture, capsule);
-      if (missing == 0) {
+      // Terrain can be complete while the traits describing it are not. A new trait bit changes
+      // what the block data means, and re-capturing is the only way to refresh it -- so a stale
+      // table is a reason to capture even when every column is already on disk.
+      if (missing == 0 && !staleTraits(capture)) {
         continue;
       }
       requests.add(
@@ -171,6 +174,20 @@ public final class CorpusProvisioner {
    * <p>Checked per chunk rather than by a marker file, so an interrupted capture resumes rather
    * than being either redone from scratch or wrongly believed complete.
    */
+  /** Whether this capture's trait table was written against different trait bits. */
+  boolean staleTraits(CaptureDirectory capture) {
+    java.nio.file.Path table = capture.root().resolve("traits.tsv");
+    if (!java.nio.file.Files.isRegularFile(table)) {
+      return true;
+    }
+    try {
+      org.cobblestonemc.stonebrick.format.TraitTable.read(table);
+      return false;
+    } catch (java.io.IOException e) {
+      return true;
+    }
+  }
+
   private int countMissing(CaptureDirectory capture, NeededChunks capsule) {
     // Shift, not divide. Integer division truncates towards zero, so block -1 would land in chunk
     // 0 rather than chunk -1 — and the box would then miss a strip of the capsule on every negative

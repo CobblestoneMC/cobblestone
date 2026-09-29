@@ -21,6 +21,21 @@ import java.util.List;
 public final class SectionProfile {
 
   /**
+   * The shape of a stored profile, bumped whenever that shape changes.
+   *
+   * <p>Coverage is a dense array indexed by {@link Medium#ordinal()} and sized by {@link
+   * Medium#COUNT}, so adding, removing or reordering a medium changes what every byte of a stored
+   * profile means without changing its length in any way a reader could notice. Anything that
+   * persists or caches profiles must record this number beside them and discard what it holds when
+   * it moves; the alternative is a cache that silently answers with the wrong terrain.
+   *
+   * <p>Nothing has shipped, so this stays at 1 and a change to the mediums is answered by throwing
+   * the derived data away rather than by carrying a number forward. Once there are installs in the
+   * field that cannot simply be told to re-profile, it starts moving.
+   */
+  public static final int FORMAT_VERSION = 1;
+
+  /**
    * The most components a section keeps.
    *
    * <p>Pathological terrain — a lattice of small sealed pockets — can have dozens, and keeping them
@@ -260,7 +275,7 @@ public final class SectionProfile {
       Medium best = null;
       for (Medium medium : available) {
         if (coverage(axis, medium) > 0
-            && (best == null || medium.costPerBlock() < best.costPerBlock())) {
+            && (best == null || medium.baseCostPerBlock() < best.baseCostPerBlock())) {
           best = medium;
         }
       }

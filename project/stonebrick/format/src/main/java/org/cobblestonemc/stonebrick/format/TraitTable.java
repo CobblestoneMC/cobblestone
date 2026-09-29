@@ -39,7 +39,21 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class TraitTable {
 
+  /**
+   * The header, carrying a version that is bumped whenever the trait bits change.
+   *
+   * <p>A new bit changes what every existing row means without changing how any of them parse, so a
+   * stale table reads cleanly and answers wrongly -- soul sand that does not know it is soul sand,
+   * and a coarse layer that prices a whole biome as ordinary ground. Refusing to read an old table
+   * is the only way that failure gets noticed.
+   *
+   * <p>Held at 1 while nothing has shipped: a capture is machine-local and regenerable, so a change
+   * to the bits is answered by deleting the corpus and re-capturing rather than by growing a
+   * version history. ⚠️ That only works if the corpus really is deleted -- a table left behind from
+   * before such a change carries this same header and will be read as current.
+   */
   private static final String HEADER = "#stonebrick-traits 1";
+
   private static final String COLUMNS =
       "#state\tbits\tbreakTimeSeconds\tspeedFactor\tdamagePerSecond";
 
@@ -168,8 +182,16 @@ public final class TraitTable {
   public static TraitTable read(Path path) throws IOException {
     List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
     if (lines.isEmpty() || !lines.get(0).equals(HEADER)) {
+      String found = lines.isEmpty() ? "an empty file" : "'" + lines.get(0) + "'";
       throw new CaptureFormatException(
-          path + ": not a stonebrick trait table (expected '" + HEADER + "' on the first line)");
+          path
+              + ": expected '"
+              + HEADER
+              + "' on the first line but found "
+              + found
+              + ". A table written against different trait bits parses cleanly and answers wrongly,"
+              + " so it is refused rather than used. Regenerate it with:"
+              + "  ./gradlew captureCorpus -PacceptMinecraftEula=true");
     }
     Map<String, BlockTraits> traits = new java.util.HashMap<>();
     for (int i = 1; i < lines.size(); i++) {

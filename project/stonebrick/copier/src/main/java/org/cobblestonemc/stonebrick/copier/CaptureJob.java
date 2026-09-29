@@ -313,11 +313,22 @@ final class CaptureJob {
    * <p>A capture directory accumulates: a scenario's terrain may arrive in several runs, and a
    * later run that dropped the states an earlier one had seen would leave the directory's own
    * column files referencing traits nothing describes.
+   *
+   * <p><b>A table this build cannot read is discarded, not merged and not fatal.</b> It was written
+   * against different trait bits, so its rows describe blocks in units this build no longer uses,
+   * and carrying them forward would defeat the version check that rejected them. Refusing outright
+   * would be worse: regenerating is the only way to replace an old table, so a writer that first
+   * demands to read one can never do it.
    */
   private void mergeAndWriteTraits(TraitTable table) throws IOException {
     TraitTable.Builder merged = TraitTable.builder();
     if (java.nio.file.Files.exists(capture.traitTable())) {
-      TraitTable.read(capture.traitTable()).asMap().forEach(merged::add);
+      try {
+        TraitTable.read(capture.traitTable()).asMap().forEach(merged::add);
+      } catch (IOException stale) {
+        progress.accept("Replacing a trait table this build cannot read; regenerating it");
+        merged = TraitTable.builder();
+      }
     }
     table.asMap().forEach(merged::add);
     merged.build().write(capture.traitTable());

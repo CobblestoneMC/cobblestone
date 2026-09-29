@@ -71,9 +71,15 @@ final class Sweep {
       ScenarioRunner runner)
       throws IOException {
     double[] weights = options.weights() == null ? DEFAULT_WEIGHTS : options.weights();
+    // ZERO only when asked for. It is Dijkstra -- a measuring instrument, not a candidate -- and
+    // it solves a fraction of the corpus within any sane cap. Left in the default grid it drags
+    // the common solved subset down to whatever Dijkstra managed (63 scenarios to 19, when this
+    // was first run), so every aggregate silently becomes a report on the easiest routes only.
     List<Scenario.Heuristic> heuristics =
         options.heuristic() == null
-            ? List.of(Scenario.Heuristic.values())
+            ? java.util.Arrays.stream(Scenario.Heuristic.values())
+                .filter(heuristic -> heuristic != Scenario.Heuristic.ZERO)
+                .toList()
             : List.of(options.heuristic());
 
     List<Point> points = new ArrayList<>();

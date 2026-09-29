@@ -78,13 +78,13 @@ class SectionProfilerTest {
 
     assertEquals(1, profile.components().size());
     SectionProfile.Component open = profile.components().get(0);
-    assertEquals(1.0, open.coverage(Axis.X, Medium.WALK));
-    assertEquals(1.0, open.coverage(Axis.Z, Medium.WALK));
+    assertEquals(1.0, open.coverage(Axis.X, Medium.WALKABLE));
+    assertEquals(1.0, open.coverage(Axis.Z, Medium.WALKABLE));
     // Only the one slice just above the floor is standable, out of sixteen.
-    assertEquals(1 / 16.0, open.coverage(Axis.Y, Medium.WALK));
+    assertEquals(1 / 16.0, open.coverage(Axis.Y, Medium.WALKABLE));
     // Flying fills the whole air space.
-    assertEquals(1.0, open.coverage(Axis.X, Medium.FLY));
-    assertEquals(12 / 16.0, open.coverage(Axis.Y, Medium.FLY));
+    assertEquals(1.0, open.coverage(Axis.X, Medium.FLYABLE));
+    assertEquals(12 / 16.0, open.coverage(Axis.Y, Medium.FLYABLE));
   }
 
   @Test
@@ -97,8 +97,8 @@ class SectionProfilerTest {
     assertEquals(2, profile.components().size());
     for (SectionProfile.Component side : profile.components()) {
       // Neither half spans the full width; the wall is at slice 8.
-      assertTrue(side.coverage(Axis.X, Medium.FLY) < 1.0, "a half should not span X");
-      assertEquals(1.0, side.coverage(Axis.Z, Medium.FLY), "but each half spans Z");
+      assertTrue(side.coverage(Axis.X, Medium.FLYABLE) < 1.0, "a half should not span X");
+      assertEquals(1.0, side.coverage(Axis.Z, Medium.FLYABLE), "but each half spans Z");
     }
   }
 
@@ -110,9 +110,9 @@ class SectionProfilerTest {
         new SectionProfiler().profile(chunk((x, y, z) -> y <= 7 ? WATER : AIR), 0);
 
     SectionProfile.Component open = profile.components().get(0);
-    assertEquals(1.0, open.coverage(Axis.X, Medium.BOAT));
-    assertEquals(1.0, open.coverage(Axis.Z, Medium.BOAT));
-    assertEquals(1 / 16.0, open.coverage(Axis.Y, Medium.BOAT));
+    assertEquals(1.0, open.coverage(Axis.X, Medium.BOATABLE));
+    assertEquals(1.0, open.coverage(Axis.Z, Medium.BOATABLE));
+    assertEquals(1 / 16.0, open.coverage(Axis.Y, Medium.BOATABLE));
   }
 
   @Test
@@ -123,7 +123,7 @@ class SectionProfilerTest {
 
     // Swimming fills the water column; only its top slice floats a boat.
     assertTrue(
-        open.coverage(Axis.Y, Medium.SWIM) > open.coverage(Axis.Y, Medium.BOAT),
+        open.coverage(Axis.Y, Medium.SWIMMABLE) > open.coverage(Axis.Y, Medium.BOATABLE),
         "swim should reach deeper than boat");
   }
 
@@ -135,10 +135,10 @@ class SectionProfilerTest {
 
     SectionProfile.Component shaft =
         profile.components().stream()
-            .filter(c -> c.coverage(Axis.Y, Medium.CLIMB) > 0)
+            .filter(c -> c.coverage(Axis.Y, Medium.CLIMBABLE) > 0)
             .findFirst()
             .orElseThrow();
-    assertEquals(1.0, shaft.coverage(Axis.Y, Medium.CLIMB));
+    assertEquals(1.0, shaft.coverage(Axis.Y, Medium.CLIMBABLE));
   }
 
   @Test
@@ -151,17 +151,17 @@ class SectionProfilerTest {
     assertEquals(1, profile.components().size());
     SectionProfile.Component rock = profile.components().get(0);
     assertEquals(0, rock.openVolume());
-    assertEquals(1.0, rock.coverage(Axis.X, Medium.MINE));
-    assertEquals(1.0, rock.coverage(Axis.Y, Medium.MINE));
+    assertEquals(1.0, rock.coverage(Axis.X, Medium.MINEABLE));
+    assertEquals(1.0, rock.coverage(Axis.Y, Medium.MINEABLE));
     assertEquals(1.5, rock.averageBreakTime());
-    assertEquals(0.0, rock.coverage(Axis.X, Medium.WALK));
+    assertEquals(0.0, rock.coverage(Axis.X, Medium.WALKABLE));
   }
 
   @Test
   void bedrockCannotBeMinedThrough() {
     SectionProfile profile = new SectionProfiler().profile(chunk((x, y, z) -> BEDROCK), 0);
 
-    assertEquals(0.0, profile.components().get(0).coverage(Axis.X, Medium.MINE));
+    assertEquals(0.0, profile.components().get(0).coverage(Axis.X, Medium.MINEABLE));
   }
 
   @Test
@@ -194,11 +194,16 @@ class SectionProfilerTest {
     SectionProfile.Component open = profile.components().get(0);
 
     // A walker with a boat takes the boat; without one, swimming is all that is left laterally.
-    assertSame(Medium.BOAT, open.cheapest(Axis.X, java.util.List.of(Medium.WALK, Medium.BOAT)));
-    assertSame(Medium.SWIM, open.cheapest(Axis.X, java.util.List.of(Medium.WALK, Medium.SWIM)));
+    assertSame(
+        Medium.BOATABLE,
+        open.cheapest(Axis.X, java.util.List.of(Medium.WALKABLE, Medium.BOATABLE)));
+    assertSame(
+        Medium.SWIMMABLE,
+        open.cheapest(Axis.X, java.util.List.of(Medium.WALKABLE, Medium.SWIMMABLE)));
     // And a flier beats both, everywhere.
     assertSame(
-        Medium.FLY, open.cheapest(Axis.X, java.util.List.of(Medium.WALK, Medium.BOAT, Medium.FLY)));
+        Medium.FLYABLE,
+        open.cheapest(Axis.X, java.util.List.of(Medium.WALKABLE, Medium.BOATABLE, Medium.FLYABLE)));
   }
 
   @Test
@@ -212,6 +217,6 @@ class SectionProfilerTest {
     assertTrue(solid.solid());
     assertFalse(open.solid());
     assertTrue(solidAgain.solid());
-    assertEquals(1.0, open.components().get(0).coverage(Axis.Y, Medium.FLY));
+    assertEquals(1.0, open.components().get(0).coverage(Axis.Y, Medium.FLYABLE));
   }
 }

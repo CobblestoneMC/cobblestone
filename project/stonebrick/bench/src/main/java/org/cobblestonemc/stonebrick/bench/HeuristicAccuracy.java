@@ -90,7 +90,9 @@ public final class HeuristicAccuracy {
     // from measurement rather than argued about. Swept over the plausible range: from "an uncovered
     // slice is no worse than walking" to "it is twice as bad as mining through".
     for (double fallback :
-        new double[] {Medium.WALK.costPerBlock(), 0.4, 0.7, Medium.MINE.costPerBlock(), 2.8}) {
+        new double[] {
+          Medium.WALKABLE.baseCostPerBlock(), 0.4, 0.7, Medium.MINEABLE.baseCostPerBlock(), 2.8
+        }) {
       DirectProfiles profiles = new DirectProfiles(capture, scenario.world());
       CoarseCost cost = CoarseCost.forMediums(mediumsFor(loadout), fallback);
       CoarseSearch coarse = new CoarseSearch(profiles, cost, scenario.destination());
@@ -173,10 +175,10 @@ public final class HeuristicAccuracy {
   private static java.util.Set<Medium> mediumsFor(Loadout loadout) {
     java.util.EnumSet<Medium> mediums = java.util.EnumSet.copyOf(CoarseCost.survival());
     if (loadout.agent().canFly()) {
-      mediums.add(Medium.FLY);
+      mediums.add(Medium.FLYABLE);
     }
     if (loadout.agent().hasBoat() || loadout.agent().inBoat()) {
-      mediums.add(Medium.BOAT);
+      mediums.add(Medium.BOATABLE);
     }
     return mediums;
   }
