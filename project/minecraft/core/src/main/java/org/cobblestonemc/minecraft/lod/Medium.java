@@ -34,14 +34,22 @@ import org.cobblestonemc.minecraft.MinecraftBlock;
  * SectionProfile#FORMAT_VERSION} in the same change, and anything caching profiles must discard
  * what it holds when that number moves.
  *
- * <p>The per-block costs here are deliberately approximate and are only ever used to turn a profile
- * into an estimate. The real costs live in the modes, and the estimate's job is to be comparable
- * across terrain rather than exact anywhere.
+ * <p><b>The base costs mirror {@code MovementCosts}.</b> They are what the fine search actually
+ * charges for a block of that terrain, not independent guesses, because any gap between the two
+ * becomes a flat bias in every estimate. They had drifted: walkable was 0.215 against the search's
+ * 0.20 and swimmable 0.45 against 0.30, so the coarse layer over-priced dry ground by 7.5% and
+ * water by 50% everywhere at once. That mismatch was most of the residual over-estimate left on
+ * flat terrain once the blend was fixed -- savanna-small peaked at 1.068, against a walkable ratio
+ * of exactly 1.075.
+ *
+ * <p>⚠️ Keep them reconciled. A change to {@code MovementCosts} that is not mirrored here reappears
+ * as an estimate that is quietly wrong on every route the medium touches, and {@code bench verify}
+ * is the only thing that would notice.
  */
 public enum Medium {
 
   /** Solid ground with headroom: what walking, jumping and stepping up all cross. */
-  WALKABLE(0.215),
+  WALKABLE(0.20),
 
   /**
    * Solid ground that drags: soul sand and soul soil.
@@ -52,19 +60,19 @@ public enum Medium {
    * both, and averaging it into walkable ground made the coarse estimate over-price whole nether
    * biomes.
    */
-  SOUL_SAND(0.54),
+  SOUL_SAND(0.50),
 
   /** Water, crossed by swimming. */
-  SWIMMABLE(0.45),
+  SWIMMABLE(0.30),
 
   /** A water surface a boat floats on. */
-  BOATABLE(0.12),
+  BOATABLE(0.15),
 
   /** Ladders, vines and scaffolding. */
   CLIMBABLE(0.4),
 
   /** Open space, crossed by flying. */
-  FLYABLE(0.09),
+  FLYABLE(0.08),
 
   /** Breakable material. Expensive, and almost everywhere. */
   MINEABLE(1.4);

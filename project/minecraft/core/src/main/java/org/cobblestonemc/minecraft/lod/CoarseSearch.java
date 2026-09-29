@@ -181,6 +181,14 @@ public final class CoarseSearch {
     int sy = unpackY(entry.key());
     int sz = unpackZ(entry.key());
     List<CompletableFuture<SectionProfile>> waiting = null;
+    // The section itself, not only its neighbours: half of every crossing is priced against the
+    // terrain being left, so expanding needs this profile in hand as much as theirs. The goal's
+    // own section is seeded without ever being fetched, so without this it would be read pending.
+    FutureOr<SectionProfile> self = profiles.at(sx, sy, sz);
+    if (!self.isImmediate()) {
+      waiting = new ArrayList<>();
+      waiting.add(self.future());
+    }
     for (int[] offset : NEIGHBOURS) {
       FutureOr<SectionProfile> neighbour =
           profiles.at(sx + offset[0], sy + offset[1], sz + offset[2]);
@@ -214,6 +222,10 @@ public final class CoarseSearch {
     int sy = unpackY(entry.key());
     int sz = unpackZ(entry.key());
 
+    // Immediate by construction: fetch() ran first and returned only once every profile this
+    // expansion reads was resident.
+    SectionProfile here = profiles.at(sx, sy, sz).value();
+
     for (int[] offset : NEIGHBOURS) {
       int nx = sx + offset[0];
       int ny = sy + offset[1];
@@ -227,12 +239,24 @@ public final class CoarseSearch {
       if (into.openVolume() == 0 && into.coverage(SectionProfile.Axis.X, Medium.MINEABLE) == 0) {
         continue; // solid and unbreakable: bedrock, or the bottom of the world
       }
-      // Priced forward: the agent will travel neighbour -> here, so it crosses `into` on the way.
-      // Charging the section being expanded from would price the wrong terrain.
+      // Priced forward: the agent travels neighbour -> here. Centre to centre, that crosses half
+      // of the neighbour and half of this section -- diagonally through both, never entering the
+      // sections that merely share a face with the line. Charging the whole span to either end
+      // prices every step by the terrain it arrives in and none by the terrain it leaves, which is
+      // wrong by a whole section's worth wherever the two differ. Split in half it telescopes
+      // along a route to half the first section, all of every section between, and half the last.
       double span =
           SECTION
               * Math.sqrt(offset[0] * offset[0] + offset[1] * offset[1] + offset[2] * offset[2]);
-      relax(key(nx, ny, nz), entry.cost() + cost.crossingCost(into, span, axesOf(offset)));
+      SectionProfile.Axis[] axes = axesOf(offset);
+      double crossing = cost.crossingCost(into, span / 2, axes);
+      crossing +=
+          here == null
+              // Nothing known about where we are -- price the whole span on what we are entering,
+              // which is what this did before there was a second half to charge.
+              ? cost.crossingCost(into, span / 2, axes)
+              : cost.crossingCost(here.whole(), span / 2, axes);
+      relax(key(nx, ny, nz), entry.cost() + crossing);
     }
   }
 
