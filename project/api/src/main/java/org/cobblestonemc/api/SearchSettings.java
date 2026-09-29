@@ -43,11 +43,27 @@ public final class SearchSettings {
   /** Default A* heuristic weight (1.0 = admissible/optimal; &gt;1 = faster, weighted A*). */
   public static final double DEFAULT_HEURISTIC_WEIGHT = 1.5;
 
+  /**
+   * The estimate a search uses unless told otherwise.
+   *
+   * <p>{@link Heuristic#COARSE} by default, from measurement. Benchmarked over 22 routes and five
+   * agent loadouts at this weight it returns paths three times closer to optimal than the running
+   * average (+5.7% over the best found, against +17.3%) and solves routes the running average
+   * cannot solve at any weight, for about 17% more expanded nodes.
+   *
+   * <p>⚠️ It is not free: each solve profiles the terrain it reasons over, which on a long route is
+   * thousands of chunk reads and seconds of CPU, and none of that is shared between searches yet. A
+   * server that runs many concurrent searches on slow storage should measure before trusting the
+   * default.
+   */
+  public static final Heuristic DEFAULT_HEURISTIC = Heuristic.COARSE;
+
   private final int maxCellsVisited;
   private final long maxWallClockMillis;
   private final double tier1UnsolvedPessimism;
   private final int runningAverageWidth;
   private final double heuristicWeight;
+  private final Heuristic heuristic;
 
   private SearchSettings(Builder builder) {
     this.maxCellsVisited = builder.maxCellsVisited;
@@ -55,6 +71,7 @@ public final class SearchSettings {
     this.tier1UnsolvedPessimism = builder.tier1UnsolvedPessimism;
     this.runningAverageWidth = builder.runningAverageWidth;
     this.heuristicWeight = builder.heuristicWeight;
+    this.heuristic = builder.heuristic;
   }
 
   /**
@@ -131,6 +148,36 @@ public final class SearchSettings {
     return heuristicWeight;
   }
 
+  /**
+   * Returns which estimate the fine search runs on.
+   *
+   * @return the heuristic
+   */
+  public Heuristic heuristic() {
+    return heuristic;
+  }
+
+  /** Which estimate the fine search prices its remaining journey with. */
+  public enum Heuristic {
+    /**
+     * Remaining distance times the per-block cost of the last few steps.
+     *
+     * <p>Cheap and needs nothing but the path already walked, but it extrapolates: it will happily
+     * price a long journey at the rate of a river it is currently swimming down, because the river
+     * really is cheap and simply does not go anywhere.
+     */
+    RUNNING_AVERAGE,
+
+    /**
+     * A search over 16-block terrain summaries, run backwards from the destination.
+     *
+     * <p>Prices the journey from terrain it has actually looked at rather than from terrain it has
+     * just crossed. Costs chunk reads and CPU to build those summaries -- a long route touches
+     * thousands of columns -- and each solve currently pays for its own.
+     */
+    COARSE
+  }
+
   /** A fluent builder for {@link SearchSettings}. */
   public static final class Builder {
 
@@ -139,6 +186,7 @@ public final class SearchSettings {
     private double tier1UnsolvedPessimism = DEFAULT_TIER1_UNSOLVED_PESSIMISM;
     private int runningAverageWidth = DEFAULT_RUNNING_AVERAGE_WIDTH;
     private double heuristicWeight = DEFAULT_HEURISTIC_WEIGHT;
+    private Heuristic heuristic = DEFAULT_HEURISTIC;
 
     private Builder() {}
 
@@ -148,6 +196,17 @@ public final class SearchSettings {
      * @param value the weight
      * @return this builder
      */
+    /**
+     * Sets which estimate the fine search runs on.
+     *
+     * @param value the heuristic
+     * @return this builder
+     */
+    public Builder heuristic(Heuristic value) {
+      this.heuristic = java.util.Objects.requireNonNull(value, "heuristic");
+      return this;
+    }
+
     public Builder heuristicWeight(double value) {
       if (value < 1.0) {
         throw new IllegalArgumentException("heuristicWeight must be >= 1.0: " + value);

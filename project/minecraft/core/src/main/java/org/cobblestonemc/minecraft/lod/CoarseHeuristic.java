@@ -10,6 +10,7 @@ package org.cobblestonemc.minecraft.lod;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.HeuristicStrategy;
@@ -59,18 +60,35 @@ public final class CoarseHeuristic implements HeuristicStrategy {
    */
   private static final long QUERY_BUDGET = Long.MAX_VALUE;
 
-  private final CoarseSearch.SectionProfiles profiles;
+  private final Function<DomainRegion<?>, CoarseSearch.SectionProfiles> profilesFor;
   private final CoarseCost cost;
   private final double cheapestCostPerBlock;
 
   /**
-   * Creates a heuristic over a profile source.
+   * Creates a heuristic over a single profile source.
    *
    * @param profiles where section profiles come from
    * @param cost the agent's cost model
    */
   public CoarseHeuristic(CoarseSearch.SectionProfiles profiles, CoarseCost cost) {
-    this.profiles = profiles;
+    this(region -> profiles, cost);
+  }
+
+  /**
+   * Creates a heuristic that builds a profile source per solve.
+   *
+   * <p>One strategy is built per navigate, but {@link #newSolve} runs once per leg, and Tier 1 may
+   * route a trip through several worlds. A profile source reads one world, so binding it to the
+   * strategy would have every leg after the first profiling the wrong terrain — silently, since a
+   * chunk read against the wrong world answers perfectly well. The target region knows its own
+   * {@link DomainRegion#domain()}, so the source is built from that instead.
+   *
+   * @param profilesFor builds a profile source for a solve's target region
+   * @param cost the agent's cost model
+   */
+  public CoarseHeuristic(
+      Function<DomainRegion<?>, CoarseSearch.SectionProfiles> profilesFor, CoarseCost cost) {
+    this.profilesFor = profilesFor;
     this.cost = cost;
     this.cheapestCostPerBlock = cost.cheapestCostPerBlock();
   }
@@ -84,18 +102,20 @@ public final class CoarseHeuristic implements HeuristicStrategy {
 
   @Override
   public SolveHeuristic newSolve(int windowWidth, DomainRegion<?> target) {
-    return new Solve(target);
+    return new Solve(target, profilesFor.apply(target));
   }
 
   /** One solve's view: a backward coarse search, seeded on first use, and its answers. */
   private final class Solve implements SolveHeuristic {
 
     private final DomainRegion<?> target;
+    private final CoarseSearch.SectionProfiles profiles;
     private final Map<Long, Double> frozen = new HashMap<>();
     private CoarseSearch search;
 
-    Solve(DomainRegion<?> target) {
+    Solve(DomainRegion<?> target, CoarseSearch.SectionProfiles profiles) {
       this.target = target;
+      this.profiles = profiles;
     }
 
     @Override

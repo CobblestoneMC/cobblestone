@@ -11,6 +11,8 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.cobblestonemc.minecraft.CobblestonePlayer;
+import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.cobblestonemc.minecraft.lod.SectionProfile.Axis;
 import org.cobblestonemc.minecraft.lod.SectionProfile.Component;
 
@@ -204,6 +206,44 @@ public final class CoarseCost {
    */
   public static CoarseCost forMediums(Set<Medium> available, double fallbackCostPerBlock) {
     return forMediums(available, Map.of(), fallbackCostPerBlock);
+  }
+
+  /**
+   * Returns the cost model for a player, given the modes an operator has excluded.
+   *
+   * <p>The one place production turns a {@link CobblestonePlayer} into coarse costs, so the
+   * estimate and the fine search cannot disagree about what a player is able to do. A medium the
+   * exclusions forbid is dropped: leaving it in prices routes through terrain the search is not
+   * allowed to cross, and the estimate then steers toward paths it can never take.
+   *
+   * @param player the navigating player
+   * @param excluded the step types an operator has turned off
+   * @return the cost model
+   */
+  public static CoarseCost forPlayer(CobblestonePlayer player, Set<MinecraftStepType> excluded) {
+    EnumSet<Medium> mediums = EnumSet.copyOf(survival());
+    if (excluded.contains(MinecraftStepType.MINE)) {
+      mediums.remove(Medium.MINEABLE);
+      mediums.remove(Medium.SOUL_SAND);
+    }
+    if (excluded.contains(MinecraftStepType.SWIM)) {
+      mediums.remove(Medium.SWIMMABLE);
+    }
+    if (excluded.contains(MinecraftStepType.WALK)) {
+      mediums.remove(Medium.WALKABLE);
+      mediums.remove(Medium.SOUL_SAND);
+    }
+    if (excluded.contains(MinecraftStepType.CLIMB)) {
+      mediums.remove(Medium.CLIMBABLE);
+    }
+    if (!excluded.contains(MinecraftStepType.FLY) && (player.canFly() || player.canGlide())) {
+      mediums.add(Medium.FLYABLE);
+    }
+    if (!excluded.contains(MinecraftStepType.BOAT)
+        && (player.hasBoatInInventory() || player.isInBoat())) {
+      mediums.add(Medium.BOATABLE);
+    }
+    return forMediums(mediums);
   }
 
   /**
