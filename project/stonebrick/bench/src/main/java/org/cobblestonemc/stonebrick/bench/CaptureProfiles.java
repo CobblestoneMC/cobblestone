@@ -9,15 +9,15 @@ package org.cobblestonemc.stonebrick.bench;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import org.cobblestonemc.FutureOr;
+import org.cobblestonemc.minecraft.ChunkFetch;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.lod.CoarseSearch;
 import org.cobblestonemc.minecraft.lod.SectionProfile;
 import org.cobblestonemc.minecraft.lod.SectionProfiler;
-import org.cobblestonemc.stonebrick.format.CaptureFormatException;
-import org.cobblestonemc.stonebrick.format.ChunkColumn;
-import org.cobblestonemc.stonebrick.platform.Capture;
-import org.cobblestonemc.stonebrick.platform.CaptureChunks;
+import org.cobblestonemc.stonebrick.platform.StonebrickPlatformApi;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Profiles a capture's sections on demand, remembering what it has done.
@@ -26,17 +26,28 @@ import org.cobblestonemc.stonebrick.platform.CaptureChunks;
  * is asked for and kept for the rest of the run. That is the warm-cache case the design expects to
  * be normal, reached by paying for it once rather than by loading it from disk.
  *
- * <p>Answers synchronously, which a live server could not — see {@link
- * org.cobblestonemc.minecraft.lod.CoarseHeuristic}. It is possible here only because the capture is
- * already in memory.
+ * <p><b>Reads go through the simulated disk</b>, the same one the search's own chunk fetches are
+ * charged against. Under a {@code zero} profile that is still effectively free and every answer is
+ * immediate; under {@code spinning} or {@code nvme} a column that is not resident comes back
+ * pending, the coarse search stops, and the fine search parks. That is the only thing in the bench
+ * that exercises the park path a live server will be in constantly, and it is what puts the coarse
+ * layer's chunk reads on the same clock as everything else.
  */
 public final class CaptureProfiles implements CoarseSearch.SectionProfiles {
 
-  private final Capture capture;
+  private final StonebrickPlatformApi platform;
   private final String world;
   private final SectionProfiler profiler = new SectionProfiler();
   private final Map<Long, SectionProfile> sections = new HashMap<>();
   private final Map<Long, MinecraftChunk> chunks = new HashMap<>();
+
+  /**
+   * Columns being read right now, so 26 neighbours asking for one column queue one read.
+   *
+   * <p>Dropped as soon as the read lands, at which point {@link #chunks} answers immediately -- the
+   * progress guarantee {@link CoarseSearch.SectionProfiles} requires.
+   */
+  private final Map<Long, CompletableFuture<MinecraftChunk>> inFlight = new HashMap<>();
 
   /**
    * Reads past the capture's edge, kept apart from the capture's own log.
@@ -50,11 +61,11 @@ public final class CaptureProfiles implements CoarseSearch.SectionProfiles {
   /**
    * Creates a profile source over one world of a capture.
    *
-   * @param capture the capture
+   * @param platform the platform whose disk the reads are charged against
    * @param world the world key
    */
-  public CaptureProfiles(Capture capture, String world) {
-    this.capture = capture;
+  public CaptureProfiles(StonebrickPlatformApi platform, String world) {
+    this.platform = platform;
     this.world = world;
   }
 
@@ -98,27 +109,41 @@ public final class CaptureProfiles implements CoarseSearch.SectionProfiles {
     if (sections.containsKey(key)) {
       return FutureOr.of(sections.get(key));
     }
-    MinecraftChunk chunk = chunkAt(sectionX, sectionZ);
-    SectionProfile profile = chunk == null ? null : profiler.profile(chunk, sectionY);
-    sections.put(key, profile);
-    return FutureOr.of(profile);
+    long column = ((long) sectionX << 32) | (sectionZ & 0xFFFF_FFFFL);
+    if (chunks.containsKey(column)) {
+      return FutureOr.of(profiled(key, chunks.get(column), sectionY));
+    }
+    // from(), not ofFuture(): under a zero-IO profile the read completes on the spot, and wrapping
+    // an already-finished future as Pending would park the search for a chunk it already has.
+    return FutureOr.<SectionProfile>from(
+        fetch(column, sectionX, sectionZ).thenApply(chunk -> profiled(key, chunk, sectionY)));
   }
 
-  private MinecraftChunk chunkAt(int chunkX, int chunkZ) {
-    long key = ((long) chunkX << 32) | (chunkZ & 0xFFFF_FFFFL);
-    if (chunks.containsKey(key)) {
-      return chunks.get(key);
+  /** Profiles a resident column's section and remembers the answer. */
+  private @Nullable SectionProfile profiled(
+      long key, @Nullable MinecraftChunk chunk, int sectionY) {
+    SectionProfile profile = chunk == null ? null : profiler.profile(chunk, sectionY);
+    sections.put(key, profile);
+    return profile;
+  }
+
+  /** Starts a read for a column, or joins the one already going. */
+  private CompletableFuture<MinecraftChunk> fetch(long column, int chunkX, int chunkZ) {
+    CompletableFuture<MinecraftChunk> existing = inFlight.get(column);
+    if (existing != null) {
+      return existing;
     }
-    MinecraftChunk chunk = null;
-    try {
-      ChunkColumn column = capture.column(world, chunkX, chunkZ);
-      if (column != null) {
-        chunk = CaptureChunks.chunk(capture, column, world, beyond);
-      }
-    } catch (CaptureFormatException e) {
-      chunk = null;
-    }
-    chunks.put(key, chunk);
-    return chunk;
+    CompletableFuture<MinecraftChunk> reading =
+        platform
+            .fetchForProfile(world, chunkX, chunkZ, beyond)
+            .thenApply(
+                fetch -> fetch instanceof ChunkFetch.Success success ? success.chunk() : null)
+            .whenComplete(
+                (chunk, throwable) -> {
+                  chunks.put(column, chunk);
+                  inFlight.remove(column);
+                });
+    inFlight.put(column, reading);
+    return reading;
   }
 }

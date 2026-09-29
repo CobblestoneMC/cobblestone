@@ -115,7 +115,7 @@ public final class ScenarioRunner {
 
       Counting counting = new Counting(observer);
       SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> handle =
-          start(scenario, loadout, world, player, scheduler, counting, capture);
+          start(scenario, loadout, world, player, scheduler, counting, platform);
 
       long startedAt = System.nanoTime();
       boolean settled = scheduler.drainUntil(() -> handle.future().isDone(), MAX_TASKS);
@@ -162,6 +162,7 @@ public final class ScenarioRunner {
           counting.opened.get(),
           counting.closed.get(),
           platform.ioStats().reads(),
+          platform.profileReads(),
           platform.ioStats().coldReads(),
           scheduler.millis(),
           platform.ioStats().totalDelayMicros(),
@@ -179,7 +180,7 @@ public final class ScenarioRunner {
       StonebrickPlayer player,
       DeterministicScheduler scheduler,
       SearchObserver observer,
-      Capture capture) {
+      StonebrickPlatformApi platform) {
     // The exclusions come from the loadout, not from a constant. They used to be empty here, which
     // with a null break checker meant every scenario ran as a player free to tunnel through
     // anything -- one point in the space, and not the representative one.
@@ -210,7 +211,7 @@ public final class ScenarioRunner {
             cast,
             List.of(),
             List.of(),
-            heuristicFor(scenario, loadout, player, excluded, capture),
+            heuristicFor(scenario, loadout, player, excluded, platform),
             SearchSettings.builder()
                 .heuristicWeight(scenario.settings().heuristicWeight())
                 .maxCellsVisited(scenario.settings().maxCellsVisited())
@@ -244,7 +245,7 @@ public final class ScenarioRunner {
       Loadout loadout,
       StonebrickPlayer player,
       Set<MinecraftStepType> excluded,
-      Capture capture) {
+      StonebrickPlatformApi platform) {
     if (scenario.heuristic() == Scenario.Heuristic.RUNNING_AVERAGE) {
       return Heuristics.runningAverage(MinecraftModes.cheapestCostPerBlock(player, excluded));
     }
@@ -265,7 +266,7 @@ public final class ScenarioRunner {
         && !excluded.contains(MinecraftStepType.BOAT)) {
       mediums.add(org.cobblestonemc.minecraft.lod.Medium.BOAT);
     }
-    CaptureProfiles profiles = new CaptureProfiles(capture, scenario.world());
+    CaptureProfiles profiles = new CaptureProfiles(platform, scenario.world());
     lastCoarseProfiles = profiles;
     return new org.cobblestonemc.minecraft.lod.CoarseHeuristic(
         profiles, org.cobblestonemc.minecraft.lod.CoarseCost.forMediums(mediums));

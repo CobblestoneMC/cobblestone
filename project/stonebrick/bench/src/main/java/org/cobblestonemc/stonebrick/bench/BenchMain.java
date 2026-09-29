@@ -116,6 +116,9 @@ public final class BenchMain {
     if (options.weights() != null && options.weights().length > 0) {
       applied = applied.withHeuristicWeight(options.weights()[0]);
     }
+    if (options.io() != null) {
+      applied = applied.withIo(options.io());
+    }
     return applied;
   }
 
@@ -181,7 +184,10 @@ public final class BenchMain {
     ScenarioRunner runner = new ScenarioRunner(options.corpusRoot(), new QuietLogger());
     for (Scenario scenario : scenarios) {
       for (Loadout loadout : loadouts) {
-        RunResult result = runner.run(scenario, loadout, SearchObserver.none());
+        // The same overrides a run honours. Accepting a configuration other than the one just
+        // measured would make the baseline a record of something nobody looked at.
+        RunResult result =
+            runner.run(applyOverrides(scenario, options), loadout, SearchObserver.none());
         Baselines.accept(options.baselinesDir(), result, options.commit());
         System.out.printf(
             Locale.ROOT,
@@ -243,7 +249,8 @@ public final class BenchMain {
       String commit,
       Scenario.Heuristic heuristic,
       double[] weights,
-      String agent) {
+      String agent,
+      org.cobblestonemc.stonebrick.platform.IoProfile io) {
 
     static Options parse(String[] args) {
       String command = args.length > 0 && !args[0].startsWith("--") ? args[0] : "run";
@@ -257,6 +264,7 @@ public final class BenchMain {
       Scenario.Heuristic heuristic = null;
       double[] weights = null;
       String agent = null;
+      org.cobblestonemc.stonebrick.platform.IoProfile io = null;
 
       for (int i = 0; i < args.length; i++) {
         switch (args[i]) {
@@ -271,6 +279,7 @@ public final class BenchMain {
               heuristic = Scenario.Heuristic.valueOf(args[++i].toUpperCase(Locale.ROOT));
           case "--weight", "--weights" -> weights = weights(args[++i]);
           case "--agent", "--loadout" -> agent = args[++i];
+          case "--io" -> io = org.cobblestonemc.stonebrick.platform.IoProfile.byName(args[++i]);
           default -> {
             // positional command, already taken
           }
@@ -288,7 +297,8 @@ public final class BenchMain {
           commit,
           heuristic,
           weights,
-          agent);
+          agent,
+          io);
     }
 
     private static double[] weights(String value) {

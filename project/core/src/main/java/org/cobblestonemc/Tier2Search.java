@@ -380,7 +380,16 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private record DeferredOffer(CellState key, double cost, double trailAverage) {}
 
   /**
-   * Queues the offers whose estimates have arrived.
+   * Retries the offers whose estimates have arrived.
+   *
+   * <p>Back through {@link #offer} rather than straight onto the open set. One completed fetch does
+   * not mean the estimate is ready: a coarse search walks outward a section at a time and may stop
+   * on the next chunk it needs, so a node can park several times before it can be priced. Queueing
+   * it after the first wake-up would price it from the optimistic backstop instead -- which
+   * measures as the heuristic collapsing entirely under any disk that is not free.
+   *
+   * <p>Terminating because the profile source must answer immediately once a fetch it handed out
+   * has completed, so every retry advances the coarse search.
    *
    * <p>A node may have been closed, superseded or repaired away while its estimate was in flight,
    * so each one is re-checked against the node table rather than trusted.
@@ -393,7 +402,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       if (node == null || node.closed || node.cost != offer.cost()) {
         continue;
       }
-      queue(offer.key(), offer.cost(), offer.trailAverage());
+      offer(offer.key(), offer.cost(), offer.trailAverage());
     }
   }
 

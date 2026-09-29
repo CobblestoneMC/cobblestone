@@ -283,6 +283,34 @@ public record Scenario(
     return id + "@" + loadout.name();
   }
 
+  /**
+   * Returns this scenario run against a different simulated disk.
+   *
+   * <p>An override rather than a per-scenario edit, so the same route can be measured on a free
+   * disk and a slow one without the corpus having to carry both.
+   *
+   * @param profile the disk to run against
+   * @return the variant
+   */
+  public Scenario withIo(IoProfile profile) {
+    return new Scenario(
+        id,
+        description,
+        tags,
+        tier,
+        capture,
+        world,
+        origin,
+        destination,
+        destinationRadius,
+        settings,
+        profile,
+        onMissingCapture,
+        expectedOutcome,
+        ungenerated,
+        heuristic);
+  }
+
   private static Scenario from(Map<String, Object> root, Path file) throws IOException {
     String id = string(root, "id", "unnamed");
     Map<String, Object> agent = map(root, "agent");

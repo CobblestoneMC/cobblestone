@@ -82,6 +82,9 @@ final class Sweep {
         for (Scenario.Heuristic heuristic : heuristics) {
           for (double weight : weights) {
             Scenario variant = scenario.withHeuristic(heuristic).withHeuristicWeight(weight);
+            if (options.io() != null) {
+              variant = variant.withIo(options.io());
+            }
             System.out.printf(
                 Locale.ROOT,
                 "running %s %s w=%.2f...%n",
