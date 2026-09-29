@@ -170,7 +170,9 @@ final class Sweep {
         all.stream()
             .filter(
                 scenario ->
-                    points.stream().filter(p -> p.scenario().equals(scenario)).allMatch(Point::solved))
+                    points.stream()
+                        .filter(p -> p.scenario().equals(scenario))
+                        .allMatch(Point::solved))
             .toList();
 
     System.out.printf(

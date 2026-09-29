@@ -9,11 +9,13 @@ package org.cobblestonemc.minecraft.lod;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.SolveHeuristic;
 import org.cobblestonemc.api.TraversalState;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * The fine search's heuristic, answered from the coarse layer.
@@ -109,26 +111,55 @@ public final class CoarseHeuristic implements HeuristicStrategy {
     }
 
     @Override
-    public double estimate(Cell from, double distance, TraversalState state, double trailAverage) {
+    public @Nullable CompletableFuture<Void> prepare(Cell from) {
+      long section = sectionOf(from);
+      if (frozen.containsKey(section)) {
+        return null; // already answered; the common case, and it allocates nothing
+      }
       if (search == null) {
         // Seeded here rather than in the constructor because the goal is a region, and the cell of
         // it worth aiming at depends on where the search actually starts.
         search = new CoarseSearch(profiles, cost, target.nearestBoundaryCell(from));
       }
-      long section =
-          CoarseSearch.key(
-              Math.floorDiv(from.x(), CoarseSearch.SECTION),
-              Math.floorDiv(from.y(), CoarseSearch.SECTION),
-              Math.floorDiv(from.z(), CoarseSearch.SECTION));
+      double estimate = search.sectionCostToGoal(from, QUERY_BUDGET);
+      CompletableFuture<Void> waiting = search.takePending();
+      if (waiting != null) {
+        // The coarse search stopped on a chunk. Nothing is frozen: what it would have returned is
+        // the optimistic backstop, and remembering that is exactly the mistake the budget used to
+        // make. The fine search parks and asks again once the terrain is here.
+        return waiting;
+      }
+      frozen.put(section, estimate);
+      return null;
+    }
+
+    @Override
+    public double estimate(Cell from, double distance, TraversalState state, double trailAverage) {
+      long section = sectionOf(from);
       Double known = frozen.get(section);
       if (known != null) {
         // Within a section the coarse term is constant, so the within-section refinement still has
         // to be applied per cell — freezing is about the section's cost, not about the cell's.
         return known + withinSection(from);
       }
+      // Reached only when something estimates without preparing. Answer from whatever the coarse
+      // search can say now, and do not freeze it: a caller that skipped the park has not earned a
+      // permanent answer.
+      if (search == null) {
+        search = new CoarseSearch(profiles, cost, target.nearestBoundaryCell(from));
+      }
       double estimate = search.sectionCostToGoal(from, QUERY_BUDGET);
-      frozen.put(section, estimate);
+      if (search.takePending() == null) {
+        frozen.put(section, estimate);
+      }
       return estimate + withinSection(from);
+    }
+
+    private long sectionOf(Cell from) {
+      return CoarseSearch.key(
+          Math.floorDiv(from.x(), CoarseSearch.SECTION),
+          Math.floorDiv(from.y(), CoarseSearch.SECTION),
+          Math.floorDiv(from.z(), CoarseSearch.SECTION));
     }
 
     /** How much nearer the goal this cell is than its section's centre, priced cheaply. */

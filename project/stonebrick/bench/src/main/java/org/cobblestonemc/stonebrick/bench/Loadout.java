@@ -25,9 +25,9 @@ import org.yaml.snakeyaml.Yaml;
  * What a player can do about the terrain, named and reusable across scenarios.
  *
  * <p>A scenario is a pair of positions; a loadout is everything else about the traveller. Keeping
- * them separate means a route does not have to be re-marked in-game to be measured for a player
- * who can fly, and it makes the interesting comparison — the same terrain under different
- * capabilities — a cross product rather than a copied entry.
+ * them separate means a route does not have to be re-marked in-game to be measured for a player who
+ * can fly, and it makes the interesting comparison — the same terrain under different capabilities
+ * — a cross product rather than a copied entry.
  *
  * <p>Called a loadout rather than an agent because {@code agent} already names the thing being
  * navigated in the API, and what varies here is what it is carrying.

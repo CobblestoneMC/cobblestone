@@ -268,8 +268,7 @@ public final class ScenarioRunner {
     CaptureProfiles profiles = new CaptureProfiles(capture, scenario.world());
     lastCoarseProfiles = profiles;
     return new org.cobblestonemc.minecraft.lod.CoarseHeuristic(
-        profiles,
-        org.cobblestonemc.minecraft.lod.CoarseCost.forMediums(mediums));
+        profiles, org.cobblestonemc.minecraft.lod.CoarseCost.forMediums(mediums));
   }
 
   private static String outcomeOf(

@@ -118,7 +118,8 @@ final class ScenarioFile {
       if (indent == 0 && trimmed.endsWith(":")) {
         // Only the trailing colon comes off: a world key is namespaced, so the colon inside
         // "minecraft:overworld" is part of the name.
-        entries = worlds.computeIfAbsent(withoutTrailingColon(trimmed), key -> new LinkedHashMap<>());
+        entries =
+            worlds.computeIfAbsent(withoutTrailingColon(trimmed), key -> new LinkedHashMap<>());
         current = null;
       } else if (indent == 2 && trimmed.endsWith(":") && entries != null) {
         current = new ArrayList<>();

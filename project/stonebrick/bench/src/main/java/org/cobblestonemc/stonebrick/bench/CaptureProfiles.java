@@ -9,6 +9,7 @@ package org.cobblestonemc.stonebrick.bench;
 
 import java.util.HashMap;
 import java.util.Map;
+import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.lod.CoarseSearch;
 import org.cobblestonemc.minecraft.lod.SectionProfile;
@@ -79,9 +80,9 @@ public final class CaptureProfiles implements CoarseSearch.SectionProfiles {
    * Returns how many chunk columns the profiler read.
    *
    * <p>The number that decides whether this layer is affordable on a live server. Here the capture
-   * is already in memory, so these reads cost nothing and are deliberately kept out of the IO
-   * model — but in production every one of them is a chunk fetch, paid before the fine search
-   * takes its first step.
+   * is already in memory, so these reads cost nothing and are deliberately kept out of the IO model
+   * — but in production every one of them is a chunk fetch, paid before the fine search takes its
+   * first step.
    *
    * @return the chunk columns read
    */
@@ -90,15 +91,17 @@ public final class CaptureProfiles implements CoarseSearch.SectionProfiles {
   }
 
   @Override
-  public SectionProfile at(int sectionX, int sectionY, int sectionZ) {
+  // Always immediate: the capture is held in memory, so there is nothing to wait for. The
+  // search's park path is exercised instead by the simulated-IO source.
+  public FutureOr<SectionProfile> at(int sectionX, int sectionY, int sectionZ) {
     long key = CoarseSearch.key(sectionX, sectionY, sectionZ);
     if (sections.containsKey(key)) {
-      return sections.get(key);
+      return FutureOr.of(sections.get(key));
     }
     MinecraftChunk chunk = chunkAt(sectionX, sectionZ);
     SectionProfile profile = chunk == null ? null : profiler.profile(chunk, sectionY);
     sections.put(key, profile);
-    return profile;
+    return FutureOr.of(profile);
   }
 
   private MinecraftChunk chunkAt(int chunkX, int chunkZ) {

@@ -100,7 +100,6 @@ class LoadoutTest {
     assertEquals("overworld/deep-cave", scenario.id());
     assertEquals(
         "overworld/deep-cave@flyer",
-        scenario.runId(
-            new Loadout("flyer", "", Scenario.AgentSpec.plain(), java.util.Set.of())));
+        scenario.runId(new Loadout("flyer", "", Scenario.AgentSpec.plain(), java.util.Set.of())));
   }
 }

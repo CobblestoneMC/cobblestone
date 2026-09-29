@@ -47,10 +47,15 @@ class CoarseSearchTest {
     int profiled;
 
     @Override
-    public SectionProfile at(int sx, int sy, int sz) {
+    public org.cobblestonemc.FutureOr<SectionProfile> at(int sx, int sy, int sz) {
       if (sy != 0) {
-        return null; // one layer of sections, so the search cannot wander vertically
+        // One layer of sections, so the search cannot wander vertically.
+        return org.cobblestonemc.FutureOr.of(null);
       }
+      return org.cobblestonemc.FutureOr.of(profile(sx, sy, sz));
+    }
+
+    private SectionProfile profile(int sx, int sy, int sz) {
       return cache.computeIfAbsent(
           CoarseSearch.key(sx, sy, sz),
           key -> {

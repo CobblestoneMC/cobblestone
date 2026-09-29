@@ -16,6 +16,7 @@ import java.util.Locale;
 import java.util.Map;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.CobblestoneLogger;
+import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.lod.CoarseCost;
@@ -208,15 +209,16 @@ public final class HeuristicAccuracy {
     }
 
     @Override
-    public SectionProfile at(int sx, int sy, int sz) {
+    // Always immediate: this report reads a capture already in memory.
+    public FutureOr<SectionProfile> at(int sx, int sy, int sz) {
       long key = CoarseSearch.key(sx, sy, sz);
       if (cache.containsKey(key)) {
-        return cache.get(key);
+        return FutureOr.of(cache.get(key));
       }
       MinecraftChunk chunk = chunkAt(sx, sz);
       SectionProfile profile = chunk == null ? null : profiler.profile(chunk, sy);
       cache.put(key, profile);
-      return profile;
+      return FutureOr.of(profile);
     }
 
     private MinecraftChunk chunkAt(int chunkX, int chunkZ) {

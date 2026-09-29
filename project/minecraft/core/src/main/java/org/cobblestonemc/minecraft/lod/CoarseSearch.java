@@ -7,10 +7,15 @@
 
 package org.cobblestonemc.minecraft.lod;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
+import java.util.concurrent.CompletableFuture;
 import org.cobblestonemc.Cell;
+import org.cobblestonemc.FutureOr;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * A Dijkstra over section profiles, run <b>backward from the destination</b>, whose settled costs
@@ -57,6 +62,7 @@ public final class CoarseSearch {
 
   private long expansions;
   private boolean exhausted;
+  private @Nullable CompletableFuture<Void> pending;
 
   /**
    * Creates a search seeded at the destination.
@@ -69,12 +75,11 @@ public final class CoarseSearch {
     this.profiles = profiles;
     this.cost = cost;
     this.goal = goal;
-    if (profiles.at(section(goal.x()), section(goal.y()), section(goal.z())) != null) {
-      // The goal's own section costs nothing to be in; everything is measured outward from here.
-      long key = key(section(goal.x()), section(goal.y()), section(goal.z()));
-      best.put(key, 0.0);
-      open.add(new Entry(key, 0.0));
-    }
+    // Seeded unconditionally. Whether the goal's own section can be profiled is not knowable
+    // without possibly fetching a chunk, and the search is the thing that knows how to wait.
+    long key = key(section(goal.x()), section(goal.y()), section(goal.z()));
+    best.put(key, 0.0);
+    open.add(new Entry(key, 0.0));
   }
 
   /**
@@ -126,14 +131,25 @@ public final class CoarseSearch {
 
     long spent = 0;
     while (spent < budget && !open.isEmpty()) {
-      Entry entry = open.poll();
+      Entry entry = open.peek();
       Double bestKnown = best.get(entry.key());
       if (bestKnown == null || entry.cost() > bestKnown) {
+        open.poll();
         continue; // superseded
       }
-      if (settled.putIfAbsent(entry.key(), entry.cost()) != null) {
+      if (settled.containsKey(entry.key())) {
+        open.poll();
         continue;
       }
+      // Resident first, then commit. An expansion that discovered halfway through that it needed
+      // a chunk would have to undo a settle, and a half-settled Dijkstra is not a Dijkstra.
+      CompletableFuture<Void> waiting = fetch(entry);
+      if (waiting != null) {
+        pending = waiting;
+        return backstop(cell);
+      }
+      open.poll();
+      settled.put(entry.key(), entry.cost());
       expansions++;
       spent++;
       expand(entry);
@@ -154,6 +170,45 @@ public final class CoarseSearch {
     return cell.distance(goal) * cost.cheapestCostPerBlock();
   }
 
+  /**
+   * Makes sure every profile an expansion will read is in hand.
+   *
+   * @param entry the section about to be expanded
+   * @return a future completing when the missing profiles arrive, or {@code null} if none are
+   */
+  private @Nullable CompletableFuture<Void> fetch(Entry entry) {
+    int sx = unpackX(entry.key());
+    int sy = unpackY(entry.key());
+    int sz = unpackZ(entry.key());
+    List<CompletableFuture<SectionProfile>> waiting = null;
+    for (int[] offset : NEIGHBOURS) {
+      FutureOr<SectionProfile> neighbour =
+          profiles.at(sx + offset[0], sy + offset[1], sz + offset[2]);
+      if (!neighbour.isImmediate()) {
+        if (waiting == null) {
+          waiting = new ArrayList<>();
+        }
+        waiting.add(neighbour.future());
+      }
+    }
+    // All of them, not the first: the 26 fetches go out together and are waited on once, rather
+    // than parking the whole fine search 26 times over for one section.
+    return waiting == null
+        ? null
+        : CompletableFuture.allOf(waiting.toArray(new CompletableFuture[0]));
+  }
+
+  /**
+   * Returns the future the last query stopped on, clearing it.
+   *
+   * @return the future, or {@code null} if the last query did not stop
+   */
+  public @Nullable CompletableFuture<Void> takePending() {
+    CompletableFuture<Void> waiting = pending;
+    pending = null;
+    return waiting;
+  }
+
   private void expand(Entry entry) {
     int sx = unpackX(entry.key());
     int sy = unpackY(entry.key());
@@ -163,7 +218,8 @@ public final class CoarseSearch {
       int nx = sx + offset[0];
       int ny = sy + offset[1];
       int nz = sz + offset[2];
-      SectionProfile neighbour = profiles.at(nx, ny, nz);
+      // Immediate by construction: fetch() ran first and returned only once all 26 were resident.
+      SectionProfile neighbour = profiles.at(nx, ny, nz).value();
       if (neighbour == null) {
         continue;
       }
@@ -309,14 +365,22 @@ public final class CoarseSearch {
   public interface SectionProfiles {
 
     /**
-     * Returns the profile for a section, computing it if needed, or {@code null} if that section
-     * cannot be known.
+     * Returns the profile for a section, computing it if needed, or an immediate {@code null} if
+     * that section cannot be known.
+     *
+     * <p>May be {@link FutureOr.Pending} where the chunks have to be fetched. The search then stops
+     * rather than guessing, and resumes when they land.
+     *
+     * <p>⚠️ <b>An implementation must remember what it fetched.</b> Once a returned future has
+     * completed, a later call for that same section has to answer immediately; a source that
+     * re-requests would leave the search parking on the same section forever, making no progress
+     * and never failing.
      *
      * @param sectionX the section X
      * @param sectionY the section Y
      * @param sectionZ the section Z
      * @return the profile, or {@code null}
      */
-    SectionProfile at(int sectionX, int sectionY, int sectionZ);
+    FutureOr<SectionProfile> at(int sectionX, int sectionY, int sectionZ);
   }
 }

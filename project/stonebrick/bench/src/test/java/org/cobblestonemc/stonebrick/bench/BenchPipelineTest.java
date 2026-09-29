@@ -79,7 +79,8 @@ class BenchPipelineTest {
     assertTrue(scenario.tags().contains("smoke"));
 
     RunResult result =
-        new ScenarioRunner(root, new SilentLogger()).run(scenario, Loadout.fallback(), SearchObserver.none());
+        new ScenarioRunner(root, new SilentLogger())
+            .run(scenario, Loadout.fallback(), SearchObserver.none());
 
     assertEquals("success", result.outcome());
     assertTrue(result.pathCost() > 0);
@@ -127,7 +128,8 @@ class BenchPipelineTest {
     Path baselines = dir.resolve("baselines");
     Scenario scenario = Scenario.loadAll(root.resolve(Scenario.FILE_NAME)).get(0);
     RunResult real =
-        new ScenarioRunner(root, new SilentLogger()).run(scenario, Loadout.fallback(), SearchObserver.none());
+        new ScenarioRunner(root, new SilentLogger())
+            .run(scenario, Loadout.fallback(), SearchObserver.none());
     Baselines.accept(baselines, real, "testsha");
 
     // Stand in for an algorithm change: the same scenario, twice the expansions.
@@ -167,7 +169,8 @@ class BenchPipelineTest {
     Path baselines = dir.resolve("baselines");
     Scenario scenario = Scenario.loadAll(root.resolve(Scenario.FILE_NAME)).get(0);
     RunResult real =
-        new ScenarioRunner(root, new SilentLogger()).run(scenario, Loadout.fallback(), SearchObserver.none());
+        new ScenarioRunner(root, new SilentLogger())
+            .run(scenario, Loadout.fallback(), SearchObserver.none());
     Baselines.accept(baselines, real, "testsha");
 
     // A CI runner that happened to be fifty times slower must not turn that into a red build.
@@ -191,7 +194,8 @@ class BenchPipelineTest {
 
     assertEquals(
         Comparison.Status.MATCH,
-        Comparison.compare(slower, Baselines.read(baselines, scenario.runId(Loadout.fallback()))).status());
+        Comparison.compare(slower, Baselines.read(baselines, scenario.runId(Loadout.fallback())))
+            .status());
   }
 
   @Test
@@ -201,7 +205,8 @@ class BenchPipelineTest {
     Scenario scenario = Scenario.loadAll(root.resolve(Scenario.FILE_NAME)).get(0);
 
     RunResult result =
-        new ScenarioRunner(root, new SilentLogger()).run(scenario, Loadout.fallback(), SearchObserver.none());
+        new ScenarioRunner(root, new SilentLogger())
+            .run(scenario, Loadout.fallback(), SearchObserver.none());
 
     assertFalse(result.isValid());
     assertNotNull(result.missingCaptureReport());
@@ -236,7 +241,8 @@ class BenchPipelineTest {
 
     Scenario scenario = Scenario.loadAll(root.resolve(Scenario.FILE_NAME)).get(0);
     RunResult result =
-        new ScenarioRunner(root, new SilentLogger()).run(scenario, Loadout.fallback(), SearchObserver.none());
+        new ScenarioRunner(root, new SilentLogger())
+            .run(scenario, Loadout.fallback(), SearchObserver.none());
 
     assertEquals("success", result.outcome());
   }
@@ -246,7 +252,8 @@ class BenchPipelineTest {
     Path root = corpus(dir, "flat-walk", 56, 56, "zero");
     Scenario scenario = Scenario.loadAll(root.resolve(Scenario.FILE_NAME)).get(0);
     RunResult result =
-        new ScenarioRunner(root, new SilentLogger()).run(scenario, Loadout.fallback(), SearchObserver.none());
+        new ScenarioRunner(root, new SilentLogger())
+            .run(scenario, Loadout.fallback(), SearchObserver.none());
 
     Comparison.Verdict verdict = Comparison.compare(result, null);
 

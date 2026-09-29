@@ -138,6 +138,26 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private long sequence;
 
   private PendingModes<T> pendingModes;
+
+  /**
+   * Nodes whose estimate was not available when they were offered.
+   *
+   * <p>Filled from whatever thread completes the heuristic's future and drained on the search's own
+   * thread, like the verdict mailboxes above it.
+   */
+  private final java.util.Queue<DeferredOffer> deferredOffers =
+      new java.util.concurrent.ConcurrentLinkedQueue<>();
+
+  /**
+   * How many offers are waiting on an estimate.
+   *
+   * <p>Separate from the queue's size because the two change at different moments: this rises when
+   * the offer is deferred and falls only once the node is queued, so an empty open set with work
+   * still outstanding is never mistaken for an exhausted one.
+   */
+  private final java.util.concurrent.atomic.AtomicInteger pendingEstimates =
+      new java.util.concurrent.atomic.AtomicInteger();
+
   private CellState pendingGoal; // an optimistically-reached goal awaiting path confirmation
 
   // --- passability; verdicts are permanent ---
@@ -327,13 +347,54 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     return 1.0 + (heuristicWeight - 1.0) * (remaining / ENDGAME_RADIUS);
   }
 
-  /** Queues a node on the open set at cost {@code g}, pricing its remaining journey. */
+  /**
+   * Queues a node on the open set at cost {@code g}, pricing its remaining journey.
+   *
+   * <p>If the heuristic cannot price it yet -- a coarse estimate whose chunks are still loading --
+   * the node is held until it can, rather than queued at a guessed priority.
+   */
   private void offer(CellState key, double g, double trailAverage) {
+    java.util.concurrent.CompletableFuture<Void> waiting = heuristic.prepare(key.cell());
+    if (waiting == null) {
+      queue(key, g, trailAverage);
+      return;
+    }
+    pendingEstimates.incrementAndGet();
+    waiting.whenComplete(
+        (ignored, throwable) -> {
+          deferredOffers.add(new DeferredOffer(key, g, trailAverage));
+          wake();
+        });
+  }
+
+  /** Prices a node and puts it on the open set. */
+  private void queue(CellState key, double g, double trailAverage) {
     double remaining = distanceToTarget(key.cell());
     double estimate = heuristic.estimate(key.cell(), remaining, key.state(), trailAverage);
     double f = g + weightAt(remaining) * estimate;
     open.add(new Entry(key, g, f, sequence++));
     observer.opened(key.cell(), g, f);
+  }
+
+  /** An offer held back until its estimate was available. */
+  private record DeferredOffer(CellState key, double cost, double trailAverage) {}
+
+  /**
+   * Queues the offers whose estimates have arrived.
+   *
+   * <p>A node may have been closed, superseded or repaired away while its estimate was in flight,
+   * so each one is re-checked against the node table rather than trusted.
+   */
+  private void drainOffers() {
+    DeferredOffer offer;
+    while ((offer = deferredOffers.poll()) != null) {
+      pendingEstimates.decrementAndGet();
+      Node<T> node = nodes.get(offer.key());
+      if (node == null || node.closed || node.cost != offer.cost()) {
+        continue;
+      }
+      queue(offer.key(), offer.cost(), offer.trailAverage());
+    }
   }
 
   private String stats() {
@@ -410,6 +471,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         return;
       }
       drainVerdicts();
+      drainOffers();
       if (result.isDone()) {
         return;
       }
@@ -436,6 +498,9 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       if (open.isEmpty()) {
         if (pendingChecks.get() > 0) {
           return; // nothing to expand, but a pending verdict may yet repair; wait
+        }
+        if (pendingEstimates.get() > 0) {
+          return; // every candidate is waiting on its estimate; the future will wake us
         }
         logger.debug("Failed: open set is empty; {}", stats());
         result.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.UNREACHABLE));

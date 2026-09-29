@@ -175,8 +175,7 @@ public record Scenario(
         throw new IOException(
             file + ": '" + world.getKey() + "' should hold scenarios, keyed by name");
       }
-      for (Map.Entry<String, Object> entry :
-          ((Map<String, Object>) world.getValue()).entrySet()) {
+      for (Map.Entry<String, Object> entry : ((Map<String, Object>) world.getValue()).entrySet()) {
         if (!(entry.getValue() instanceof Map)) {
           throw new IOException(file + ": '" + entry.getKey() + "' is not a scenario");
         }
@@ -221,9 +220,24 @@ public record Scenario(
    * @return the variant, or this scenario if nothing changed
    */
   public Scenario withHeuristic(Heuristic value) {
-    return value == heuristic ? this : new Scenario(id, description, tags, tier, capture, world,
-        origin, destination, destinationRadius, settings, io, onMissingCapture,
-        expectedOutcome, ungenerated, value);
+    return value == heuristic
+        ? this
+        : new Scenario(
+            id,
+            description,
+            tags,
+            tier,
+            capture,
+            world,
+            origin,
+            destination,
+            destinationRadius,
+            settings,
+            io,
+            onMissingCapture,
+            expectedOutcome,
+            ungenerated,
+            value);
   }
 
   /**
@@ -238,8 +252,21 @@ public record Scenario(
     }
     SearchLimits tuned =
         new SearchLimits(weight, settings.maxCellsVisited(), settings.maxWallClockMillis());
-    return new Scenario(id, description, tags, tier, capture, world, origin, destination,
-        destinationRadius, tuned, io, onMissingCapture, expectedOutcome, ungenerated,
+    return new Scenario(
+        id,
+        description,
+        tags,
+        tier,
+        capture,
+        world,
+        origin,
+        destination,
+        destinationRadius,
+        tuned,
+        io,
+        onMissingCapture,
+        expectedOutcome,
+        ungenerated,
         heuristic);
   }
 

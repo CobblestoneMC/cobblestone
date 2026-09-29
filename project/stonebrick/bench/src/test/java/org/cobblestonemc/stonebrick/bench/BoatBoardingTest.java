@@ -37,15 +37,20 @@ import org.junit.jupiter.api.Test;
 class BoatBoardingTest {
 
   private static final class Silent extends CobblestoneLogger {
-    @Override public void trace(String message, Object... args) {}
+    @Override
+    public void trace(String message, Object... args) {}
 
-    @Override public void debug(String message, Object... args) {}
+    @Override
+    public void debug(String message, Object... args) {}
 
-    @Override public void info(String message, Object... args) {}
+    @Override
+    public void info(String message, Object... args) {}
 
-    @Override public void warn(String message, Object... args) {}
+    @Override
+    public void warn(String message, Object... args) {}
 
-    @Override public void error(String message, Throwable throwable, Object... args) {}
+    @Override
+    public void error(String message, Throwable throwable, Object... args) {}
   }
 
   @Test
