@@ -40,11 +40,22 @@ public final class CoarseHeuristic implements HeuristicStrategy {
   /**
    * Section expansions one estimate may spend before falling back.
    *
-   * <p>Small on purpose. A query that cannot be answered cheaply gets the optimistic euclidean
-   * backstop and the search carries on; spending thousands of coarse expansions inside a single
-   * heuristic call would trade the cost this layer is meant to save.
+   * <p><b>Unbounded, and measured that way.</b> A budget looks prudent -- it caps the work inside a
+   * single heuristic call -- but what it actually does is hand back the optimistic euclidean
+   * backstop, which {@link Solve} then freezes for that whole section. The fine search spends the
+   * rest of the solve steering by a number the coarse layer could have answered exactly.
+   *
+   * <p>At 4 096 it bound on 7 of 22 scenarios, and lifting it was worth up to 5x on expanded nodes
+   * at equal or better path cost: {@code overworld/ocean} as a miner went 9 788 -> 1 964 nodes at
+   * w=2.5 while the path got cheaper (208.86 -> 206.93), and 14 623 -> 6 811 at w=1.5 for an
+   * identical path. Nothing measured got meaningfully worse.
+   *
+   * <p>⚠️ This is only affordable because {@link CoarseSearch} is bounded by the terrain it can
+   * see, and because the profiles behind it answer synchronously. A production wiring reaching
+   * chunks through futures cannot expand without parking, which is the real fix -- the budget was
+   * standing in for that plumbing and paying for it in estimate quality.
    */
-  private static final long QUERY_BUDGET = 4_096;
+  private static final long QUERY_BUDGET = Long.MAX_VALUE;
 
   private final CoarseSearch.SectionProfiles profiles;
   private final CoarseCost cost;
