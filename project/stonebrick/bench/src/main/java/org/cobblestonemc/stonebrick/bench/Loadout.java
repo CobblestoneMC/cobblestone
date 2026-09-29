@@ -19,6 +19,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
+import org.cobblestonemc.minecraft.lod.CoarseCost;
+import org.cobblestonemc.minecraft.lod.Medium;
 import org.yaml.snakeyaml.Yaml;
 
 /**
@@ -42,6 +44,32 @@ public record Loadout(
     String description,
     Scenario.AgentSpec agent,
     Set<MinecraftStepType> excludedModes) {
+
+  /**
+   * Returns the coarse mediums this loadout can use.
+   *
+   * <p>Here rather than beside each caller so the heuristic, the accuracy report and the
+   * verification all price the same agent the same way. A medium the loadout's exclusions forbid is
+   * dropped, or the estimate would price a route the fine search is not allowed to take.
+   *
+   * @return the mediums
+   */
+  public java.util.Set<Medium> mediums() {
+    java.util.EnumSet<Medium> mediums = java.util.EnumSet.copyOf(CoarseCost.survival());
+    if (excludedModes.contains(MinecraftStepType.MINE)) {
+      mediums.remove(Medium.MINE);
+    }
+    if (excludedModes.contains(MinecraftStepType.SWIM)) {
+      mediums.remove(Medium.SWIM);
+    }
+    if (agent.canFly() && !excludedModes.contains(MinecraftStepType.FLY)) {
+      mediums.add(Medium.FLY);
+    }
+    if ((agent.hasBoat() || agent.inBoat()) && !excludedModes.contains(MinecraftStepType.BOAT)) {
+      mediums.add(Medium.BOAT);
+    }
+    return mediums;
+  }
 
   /** The file a corpus keeps its loadouts in. */
   public static final String FILE_NAME = "agents.yml";

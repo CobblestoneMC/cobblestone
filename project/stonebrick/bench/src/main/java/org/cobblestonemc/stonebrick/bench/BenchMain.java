@@ -55,6 +55,15 @@ public final class BenchMain {
       return;
     }
 
+    if (options.command().equals("verify")) {
+      for (Scenario scenario : scenarios) {
+        for (Loadout loadout : loadouts) {
+          Verify.run(options.corpusRoot(), scenario, loadout, 12, new QuietLogger());
+        }
+      }
+      return;
+    }
+
     if (options.command().equals("profile")) {
       ProfileReport.run(
           options.corpusRoot(), options.scenarioId() == null ? "smoke" : options.scenarioId());

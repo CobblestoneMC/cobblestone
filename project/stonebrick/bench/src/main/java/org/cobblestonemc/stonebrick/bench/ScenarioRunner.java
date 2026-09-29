@@ -246,26 +246,13 @@ public final class ScenarioRunner {
       StonebrickPlayer player,
       Set<MinecraftStepType> excluded,
       StonebrickPlatformApi platform) {
+    if (scenario.heuristic() == Scenario.Heuristic.ZERO) {
+      return Heuristics.zero();
+    }
     if (scenario.heuristic() == Scenario.Heuristic.RUNNING_AVERAGE) {
       return Heuristics.runningAverage(MinecraftModes.cheapestCostPerBlock(player, excluded));
     }
-    java.util.EnumSet<org.cobblestonemc.minecraft.lod.Medium> mediums =
-        java.util.EnumSet.copyOf(org.cobblestonemc.minecraft.lod.CoarseCost.survival());
-    // The coarse mediums have to track the loadout's exclusions too, or the estimate prices a
-    // route through terrain the fine search is forbidden to cross.
-    if (excluded.contains(MinecraftStepType.MINE)) {
-      mediums.remove(org.cobblestonemc.minecraft.lod.Medium.MINE);
-    }
-    if (excluded.contains(MinecraftStepType.SWIM)) {
-      mediums.remove(org.cobblestonemc.minecraft.lod.Medium.SWIM);
-    }
-    if (loadout.agent().canFly() && !excluded.contains(MinecraftStepType.FLY)) {
-      mediums.add(org.cobblestonemc.minecraft.lod.Medium.FLY);
-    }
-    if ((loadout.agent().hasBoat() || loadout.agent().inBoat())
-        && !excluded.contains(MinecraftStepType.BOAT)) {
-      mediums.add(org.cobblestonemc.minecraft.lod.Medium.BOAT);
-    }
+    java.util.Set<org.cobblestonemc.minecraft.lod.Medium> mediums = loadout.mediums();
     CaptureProfiles profiles = new CaptureProfiles(platform, scenario.world());
     lastCoarseProfiles = profiles;
     return new org.cobblestonemc.minecraft.lod.CoarseHeuristic(

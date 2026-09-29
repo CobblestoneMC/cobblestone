@@ -64,6 +64,14 @@ public record Scenario(
 
   /** Which estimate the fine search runs on. */
   public enum Heuristic {
+    /**
+     * No estimate at all, turning the search into Dijkstra.
+     *
+     * <p>Not for production: it expands everything. It is the only way to get a route's <i>true</i>
+     * optimal cost, which is what {@code bench verify} measures the coarse estimates against.
+     */
+    ZERO,
+
     /** Today's production heuristic: remaining distance times the recent per-block cost. */
     RUNNING_AVERAGE,
 
@@ -305,6 +313,59 @@ public record Scenario(
         destinationRadius,
         settings,
         profile,
+        onMissingCapture,
+        expectedOutcome,
+        ungenerated,
+        heuristic);
+  }
+
+  /**
+   * Returns this scenario started somewhere else.
+   *
+   * <p>For asking what a route costs from partway along it, which is what verifying a cost-to-goal
+   * estimate needs.
+   *
+   * @param cell where to start
+   * @return the variant
+   */
+  public Scenario withOrigin(Cell cell) {
+    return new Scenario(
+        id,
+        description,
+        tags,
+        tier,
+        capture,
+        world,
+        cell,
+        destination,
+        destinationRadius,
+        settings,
+        io,
+        onMissingCapture,
+        expectedOutcome,
+        ungenerated,
+        heuristic);
+  }
+
+  /**
+   * Returns this scenario run under different limits.
+   *
+   * @param limits the limits to run under
+   * @return the variant
+   */
+  public Scenario withLimits(SearchLimits limits) {
+    return new Scenario(
+        id,
+        description,
+        tags,
+        tier,
+        capture,
+        world,
+        origin,
+        destination,
+        destinationRadius,
+        limits,
+        io,
         onMissingCapture,
         expectedOutcome,
         ungenerated,
