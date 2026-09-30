@@ -59,6 +59,18 @@ project(":minecraft:platform:sponge-latest:plugin").name = "sponge-latest-plugin
 include(":minecraft:platform:sponge-1_21_1:plugin")
 project(":minecraft:platform:sponge-1_21_1:plugin").name = "sponge-1_21_1-plugin"
 
+// Stonebrick — the benchmarking and visual-debugging platform (designs/stonebrick.md). None of it
+// ships: `format` is the .sbc capture codec, `copier` is a Paper plugin that writes captures, and
+// the rest read them back to run and visualize searches without a server.
+include(":stonebrick:format")
+project(":stonebrick:format").name = "stonebrick-format"
+include(":stonebrick:copier")
+project(":stonebrick:copier").name = "stonebrick-copier"
+include(":stonebrick:platform")
+project(":stonebrick:platform").name = "stonebrick-platform"
+include(":stonebrick:bench")
+project(":stonebrick:bench").name = "stonebrick-bench"
+
 // Example integration plugins live under examples/ — self-contained, third-party-style plugins that
 // depend only on Cobblestone's published API to demonstrate extending navigation (design/08).
 include(":examples:paper-warps")

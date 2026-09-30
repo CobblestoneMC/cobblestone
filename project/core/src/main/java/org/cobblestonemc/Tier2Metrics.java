@@ -23,10 +23,11 @@ package org.cobblestonemc;
  */
 final class Tier2Metrics {
 
-  private final Stopwatch active = new Stopwatch();
+  private final TimeSource time;
+  private final Stopwatch active;
   private final double startDistance;
 
-  private long parkedSince = System.currentTimeMillis();
+  private long parkedSince;
   private boolean everPumped;
   private long parks;
   private long parkedMillis;
@@ -34,8 +35,11 @@ final class Tier2Metrics {
   private double closestApproach = Double.POSITIVE_INFINITY;
   private int expanded;
 
-  Tier2Metrics(double startDistance) {
+  Tier2Metrics(double startDistance, TimeSource time) {
     this.startDistance = startDistance;
+    this.time = time;
+    this.active = new Stopwatch(time);
+    this.parkedSince = time.millis();
   }
 
   /**
@@ -49,7 +53,7 @@ final class Tier2Metrics {
    * @return the length of the park just ended, in milliseconds
    */
   long woke() {
-    long parked = System.currentTimeMillis() - parkedSince;
+    long parked = time.millis() - parkedSince;
     if (everPumped) {
       parks++;
       parkedMillis += parked;
@@ -70,7 +74,7 @@ final class Tier2Metrics {
 
   /** Stamps the start of a park, i.e. the moment the pump releases. */
   void park() {
-    parkedSince = System.currentTimeMillis();
+    parkedSince = time.millis();
   }
 
   /** Counts one node expansion. */

@@ -168,6 +168,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                 .tier1UnsolvedPessimism(config.get(keys.algorithmTier1UnsolvedPessimism))
                 .runningAverageWidth(config.get(keys.algorithmRunningAverageWidth))
                 .heuristicWeight(config.get(keys.algorithmHeuristicWeight))
+                .heuristic(heuristicFrom(config.get(keys.algorithmHeuristic)))
                 .build();
 
     // The trip service is the shared "search-then-guide" code path: the /navigate command and
@@ -248,5 +249,28 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
       dataStore.close();
     }
     getLogger().info("Cobblestone disabled.");
+  }
+
+  /**
+   * Reads the configured heuristic, falling back to the default on anything unrecognised.
+   *
+   * <p>A misspelled value should not stop a server from starting, and it should not quietly pick
+   * the other heuristic either -- the two behave differently enough that an operator would be
+   * debugging the wrong thing. So it warns, loudly enough to find, and uses the default.
+   */
+  private org.cobblestonemc.api.SearchSettings.Heuristic heuristicFrom(String configured) {
+    try {
+      return org.cobblestonemc.api.SearchSettings.Heuristic.valueOf(
+          configured.strip().toUpperCase(java.util.Locale.ROOT));
+    } catch (IllegalArgumentException unknown) {
+      getLogger()
+          .warning(
+              "search.algorithm.heuristic is '"
+                  + configured
+                  + "', which is not a heuristic; using "
+                  + org.cobblestonemc.api.SearchSettings.DEFAULT_HEURISTIC
+                  + ". Valid values: RUNNING_AVERAGE, COARSE");
+      return org.cobblestonemc.api.SearchSettings.DEFAULT_HEURISTIC;
+    }
   }
 }
