@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 260" role="img" aria-label="A player following a particle trail toward a distant flag">
+  <ellipse cx="200" cy="228" rx="160" ry="20" fill="#4aa8ff" fill-opacity="0.12"/>
+
+  <!-- ground blocks -->
+  <g>
+    <rect x="40" y="206" width="70" height="22" rx="3" fill="#7f97ad"/>
+    <rect x="118" y="196" width="70" height="32" rx="3" fill="#8fa8bf"/>
+    <rect x="196" y="186" width="70" height="42" rx="3" fill="#9db4c8"/>
+    <rect x="274" y="172" width="86" height="56" rx="3" fill="#a8c0d4"/>
+  </g>
+
+  <!-- the particle trail -->
+  <g fill="#4aa8ff">
+    <circle cx="96" cy="176" r="4"/>
+    <circle cx="120" cy="164" r="3.4" fill-opacity="0.9"/>
+    <circle cx="145" cy="156" r="4.2"/>
+    <circle cx="170" cy="146" r="3" fill-opacity="0.85"/>
+    <circle cx="196" cy="140" r="4.4"/>
+    <circle cx="222" cy="130" r="3.2" fill-opacity="0.9"/>
+    <circle cx="248" cy="124" r="4"/>
+    <circle cx="274" cy="116" r="3.4" fill-opacity="0.85"/>
+    <circle cx="300" cy="110" r="4.2"/>
+  </g>
+  <g fill="#ffc857">
+    <circle cx="133" cy="148" r="2.4"/>
+    <circle cx="210" cy="126" r="2.6"/>
+    <circle cx="286" cy="102" r="2.4"/>
+  </g>
+
+  <!-- player (blocky, facing the trail) -->
+  <g>
+    <rect x="58" y="150" width="26" height="26" rx="3" fill="#c98f6a"/>
+    <rect x="58" y="150" width="26" height="9" rx="3" fill="#5a4636"/>
+    <rect x="62" y="176" width="18" height="30" rx="3" fill="#2a6fb5"/>
+    <rect x="80" y="180" width="8" height="22" rx="3" fill="#c98f6a"/>
+    <rect x="54" y="180" width="8" height="22" rx="3" fill="#c98f6a"/>
+    <rect x="64" y="206" width="6" height="14" rx="2" fill="#3b4b5c"/>
+    <rect x="74" y="206" width="6" height="14" rx="2" fill="#3b4b5c"/>
+  </g>
+
+  <!-- destination flag -->
+  <g>
+    <rect x="316" y="118" width="4" height="54" rx="2" fill="#5a7089"/>
+    <path d="M320 122h30l-8 10 8 10h-30z" fill="#ffc857"/>
+  </g>
+</svg>
