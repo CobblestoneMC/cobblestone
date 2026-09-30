@@ -429,12 +429,12 @@ final class NavigateCommand {
     } else if (last.startsWith("-")) {
       flagNames().stream().filter(flag -> flag.startsWith(last)).forEach(offset::suggest);
     } else {
-      List<String> suggestions =
-          DestinationResolver.suggest(
+      DestinationResolver.suggest(
               destinationRoots(integrations, player),
               FlagParser.destinationTokens(tokens),
               player::hasPermission,
-              canNavigate(player));
+              canNavigate(player))
+          .forEach(offset::suggest);
     }
     return offset.buildFuture();
   }
