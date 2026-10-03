@@ -16,6 +16,7 @@ import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.navigator.AbstractTrailNavigator;
+import org.cobblestonemc.plugin.navigator.TrailBlock;
 import org.cobblestonemc.plugin.navigator.Vec3;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.data.Keys;
@@ -130,15 +131,20 @@ final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> 
   }
 
   @Override
-  protected boolean solidAt(int blockX, int blockY, int blockZ) {
+  protected TrailBlock blockAt(int blockX, int blockY, int blockZ) {
     Optional<ServerPlayer> player = player();
     if (player.isEmpty()) {
-      return false;
+      return TrailBlock.UNLOADED;
     }
     ServerWorld world = player.get().world();
     if (blockY < world.min().y() || blockY > world.max().y()) {
-      return false;
+      return TrailBlock.OPEN;
     }
-    return world.block(blockX, blockY, blockZ).get(Keys.IS_SOLID).orElse(false);
+    if (!world.isBlockLoaded(blockX, blockY, blockZ)) {
+      return TrailBlock.UNLOADED; // never let a lookup load the chunk
+    }
+    return world.block(blockX, blockY, blockZ).get(Keys.IS_SOLID).orElse(false)
+        ? TrailBlock.SOLID
+        : TrailBlock.OPEN;
   }
 }

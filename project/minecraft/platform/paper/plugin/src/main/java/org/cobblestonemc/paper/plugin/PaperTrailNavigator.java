@@ -16,12 +16,12 @@ import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.World;
-import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.navigator.AbstractTrailNavigator;
+import org.cobblestonemc.plugin.navigator.TrailBlock;
 import org.cobblestonemc.plugin.navigator.Vec3;
 
 /**
@@ -131,12 +131,23 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
   }
 
   @Override
-  protected boolean solidAt(int blockX, int blockY, int blockZ) {
+  protected TrailBlock blockAt(int blockX, int blockY, int blockZ) {
     World world = player.getWorld();
     if (world == null) {
-      return false;
+      return TrailBlock.UNLOADED;
     }
-    Block block = world.getBlockAt(blockX, blockY, blockZ);
-    return Bukkit.isOwnedByCurrentRegion(block) && block.getType().isSolid();
+    if (blockY < world.getMinHeight() || blockY >= world.getMaxHeight()) {
+      return TrailBlock.OPEN;
+    }
+    int chunkX = blockX >> 4;
+    int chunkZ = blockZ >> 4;
+    // Check ownership first (Folia), and never let a lookup load the chunk.
+    if (!Bukkit.isOwnedByCurrentRegion(world, chunkX, chunkZ)
+        || !world.isChunkLoaded(chunkX, chunkZ)) {
+      return TrailBlock.UNLOADED;
+    }
+    return world.getBlockAt(blockX, blockY, blockZ).getType().isSolid()
+        ? TrailBlock.SOLID
+        : TrailBlock.OPEN;
   }
 }
