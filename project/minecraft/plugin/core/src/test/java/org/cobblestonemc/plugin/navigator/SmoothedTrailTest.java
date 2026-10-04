@@ -55,6 +55,41 @@ class SmoothedTrailTest {
   }
 
   @Test
+  void retriesWhenBlocksAroundLoadedNodesWereUnloaded() {
+    // A staircase whose own blocks are loaded but whose surroundings aren't yet: every node is
+    // drawable, but none can reach the diagonal until the rest of the world loads.
+    List<Vec3> nodes = new ArrayList<>();
+    for (int i = 0; i < 20; i++) {
+      nodes.add(new Vec3((i + 1) / 2 + 0.5, 0.9, i / 2 + 0.5));
+    }
+    Set<TrailSmootherTest.Block> path = new HashSet<>();
+    for (Vec3 node : nodes) {
+      var block = TrailSmootherTest.blockOf(node);
+      path.add(block);
+      path.add(new TrailSmootherTest.Block(block.x(), 1, block.z()));
+    }
+    boolean[] loaded = {false};
+    TrailSmoother.BlockProbe probe =
+        (x, y, z) ->
+            loaded[0] || path.contains(new TrailSmootherTest.Block(x, y, z))
+                ? OPEN_FIELD.at(x, y, z)
+                : TrailBlock.UNLOADED;
+    var trail = new SmoothedTrail(nodes, node -> false);
+
+    trail.refresh(0, 19, 0, node -> true, probe);
+    assertTrue(trail.drawable(10));
+    List<Vec3> heldBack = List.copyOf(trail.nodes());
+
+    loaded[0] = true;
+    trail.refresh(0, 19, 20, node -> true, probe);
+    double furthest = 0;
+    for (int i = 0; i < nodes.size(); i++) {
+      furthest = Math.max(furthest, trail.node(i).minus(heldBack.get(i)).length());
+    }
+    assertTrue(furthest > 0.1, "smoothed further once they load, by " + furthest);
+  }
+
+  @Test
   void unavailableNodesWaitForAReset() {
     var trail = new SmoothedTrail(line(10), node -> false);
     trail.refresh(0, 9, 0, node -> node < 5, OPEN_FIELD);

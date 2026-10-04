@@ -20,10 +20,10 @@ import java.util.function.IntPredicate;
  * the player walks. A chunk is smoothed from the nodes' current positions, with its smoothed
  * neighbors held in place, so the two join exactly. Up to {@code CONTEXT} nodes of a neighbor that
  * isn't smoothed yet are smoothed along with it, but only as context, so the chunk's ends don't
- * bend toward the unsmoothed path. A chunk that had unloaded nodes is re-smoothed every {@code
- * RETRY_TICKS} until everything in it has loaded, and one that had unavailable nodes is re-smoothed
- * after {@link #resetUnavailable}. Until a node's chunk is smoothed, the node keeps its original
- * position and is not {@link #drawable}.
+ * bend toward the unsmoothed path. A chunk that had unloaded nodes, or nodes held back by unloaded
+ * blocks around them, is re-smoothed every {@code RETRY_TICKS} until everything it read has loaded,
+ * and one that had unavailable nodes is re-smoothed after {@link #resetUnavailable}. Until a node's
+ * chunk is smoothed, the node keeps its original position and is not {@link #drawable}.
  */
 final class SmoothedTrail {
 
@@ -42,7 +42,7 @@ final class SmoothedTrail {
   private final List<Vec3> view;
   private final boolean[] loaded;
   private final int[] smoothedAt; // per chunk: the tick it was last smoothed, or NEVER
-  private final boolean[] incomplete; // per chunk: whether it had an unloaded node
+  private final boolean[] incomplete; // per chunk: whether it read an unloaded block
   private final boolean[] partial; // per chunk: whether it had an unavailable node
 
   /**
@@ -160,7 +160,7 @@ final class SmoothedTrail {
       anyUnloaded |= readable[i - start] && !result.loaded()[i - start];
       anyUnavailable |= !readable[i - start];
     }
-    incomplete[chunk] = anyUnloaded;
+    incomplete[chunk] = anyUnloaded || result.nearUnloaded();
     partial[chunk] = anyUnavailable;
   }
 }

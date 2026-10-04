@@ -15,8 +15,9 @@ package org.cobblestonemc.plugin.navigator;
  * point is the corner itself and whose endpoints sit {@code min(segment / 2, MAX_CORNER_RADIUS)}
  * back along each adjoining segment; the rest of each segment stays straight. The curve is tangent
  * to both segments where it joins them, so the spawn point and the flow direction change
- * continuously. Because a Bézier stays within the convex hull of its control points, the rounded
- * corner never bulges outside the corner it cuts — particles don't swing into walls.
+ * continuously. A Bézier stays within the convex hull of its control points, so the rounded corner
+ * never bulges outside the corner it cuts; it does cut inside the corner, toward whatever lies
+ * there, so {@link TrailSmoother} keeps these curves (not just the segments) clear of blocks.
  *
  * <p>A segment is sampled on its own ({@link #sample}) given its neighbors, and both segments that
  * share a corner compute the same curve for it, so adjacent segments join seamlessly. Half of each
@@ -62,27 +63,49 @@ public final class TrailCurve {
 
     // Second half of the curve around `from`: t runs 0.5 → 1 over the first `ownTrim` blocks.
     if (prev != null && distance < ownTrim) {
-      Vec3 in = from.minus(prev);
-      double inLength = in.length();
-      if (inLength >= EPSILON) {
-        double inTrim = Math.min(inLength / 2, MAX_CORNER_RADIUS);
-        Vec3 start = from.minus(in.times(inTrim / inLength));
-        Vec3 end = from.plus(dir.times(ownTrim));
-        return quadratic(start, from, end, 0.5 + 0.5 * distance / ownTrim, dir);
+      Vec3 start = trimPoint(from, prev);
+      if (start != null) {
+        return quadratic(start, from, trimPoint(from, to), 0.5 + 0.5 * distance / ownTrim, dir);
       }
     }
     // First half of the curve around `to`: t runs 0 → 0.5 over the last `ownTrim` blocks.
     if (next != null && distance > length - ownTrim) {
-      Vec3 out = next.minus(to);
-      double outLength = out.length();
-      if (outLength >= EPSILON) {
-        double outTrim = Math.min(outLength / 2, MAX_CORNER_RADIUS);
-        Vec3 start = to.minus(dir.times(ownTrim));
-        Vec3 end = to.plus(out.times(outTrim / outLength));
-        return quadratic(start, to, end, 0.5 * (distance - (length - ownTrim)) / ownTrim, dir);
+      Vec3 end = trimPoint(to, next);
+      if (end != null) {
+        return quadratic(
+            trimPoint(to, from), to, end, 0.5 * (distance - (length - ownTrim)) / ownTrim, dir);
       }
     }
     return new Sample(from.plus(dir.times(distance)), dir);
+  }
+
+  /**
+   * A point on the rounded corner at {@code corner} between {@code prev} and {@code next}: the same
+   * curve {@link #sample} draws there, from where it leaves the segment from {@code prev} ({@code t
+   * = 0}) to where it joins the segment to {@code next} ({@code t = 1}).
+   *
+   * @return the point, or {@code null} if either segment has zero length (the corner isn't rounded)
+   */
+  static Vec3 corner(Vec3 prev, Vec3 corner, Vec3 next, double t) {
+    Vec3 start = trimPoint(corner, prev);
+    Vec3 end = trimPoint(corner, next);
+    if (start == null || end == null) {
+      return null;
+    }
+    return quadratic(start, corner, end, t, Vec3.ZERO).point();
+  }
+
+  /**
+   * Where a corner's curve meets the segment from {@code corner} toward {@code other}, or {@code
+   * null} if that segment has zero length.
+   */
+  private static Vec3 trimPoint(Vec3 corner, Vec3 other) {
+    Vec3 diff = other.minus(corner);
+    double length = diff.length();
+    if (length < EPSILON) {
+      return null;
+    }
+    return corner.plus(diff.times(Math.min(length / 2, MAX_CORNER_RADIUS) / length));
   }
 
   /**

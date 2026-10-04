@@ -16,10 +16,14 @@ import java.util.List;
  * <p>Each free node is repeatedly pulled toward the midpoint of its neighbors (Laplacian smoothing,
  * sweeping alternately forward and backward so neither direction is favored). That straightens a
  * staircase of grid steps into a diagonal and widens a turn into a gradual sweep. A move is only
- * accepted if the node, and the segments to both neighbors, keep {@code CLEARANCE} from every solid
- * block; otherwise the move is halved and retried, then abandoned. So the trail flows freely in
- * open terrain but stays hugging the block centers in a tight cave, and a bend is limited by
- * whichever surface lies on its inside: the floor over a crest, the ceiling at the foot of a slope.
+ * accepted if the trail as drawn around the node keeps {@code CLEARANCE} from every solid block:
+ * the node, the segments to both neighbors, and the rounded corners {@link TrailCurve} draws at the
+ * node and at both neighbors (whose shape the move changes too). Otherwise the move is halved and
+ * retried, then abandoned. So the trail flows freely in open terrain but stays hugging the block
+ * centers in a tight cave, and a bend is limited by whichever surface lies on its inside: the floor
+ * over a crest, the ceiling at the foot of a slope. Every interior corner is checked as rounded,
+ * even one the renderer leaves sharp (e.g. next to an action), which only holds the trail back a
+ * little more there.
  *
  * <p>The path's own blocks — the block each node sits in and the one above it (the player's body
  * space) — count as open around that node and its two neighbors, since the path goes through them
@@ -49,12 +53,23 @@ public final class TrailSmoother {
   /** The spacing of a segment's clearance samples, in blocks; less than {@code CLEARANCE}. */
   private static final double SAMPLE_SPACING = 0.2;
 
+  /** How many points of a rounded corner are checked for clearance, between its ends. */
+  private static final int CORNER_SAMPLES = 5;
+
   /** Smoothing stops once no node moves further than this in a pass, in blocks. */
   private static final double CONVERGED = 1e-3;
 
   /** Reads the block at a position. */
   @FunctionalInterface
   public interface BlockProbe {
+    /**
+     * What occupies a block position.
+     *
+     * @param x the block's x-coordinate
+     * @param y the block's y-coordinate
+     * @param z the block's z-coordinate
+     * @return what the trail sees there
+     */
     TrailBlock at(int x, int y, int z);
   }
 
@@ -64,8 +79,10 @@ public final class TrailSmoother {
    * @param points the smoothed positions, index-aligned with the input nodes
    * @param loaded whether each node's block was loaded; an unloaded node was left in place and
    *     should not be drawn
+   * @param nearUnloaded whether moving a kept node read a block that wasn't loaded, which may have
+   *     held it back: smoothing again once that block loads can go further
    */
-  public record Result(List<Vec3> points, boolean[] loaded) {}
+  public record Result(List<Vec3> points, boolean[] loaded, boolean nearUnloaded) {}
 
   private TrailSmoother() {}
 
@@ -91,8 +108,8 @@ public final class TrailSmoother {
    * @param start where each node starts; the trail between them must already be clear
    * @param pinned which nodes must not move
    * @param provisional which nodes' results the caller discards, smoothed only as context for the
-   *     others. A kept node next to one also keeps its segment to that node's start clear, since
-   *     the trail joins it there.
+   *     others. A kept node near one also keeps the trail clear with that node at its start, since
+   *     that is where the kept trail joins it.
    * @param probe reads the world; each block is read at most once per call
    * @return the smoothed nodes
    */
@@ -113,8 +130,19 @@ public final class TrailSmoother {
       loaded[j] = world.at(block.x(), block.y(), block.z()) != TrailBlock.UNLOADED;
     }
     var clearance = new Clearance(world, corridor);
+    world.takeUnloaded(); // only reads made while moving nodes count
 
     Vec3[] current = start.toArray(new Vec3[0]);
+    // The trail as the caller keeps it: provisional nodes stay at their starts.
+    Vec3[] kept = current.clone();
+    // Whether a provisional node shapes the trail drawn around kept node j.
+    var nearProvisional = new boolean[n];
+    for (int j = 0; j < n; j++) {
+      for (int i = Math.max(0, j - 2); i <= Math.min(n - 1, j + 2); i++) {
+        nearProvisional[j] |= !provisional[j] && provisional[i];
+      }
+    }
+    boolean nearUnloaded = false;
     // A refused move is refused again until the node or a neighbor moves: same inputs, same answer.
     var stuck = new boolean[n];
     for (int iteration = 0; iteration < ITERATIONS; iteration++) {
@@ -136,10 +164,13 @@ public final class TrailSmoother {
         }
         stuck[j] = true;
         for (int attempt = 0; attempt <= BISECTIONS; attempt++) {
-          if (clearance.accepts(j, prev, target, next)
-              && (provisional[j] || joinsProvisional(clearance, j, target, start, provisional))) {
+          if (clearance.accepts(j, current, target)
+              && (!nearProvisional[j] || clearance.accepts(j, kept, target))) {
             moved = Math.max(moved, target.minus(current[j]).length());
             current[j] = target;
+            if (!provisional[j]) {
+              kept[j] = target;
+            }
             stuck[j - 1] = false;
             stuck[j] = false;
             stuck[j + 1] = false;
@@ -147,42 +178,72 @@ public final class TrailSmoother {
           }
           target = current[j].plus(target).times(0.5);
         }
+        // A provisional node's reads don't count: its result is discarded.
+        nearUnloaded |= world.takeUnloaded() && !provisional[j];
       }
       if (moved < CONVERGED) {
         break;
       }
     }
-    return new Result(List.of(current), loaded);
+    return new Result(List.of(current), loaded, nearUnloaded);
   }
 
   /**
-   * Whether kept node {@code j} at {@code point} joins clear to any provisional neighbor's start.
-   */
-  private static boolean joinsProvisional(
-      Clearance clearance, int j, Vec3 point, List<Vec3> start, boolean[] provisional) {
-    return (!provisional[j - 1] || clearance.clearBetween(start.get(j - 1), point, j))
-        && (!provisional[j + 1] || clearance.clearBetween(point, start.get(j + 1), j));
-  }
-
-  /**
-   * Clearance tests against the world, where node {@code j}'s tests count the corridor blocks of
-   * nodes {@code j - 1} through {@code j + 1} as open.
+   * Clearance tests against the world, where the tests around node {@code j} count the corridor
+   * blocks of nodes {@code j - 1} through {@code j + 1} as open.
    *
    * @param corridor each node's block and the one above it, packed: node {@code j}'s are at {@code
    *     2j} and {@code 2j + 1}
    */
   private record Clearance(BlockCache world, long[] corridor) {
 
-    /** Whether node {@code j} at {@code point}, and the segments to both neighbors, are clear. */
-    boolean accepts(int j, Vec3 prev, Vec3 point, Vec3 next) {
-      return openAround(j, prev, point, next)
-          || (clearAt(point, j) && clearBetween(prev, point, j) && clearBetween(point, next, j));
+    /**
+     * Whether the trail drawn around node {@code j} at {@code point}, with the other nodes where
+     * {@code trail} has them, is clear: the node, the segments to both neighbors, and the rounded
+     * corners at the node and at both neighbors.
+     */
+    boolean accepts(int j, Vec3[] trail, Vec3 point) {
+      Vec3 prev = trail[j - 1];
+      Vec3 next = trail[j + 1];
+      boolean aroundNode =
+          openAround(j, prev, point, next)
+              || (clearAt(point, j)
+                  && clearBetween(prev, point, j)
+                  && clearBetween(point, next, j)
+                  && cornerClear(prev, point, next, j));
+      return aroundNode
+          && (j < 2 || neighborCornerClear(trail[j - 2], prev, point, j - 1))
+          && (j + 2 >= trail.length || neighborCornerClear(point, next, trail[j + 2], j + 1));
+    }
+
+    /**
+     * Whether the rounded corner at node {@code k}, at {@code b} between {@code a} and {@code c},
+     * is clear. It ends at most halfway along each segment, so it lies in the triangle of {@code b}
+     * and the two segments' midpoints.
+     */
+    private boolean neighborCornerClear(Vec3 a, Vec3 b, Vec3 c, int k) {
+      return openAround(k, a.plus(b).times(0.5), b, b.plus(c).times(0.5))
+          || cornerClear(a, b, c, k);
+    }
+
+    /** Whether the rounded corner at {@code b}, between {@code a} and {@code c}, is clear. */
+    private boolean cornerClear(Vec3 a, Vec3 b, Vec3 c, int k) {
+      for (int s = 1; s <= CORNER_SAMPLES; s++) {
+        Vec3 point = TrailCurve.corner(a, b, c, (double) s / (CORNER_SAMPLES + 1));
+        if (point == null) {
+          return true; // not rounded: the segments are the whole trail here
+        }
+        if (!clearAt(point, k)) {
+          return false;
+        }
+      }
+      return true;
     }
 
     /**
      * Whether every block within {@code CLEARANCE} of the bounding box of {@code a}, {@code b} and
-     * {@code c} is open for node {@code j}. Then both segments are clear without sampling them,
-     * which is the common case in open terrain.
+     * {@code c} is open for node {@code j}. Then everything in their triangle (segments and rounded
+     * corner alike) is clear without sampling it, which is the common case in open terrain.
      */
     private boolean openAround(int j, Vec3 a, Vec3 b, Vec3 c) {
       int maxX = BlockPos.floor(Math.max(a.x(), Math.max(b.x(), c.x())) + CLEARANCE);
@@ -205,7 +266,7 @@ public final class TrailSmoother {
     }
 
     /** Whether the interior of the segment {@code a → b} is clear for node {@code j}. */
-    boolean clearBetween(Vec3 a, Vec3 b, int j) {
+    private boolean clearBetween(Vec3 a, Vec3 b, int j) {
       Vec3 diff = b.minus(a);
       int samples = (int) Math.ceil(diff.length() / SAMPLE_SPACING);
       for (int i = 1; i < samples; i++) {
@@ -270,6 +331,7 @@ public final class TrailSmoother {
     private long[] keys = new long[256];
     private byte[] values = new byte[256]; // 0 = empty, otherwise ordinal + 1
     private int size;
+    private boolean sawUnloaded;
 
     BlockCache(BlockProbe probe) {
       this.probe = probe;
@@ -278,16 +340,26 @@ public final class TrailSmoother {
     TrailBlock at(int x, int y, int z) {
       long key = BlockPos.pack(x, y, z);
       int slot = slot(keys, values, key);
+      TrailBlock block;
       if (values[slot] != 0) {
-        return BLOCKS[values[slot] - 1];
+        block = BLOCKS[values[slot] - 1];
+      } else {
+        block = probe.at(x, y, z);
+        keys[slot] = key;
+        values[slot] = (byte) (block.ordinal() + 1);
+        if (++size * 2 > keys.length) {
+          grow();
+        }
       }
-      TrailBlock block = probe.at(x, y, z);
-      keys[slot] = key;
-      values[slot] = (byte) (block.ordinal() + 1);
-      if (++size * 2 > keys.length) {
-        grow();
-      }
+      sawUnloaded |= block == TrailBlock.UNLOADED;
       return block;
+    }
+
+    /** Whether a lookup has returned {@link TrailBlock#UNLOADED} since the last call. */
+    boolean takeUnloaded() {
+      boolean saw = sawUnloaded;
+      sawUnloaded = false;
+      return saw;
     }
 
     private void grow() {

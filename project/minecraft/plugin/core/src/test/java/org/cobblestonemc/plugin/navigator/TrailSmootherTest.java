@@ -258,8 +258,9 @@ class TrailSmootherTest {
   }
 
   /**
-   * Asserts the smoothed polyline keeps clear of every solid block, except the path's own blocks
-   * next to each segment: those of its two nodes and of their outer neighbors.
+   * Asserts the smoothed trail, as drawn with its rounded corners, keeps clear of every solid
+   * block, except the path's own blocks next to each segment: those of its two nodes and of their
+   * outer neighbors.
    */
   static void assertKeepsClear(List<Vec3> original, List<Vec3> smoothed, Set<Block> solid) {
     for (int i = 0; i + 1 < smoothed.size(); i++) {
@@ -269,13 +270,21 @@ class TrailSmootherTest {
         corridor.add(block);
         corridor.add(new Block(block.x(), block.y() + 1, block.z()));
       }
+      Vec3 prev = i > 0 ? smoothed.get(i - 1) : null;
+      Vec3 next = i + 2 < smoothed.size() ? smoothed.get(i + 2) : null;
       for (Block block : solid) {
         if (corridor.contains(block)) {
           continue;
         }
-        double distance = distance(smoothed.subList(i, i + 2), block);
+        double closest = Double.POSITIVE_INFINITY;
+        for (int s = 0; s <= 50; s++) {
+          Vec3 point =
+              TrailCurve.sample(prev, smoothed.get(i), smoothed.get(i + 1), next, s / 50.0).point();
+          closest = Math.min(closest, distance(point, block));
+        }
         assertTrue(
-            distance >= SAMPLED_CLEARANCE, "segment " + i + " is " + distance + " from " + block);
+            closest >= SAMPLED_CLEARANCE,
+            "segment " + i + " is drawn " + closest + " from " + block);
       }
     }
   }
@@ -287,14 +296,17 @@ class TrailSmootherTest {
       Vec3 a = polyline.get(i);
       Vec3 diff = polyline.get(i + 1).minus(a);
       for (int s = 0; s <= 50; s++) {
-        Vec3 point = a.plus(diff.times(s / 50.0));
-        double dx = Math.max(0, Math.max(block.x() - point.x(), point.x() - block.x() - 1));
-        double dy = Math.max(0, Math.max(block.y() - point.y(), point.y() - block.y() - 1));
-        double dz = Math.max(0, Math.max(block.z() - point.z(), point.z() - block.z() - 1));
-        closest = Math.min(closest, Math.sqrt(dx * dx + dy * dy + dz * dz));
+        closest = Math.min(closest, distance(a.plus(diff.times(s / 50.0)), block));
       }
     }
     return closest;
+  }
+
+  private static double distance(Vec3 point, Block block) {
+    double dx = Math.max(0, Math.max(block.x() - point.x(), point.x() - block.x() - 1));
+    double dy = Math.max(0, Math.max(block.y() - point.y(), point.y() - block.y() - 1));
+    double dz = Math.max(0, Math.max(block.z() - point.z(), point.z() - block.z() - 1));
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
   }
 
   private static void assertVec(Vec3 expected, Vec3 actual) {
