@@ -383,21 +383,10 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
         // if the next step is an action, highlight this step
         highlight = true;
       }
-      // Step i runs from trail node i to node i + 1; skip it where the world isn't readable.
-      if (!trail.drawable(i) || !trail.drawable(i + 1)) {
-        continue;
+      // Step i is the trail's segment i; skip it where the world isn't readable.
+      if (trail.segmentDrawable(i)) {
+        renderStep(trail, i, payload, highlight, playerVec, probe, random);
       }
-      renderBlock(
-          rounds(steps, i - 1) ? trail.drawableNode(i - 1) : null,
-          trail.node(i),
-          trail.node(i + 1),
-          rounds(steps, i) ? trail.drawableNode(i + 2) : null,
-          trail.original(i + 1),
-          playerVec,
-          payload,
-          highlight,
-          probe,
-          random);
     }
   }
 
@@ -416,15 +405,11 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     for (var step : pathSteps) {
       nodes.add(renderPoint(step.position()));
     }
-    return new SmoothedTrail(nodes, node -> pinned(pathSteps, node - 1));
-  }
-
-  /**
-   * Whether the node at the destination of {@code steps[index]} must stay in place: its corner
-   * isn't rounded, or the step mines there, so the trail goes straight through the mined block.
-   */
-  private boolean pinned(List<Step<L, MinecraftStepPayload>> steps, int index) {
-    return !rounds(steps, index) || steps.get(index).payload().stepType() == MinecraftStepType.MINE;
+    // A mined node stays at the block it mines, so the trail goes straight through it.
+    return new SmoothedTrail(
+        nodes,
+        node -> rounds(pathSteps, node - 1),
+        node -> pathSteps.get(node - 1).payload().stepType() == MinecraftStepType.MINE);
   }
 
   /**
@@ -443,31 +428,28 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   }
 
   /**
-   * Draws the segment {@code from → to} (rounded toward {@code prev} and {@code next}, either
-   * {@code null} for a sharp end), a highlight at {@code to} if asked, and a mine marker on the
-   * step's {@code block} (its unsmoothed point) if it mines.
+   * Draws step {@code i} of {@code path} (its segment {@code i}), a highlight at its destination if
+   * asked, and a mine marker on its unsmoothed block if it mines.
    */
-  private void renderBlock(
-      Vec3 prev,
-      Vec3 from,
-      Vec3 to,
-      Vec3 next,
-      Vec3 block,
-      Vec3 playerVec,
+  private void renderStep(
+      SmoothedTrail path,
+      int i,
       MinecraftStepPayload payload,
       boolean highlight,
+      Vec3 playerVec,
       TrailSmoother.BlockProbe probe,
       ThreadLocalRandom random) {
-    if (playerVec.minus(to).lengthSquared() < NEAR_BUFFER_SQUARED) {
+    Vec3 destination = path.node(i + 1);
+    if (playerVec.minus(destination).lengthSquared() < NEAR_BUFFER_SQUARED) {
       return; // keep the player's immediate view clear
     }
-    scatter(prev, from, to, next, random);
+    scatter(path, i, random);
     if (highlight) {
-      highlight(to, random);
+      highlight(destination, random);
     }
 
     if (payload != null && payload.stepType() == MinecraftStepType.MINE) {
-      var feet = BlockPos.of(block);
+      var feet = BlockPos.of(path.original(i + 1));
       for (BlockPos mined : List.of(feet, feet.above())) {
         if (probe.at(mined.x(), mined.y(), mined.z()) == TrailBlock.SOLID) {
           renderMineMarker(mined, random);
@@ -526,42 +508,26 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     List<Step<L, MinecraftStepPayload>> guideSteps = guide.steps();
     SmoothedTrail path = guide.trail();
     path.refresh(0, path.size() - 1, tickCounter, node -> true, probe);
+    path.drawFrom(playerVec); // the guide leads from wherever the player now is
     for (int i = 0; i < guideSteps.size(); i++) {
-      // Step i runs from node i to node i + 1, except that the first runs from the player.
-      if (!path.drawable(i + 1) || (i > 0 && !path.drawable(i))) {
-        continue;
+      if (path.segmentDrawable(i)) {
+        renderStep(path, i, guideSteps.get(i).payload(), false, playerVec, probe, random);
       }
-      Vec3 prev = null;
-      if (rounds(guideSteps, i - 1)) {
-        prev = i == 1 ? playerVec : path.drawableNode(i - 1);
-      }
-      renderBlock(
-          prev,
-          i == 0 ? playerVec : path.node(i),
-          path.node(i + 1),
-          rounds(guideSteps, i) ? path.drawableNode(i + 2) : null,
-          path.original(i + 1),
-          playerVec,
-          guideSteps.get(i).payload(),
-          false,
-          probe,
-          random);
     }
   }
 
   /**
-   * Spawns ~{@code density} Gaussian-scattered particles per block around a random point on the
-   * segment, flowing along it. The segment's corners are rounded by {@link TrailCurve} toward
-   * {@code prev} and {@code next} (either {@code null} for a sharp end). A fractional density is
-   * probabilistic (0.7 → 70%).
+   * Spawns ~{@code density} Gaussian-scattered particles per block around a random point on segment
+   * {@code i} of {@code path} as drawn, flowing along it. A fractional density is probabilistic
+   * (0.7 → 70%).
    */
-  private void scatter(Vec3 prev, Vec3 from, Vec3 to, Vec3 next, ThreadLocalRandom random) {
-    double floatCount = density * to.minus(from).length();
+  private void scatter(SmoothedTrail path, int i, ThreadLocalRandom random) {
+    double floatCount = density * path.segmentLength(i);
     int count = (int) floatCount;
     if (random.nextDouble() < floatCount - count) {
       count++;
     }
-    TrailCurve.Sample sample = TrailCurve.sample(prev, from, to, next, random.nextDouble());
+    TrailCurve.Sample sample = path.sample(i, random.nextDouble());
     var center = sample.point();
     var velocity = sample.direction().times(PARTICLE_FLOW_SPEED);
     for (int p = 0; p < count; p++) {

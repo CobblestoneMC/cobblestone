@@ -23,7 +23,7 @@ package org.cobblestonemc.plugin.navigator;
  * share a corner compute the same curve for it, so adjacent segments join seamlessly. Half of each
  * corner curve belongs to the segment on either side.
  */
-public final class TrailCurve {
+final class TrailCurve {
 
   /** The furthest a corner curve reaches back along a segment, in blocks. */
   static final double MAX_CORNER_RADIUS = 0.5;
@@ -36,7 +36,7 @@ public final class TrailCurve {
    * @param point the position
    * @param direction the unit tangent, or {@link Vec3#ZERO} for a zero-length segment
    */
-  public record Sample(Vec3 point, Vec3 direction) {}
+  record Sample(Vec3 point, Vec3 direction) {}
 
   private TrailCurve() {}
 
@@ -51,7 +51,7 @@ public final class TrailCurve {
    * @param fraction how far along the segment, from 0 (at {@code from}) to 1 (at {@code to})
    * @return the smoothed position and direction of travel
    */
-  public static Sample sample(Vec3 prev, Vec3 from, Vec3 to, Vec3 next, double fraction) {
+  static Sample sample(Vec3 prev, Vec3 from, Vec3 to, Vec3 next, double fraction) {
     Vec3 diff = to.minus(from);
     double length = diff.length();
     if (length < EPSILON) {

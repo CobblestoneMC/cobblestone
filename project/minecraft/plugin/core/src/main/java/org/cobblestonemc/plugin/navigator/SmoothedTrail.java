@@ -14,7 +14,12 @@ import java.util.function.IntPredicate;
 
 /**
  * A trail's nodes, smoothed by {@link TrailSmoother} lazily and in fixed chunks, so a long path is
- * only smoothed where the player is about to see it.
+ * only smoothed where the player is about to see it, and the curve drawn through them.
+ *
+ * <p>The trail is drawn as segments from node {@code i} to node {@code i + 1}, each rounded by
+ * {@link TrailCurve} at a {@code rounded} corner and left sharp at the others (and at the trail's
+ * ends). The smoother is given the same corners, so what it keeps clear of blocks is what is drawn.
+ * A corner that isn't rounded is also held in place: the trail turns exactly there.
  *
  * <p>Each chunk of {@code CHUNK} nodes is smoothed once and then kept: the trail doesn't shift as
  * the player walks. A chunk is smoothed from the nodes' current positions, with its smoothed
@@ -37,23 +42,34 @@ final class SmoothedTrail {
   private static final int NEVER = Integer.MIN_VALUE;
 
   private final List<Vec3> original;
-  private final IntPredicate pinned;
+  private final boolean[] rounded;
+  private final boolean[] pinned;
   private final Vec3[] nodes;
   private final List<Vec3> view;
   private final boolean[] loaded;
   private final int[] smoothedAt; // per chunk: the tick it was last smoothed, or NEVER
   private final boolean[] incomplete; // per chunk: whether it read an unloaded block
   private final boolean[] partial; // per chunk: whether it had an unavailable node
+  private Vec3 drawOrigin; // drawn in place of node 0, or null
 
   /**
    * Creates an unsmoothed trail.
    *
    * @param original the block-centered nodes, in path order
-   * @param pinned whether the node at an index must stay in place (e.g. next to an action step)
+   * @param rounded whether the corner at the node at an index is drawn rounded (e.g. not next to an
+   *     action step); the trail's first and last nodes never are
+   * @param pinned whether the node at a rounded corner must still stay in place (e.g. a mined
+   *     block)
    */
-  SmoothedTrail(List<Vec3> original, IntPredicate pinned) {
+  SmoothedTrail(List<Vec3> original, IntPredicate rounded, IntPredicate pinned) {
     this.original = List.copyOf(original);
-    this.pinned = pinned;
+    int size = this.original.size();
+    this.rounded = new boolean[size];
+    this.pinned = new boolean[size];
+    for (int i = 0; i < size; i++) {
+      this.rounded[i] = i > 0 && i < size - 1 && rounded.test(i);
+      this.pinned[i] = !this.rounded[i] || pinned.test(i);
+    }
     this.nodes = this.original.toArray(new Vec3[0]);
     this.view = Collections.unmodifiableList(Arrays.asList(nodes));
     this.loaded = new boolean[nodes.length];
@@ -88,9 +104,44 @@ final class SmoothedTrail {
     return index >= 0 && index < nodes.length && loaded[index];
   }
 
-  /** The node at {@code index} if it is {@link #drawable}, otherwise {@code null}. */
-  Vec3 drawableNode(int index) {
-    return drawable(index) ? nodes[index] : null;
+  /**
+   * Draws the trail from {@code origin} instead of node 0, e.g. a guide drawn from wherever the
+   * player now is; {@code null} draws from node 0 again. Smoothing still uses node 0.
+   */
+  void drawFrom(Vec3 origin) {
+    this.drawOrigin = origin;
+  }
+
+  /** Whether segment {@code i} (node {@code i} to node {@code i + 1}) can be drawn. */
+  boolean segmentDrawable(int i) {
+    return drawnNodeVisible(i) && drawable(i + 1);
+  }
+
+  /** The straight-line length of segment {@code i}, as drawn. */
+  double segmentLength(int i) {
+    return nodes[i + 1].minus(drawnNode(i)).length();
+  }
+
+  /**
+   * A point on segment {@code i} as drawn, rounded into its corners where they are rounded and
+   * their far neighbor is drawable.
+   *
+   * @param i the segment, from node {@code i} to node {@code i + 1}
+   * @param fraction how far along it, from 0 to 1
+   * @return the point and the direction of travel there
+   */
+  TrailCurve.Sample sample(int i, double fraction) {
+    Vec3 prev = rounded[i] && drawnNodeVisible(i - 1) ? drawnNode(i - 1) : null;
+    Vec3 next = rounded[i + 1] && drawable(i + 2) ? nodes[i + 2] : null;
+    return TrailCurve.sample(prev, drawnNode(i), nodes[i + 1], next, fraction);
+  }
+
+  private Vec3 drawnNode(int index) {
+    return index == 0 && drawOrigin != null ? drawOrigin : nodes[index];
+  }
+
+  private boolean drawnNodeVisible(int index) {
+    return (index == 0 && drawOrigin != null) || drawable(index);
   }
 
   /**
@@ -140,18 +191,19 @@ final class SmoothedTrail {
     int start = Math.max(0, coreStart - CONTEXT);
     int end = Math.min(nodes.length, coreEnd + CONTEXT);
     var pin = new boolean[end - start];
+    var round = Arrays.copyOfRange(rounded, start, end);
     var provisional = new boolean[end - start];
     var readable = new boolean[end - start];
     for (int i = start; i < end; i++) {
       boolean core = i >= coreStart && i < coreEnd;
       boolean settled = !core && smoothedAt[i / CHUNK] != NEVER;
       readable[i - start] = available.test(i);
-      pin[i - start] = pinned.test(i) || !readable[i - start] || settled;
+      pin[i - start] = pinned[i] || !readable[i - start] || settled;
       provisional[i - start] = !core && !settled;
     }
     TrailSmoother.Result result =
         TrailSmoother.smooth(
-            original.subList(start, end), view.subList(start, end), pin, provisional, probe);
+            original.subList(start, end), view.subList(start, end), pin, round, provisional, probe);
     boolean anyUnloaded = false;
     boolean anyUnavailable = false;
     for (int i = coreStart; i < coreEnd; i++) {

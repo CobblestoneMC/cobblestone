@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -158,7 +159,8 @@ class TrailSmootherTest {
     var pinned = new boolean[nodes.size()];
     pinned[5] = true;
 
-    List<Vec3> smoothed = TrailSmoother.smooth(nodes, pinned, probe(solid)).points();
+    List<Vec3> smoothed =
+        TrailSmoother.smooth(nodes, pinned, allRounded(nodes), probe(solid)).points();
 
     assertVec(mined, smoothed.get(5));
     assertTrue(smoothed.get(4).minus(nodes.get(4)).length() > 0.1, "node 4 still smooths");
@@ -185,13 +187,14 @@ class TrailSmootherTest {
     var minedLater = new Block(3, 0, 4);
 
     // While the block is open, the diagonal touches its corner...
-    List<Vec3> open = TrailSmoother.smooth(nodes, pinned, probe(solid)).points();
+    List<Vec3> open = TrailSmoother.smooth(nodes, pinned, allRounded(nodes), probe(solid)).points();
     assertTrue(distance(open.subList(0, 13), minedLater) < SAMPLED_CLEARANCE);
 
     // ...but while it is still solid, the staircase keeps clear of it.
     solid.add(minedLater);
     solid.add(new Block(3, 1, 4));
-    List<Vec3> smoothed = TrailSmoother.smooth(nodes, pinned, probe(solid)).points();
+    List<Vec3> smoothed =
+        TrailSmoother.smooth(nodes, pinned, allRounded(nodes), probe(solid)).points();
     assertTrue(distance(smoothed.subList(0, 13), minedLater) >= SAMPLED_CLEARANCE);
     assertKeepsClear(nodes, smoothed, solid);
   }
@@ -208,7 +211,7 @@ class TrailSmootherTest {
     TrailSmoother.BlockProbe probe =
         (x, y, z) -> x >= 8 ? TrailBlock.UNLOADED : probe(solid).at(x, y, z);
 
-    TrailSmoother.Result result = TrailSmoother.smooth(nodes, pinned, probe);
+    TrailSmoother.Result result = TrailSmoother.smooth(nodes, pinned, allRounded(nodes), probe);
 
     assertVec(nodes.get(5), result.points().get(5));
     assertTrue(result.loaded()[5]);
@@ -225,7 +228,14 @@ class TrailSmootherTest {
   // --- helpers ----------------------------------------------------------------
 
   private static TrailSmoother.Result smooth(List<Vec3> nodes, Set<Block> solid) {
-    return TrailSmoother.smooth(nodes, new boolean[nodes.size()], probe(solid));
+    return TrailSmoother.smooth(nodes, new boolean[nodes.size()], allRounded(nodes), probe(solid));
+  }
+
+  /** Every corner rounded, as the navigator draws a walked trail. */
+  private static boolean[] allRounded(List<Vec3> nodes) {
+    var rounded = new boolean[nodes.size()];
+    Arrays.fill(rounded, true);
+    return rounded;
   }
 
   static TrailSmoother.BlockProbe probe(Set<Block> solid) {

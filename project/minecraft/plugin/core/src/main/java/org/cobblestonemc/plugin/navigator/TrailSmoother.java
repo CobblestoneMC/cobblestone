@@ -17,13 +17,11 @@ import java.util.List;
  * sweeping alternately forward and backward so neither direction is favored). That straightens a
  * staircase of grid steps into a diagonal and widens a turn into a gradual sweep. A move is only
  * accepted if the trail as drawn around the node keeps {@code CLEARANCE} from every solid block:
- * the node, the segments to both neighbors, and the rounded corners {@link TrailCurve} draws at the
- * node and at both neighbors (whose shape the move changes too). Otherwise the move is halved and
- * retried, then abandoned. So the trail flows freely in open terrain but stays hugging the block
- * centers in a tight cave, and a bend is limited by whichever surface lies on its inside: the floor
- * over a crest, the ceiling at the foot of a slope. Every interior corner is checked as rounded,
- * even one the renderer leaves sharp (e.g. next to an action), which only holds the trail back a
- * little more there.
+ * the node, the segments to both neighbors, and, where those corners are rounded, the curves {@link
+ * TrailCurve} draws at the node and at both neighbors (whose shape the move changes too). Otherwise
+ * the move is halved and retried, then abandoned. So the trail flows freely in open terrain but
+ * stays hugging the block centers in a tight cave, and a bend is limited by whichever surface lies
+ * on its inside: the floor over a crest, the ceiling at the foot of a slope.
  *
  * <p>The path's own blocks — the block each node sits in and the one above it (the player's body
  * space) — count as open around that node and its two neighbors, since the path goes through them
@@ -92,11 +90,12 @@ public final class TrailSmoother {
    * @param nodes the original (block-centered) nodes, in path order
    * @param pinned which nodes must not move (e.g. at an action step), index-aligned with {@code
    *     nodes}
+   * @param rounded which nodes' corners are drawn rounded, index-aligned with {@code nodes}
    * @param probe reads the world; each block is read at most once per call
    * @return the smoothed nodes
    */
-  public static Result smooth(List<Vec3> nodes, boolean[] pinned, BlockProbe probe) {
-    return smooth(nodes, nodes, pinned, new boolean[nodes.size()], probe);
+  static Result smooth(List<Vec3> nodes, boolean[] pinned, boolean[] rounded, BlockProbe probe) {
+    return smooth(nodes, nodes, pinned, rounded, new boolean[nodes.size()], probe);
   }
 
   /**
@@ -107,6 +106,7 @@ public final class TrailSmoother {
    *     {@code MAX_DEVIATION} from its anchor, and its anchor's blocks count as open around it
    * @param start where each node starts; the trail between them must already be clear
    * @param pinned which nodes must not move
+   * @param rounded which nodes' corners are drawn rounded; the others are drawn sharp
    * @param provisional which nodes' results the caller discards, smoothed only as context for the
    *     others. A kept node near one also keeps the trail clear with that node at its start, since
    *     that is where the kept trail joins it.
@@ -117,6 +117,7 @@ public final class TrailSmoother {
       List<Vec3> anchors,
       List<Vec3> start,
       boolean[] pinned,
+      boolean[] rounded,
       boolean[] provisional,
       BlockProbe probe) {
     int n = anchors.size();
@@ -129,7 +130,7 @@ public final class TrailSmoother {
       corridor[2 * j + 1] = block.above().pack();
       loaded[j] = world.at(block.x(), block.y(), block.z()) != TrailBlock.UNLOADED;
     }
-    var clearance = new Clearance(world, corridor);
+    var clearance = new Clearance(world, corridor, rounded);
     world.takeUnloaded(); // only reads made while moving nodes count
 
     Vec3[] current = start.toArray(new Vec3[0]);
@@ -194,13 +195,14 @@ public final class TrailSmoother {
    *
    * @param corridor each node's block and the one above it, packed: node {@code j}'s are at {@code
    *     2j} and {@code 2j + 1}
+   * @param rounded which nodes' corners are drawn rounded
    */
-  private record Clearance(BlockCache world, long[] corridor) {
+  private record Clearance(BlockCache world, long[] corridor, boolean[] rounded) {
 
     /**
      * Whether the trail drawn around node {@code j} at {@code point}, with the other nodes where
      * {@code trail} has them, is clear: the node, the segments to both neighbors, and the rounded
-     * corners at the node and at both neighbors.
+     * corners (where they are rounded) at the node and at both neighbors.
      */
     boolean accepts(int j, Vec3[] trail, Vec3 point) {
       Vec3 prev = trail[j - 1];
@@ -212,8 +214,10 @@ public final class TrailSmoother {
                   && clearBetween(point, next, j)
                   && cornerClear(prev, point, next, j));
       return aroundNode
-          && (j < 2 || neighborCornerClear(trail[j - 2], prev, point, j - 1))
-          && (j + 2 >= trail.length || neighborCornerClear(point, next, trail[j + 2], j + 1));
+          && (j < 2 || !rounded[j - 1] || neighborCornerClear(trail[j - 2], prev, point, j - 1))
+          && (j + 2 >= trail.length
+              || !rounded[j + 1]
+              || neighborCornerClear(point, next, trail[j + 2], j + 1));
     }
 
     /**
@@ -226,8 +230,14 @@ public final class TrailSmoother {
           || cornerClear(a, b, c, k);
     }
 
-    /** Whether the rounded corner at {@code b}, between {@code a} and {@code c}, is clear. */
+    /**
+     * Whether the corner at node {@code k}, at {@code b} between {@code a} and {@code c}, is clear
+     * where it is rounded. A sharp corner is just its segments.
+     */
     private boolean cornerClear(Vec3 a, Vec3 b, Vec3 c, int k) {
+      if (!rounded[k]) {
+        return true;
+      }
       for (int s = 1; s <= CORNER_SAMPLES; s++) {
         Vec3 point = TrailCurve.corner(a, b, c, (double) s / (CORNER_SAMPLES + 1));
         if (point == null) {

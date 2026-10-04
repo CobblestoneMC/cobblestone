@@ -7,7 +7,9 @@
 
 package org.cobblestonemc.plugin.navigator;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -25,7 +27,7 @@ class SmoothedTrailTest {
 
   @Test
   void smoothsOnlyWhatIsNeededAChunkAtATime() {
-    var trail = new SmoothedTrail(line(70), node -> false);
+    var trail = new SmoothedTrail(line(70), node -> true, node -> false);
     assertFalse(trail.drawable(0), "nothing is drawable before it is smoothed");
 
     trail.refresh(0, 69, 0, node -> true, OPEN_FIELD);
@@ -39,7 +41,7 @@ class SmoothedTrailTest {
 
   @Test
   void retriesUnloadedChunksUntilTheyLoad() {
-    var trail = new SmoothedTrail(line(10), node -> false);
+    var trail = new SmoothedTrail(line(10), node -> true, node -> false);
     boolean[] loaded = {false};
     TrailSmoother.BlockProbe probe =
         (x, y, z) -> loaded[0] ? OPEN_FIELD.at(x, y, z) : TrailBlock.UNLOADED;
@@ -74,7 +76,7 @@ class SmoothedTrailTest {
             loaded[0] || path.contains(new TrailSmootherTest.Block(x, y, z))
                 ? OPEN_FIELD.at(x, y, z)
                 : TrailBlock.UNLOADED;
-    var trail = new SmoothedTrail(nodes, node -> false);
+    var trail = new SmoothedTrail(nodes, node -> true, node -> false);
 
     trail.refresh(0, 19, 0, node -> true, probe);
     assertTrue(trail.drawable(10));
@@ -91,7 +93,7 @@ class SmoothedTrailTest {
 
   @Test
   void unavailableNodesWaitForAReset() {
-    var trail = new SmoothedTrail(line(10), node -> false);
+    var trail = new SmoothedTrail(line(10), node -> true, node -> false);
     trail.refresh(0, 9, 0, node -> node < 5, OPEN_FIELD);
     assertTrue(trail.drawable(4));
     assertFalse(trail.drawable(5));
@@ -131,7 +133,7 @@ class SmoothedTrailTest {
     TrailSmoother.BlockProbe world = TrailSmootherTest.probe(solid);
     TrailSmoother.BlockProbe probe =
         (x, y, z) -> x < loadedFrom[0] ? TrailBlock.UNLOADED : world.at(x, y, z);
-    var trail = new SmoothedTrail(nodes, node -> false);
+    var trail = new SmoothedTrail(nodes, node -> true, node -> false);
 
     int last = nodes.size() - 1;
     int tick = 0;
@@ -148,6 +150,43 @@ class SmoothedTrailTest {
       assertTrue(trail.drawable(i), "node " + i + " is smoothed");
     }
     TrailSmootherTest.assertKeepsClear(nodes, trail.nodes(), solid);
+  }
+
+  @Test
+  void roundsOnlyTheCornersItIsTold() {
+    // East 5 blocks, then south 5: the corner at node 5 is drawn sharp unless it's rounded.
+    List<Vec3> nodes = new ArrayList<>();
+    for (int x = 0; x <= 5; x++) {
+      nodes.add(new Vec3(x + 0.5, 0.9, 0.5));
+    }
+    for (int z = 1; z <= 5; z++) {
+      nodes.add(new Vec3(5.5, 0.9, z + 0.5));
+    }
+
+    var sharp = new SmoothedTrail(nodes, node -> node != 5, node -> false);
+    sharp.refresh(0, 10, 0, node -> true, OPEN_FIELD);
+    assertEquals(nodes.get(5), sharp.node(5), "a sharp corner is held in place");
+    assertEquals(
+        0, sharp.sample(4, 1.0).point().minus(sharp.node(5)).length(), 1e-9, "drawn sharp");
+
+    var rounded = new SmoothedTrail(nodes, node -> true, node -> false);
+    rounded.refresh(0, 10, 0, node -> true, OPEN_FIELD);
+    assertNotEquals(nodes.get(5), rounded.node(5), "a rounded corner smooths");
+    double cut = rounded.sample(4, 1.0).point().minus(rounded.node(5)).length();
+    assertTrue(cut > 0.01, "and is drawn as a curve, cutting it by " + cut);
+  }
+
+  @Test
+  void drawsFromAGivenOrigin() {
+    var trail = new SmoothedTrail(line(10), node -> true, node -> false);
+    trail.refresh(0, 9, 0, node -> true, OPEN_FIELD);
+    var player = new Vec3(-2, 0.9, 1);
+
+    trail.drawFrom(player);
+
+    assertEquals(0, trail.sample(0, 0.0).point().minus(player).length(), 1e-9);
+    assertEquals(player.minus(trail.node(1)).length(), trail.segmentLength(0), 1e-9);
+    assertEquals(new Vec3(0.5, 0.9, 0.5), trail.node(0), "smoothing still uses node 0");
   }
 
   private static List<Vec3> line(int length) {
