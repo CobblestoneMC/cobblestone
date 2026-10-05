@@ -8,32 +8,27 @@
 package org.cobblestonemc.stonebrick.bench;
 
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.SearchObserver;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
  * Carrying a boat has to change how an ocean is crossed.
  *
- * <p>⚠️ <b>Currently failing, and deliberately recorded rather than deleted.</b> A {@code boater}
- * produces a byte-identical path to a {@code walker} on {@code overworld/ocean} and {@code
- * overworld/along-river} — same cost, same step count, same per-layer histogram — while differing
- * on six cave scenarios. {@code BoatMode} is in the mode list for the boater and the capture marks
- * water with {@code SUPPORTS_BOAT}, so the mode exists and the terrain supports it; what never
- * happens is the {@code PLACE_BOAT} transition that gets the agent aboard. An agent started with
- * {@code inBoat} does move differently, which places the fault in boarding rather than in boating.
+ * <p>Pinned to the coarse heuristic, which is what production runs. Under the running average a
+ * {@code boater}'s path on {@code overworld/ocean} is byte-identical to a {@code walker}'s: it
+ * never boards (#27). Boarding itself works -- Dijkstra boards, and under the coarse estimate the
+ * boater crosses for 107 s against the walker's 175 -- so the fault is in the running average,
+ * which prices the remaining journey at the rate it has been walking and never finds the detour to
+ * the water worth taking.
  *
- * <p>Worth about 60 seconds of path cost on the ocean route: swimming is 0.30 s/block against a
- * boat's 0.15 over roughly 400 blocks.
- *
- * <p>Enable this once boarding works.
+ * <p>Needs the local corpus, so it is skipped where {@code ocean} has not been captured.
  */
-@Disabled("#27: BoatMode never boards; a boater's path is identical to a walker's on water routes")
 class BoatBoardingTest {
 
   private static final class Silent extends CobblestoneLogger {
@@ -61,13 +56,17 @@ class BoatBoardingTest {
       root = root.getParent();
     }
     Path corpus = root.resolve("stonebrick/data");
+    assumeTrue(
+        Files.isDirectory(corpus.resolve("captures").resolve("ocean")),
+        "no local capture of ocean; run ./gradlew captureCorpus");
 
     List<Loadout> loadouts = Loadout.loadAll(corpus.resolve(Loadout.FILE_NAME));
     Scenario ocean =
         Scenario.loadAll(corpus.resolve(Scenario.FILE_NAME)).stream()
             .filter(scenario -> scenario.id().equals("overworld/ocean"))
             .findFirst()
-            .orElseThrow();
+            .orElseThrow()
+            .withHeuristic(Scenario.Heuristic.COARSE);
     ScenarioRunner runner = new ScenarioRunner(corpus, new Silent());
 
     RunResult walker = runner.run(ocean, named(loadouts, "walker"), SearchObserver.none());
