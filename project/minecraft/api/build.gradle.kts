@@ -1,4 +1,4 @@
-// minecraft-api — thin, developer-facing Minecraft types (StepType, Instruction, Agent, …). (design/04)
+// minecraft-api — thin, developer-facing Minecraft types (StepType, Instruction, Agent, …).
 // Published but flagged internal (platform APIs compile against it). No Adventure here.
 plugins {
     id("cobblestone.publish-conventions")

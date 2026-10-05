@@ -1,7 +1,7 @@
 // sponge-core — SpongeAPI PlatformApi/Scheduler implementation + native object wrappers, compiled
 // against the API floor. Version-independent: the one thing that differs per Minecraft version is
 // reading an unloaded chunk, which is behind OfflineChunkSource and supplied by a per-version
-// module. (design/05)
+// module.
 plugins {
     id("cobblestone.java-conventions")
 }

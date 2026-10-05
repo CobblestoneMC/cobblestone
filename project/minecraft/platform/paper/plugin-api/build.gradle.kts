@@ -1,6 +1,6 @@
 // paper-plugin-api — the published Paper-native binding of the plugin-extension surface. Other Paper
 // plugins depend on this to register destinations/navigators with the installed Cobblestone plugin and
-// reach navigation via .platform() in native Player/Location terms. (design/06, design/07)
+// reach navigation via .platform() in native Player/Location terms.
 plugins {
     id("cobblestone.publish-conventions")
 }

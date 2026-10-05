@@ -70,7 +70,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     }
 
     // The transition registry is owned by the plugin; the platform API only reads from / registers
-    // into it (design/05). Both are reachable to other plugins via the registered plugin API.
+    // into it. Both are reachable to other plugins via the registered plugin API.
     this.platformApi =
         new PaperNavigationServiceImpl(
             this,

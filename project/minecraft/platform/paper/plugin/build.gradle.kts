@@ -1,7 +1,7 @@
 // paper-plugin — the shippable Paper/Folia plugin. Only our own org.cobblestonemc.* modules are
 // shaded into the jar (they are not on a public Maven repo); third-party runtime libraries (SnakeYAML
 // now; JDBC/bStats/etc. later) are declared in the paper-plugin.yml loader and downloaded by Paper's
-// MavenLibraryResolver at runtime. Adventure and paper-api are provided by the server. (design/07)
+// MavenLibraryResolver at runtime. Adventure and paper-api are provided by the server.
 
 plugins {
     id("cobblestone.paper-plugin-conventions")
