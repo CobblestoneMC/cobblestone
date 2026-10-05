@@ -33,7 +33,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Enable this once boarding works.
  */
-@Disabled("BoatMode never boards: a boater's path is identical to a walker's on water routes")
+@Disabled("#27: BoatMode never boards; a boater's path is identical to a walker's on water routes")
 class BoatBoardingTest {
 
   private static final class Silent extends CobblestoneLogger {
