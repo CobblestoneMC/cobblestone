@@ -393,10 +393,18 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
    *
    * <p>A node may have been closed, superseded or repaired away while its estimate was in flight,
    * so each one is re-checked against the node table rather than trusted.
+   *
+   * <p>Only the offers already waiting when the drain began. One that parks again on a future that
+   * is already done comes straight back onto the queue; it is retried on the next pump, after the
+   * deadline and cancellation checks, rather than in a loop that never reaches them.
    */
   private void drainOffers() {
     DeferredOffer offer;
-    while ((offer = deferredOffers.poll()) != null) {
+    for (int ready = deferredOffers.size(); ready > 0; ready--) {
+      offer = deferredOffers.poll();
+      if (offer == null) {
+        break;
+      }
       pendingEstimates.decrementAndGet();
       Node<T> node = nodes.get(offer.key());
       if (node == null || node.closed || node.cost != offer.cost()) {

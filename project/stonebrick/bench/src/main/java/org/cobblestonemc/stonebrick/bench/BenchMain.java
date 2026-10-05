@@ -89,7 +89,9 @@ public final class BenchMain {
               new ScenarioRunner(options.corpusRoot(), new QuietLogger()));
       default -> {
         System.out.println(
-            "Unknown command '" + options.command() + "'. Try run, sweep, accept or list.");
+            "Unknown command '"
+                + options.command()
+                + "'. Try run, sweep, accept, list, verify, h3 or profile.");
         System.exit(2);
       }
     }

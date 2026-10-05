@@ -1,6 +1,28 @@
 # Stonebrick — a benchmarking & visual-debugging platform for Cobblestone
 
-Status: design draft (2026-09-22). Not yet implemented.
+Status: partly implemented (2026-10-04, PR #24). Drafted 2026-09-22; the sections below are the
+design as written, and where the build departed from it the commit history says why.
+
+**Built**
+- `stonebrick-format`, `stonebrick-copier`, `stonebrick-platform`, `stonebrick-bench` (§1–§8).
+  `bench` commands: `run`, `accept`, `list`, `sweep` (heuristic × weight grid), `verify`
+  (estimates against a Dijkstra optimum), `h3`, `profile`.
+- Core seams: `TimeSource`, `SearchObserver` (the §8.3 `Tier2Observer`, renamed), the
+  insertion-order tie-break, and `SolveHeuristic#prepare` so the fine search parks on an estimate
+  whose chunks are not resident.
+- The corpus is generated from a seed (`./gradlew captureCorpus`), scenarios are run under every
+  agent loadout in `agents.yml`, and the capture region grows to a fixpoint from `needed-chunks.yml`.
+- Tier 2 at L0 only: `SectionProfile`, `SectionProfiler`, `CoarseCost`, a backward 26-connected
+  `CoarseSearch`, and `CoarseHeuristic`, wired into Paper and Sponge as the default
+  (`search.algorithm.heuristic: COARSE`).
+
+**Not built**
+- The visualizer (§9), and the deletion of `:core-test` and `:playground` (§1.1).
+- The pyramid: L1–L3, persistent storage, sharing profiles between solves (§10.9–§10.13). Each solve
+  profiles its own terrain today.
+- Tier 1 work (§11) and the production behaviour in §13.
+- Committed baselines and CI gating (§8.4). Baselines are gitignored and local until the corpus is
+  routinely regenerated from the seed.
 
 Stonebrick is a fourth "platform" alongside Paper and Sponge, except the world it reads is a file
 captured from a real server rather than a live one. It exists so the search can be run
@@ -1373,9 +1395,10 @@ Two things that are not about benchmarking but fall out of the work:
 
 - **Captures**: one file per chunk column, cube-level `sectionMask`, column-local palette, **raw
   payloads** for byte-stability across JDKs.
-- **Captures are not version-controlled.** Each developer captures their own with `/copier`; a team
-  would put the corpus on shared storage. Baselines (small JSON) are committed; the captures they
-  describe are not, so benchmark gating is a local discipline rather than a CI one.
+- **Captures are not version-controlled.** They are regenerated from the seed in `corpus.yml` by
+  `captureCorpus`. Baselines are local for now too (gitignored); they can be committed once the
+  corpus is routinely regenerated, since only then do they mean the same thing on every machine.
+  Benchmark gating is a local discipline rather than a CI one.
 - **Scale the budget, not the distance**: cell-limit behavior is tested with a small capture and a
   small `maxCellsVisited`, not with a 3 500-block route.
 - **No manifest** — every column file carries its own chunk coordinates and section mask, so the

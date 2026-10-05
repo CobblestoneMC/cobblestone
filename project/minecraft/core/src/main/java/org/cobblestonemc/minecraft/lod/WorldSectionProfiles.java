@@ -80,8 +80,13 @@ public final class WorldSectionProfiles implements CoarseSearch.SectionProfiles 
     FutureOr<SectionProfile> profile =
         world.chunkAt(anchor, destination).map(chunk -> profiled(chunk, sectionY));
     // from(), so a chunk that was already resident does not park the search on a finished future.
+    // A read that fails is a section that cannot be known, like an ungenerated one. Left failed, it
+    // would be cached as a future that is forever done and never usable: every retry would park on
+    // it, wake at once, and park again.
     FutureOr<SectionProfile> settled =
-        profile.isImmediate() ? profile : FutureOr.from(profile.future());
+        profile.isImmediate()
+            ? profile
+            : FutureOr.from(profile.future().exceptionally(failure -> null));
     sections.put(key, settled);
     return settled;
   }

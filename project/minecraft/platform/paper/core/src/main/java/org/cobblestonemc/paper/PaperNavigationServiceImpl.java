@@ -27,32 +27,27 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
-import org.cobblestonemc.Cell;
 import org.cobblestonemc.CellRegion;
 import org.cobblestonemc.CobblestoneApi;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.HeuristicStrategy;
-import org.cobblestonemc.Heuristics;
 import org.cobblestonemc.ModesProvider;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.Restriction;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
-import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.BreakChecker;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
+import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.WorldRegion;
-import org.cobblestonemc.minecraft.lod.CoarseCost;
-import org.cobblestonemc.minecraft.lod.CoarseHeuristic;
-import org.cobblestonemc.minecraft.lod.WorldSectionProfiles;
 import org.cobblestonemc.minecraft.modes.MinecraftModes;
 import org.cobblestonemc.minecraft.registry.OwnedRegistry;
 import org.cobblestonemc.paper.api.BoxWorldRegion;
@@ -177,33 +172,6 @@ public final class PaperNavigationServiceImpl
     searchModifiers.purge(owner);
   }
 
-  /**
-   * Builds the estimate this search will price its remaining journey with.
-   *
-   * <p>The coarse heuristic reads terrain, so its profile source is built per solve from the target
-   * region's own world -- a trip through a portal has legs in different worlds, and a source bound
-   * to the origin's world would answer every later leg from the wrong terrain without ever failing.
-   *
-   * <p>Nothing is profiled up front. The fine search parks on an estimate whose chunks have not
-   * arrived, the same way it parks on a mode waiting for blocks, so the terrain that gets
-   * summarised is the terrain the search actually asks about.
-   */
-  private HeuristicStrategy heuristicFor(
-      CobblestonePlayer agent, Cell origin, MinecraftSearchSettings settings) {
-    if (settings.settings().heuristic() == SearchSettings.Heuristic.RUNNING_AVERAGE) {
-      return Heuristics.runningAverage(
-          MinecraftModes.cheapestCostPerBlock(agent, settings.excludedModes()));
-    }
-    CoarseCost cost = CoarseCost.forPlayer(agent, settings.excludedModes());
-    return new CoarseHeuristic(
-        target ->
-            // The domain of a Tier-3 target region is always the world that leg runs in; the cast
-            // is the price of HeuristicStrategy being domain-agnostic.
-            new WorldSectionProfiles(
-                (MinecraftWorld) target.domain(), target.nearestBoundaryCell(origin)),
-        cost);
-  }
-
   private SearchHandle<Location, MinecraftStepPayload> search(
       Player player,
       Destination<DomainRegion<MinecraftWorld>> destination,
@@ -222,9 +190,8 @@ public final class PaperNavigationServiceImpl
     ModesProvider<CobblestonePlayer, MinecraftStepPayload, MinecraftWorld> modes =
         MinecraftModes.providerFor(
             agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
-    // Per-player, not a shared constant: the bound has to reflect what this player can actually do,
-    // or Tier-1 prices every route as if they could fly. See MinecraftModes#cheapestCostPerBlock.
-    HeuristicStrategy heuristic = heuristicFor(agent, originPosition.cell(), settings);
+    HeuristicStrategy heuristic =
+        MinecraftHeuristics.forPlayer(agent, originPosition.cell(), settings);
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
         gatherTransitions(

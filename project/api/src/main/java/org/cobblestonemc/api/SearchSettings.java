@@ -191,12 +191,6 @@ public final class SearchSettings {
     private Builder() {}
 
     /**
-     * Sets the A* heuristic weight (must be &gt;= 1.0).
-     *
-     * @param value the weight
-     * @return this builder
-     */
-    /**
      * Sets which estimate the fine search runs on.
      *
      * @param value the heuristic
@@ -207,6 +201,12 @@ public final class SearchSettings {
       return this;
     }
 
+    /**
+     * Sets the A* heuristic weight (must be &gt;= 1.0).
+     *
+     * @param value the weight
+     * @return this builder
+     */
     public Builder heuristicWeight(double value) {
       if (value < 1.0) {
         throw new IllegalArgumentException("heuristicWeight must be >= 1.0: " + value);
