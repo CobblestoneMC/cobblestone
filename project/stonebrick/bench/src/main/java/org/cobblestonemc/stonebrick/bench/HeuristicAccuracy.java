@@ -94,7 +94,7 @@ public final class HeuristicAccuracy {
           Medium.WALKABLE.baseCostPerBlock(), 0.4, 0.7, Medium.MINEABLE.baseCostPerBlock(), 2.8
         }) {
       DirectProfiles profiles = new DirectProfiles(capture, scenario.world());
-      CoarseCost cost = CoarseCost.forMediums(mediumsFor(loadout), fallback);
+      CoarseCost cost = CoarseCost.forMediums(loadout.mediums(), fallback);
       CoarseSearch coarse = new CoarseSearch(profiles, cost, scenario.destination());
 
       List<double[]> pairs = new ArrayList<>();
@@ -170,16 +170,5 @@ public final class HeuristicAccuracy {
         };
     new ScenarioRunner(corpusRoot, logger).run(scenario, loadout, recorder);
     return cells;
-  }
-
-  private static java.util.Set<Medium> mediumsFor(Loadout loadout) {
-    java.util.EnumSet<Medium> mediums = java.util.EnumSet.copyOf(CoarseCost.survival());
-    if (loadout.agent().canFly()) {
-      mediums.add(Medium.FLYABLE);
-    }
-    if (loadout.agent().hasBoat() || loadout.agent().inBoat()) {
-      mediums.add(Medium.BOATABLE);
-    }
-    return mediums;
   }
 }

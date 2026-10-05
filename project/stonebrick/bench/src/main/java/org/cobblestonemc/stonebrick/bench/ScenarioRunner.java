@@ -104,14 +104,7 @@ public final class ScenarioRunner {
                 + capture.worldKeys());
       }
 
-      StonebrickPlayer player =
-          StonebrickPlayer.builder()
-              .canFly(loadout.agent().canFly())
-              .canGlide(loadout.agent().canGlide())
-              .hasBoat(loadout.agent().hasBoat())
-              .inBoat(loadout.agent().inBoat())
-              .permissions(loadout.agent().permissions())
-              .build();
+      StonebrickPlayer player = loadout.player();
 
       Counting counting = new Counting(observer);
       SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> handle =
@@ -252,11 +245,10 @@ public final class ScenarioRunner {
     if (scenario.heuristic() == Scenario.Heuristic.RUNNING_AVERAGE) {
       return Heuristics.runningAverage(MinecraftModes.cheapestCostPerBlock(player, excluded));
     }
-    java.util.Set<org.cobblestonemc.minecraft.lod.Medium> mediums = loadout.mediums();
     CaptureProfiles profiles = new CaptureProfiles(platform, scenario.world());
     lastCoarseProfiles = profiles;
     return new org.cobblestonemc.minecraft.lod.CoarseHeuristic(
-        profiles, org.cobblestonemc.minecraft.lod.CoarseCost.forMediums(mediums));
+        profiles, org.cobblestonemc.minecraft.lod.CoarseCost.forPlayer(player, excluded));
   }
 
   private static String outcomeOf(

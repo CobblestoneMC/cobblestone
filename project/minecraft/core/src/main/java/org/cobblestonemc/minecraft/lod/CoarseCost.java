@@ -221,15 +221,30 @@ public final class CoarseCost {
    * @return the cost model
    */
   public static CoarseCost forPlayer(CobblestonePlayer player, Set<MinecraftStepType> excluded) {
+    return forMediums(mediumsFor(player, excluded));
+  }
+
+  /**
+   * Returns the mediums a player can cross, given what an operator has excluded.
+   *
+   * <p>Public so the benchmark derives its agents' mediums here too. It once kept its own copy,
+   * which is how production came to drop {@link Medium#SOUL_SAND} for every player who could not
+   * dig while the bench, measuring the copy, kept it.
+   *
+   * @param player the navigating player
+   * @param excluded the step types an operator has turned off
+   * @return the mediums
+   */
+  public static Set<Medium> mediumsFor(CobblestonePlayer player, Set<MinecraftStepType> excluded) {
     EnumSet<Medium> mediums = EnumSet.copyOf(survival());
     if (excluded.contains(MinecraftStepType.MINE)) {
       mediums.remove(Medium.MINEABLE);
-      mediums.remove(Medium.SOUL_SAND);
     }
     if (excluded.contains(MinecraftStepType.SWIM)) {
       mediums.remove(Medium.SWIMMABLE);
     }
     if (excluded.contains(MinecraftStepType.WALK)) {
+      // Soul sand is walked on, so it goes with walking.
       mediums.remove(Medium.WALKABLE);
       mediums.remove(Medium.SOUL_SAND);
     }
@@ -243,7 +258,7 @@ public final class CoarseCost {
         && (player.hasBoatInInventory() || player.isInBoat())) {
       mediums.add(Medium.BOATABLE);
     }
-    return forMediums(mediums);
+    return mediums;
   }
 
   /**

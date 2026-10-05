@@ -21,6 +21,7 @@ import java.util.Set;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.cobblestonemc.minecraft.lod.CoarseCost;
 import org.cobblestonemc.minecraft.lod.Medium;
+import org.cobblestonemc.stonebrick.platform.StonebrickPlayer;
 import org.yaml.snakeyaml.Yaml;
 
 /**
@@ -55,20 +56,22 @@ public record Loadout(
    * @return the mediums
    */
   public java.util.Set<Medium> mediums() {
-    java.util.EnumSet<Medium> mediums = java.util.EnumSet.copyOf(CoarseCost.survival());
-    if (excludedModes.contains(MinecraftStepType.MINE)) {
-      mediums.remove(Medium.MINEABLE);
-    }
-    if (excludedModes.contains(MinecraftStepType.SWIM)) {
-      mediums.remove(Medium.SWIMMABLE);
-    }
-    if (agent.canFly() && !excludedModes.contains(MinecraftStepType.FLY)) {
-      mediums.add(Medium.FLYABLE);
-    }
-    if ((agent.hasBoat() || agent.inBoat()) && !excludedModes.contains(MinecraftStepType.BOAT)) {
-      mediums.add(Medium.BOATABLE);
-    }
-    return mediums;
+    return CoarseCost.mediumsFor(player(), excludedModes);
+  }
+
+  /**
+   * Returns a player with this loadout's capabilities.
+   *
+   * @return the player
+   */
+  public StonebrickPlayer player() {
+    return StonebrickPlayer.builder()
+        .canFly(agent.canFly())
+        .canGlide(agent.canGlide())
+        .hasBoat(agent.hasBoat())
+        .inBoat(agent.inBoat())
+        .permissions(agent.permissions())
+        .build();
   }
 
   /** The file a corpus keeps its loadouts in. */
