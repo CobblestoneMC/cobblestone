@@ -48,6 +48,7 @@ public final class Baselines {
    * @param outcome the accepted outcome
    * @param deterministic the accepted gated metrics
    * @param advisory the recorded ungated metrics
+   * @param configuration what was measured; empty for a baseline written before this was recorded
    */
   public record Baseline(
       String scenario,
@@ -55,7 +56,8 @@ public final class Baselines {
       String commit,
       String outcome,
       Map<String, Number> deterministic,
-      Map<String, Number> advisory) {}
+      Map<String, Number> advisory,
+      Map<String, String> configuration) {}
 
   /**
    * Returns the file a scenario's baseline lives in.
@@ -90,10 +92,21 @@ public final class Baselines {
           String.valueOf(root.getOrDefault("commit", "")),
           String.valueOf(root.getOrDefault("outcome", "")),
           numbers(root.get("deterministic")),
-          numbers(root.get("advisory")));
+          numbers(root.get("advisory")),
+          strings(root.get("configuration")));
     } catch (RuntimeException e) {
       throw new IOException(file + ": " + e.getMessage(), e);
     }
+  }
+
+  private static Map<String, String> strings(Object node) {
+    Map<String, String> values = new java.util.LinkedHashMap<>();
+    if (node instanceof Map<?, ?> map) {
+      for (Map.Entry<?, ?> entry : map.entrySet()) {
+        values.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
+      }
+    }
+    return values;
   }
 
   @SuppressWarnings("unchecked")
@@ -131,6 +144,18 @@ public final class Baselines {
     json.append("  \"acceptedAt\": \"").append(java.time.LocalDate.now()).append("\",\n");
     json.append("  \"commit\": \"").append(commit).append("\",\n");
     json.append("  \"outcome\": \"").append(result.outcome()).append("\",\n");
+    // Strings, not numbers: these identify what was measured rather than measure it.
+    json.append("  \"configuration\": {\n");
+    List<Map.Entry<String, String>> configuration =
+        new ArrayList<>(result.configuration().entrySet());
+    for (int i = 0; i < configuration.size(); i++) {
+      json.append("    \"")
+          .append(configuration.get(i).getKey())
+          .append("\": \"")
+          .append(configuration.get(i).getValue().replace("\\", "\\\\").replace("\"", "\\\""))
+          .append(i == configuration.size() - 1 ? "\"\n" : "\",\n");
+    }
+    json.append("  },\n");
     json.append("  \"deterministic\": {\n");
     appendNumbers(json, result.deterministic());
     json.append("  },\n");

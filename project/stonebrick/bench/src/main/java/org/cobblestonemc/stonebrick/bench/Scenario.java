@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.cobblestonemc.Cell;
+import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.stonebrick.platform.IoMode;
 import org.cobblestonemc.stonebrick.platform.IoProfile;
 import org.yaml.snakeyaml.Yaml;
@@ -72,10 +73,13 @@ public record Scenario(
      */
     ZERO,
 
-    /** Today's production heuristic: remaining distance times the recent per-block cost. */
+    /** The previous production heuristic: remaining distance times the recent per-block cost. */
     RUNNING_AVERAGE,
 
-    /** The coarse layer's estimate, from a backward search over section profiles. */
+    /**
+     * The coarse layer's estimate, from a backward search over section profiles. Production's
+     * default, and so the bench's.
+     */
     COARSE
   }
 
@@ -137,7 +141,10 @@ public record Scenario(
 
     /** Returns the production defaults. */
     public static SearchLimits defaults() {
-      return new SearchLimits(1.5, 200_000, 60_000);
+      return new SearchLimits(
+          SearchSettings.DEFAULT_HEURISTIC_WEIGHT,
+          SearchSettings.DEFAULT_MAX_CELLS_VISITED,
+          SearchSettings.DEFAULT_MAX_WALL_CLOCK_MILLIS);
     }
   }
 
@@ -403,16 +410,18 @@ public record Scenario(
         cell(destination, file),
         integer(destination, "radius", 0),
         new SearchLimits(
-            number(limits, "heuristicWeight", 1.5),
-            integer(limits, "maxCellsVisited", 200_000),
-            (long) number(limits, "maxWallClockMillis", 60_000)),
+            number(limits, "heuristicWeight", SearchSettings.DEFAULT_HEURISTIC_WEIGHT),
+            integer(limits, "maxCellsVisited", SearchSettings.DEFAULT_MAX_CELLS_VISITED),
+            (long)
+                number(limits, "maxWallClockMillis", SearchSettings.DEFAULT_MAX_WALL_CLOCK_MILLIS)),
         profile,
         MissingCapturePolicy.valueOf(
             string(root, "onMissingCapture", "ERROR").toUpperCase(java.util.Locale.ROOT)),
         string(root, "expect", "success"),
         ungenerated(root, file),
         Heuristic.valueOf(
-            string(root, "heuristic", "RUNNING_AVERAGE")
+            // Whatever production ships, so the gate guards the search players actually get.
+            string(root, "heuristic", SearchSettings.DEFAULT_HEURISTIC.name())
                 .toUpperCase(java.util.Locale.ROOT)
                 .replace('-', '_')));
   }

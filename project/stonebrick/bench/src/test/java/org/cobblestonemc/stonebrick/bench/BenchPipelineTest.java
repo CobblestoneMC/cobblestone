@@ -150,7 +150,8 @@ class BenchPipelineTest {
             real.realMillis(),
             real.peakHeapBytes(),
             null,
-            java.util.Set.of());
+            java.util.Set.of(),
+            real.configuration());
 
     Comparison.Verdict verdict =
         Comparison.compare(changed, Baselines.read(baselines, scenario.runId(Loadout.fallback())));
@@ -161,7 +162,36 @@ class BenchPipelineTest {
     assertTrue(table.contains("nodesExpanded"), table);
     assertTrue(table.contains("+100.0%"), table);
     // The table has to say what to do about it, not just that something happened.
-    assertTrue(table.contains("benchAccept"), table);
+    assertTrue(table.contains("accept --scenario"), table);
+  }
+
+  /**
+   * A baseline taken under another heuristic, or against another capture of the terrain, is not
+   * compared at all. Terrain from a seed is not reproducible, so a re-capture alone moves the
+   * numbers, and reporting that as a regression would send someone looking at the algorithm.
+   */
+  @Test
+  void aBaselineThatMeasuredSomethingElseIsNotCompared(@TempDir Path dir) throws Exception {
+    Path root = corpus(dir, "flat-walk", 56, 56, "zero");
+    Path baselines = dir.resolve("baselines");
+    Scenario scenario = Scenario.loadAll(root.resolve(Scenario.FILE_NAME)).get(0);
+    ScenarioRunner runner = new ScenarioRunner(root, new SilentLogger());
+    Baselines.accept(
+        baselines, runner.run(scenario, Loadout.fallback(), SearchObserver.none()), "testsha");
+
+    Scenario other =
+        scenario.withHeuristic(
+            scenario.heuristic() == Scenario.Heuristic.COARSE
+                ? Scenario.Heuristic.RUNNING_AVERAGE
+                : Scenario.Heuristic.COARSE);
+    Comparison.Verdict verdict =
+        Comparison.compare(
+            runner.run(other, Loadout.fallback(), SearchObserver.none()),
+            Baselines.read(baselines, scenario.runId(Loadout.fallback())));
+
+    assertEquals(Comparison.Status.CONFIGURATION, verdict.status());
+    assertFalse(verdict.ok());
+    assertTrue(verdict.detail().contains("heuristic"), verdict.detail());
   }
 
   @Test
@@ -192,7 +222,8 @@ class BenchPipelineTest {
             real.realMillis() * 50 + 1000,
             real.peakHeapBytes() * 3,
             null,
-            java.util.Set.of());
+            java.util.Set.of(),
+            real.configuration());
 
     assertEquals(
         Comparison.Status.MATCH,

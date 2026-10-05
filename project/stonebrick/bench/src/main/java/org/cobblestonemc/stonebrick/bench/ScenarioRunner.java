@@ -10,6 +10,7 @@ package org.cobblestonemc.stonebrick.bench;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import org.cobblestonemc.Cell;
@@ -82,7 +83,9 @@ public final class ScenarioRunner {
    */
   public RunResult run(Scenario scenario, Loadout loadout, SearchObserver observer)
       throws IOException {
-    Capture capture = Capture.load(CorpusLayout.at(corpusRoot).capture(scenario.capture()).root());
+    Path captureRoot = CorpusLayout.at(corpusRoot).capture(scenario.capture()).root();
+    Capture capture = Capture.load(captureRoot);
+    Map<String, String> configuration = configurationOf(scenario, captureRoot);
     try (DeterministicScheduler scheduler = new DeterministicScheduler()) {
       StonebrickPlatformApi platform =
           new StonebrickPlatformApi(
@@ -162,7 +165,8 @@ public final class ScenarioRunner {
           realMillis,
           runtime.totalMemory() - runtime.freeMemory(),
           missing,
-          platform.missing().chunks());
+          platform.missing().chunks(),
+          configuration);
     }
   }
 
@@ -249,6 +253,34 @@ public final class ScenarioRunner {
     lastCoarseProfiles = profiles;
     return new org.cobblestonemc.minecraft.lod.CoarseHeuristic(
         profiles, org.cobblestonemc.minecraft.lod.CoarseCost.forPlayer(player, excluded));
+  }
+
+  /**
+   * Returns what a run measured, for a baseline to be stamped with.
+   *
+   * <p>The capture is identified by when it was taken. Terrain from a seed is <em>not</em>
+   * reproducible: two captures of the same region from the same seed and Paper build differ in
+   * their decorations, by enough to move a route's cost by several percent and its expansions by
+   * half. A baseline is therefore a fact about one capture, and comparing it against another would
+   * report the terrain's differences as the algorithm's.
+   */
+  private static Map<String, String> configurationOf(Scenario scenario, Path captureRoot)
+      throws IOException {
+    Map<String, String> configuration = new java.util.LinkedHashMap<>();
+    configuration.put("heuristic", scenario.heuristic().name());
+    configuration.put(
+        "heuristicWeight",
+        String.format(java.util.Locale.ROOT, "%.2f", scenario.settings().heuristicWeight()));
+    configuration.put("maxCellsVisited", String.valueOf(scenario.settings().maxCellsVisited()));
+    configuration.put("io", scenario.io().toString());
+    configuration.put(
+        "capture",
+        scenario.capture()
+            + "@"
+            + org.cobblestonemc.stonebrick.format.CaptureDirectory.at(captureRoot)
+                .readMeta()
+                .getOrDefault("capturedAt", "unknown"));
+    return configuration;
   }
 
   private static String outcomeOf(

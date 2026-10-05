@@ -43,6 +43,8 @@ import org.jetbrains.annotations.Nullable;
  * @param peakHeapBytes peak heap during the run; advisory only
  * @param missingCaptureReport a description of reads outside the capture, or {@code null}
  * @param missingChunks every chunk read outside the capture, packed as {@code (x << 32) | z}
+ * @param configuration what was measured: the heuristic, weight, limits, IO model and the exact
+ *     capture. Two runs are only comparable when these agree
  */
 public record RunResult(
     String scenario,
@@ -60,7 +62,8 @@ public record RunResult(
     long realMillis,
     long peakHeapBytes,
     @Nullable String missingCaptureReport,
-    java.util.Set<Long> missingChunks) {
+    java.util.Set<Long> missingChunks,
+    Map<String, String> configuration) {
 
   /**
    * Returns whether this run produced a number worth comparing.

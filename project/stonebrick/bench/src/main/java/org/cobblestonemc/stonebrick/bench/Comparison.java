@@ -26,6 +26,10 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class Comparison {
 
+  /** How to accept new numbers, printed where a reader needs it. */
+  static final String ACCEPT =
+      "./gradlew :stonebrick:stonebrick-bench:run --args=\"accept --scenario <id>\"";
+
   private Comparison() {}
 
   /** How one metric moved. */
@@ -68,6 +72,13 @@ public final class Comparison {
     /** The run read outside its capture, so its numbers describe nothing. */
     DEGENERATE,
 
+    /**
+     * The baseline measured something else: another heuristic, weight or IO model, or another
+     * capture of the terrain. Its numbers are not compared, because every difference would be
+     * reported as the algorithm's.
+     */
+    CONFIGURATION,
+
     /** No baseline yet; nothing to compare against. */
     NEW
   }
@@ -89,6 +100,14 @@ public final class Comparison {
     if (baseline == null) {
       return new Verdict(
           result.scenario(), Status.NEW, "no baseline yet; accept it to start tracking", List.of());
+    }
+
+    if (!baseline.configuration().equals(result.configuration())) {
+      return new Verdict(
+          result.scenario(),
+          Status.CONFIGURATION,
+          configurationDifference(baseline.configuration(), result.configuration()),
+          List.of());
     }
 
     List<Delta> deltas = new ArrayList<>();
@@ -159,8 +178,8 @@ public final class Comparison {
       long fresh = verdicts.stream().filter(v -> v.status() == Status.NEW).count();
       if (fresh == verdicts.size()) {
         text.append(
-            "%d scenario(s) have no baseline yet. Accept them to start tracking:%n  ./gradlew benchAccept%n"
-                .formatted(fresh));
+            "%d scenario(s) have no baseline yet. Accept them to start tracking:%n  %s%n"
+                .formatted(fresh, ACCEPT.replace(" --scenario <id>", "")));
       } else if (fresh > 0) {
         text.append(
             "%d scenario(s) match their baselines; %d have none yet.%n"
@@ -174,11 +193,26 @@ public final class Comparison {
       text.append(
           """
           %d of %d scenarios differ. Review the table; if the new numbers are right, accept them:
-            ./gradlew benchAccept --scenario <id>
+            %s
           """
-              .formatted(failed, verdicts.size()));
+              .formatted(failed, verdicts.size(), ACCEPT));
     }
     return text.toString();
+  }
+
+  private static String configurationDifference(
+      Map<String, String> baseline, Map<String, String> current) {
+    if (baseline.isEmpty()) {
+      return "baseline does not record what it measured; re-accept it";
+    }
+    List<String> moved = new ArrayList<>();
+    for (Map.Entry<String, String> entry : current.entrySet()) {
+      String before = baseline.get(entry.getKey());
+      if (!entry.getValue().equals(before)) {
+        moved.add(entry.getKey() + " " + before + " -> " + entry.getValue());
+      }
+    }
+    return "measured differently: " + String.join("; ", moved);
   }
 
   private static String describe(Delta delta) {
