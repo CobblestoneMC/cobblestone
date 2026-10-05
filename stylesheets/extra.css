@@ -1,0 +1,102 @@
+/* Cobblestone docs theme — brand colors come from the in-game message palette
+   (CobblestoneColors: sky blue #4AA8FF, amber #FFC857). */
+
+:root {
+  --md-primary-fg-color: #2a6fb5;
+  --md-primary-fg-color--light: #4aa8ff;
+  --md-primary-fg-color--dark: #1d4f81;
+  --md-accent-fg-color: #c98a00;
+  --cs-accent: #4aa8ff;
+  --cs-amber: #ffc857;
+  --md-typeset-a-color: #1f64a8;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #123048;
+  --md-primary-fg-color--light: #4aa8ff;
+  --md-primary-fg-color--dark: #0d2233;
+  --md-accent-fg-color: #ffc857;
+  /* The slate primary is too dark to read as link text on the slate background. */
+  --md-typeset-a-color: #6cb8ff;
+}
+
+/* --- Home hero ------------------------------------------------------------ */
+
+.cs-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2rem;
+  margin: 1rem 0 2.5rem;
+}
+
+.cs-hero__text {
+  flex: 1 1 18rem;
+}
+
+.cs-hero__text h1 {
+  margin: 0 0 0.4rem;
+  font-weight: 700;
+}
+
+.cs-hero__tagline {
+  font-size: 1.1rem;
+  line-height: 1.5;
+  color: var(--md-default-fg-color--light);
+}
+
+.cs-hero__art {
+  flex: 1 1 18rem;
+  max-width: 26rem;
+}
+
+.cs-hero__art img {
+  width: 100%;
+  height: auto;
+}
+
+/* --- Badges --------------------------------------------------------------- */
+
+.cs-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.8rem 0 0;
+}
+
+.cs-badges img {
+  height: 20px;
+}
+
+/* --- Section illustrations ------------------------------------------------ */
+
+.cs-illustration {
+  display: block;
+  max-width: 22rem;
+  margin: 0 auto 1.5rem;
+}
+
+.cs-illustration img {
+  width: 100%;
+  height: auto;
+}
+
+/* --- External nav links ---------------------------------------------------- */
+
+/* Download and Stats leave the site; mark them with an "open in new" icon. */
+.md-tabs__link[href^="http"]::after,
+.md-nav__link[href^="http"]::after {
+  content: "";
+  display: inline-block;
+  width: 0.75em;
+  height: 0.75em;
+  margin-left: 0.25em;
+  vertical-align: -0.05em;
+  background-color: currentColor;
+  -webkit-mask: var(--cs-external-icon) center / contain no-repeat;
+  mask: var(--cs-external-icon) center / contain no-repeat;
+}
+
+:root {
+  --cs-external-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3m-2 16H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7Z"/></svg>');
+}
