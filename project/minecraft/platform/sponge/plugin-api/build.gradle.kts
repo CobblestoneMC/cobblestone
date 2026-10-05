@@ -1,7 +1,7 @@
 // sponge-plugin-api — the published Sponge-native binding of the plugin-extension surface. Other
 // Sponge plugins depend on this to register destinations/navigators with the installed Cobblestone
 // plugin and reach navigation in native ServerPlayer/ServerLocation terms. One jar serves every
-// supported Minecraft version. (design/06, design/07)
+// supported Minecraft version.
 plugins {
     id("cobblestone.publish-conventions")
 }

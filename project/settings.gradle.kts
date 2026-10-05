@@ -11,7 +11,7 @@ pluginManagement {
 
 rootProject.name = "cobblestone"
 
-// All subprojects live flat under project/ and are named exactly as in design/01-modules-and-build.md.
+// All subprojects live flat under project/.
 // Integration plugins (CobblestoneCitizens, CobblestoneEssentials, …) are added in Phase 8; they depend on
 // third-party plugin APIs not yet wired here.
 include(":api")
@@ -60,7 +60,7 @@ include(":minecraft:platform:sponge-1_21_1:plugin")
 project(":minecraft:platform:sponge-1_21_1:plugin").name = "sponge-1_21_1-plugin"
 
 // Example integration plugins live under examples/ — self-contained, third-party-style plugins that
-// depend only on Cobblestone's published API to demonstrate extending navigation (design/08).
+// depend only on Cobblestone's published API to demonstrate extending navigation.
 include(":examples:paper-warps")
 project(":examples:paper-warps").name = "example-warps"
 
