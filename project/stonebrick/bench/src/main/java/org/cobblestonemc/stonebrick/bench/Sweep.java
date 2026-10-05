@@ -91,15 +91,9 @@ final class Sweep {
             if (options.io() != null) {
               variant = variant.withIo(options.io());
             }
-            System.out.printf(
-                Locale.ROOT,
-                "running %s %s w=%.2f...%n",
-                scenario.runId(loadout),
-                heuristic,
-                weight);
             RunResult result = runner.run(variant, loadout, SearchObserver.none());
             CaptureProfiles profiles = runner.lastCoarseProfiles();
-            points.add(
+            Point point =
                 new Point(
                     scenario.runId(loadout),
                     loadout.name(),
@@ -110,7 +104,20 @@ final class Sweep {
                     result.nodesExpanded(),
                     heuristic == Scenario.Heuristic.COARSE && profiles != null
                         ? profiles.chunkColumns()
-                        : 0));
+                        : 0);
+            points.add(point);
+            // Each point as it lands, not only in the tables at the end: a full sweep runs for
+            // hours, and one stopped partway through should leave its measurements behind.
+            System.out.printf(
+                Locale.ROOT,
+                "point %s %s w=%.2f %s cost=%.3f expanded=%d columns=%d%n",
+                point.scenario(),
+                heuristic,
+                weight,
+                point.outcome(),
+                point.cost(),
+                point.nodes(),
+                point.coarseColumns());
           }
         }
       }
