@@ -36,9 +36,9 @@ import org.yaml.snakeyaml.Yaml;
  *
  * <p><b>Why this exists.</b> Captures are too large to keep in version control, so without this the
  * terrain on each developer's machine is whatever they happened to walk to — which makes a baseline
- * meaningless to anyone else and reduces regression checking to a personal habit. Terrain generated
- * from a seed is the same everywhere, so the scenarios, the manifest and the baselines all become
- * shareable and only the block data stays local, regenerable on demand.
+ * meaningless to anyone else. A seed fixes the routes and landforms, so the scenarios and the
+ * manifest are shareable. It does not fix every block -- decorations differ between two generations
+ * of the same seed -- so captures stay local, and so do the baselines measured against them.
  *
  * <p><b>Commands go in over stdin.</b> Paper reads its console from standard input, so driving it
  * needs no RCON port, no password and no protocol implementation — and the copier already reports

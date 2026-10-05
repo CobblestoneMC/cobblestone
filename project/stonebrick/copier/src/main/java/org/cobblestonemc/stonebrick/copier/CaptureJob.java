@@ -193,10 +193,10 @@ final class CaptureJob {
     int chunkX = at[0];
     int chunkZ = at[1];
     inFlight.incrementAndGet();
-    // Generation is off unless asked for. On a seeded corpus world it is exactly what we want —
-    // terrain is a deterministic function of the seed, so generating it is as reproducible as
-    // reading it. On somebody's live server it would silently write new chunks into their save,
-    // which is not a thing a capture tool should do by default.
+    // Generation is off unless asked for. On a seeded corpus world it is exactly what we want --
+    // the seed fixes the landforms, though not every decoration. On somebody's live server it would
+    // silently write new chunks into their save, which is not a thing a capture tool should do by
+    // default.
     world
         .getChunkAtAsync(chunkX, chunkZ, generate)
         .whenComplete(

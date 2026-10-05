@@ -1,8 +1,9 @@
 # The world the benchmark corpus is generated from.
 #
-# Terrain is a deterministic function of the seed *within a Minecraft version*, so the version is
-# part of the corpus's identity: regenerating against a different one silently produces different
-# terrain and makes every baseline mean something else. captureCorpus pins the Paper build.
+# The seed fixes the landforms *within a Minecraft version*, so the version is part of the corpus's
+# identity: regenerating against a different one produces different terrain. captureCorpus pins the
+# Paper build. Even pinned, decorations differ between generations, so a capture is not
+# byte-reproducible and baselines are tied to the capture they measured.
 seed: 8450468245224589493
 minecraftVersion: "26.2"
 paperBuild: 129

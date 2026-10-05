@@ -32,8 +32,8 @@ tasks.named<JavaExec>("run") {
 
 // Generates the benchmark corpus by running a real, seeded Minecraft server and capturing from it.
 // Captures are too large for version control, so without this every developer's terrain is whatever
-// they happened to walk to — which makes a baseline meaningless to anyone else. Terrain from a seed
-// is the same everywhere, so only the block data stays local and it is regenerable on demand.
+// they happened to walk to. A seed fixes the routes and landforms, so scenarios and the manifest are
+// shared; the blocks are not byte-reproducible, so captures and baselines stay local.
 tasks.register<JavaExec>("captureCorpus") {
     group = "stonebrick"
     description = "Generates missing corpus captures from the seeded world (needs -PacceptMinecraftEula=true)"

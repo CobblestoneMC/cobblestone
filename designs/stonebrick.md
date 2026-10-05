@@ -21,8 +21,8 @@ design as written, and where the build departed from it the commit history says 
 - The pyramid: L1–L3, persistent storage, sharing profiles between solves (§10.9–§10.13). Each solve
   profiles its own terrain today.
 - Tier 1 work (§11) and the production behaviour in §13.
-- Committed baselines and CI gating (§8.4). Baselines are gitignored and local until the corpus is
-  routinely regenerated from the seed.
+- Committed baselines and CI gating (§8.4). Baselines are local: a seed does not reproduce the
+  blocks (§6.3), so a baseline is a fact about one capture.
 
 Stonebrick is a fourth "platform" alongside Paper and Sponge, except the world it reads is a file
 captured from a real server rather than a live one. It exists so the search can be run
@@ -511,18 +511,24 @@ because an optimality-for-speed trade can legitimately move it either way.
 
 ### 6.3 What this buys back
 
-With terrain a deterministic function of a seed, everything except the block data becomes
-shareable again:
+With terrain a function of a seed, everything that describes the corpus becomes shareable:
 
 | | committed | why |
 |---|---|---|
 | `scenarios.yml` | yes | coordinates in a seeded world |
 | `corpus.yml` — seed, Minecraft version | yes | the identity of the world |
 | `needed-chunks.yml` | yes | derived, small, reproducible |
-| baselines | yes | they now mean the same thing on every machine |
+| baselines | no | a fact about one capture; see below |
 | `.sbc` captures | no | large, and regenerable from the above |
 
-Which restores shareable baselines, and makes CI gating a choice rather than an impossibility.
+⚠️ **Measured since: a seed does not reproduce the blocks.** Two captures of `along-river` from the
+same seed and Paper build differ in 157 of 521 columns, down to which decorations exist (cocoa, jungle
+logs, a melon), and the route moves with them: 89.53, 87.13 and 88.78 s across three captures, and
+777 against 1,137 coarse expansions. That is far past the gate's tolerances. Every run is therefore
+stamped with the capture it read (by `capturedAt`) along with its heuristic, weight, cell cap and IO
+model, and a baseline that measured anything else is reported as `CONFIGURATION` rather than
+compared. Comparisons *within* one capture -- a sweep, an A/B -- are unaffected: both sides read the
+same blocks. Shareable baselines would need shared captures.
 
 ### 6.4 No golden solves
 
@@ -1395,10 +1401,10 @@ Two things that are not about benchmarking but fall out of the work:
 
 - **Captures**: one file per chunk column, cube-level `sectionMask`, column-local palette, **raw
   payloads** for byte-stability across JDKs.
-- **Captures are not version-controlled.** They are regenerated from the seed in `corpus.yml` by
-  `captureCorpus`. Baselines are local for now too (gitignored); they can be committed once the
-  corpus is routinely regenerated, since only then do they mean the same thing on every machine.
-  Benchmark gating is a local discipline rather than a CI one.
+- **Captures are not version-controlled.** They are generated from the seed in `corpus.yml` by
+  `captureCorpus`, which fixes the landforms but not every block (§6.3). Baselines are local too,
+  stamped with the capture and configuration they measured. Benchmark gating is a local discipline
+  rather than a CI one.
 - **Scale the budget, not the distance**: cell-limit behavior is tested with a small capture and a
   small `maxCellsVisited`, not with a 3 500-block route.
 - **No manifest** — every column file carries its own chunk coordinates and section mask, so the
