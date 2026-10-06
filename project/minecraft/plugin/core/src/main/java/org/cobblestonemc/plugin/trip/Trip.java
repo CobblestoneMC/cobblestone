@@ -26,7 +26,7 @@ public final class Trip<E, P extends TripAgent<E>, L> {
 
   private final P player;
   private final int id;
-  private final String destination;
+  private final TripLabel label;
   private final Navigator<L> navigator;
   private final MinecraftScheduler<E> scheduler;
   private final long periodTicks;
@@ -42,7 +42,7 @@ public final class Trip<E, P extends TripAgent<E>, L> {
   Trip(
       P player,
       int id,
-      String destination,
+      TripLabel label,
       Navigator<L> navigator,
       MinecraftScheduler<E> scheduler,
       long periodTicks,
@@ -53,7 +53,7 @@ public final class Trip<E, P extends TripAgent<E>, L> {
       long liveIntervalMillis) {
     this.player = player;
     this.id = id;
-    this.destination = destination;
+    this.label = label;
     this.navigator = navigator;
     this.scheduler = scheduler;
     this.periodTicks = periodTicks;
@@ -187,7 +187,16 @@ public final class Trip<E, P extends TripAgent<E>, L> {
    * @return the destination label
    */
   public String destination() {
-    return destination;
+    return label.text();
+  }
+
+  /**
+   * Returns this trip's full label, including the destination address it was built from, if any.
+   *
+   * @return the label
+   */
+  public TripLabel label() {
+    return label;
   }
 
   /**

@@ -14,6 +14,7 @@ import java.util.Locale;
 import java.util.function.Supplier;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.cobblestonemc.api.SearchSettings;
@@ -32,6 +33,7 @@ import org.cobblestonemc.plugin.data.DataStores;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchGate;
 import org.cobblestonemc.plugin.search.SearchRegistry;
+import org.cobblestonemc.plugin.sidebar.TripSidebar;
 import org.cobblestonemc.plugin.trip.TripManager;
 
 /**
@@ -47,6 +49,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
   private PaperNavigationServiceImpl platformApi;
   private DataStore dataStore;
   private TripManager<Entity, PaperTripAgent, Location> tripManager;
+  private TripSidebar<Entity, PaperTripAgent, Location> tripSidebar;
   private PaperMetrics metrics;
   private final SearchRegistry<Location> searchRegistry = new SearchRegistry<>();
 
@@ -122,6 +125,25 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
         TrailNavigatorSettings.NAVIGATOR_ID,
         new PaperTrailNavigatorFactory(config, keys, messages));
 
+    // Each player's trips are listed in their sidebar with a countdown. Folia has no scoreboard
+    // API, so there the sidebar is simply never shown.
+    boolean folia = isFolia();
+    if (folia && config.get(keys.tripsSidebar)) {
+      getLogger().info("The trip sidebar is unavailable on Folia, which has no scoreboard API.");
+    }
+    // Trips are only ever started for players, so every agent wraps one.
+    this.tripSidebar =
+        new TripSidebar<>(
+            tripManager,
+            platformApi.scheduler(),
+            messages,
+            dataStore.playerPreferences(),
+            () -> !folia && config.get(keys.tripsSidebar),
+            agent -> new PaperSidebarDisplay((Player) agent.entity()),
+            agent -> ((Player) agent.entity()).locale(),
+            logger);
+    tripManager.onChange(tripSidebar::refresh);
+
     // Discovered vanilla portals are surfaced to searches as an internal transition provider, and
     // learned from player teleports by the portal listener.
     platformApi.register(
@@ -151,7 +173,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
 
     getServer()
         .getPluginManager()
-        .registerEvents(new CobblestoneListener(tripManager, searchRegistry), this);
+        .registerEvents(new CobblestoneListener(tripManager, searchRegistry, tripSidebar), this);
     // Keep the chunk cache honest: a block changing evicts the snapshot it belongs to.
     // When another plugin disables, drop everything it registered into our registries.
     getServer()
@@ -200,6 +222,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                           dataStore.locations(),
                           dataStore.portalTransitions(),
                           tripManager,
+                          tripSidebar,
                           searchRegistry),
                       "Cobblestone admin and utility commands",
                       List.of("stone"));
@@ -231,10 +254,23 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     getLogger().info("Cobblestone enabled.");
   }
 
+  /** Whether this server is Folia, whose regionized threading leaves out the scoreboard API. */
+  private static boolean isFolia() {
+    try {
+      Class.forName("io.papermc.paper.threadedregions.RegionizedServer");
+      return true;
+    } catch (ClassNotFoundException e) {
+      return false;
+    }
+  }
+
   @Override
   public void onDisable() {
     if (metrics != null) {
       metrics.shutdown();
+    }
+    if (tripSidebar != null) {
+      tripSidebar.closeAll();
     }
     if (tripManager != null) {
       tripManager.stopEverything();

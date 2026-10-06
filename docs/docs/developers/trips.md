@@ -30,7 +30,11 @@ player strays and end on arrival. `TripService` starts trips programmatically.
         .navigate(player, objectiveLocation, NavigatorSettings.defaults(), "Lost Lantern");
     ```
 
-This runs the search and starts the trip. The label is displayed in `/cobblestone trips`.
+This runs the search and starts the trip. Every trip needs a label. It names the trip in
+`/cobblestone trips` and in the player's trip sidebar, where it is shown exactly as given. Keep it
+short, and make it tell your own trips apart: unlike a `/navigate` address, Cobblestone cannot
+shorten or disambiguate it. The label is also the trip's identity. Starting another trip for the
+same player with the same label replaces the first one, which suits a quest objective that moves.
 
 ## Outcomes
 
@@ -58,7 +62,7 @@ tripService.navigate(player, objective, NavigatorSettings.defaults(), "Lost Lant
 An overload accepts only a failure callback:
 
 ```java
-tripService.navigate(player, objective, NavigatorSettings.defaults(),
+tripService.navigate(player, objective, NavigatorSettings.defaults(), "Lost Lantern",
     reason -> player.sendMessage("No route: " + reason));
 ```
 
@@ -126,7 +130,7 @@ To render a path from a search you ran (see [Searching](searching.md)):
     handle.future().thenAccept(result -> {
       if (result instanceof NavigationResult.Success<Location, MinecraftStepPayload> success) {
         CobblestonePaperApi.tripService()
-            .startTrip(player, success.path(), NavigatorSettings.defaults());
+            .startTrip(player, success.path(), NavigatorSettings.defaults(), "Lost Lantern");
       }
     });
     ```
@@ -140,7 +144,7 @@ To render a path from a search you ran (see [Searching](searching.md)):
     handle.future().thenAccept(result -> {
       if (result instanceof NavigationResult.Success<ServerLocation, MinecraftStepPayload> success) {
         CobblestoneSpongeApi.tripService()
-            .startTrip(player, success.path(), NavigatorSettings.defaults());
+            .startTrip(player, success.path(), NavigatorSettings.defaults(), "Lost Lantern");
       }
     });
     ```
@@ -149,7 +153,8 @@ Trips started this way are not live. Use `navigate` for trips that re-search.
 
 ## Lifecycle
 
-Programmatic trips appear in `/cobblestone trips`, count toward `trips.max_active_per_player`, and
-can be cancelled by the player. Do not restart a trip the player has cancelled.
+Programmatic trips appear in `/cobblestone trips` and the trip sidebar, count toward
+`trips.max_active_per_player`, and can be cancelled by the player. Do not restart a trip the player
+has cancelled.
 
 Trips end on arrival, cancellation, or disconnect.

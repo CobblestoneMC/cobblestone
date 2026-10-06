@@ -25,6 +25,7 @@ import org.cobblestonemc.plugin.data.DeathLocationDao;
 import org.cobblestonemc.plugin.data.EndReturnPortalDao;
 import org.cobblestonemc.plugin.data.GatewayDao;
 import org.cobblestonemc.plugin.data.LocationDao;
+import org.cobblestonemc.plugin.data.PlayerPreferencesDao;
 import org.cobblestonemc.plugin.data.PortalTransitionDao;
 
 /**
@@ -51,6 +52,7 @@ public abstract class AbstractJdbcDataStore implements DataStore {
   private PortalTransitionDao portalTransitionDao;
   private EndReturnPortalDao endReturnPortalDao;
   private GatewayDao gatewayDao;
+  private PlayerPreferencesDao playerPreferencesDao;
 
   /**
    * Creates a store.
@@ -131,6 +133,7 @@ public abstract class AbstractJdbcDataStore implements DataStore {
       this.portalTransitionDao = new JdbcPortalTransitionDao(this);
       this.endReturnPortalDao = new JdbcEndReturnPortalDao(this);
       this.gatewayDao = new JdbcGatewayDao(this);
+      this.playerPreferencesDao = new JdbcPlayerPreferencesDao(this);
     } catch (ClassNotFoundException e) {
       throw new DataStoreException.NoDriver(driver(), e);
     } catch (SQLException e) {
@@ -176,6 +179,14 @@ public abstract class AbstractJdbcDataStore implements DataStore {
       throw new IllegalStateException("DataStore.init() has not been called");
     }
     return gatewayDao;
+  }
+
+  @Override
+  public PlayerPreferencesDao playerPreferences() {
+    if (playerPreferencesDao == null) {
+      throw new IllegalStateException("DataStore.init() has not been called");
+    }
+    return playerPreferencesDao;
   }
 
   @Override

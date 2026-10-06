@@ -36,6 +36,7 @@ import org.cobblestonemc.plugin.data.PortalTransitionDao;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchRegistry;
+import org.cobblestonemc.plugin.sidebar.TripSidebar;
 import org.cobblestonemc.plugin.trip.Trip;
 import org.cobblestonemc.plugin.trip.TripManager;
 
@@ -57,6 +58,7 @@ final class CobblestoneCommand {
    * @param locations the location DAO (for {@code location set/unset})
    * @param portals the portal-transition DAO (for {@code portals clear})
    * @param trips the trip manager (for {@code cancel}/{@code trips})
+   * @param sidebar the trip sidebar (for {@code sidebar})
    * @param searches the search registry (for {@code cancel})
    * @return the command node
    */
@@ -68,6 +70,7 @@ final class CobblestoneCommand {
       LocationDao locations,
       PortalTransitionDao portals,
       TripManager<Entity, PaperTripAgent, Location> trips,
+      TripSidebar<Entity, PaperTripAgent, Location> sidebar,
       SearchRegistry<Location> searches) {
 
     var locationSubCommand =
@@ -163,6 +166,18 @@ final class CobblestoneCommand {
                 .requires(source -> source.getSender().hasPermission(Permissions.NAVIGATE.value()))
                 .executes(ctx -> trips(ctx.getSource().getSender(), messages, trips)))
         .then(
+            Commands.literal("sidebar")
+                .requires(source -> source.getSender().hasPermission(Permissions.SIDEBAR.value()))
+                .executes(ctx -> sidebar(ctx.getSource().getSender(), messages, sidebar, null))
+                .then(
+                    Commands.literal("on")
+                        .executes(
+                            ctx -> sidebar(ctx.getSource().getSender(), messages, sidebar, true)))
+                .then(
+                    Commands.literal("off")
+                        .executes(
+                            ctx -> sidebar(ctx.getSource().getSender(), messages, sidebar, false))))
+        .then(
             Commands.literal("portals")
                 .requires(source -> source.getSender().hasPermission(Permissions.PORTALS.value()))
                 .executes(ctx -> showHelp(ctx.getSource().getSender(), messages))
@@ -246,6 +261,12 @@ final class CobblestoneCommand {
         "command.cobblestone.help.cancel");
     CommandHelp.line(
         sender, messages, locale, "/cobblestone trips", "command.cobblestone.help.trips");
+    CommandHelp.line(
+        sender,
+        messages,
+        locale,
+        "/cobblestone sidebar [on|off]",
+        "command.cobblestone.help.sidebar");
     CommandHelp.line(
         sender,
         messages,
@@ -384,6 +405,33 @@ final class CobblestoneCommand {
           trip.destination(),
           messages.formatDuration(locale, trip.remainingSeconds()));
     }
+    return Command.SINGLE_SUCCESS;
+  }
+
+  /**
+   * Shows or hides the caller's trip sidebar; {@code show} is {@code null} to flip the current
+   * choice.
+   */
+  private static int sidebar(
+      CommandSender sender,
+      Messages messages,
+      TripSidebar<Entity, PaperTripAgent, Location> sidebar,
+      Boolean show) {
+    Locale locale = localeOf(sender, messages);
+    if (!(sender instanceof Player player)) {
+      messages.send(sender, locale, CobblestoneMessages.PLAYERS_ONLY);
+      return Command.SINGLE_SUCCESS;
+    }
+    if (!sidebar.available()) {
+      messages.send(player, locale, CobblestoneMessages.SIDEBAR_UNAVAILABLE);
+      return Command.SINGLE_SUCCESS;
+    }
+    boolean shown = show != null ? show : !sidebar.isShown(player.getUniqueId());
+    sidebar.setShown(new PaperTripAgent(player), shown);
+    messages.send(
+        player,
+        locale,
+        shown ? CobblestoneMessages.SIDEBAR_SHOWN : CobblestoneMessages.SIDEBAR_HIDDEN);
     return Command.SINGLE_SUCCESS;
   }
 

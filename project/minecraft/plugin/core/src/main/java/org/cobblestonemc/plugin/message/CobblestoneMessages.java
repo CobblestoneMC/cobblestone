@@ -170,6 +170,18 @@ public final class CobblestoneMessages {
   /** Shown when the player has no active trips. */
   public static final Message0 TRIPS_NONE = Message0.info("command.cobblestone.trips.none");
 
+  /** Confirms the player's trips are listed in the sidebar again. */
+  public static final Message0 SIDEBAR_SHOWN =
+      Message0.success("command.cobblestone.sidebar.shown");
+
+  /** Confirms the player's trips are no longer listed in the sidebar. */
+  public static final Message0 SIDEBAR_HIDDEN =
+      Message0.success("command.cobblestone.sidebar.hidden");
+
+  /** Shown when the server has the trip sidebar turned off, so a player's choice has no effect. */
+  public static final Message0 SIDEBAR_UNAVAILABLE =
+      Message0.error("command.cobblestone.sidebar.unavailable");
+
   /** Confirms the discovered-portal cache was cleared ({@code {0}} = how many were removed). */
   public static final Message1 PORTALS_CLEARED =
       Message1.success("command.cobblestone.portals.cleared");

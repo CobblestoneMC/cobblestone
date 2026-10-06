@@ -55,6 +55,7 @@ name, without extension, in the plugin's data folder.
 | `trips.max_active_per_player` | `3` | live |
 | `trips.live_interval_ticks` | `100` | live |
 | `trips.recalculate_distance` | `32` | live |
+| `trips.sidebar` | `true` | live |
 
 - **`max_active_per_player`**: Maximum concurrent trips per player.
 - **`live_interval_ticks`**: Interval between re-searches for live trips. Live re-searches are the
@@ -62,6 +63,11 @@ name, without extension, in the plugin's data folder.
 - **`recalculate_distance`**: Distance in blocks a player may stray before the route is
   recomputed. Below this distance, a guide path back to the trail is drawn instead. `0` disables
   recomputation.
+- **`sidebar`**: Lists each player's active trips in their sidebar with the time left on each.
+  Players can hide it for themselves with `/cobblestone sidebar off`. While shown, a player is
+  given a scoreboard of their own, so they do not see the server's main scoreboard (its sidebar,
+  or teams it uses for name colors). Turn this off if another plugin relies on that. It is never
+  shown on Folia, which has no scoreboard API.
 
 ## `search`
 

@@ -78,6 +78,7 @@ Player nodes default to allow; admin nodes default to op.
 | --- | --- | --- |
 | `cobblestone.navigate` | allow | `/navigate`, `/cobblestone trips`, `/cobblestone cancel` |
 | `cobblestone.location` | allow | Personal locations |
+| `cobblestone.sidebar` | allow | Showing or hiding one's own trip sidebar |
 | `cobblestone.navigator` | allow | Non-default navigators |
 | `cobblestone.admin.location.global` | op | Global locations |
 | `cobblestone.admin.reload` | op | `/cobblestone reload` |

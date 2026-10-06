@@ -225,6 +225,29 @@ public final class Messages {
     return secs + " " + secondWord;
   }
 
+  /**
+   * Formats a duration in seconds as compact text for tight spaces (e.g. "3m 24s", "1h 0m 5s").
+   * Leading zero units are dropped; the unit suffixes come from the message bundle.
+   *
+   * @param locale the recipient's locale
+   * @param seconds the duration in seconds
+   * @return the formatted duration
+   */
+  public String formatDurationShort(Locale locale, double seconds) {
+    long total = Math.max(0L, Math.round(seconds));
+    long hours = total / 3600L;
+    long minutes = total % 3600L / 60L;
+    long secs = total % 60L;
+    StringBuilder out = new StringBuilder();
+    if (hours > 0L) {
+      out.append(hours).append(template("format.duration.short.hours", locale)).append(' ');
+    }
+    if (hours > 0L || minutes > 0L) {
+      out.append(minutes).append(template("format.duration.short.minutes", locale)).append(' ');
+    }
+    return out.append(secs).append(template("format.duration.short.seconds", locale)).toString();
+  }
+
   private Component format(Message message, Locale locale, Object[] args) {
     String template = template(message.key(), locale);
     TextComponent.Builder builder = Component.text();

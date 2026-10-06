@@ -95,17 +95,6 @@ public final class PaperTripServiceImpl
     return factory.create(player, path, settings);
   }
 
-  @Override
-  protected String describe(Location location) {
-    return location.getWorld().getKey().asString()
-        + " "
-        + location.getBlockX()
-        + ","
-        + location.getBlockY()
-        + ","
-        + location.getBlockZ();
-  }
-
   private NavigatorFactory navigatorFactory(String id) {
     NavigatorFactory factory = integrations.navigator(id);
     return factory != null ? factory : integrations.navigator(TrailNavigatorSettings.NAVIGATOR_ID);

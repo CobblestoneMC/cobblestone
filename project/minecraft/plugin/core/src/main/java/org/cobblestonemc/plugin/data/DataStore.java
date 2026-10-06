@@ -62,6 +62,13 @@ public interface DataStore {
   GatewayDao gateways();
 
   /**
+   * Returns the player-preferences DAO.
+   *
+   * @return the player-preferences DAO
+   */
+  PlayerPreferencesDao playerPreferences();
+
+  /**
    * Closes the store and releases its resources. Idempotent; safe to call even if {@link #init()}
    * failed.
    */

@@ -302,4 +302,42 @@ class DataStoreContractTest {
       second.close();
     }
   }
+
+  @ParameterizedTest
+  @MethodSource("backends")
+  void playerPreferencesRoundTripAndOverwrite(Backend backend, @TempDir Path dir) {
+    DataStore store = opened(backend, dir);
+    try {
+      UUID player = UUID.randomUUID();
+      assertTrue(
+          store.playerPreferences().get(player).isEmpty(),
+          "a player who changed nothing has no record");
+
+      store.playerPreferences().upsert(new PlayerPreferences(player, false));
+      assertFalse(store.playerPreferences().get(player).orElseThrow().sidebar());
+
+      store.playerPreferences().upsert(new PlayerPreferences(player, true));
+      assertTrue(store.playerPreferences().get(player).orElseThrow().sidebar());
+    } finally {
+      store.close();
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("backends")
+  void playerPreferencesSurviveReopen(Backend backend, @TempDir Path dir) {
+    UUID player = UUID.randomUUID();
+    DataStore first = opened(backend, dir);
+    try {
+      first.playerPreferences().upsert(new PlayerPreferences(player, false));
+    } finally {
+      first.close();
+    }
+    DataStore second = opened(backend, dir);
+    try {
+      assertFalse(second.playerPreferences().get(player).orElseThrow().sidebar());
+    } finally {
+      second.close();
+    }
+  }
 }

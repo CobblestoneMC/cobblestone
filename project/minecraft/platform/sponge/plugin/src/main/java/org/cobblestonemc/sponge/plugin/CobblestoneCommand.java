@@ -24,6 +24,7 @@ import org.cobblestonemc.plugin.data.PortalTransitionDao;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchRegistry;
+import org.cobblestonemc.plugin.sidebar.TripSidebar;
 import org.cobblestonemc.plugin.trip.Trip;
 import org.cobblestonemc.plugin.trip.TripManager;
 import org.spongepowered.api.command.Command;
@@ -49,6 +50,7 @@ final class CobblestoneCommand {
       LocationDao locations,
       PortalTransitionDao portals,
       TripManager<Entity, SpongeTripAgent, ServerLocation> trips,
+      TripSidebar<Entity, SpongeTripAgent, ServerLocation> sidebar,
       SearchRegistry<ServerLocation> searches) {
     Parameter.Value<Integer> cancelId = Parameter.integerNumber().key("id").optional().build();
     Parameter.Value<String> name = Parameter.string().key("name").build();
@@ -101,6 +103,17 @@ final class CobblestoneCommand {
             .permission(Permissions.NAVIGATE.value())
             .executor(ctx -> trips(ctx, messages, trips))
             .build();
+    Command.Parameterized sidebarOn =
+        Command.builder().executor(ctx -> sidebar(ctx, messages, sidebar, true)).build();
+    Command.Parameterized sidebarOff =
+        Command.builder().executor(ctx -> sidebar(ctx, messages, sidebar, false)).build();
+    Command.Parameterized sidebarCmd =
+        Command.builder()
+            .permission(Permissions.SIDEBAR.value())
+            .addChild(sidebarOn, "on")
+            .addChild(sidebarOff, "off")
+            .executor(ctx -> sidebar(ctx, messages, sidebar, null))
+            .build();
     Command.Parameterized portalsClear =
         Command.builder()
             .permission(Permissions.PORTALS.value())
@@ -142,6 +155,7 @@ final class CobblestoneCommand {
         .addChild(loglevel, "loglevel")
         .addChild(cancel, "cancel")
         .addChild(tripsCmd, "trips")
+        .addChild(sidebarCmd, "sidebar")
         .addChild(portalsCmd, "portals")
         .addChild(locationCmd, "location", "loc")
         .executor(ctx -> help(ctx, messages))
@@ -162,6 +176,12 @@ final class CobblestoneCommand {
         "command.cobblestone.help.cancel");
     SpongeCommandHelp.line(
         audience, messages, locale, "/cobblestone trips", "command.cobblestone.help.trips");
+    SpongeCommandHelp.line(
+        audience,
+        messages,
+        locale,
+        "/cobblestone sidebar [on|off]",
+        "command.cobblestone.help.sidebar");
     SpongeCommandHelp.line(
         audience,
         messages,
@@ -295,6 +315,34 @@ final class CobblestoneCommand {
           trip.destination(),
           messages.formatDuration(locale, trip.remainingSeconds()));
     }
+    return CommandResult.success();
+  }
+
+  /**
+   * Shows or hides the caller's trip sidebar; {@code show} is {@code null} to flip the current
+   * choice.
+   */
+  private static CommandResult sidebar(
+      CommandContext ctx,
+      Messages messages,
+      TripSidebar<Entity, SpongeTripAgent, ServerLocation> sidebar,
+      Boolean show) {
+    Locale locale = localeOf(ctx, messages);
+    Optional<ServerPlayer> player = ctx.cause().first(ServerPlayer.class);
+    if (player.isEmpty()) {
+      messages.send(ctx.cause().audience(), locale, CobblestoneMessages.PLAYERS_ONLY);
+      return CommandResult.success();
+    }
+    if (!sidebar.available()) {
+      messages.send(player.get(), locale, CobblestoneMessages.SIDEBAR_UNAVAILABLE);
+      return CommandResult.success();
+    }
+    boolean shown = show != null ? show : !sidebar.isShown(player.get().uniqueId());
+    sidebar.setShown(new SpongeTripAgent(player.get()), shown);
+    messages.send(
+        player.get(),
+        locale,
+        shown ? CobblestoneMessages.SIDEBAR_SHOWN : CobblestoneMessages.SIDEBAR_HIDDEN);
     return CommandResult.success();
   }
 
