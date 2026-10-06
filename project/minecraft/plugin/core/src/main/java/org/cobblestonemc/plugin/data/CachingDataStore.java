@@ -65,6 +65,11 @@ final class CachingDataStore implements DataStore {
   }
 
   @Override
+  public PlayerPreferencesDao playerPreferences() {
+    return delegate.playerPreferences();
+  }
+
+  @Override
   public void close() {
     delegate.close();
   }

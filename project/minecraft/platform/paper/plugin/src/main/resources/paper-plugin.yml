@@ -15,6 +15,9 @@ permissions:
   cobblestone.navigator:
     description: "Use of custom navigators (the parent of cobblestone.navigator.<id>)"
     default: true
+  cobblestone.sidebar:
+    description: "Use of /cobblestone sidebar, to show or hide one's own trip sidebar"
+    default: true
   cobblestone.location:
     description: "Use of personal locations"
     default: true

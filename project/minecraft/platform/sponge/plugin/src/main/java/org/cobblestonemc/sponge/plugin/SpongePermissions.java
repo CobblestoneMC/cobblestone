@@ -28,6 +28,7 @@ final class SpongePermissions {
     PermissionService service = Sponge.server().serviceProvider().permissionService();
     describe(service, container, Permissions.NAVIGATE, "Use of /navigate", true);
     describe(service, container, Permissions.NAVIGATOR, "Use of custom navigators", true);
+    describe(service, container, Permissions.SIDEBAR, "Show or hide one's own trip sidebar", true);
     describe(service, container, Permissions.LOCATION, "Use of personal locations", true);
     describe(service, container, Permissions.LOG_LEVEL, "Set the console log level", false);
     describe(service, container, Permissions.RELOAD, "Reload the Cobblestone configuration", false);

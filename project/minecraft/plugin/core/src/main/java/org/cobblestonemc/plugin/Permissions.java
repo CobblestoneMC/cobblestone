@@ -28,6 +28,9 @@ public enum Permissions {
    */
   NAVIGATOR("cobblestone.navigator"),
 
+  /** Use of {@code /cobblestone sidebar}, to show or hide one's own trip sidebar. Default allow. */
+  SIDEBAR("cobblestone.sidebar"),
+
   /** Use of {@code /cobblestone location}, for the player's own locations. Default allow. */
   LOCATION("cobblestone.location"),
 

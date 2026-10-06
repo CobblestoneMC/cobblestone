@@ -17,7 +17,7 @@ public interface Navigator<L> {
   void update(Path<L, MinecraftStepPayload> p);   // a re-search replaced the path
   void stop();                                    // arrival, cancellation, or logout
   boolean isComplete();                           // has the player arrived?
-  double remainingSeconds();                      // for /cobblestone trips
+  double remainingSeconds();                      // for /cobblestone trips and the sidebar
 
   // Optional:
   default boolean consumeRecalcRequest();              // "I've lost them, re-search"

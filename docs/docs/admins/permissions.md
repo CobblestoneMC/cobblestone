@@ -14,6 +14,7 @@ navigator.
 | --- | --- | --- |
 | `cobblestone.navigate` | allow | `/navigate`, `/cobblestone trips`, `/cobblestone cancel` |
 | `cobblestone.location` | allow | `/cobblestone location set/unset/list` for personal locations |
+| `cobblestone.sidebar` | allow | `/cobblestone sidebar` |
 | `cobblestone.navigator` | allow | Parent of the per-navigator nodes |
 | `cobblestone.admin.location.global` | op | Creating and deleting global locations |
 | `cobblestone.admin.reload` | op | `/cobblestone reload` |
