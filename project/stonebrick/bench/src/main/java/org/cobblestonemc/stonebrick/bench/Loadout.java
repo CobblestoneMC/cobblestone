@@ -44,7 +44,30 @@ public record Loadout(
     String name,
     String description,
     Scenario.AgentSpec agent,
-    Set<MinecraftStepType> excludedModes) {
+    Set<MinecraftStepType> excludedModes,
+    Set<String> only) {
+
+  /**
+   * Returns whether this loadout is run on a scenario.
+   *
+   * <p>Not every loadout is worth every route: a boat changes nothing in a cave or the nether, so
+   * running it there only doubles the cost of a sweep. A loadout that names tags in {@code only}
+   * runs on scenarios carrying at least one of them; one that names none runs everywhere.
+   *
+   * @param scenario the scenario
+   * @return {@code true} if this loadout should be run on it
+   */
+  public boolean appliesTo(Scenario scenario) {
+    if (only.isEmpty()) {
+      return true;
+    }
+    for (String tag : only) {
+      if (scenario.tags().contains(tag)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   /**
    * Returns the coarse mediums this loadout can use.
@@ -85,7 +108,7 @@ public record Loadout(
    * @return the fallback loadout
    */
   public static Loadout fallback() {
-    return new Loadout("default", "plain survival", Scenario.AgentSpec.plain(), Set.of());
+    return new Loadout("default", "plain survival", Scenario.AgentSpec.plain(), Set.of(), Set.of());
   }
 
   /**
@@ -150,7 +173,8 @@ public record Loadout(
             flag(body, "hasBoat"),
             flag(body, "inBoat"),
             Set.copyOf(strings(body.get("permissions")))),
-        Set.copyOf(excluded));
+        Set.copyOf(excluded),
+        Set.copyOf(strings(body.get("only"))));
   }
 
   private static boolean flag(Map<String, Object> body, String key) {

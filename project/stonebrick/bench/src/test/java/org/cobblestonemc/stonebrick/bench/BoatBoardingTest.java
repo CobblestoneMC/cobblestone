@@ -21,11 +21,11 @@ import org.junit.jupiter.api.Test;
  * Carrying a boat has to change how an ocean is crossed.
  *
  * <p>Pinned to the coarse heuristic, which is what production runs. Under the running average a
- * {@code boater}'s path on {@code overworld/ocean} is byte-identical to a {@code walker}'s: it
- * never boards (#27). Boarding itself works -- Dijkstra boards, and under the coarse estimate the
- * boater crosses for 107 s against the walker's 175 -- so the fault is in the running average,
- * which prices the remaining journey at the rate it has been walking and never finds the detour to
- * the water worth taking.
+ * {@code player-with-boat}'s path on {@code overworld/ocean} is byte-identical to a {@code
+ * player}'s: it never boards (#27). Boarding itself works -- Dijkstra boards, and under the coarse
+ * estimate the boat crosses for 107 s against 175 on foot -- so the fault is in the running
+ * average, which prices the remaining journey at the rate it has been walking and never finds the
+ * detour to the water worth taking.
  *
  * <p>Needs the local corpus, so it is skipped where {@code ocean} has not been captured.
  */
@@ -69,10 +69,11 @@ class BoatBoardingTest {
             .withHeuristic(Scenario.Heuristic.COARSE);
     ScenarioRunner runner = new ScenarioRunner(corpus, new Silent());
 
-    RunResult walker = runner.run(ocean, named(loadouts, "walker"), SearchObserver.none());
-    RunResult boater = runner.run(ocean, named(loadouts, "boater"), SearchObserver.none());
+    RunResult player = runner.run(ocean, named(loadouts, "player"), SearchObserver.none());
+    RunResult boater =
+        runner.run(ocean, named(loadouts, "player-with-boat"), SearchObserver.none());
 
-    assertNotEquals(walker.pathCost(), boater.pathCost(), 1e-9);
+    assertNotEquals(player.pathCost(), boater.pathCost(), 1e-9);
   }
 
   private static Loadout named(List<Loadout> loadouts, String name) {

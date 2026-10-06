@@ -1,32 +1,29 @@
-# Player loadouts. Every scenario runs under every loadout, so a scenario is only a pair of
-# positions and the loadout decides what a player can do about the terrain between them.
+# Player loadouts. A scenario is only a pair of positions; the loadout decides what a player can do
+# about the terrain between them.
 #
 # Capabilities rather than mode lists, deliberately. Production derives its modes from what the
 # player is and carries (MinecraftModes#providerFor); naming the modes here directly would bypass
 # that derivation and hide a bug in it. The same capabilities also pick the coarse mediums.
 #
-# Mining is gated only by excludedModes, since the bench runs without a break checker and an
-# unconstrained MineMode will tunnel through anything. Leaving MINE out of a loadout's exclusions
-# is therefore a deliberate statement that this player may dig.
+# Players can mine unless a loadout says otherwise: nearly every real player carries a pickaxe. The
+# bench runs without a break checker, so an unconstrained MineMode will tunnel through anything.
+#
+# `only` limits a loadout to scenarios carrying one of those tags (see scenarios.yml). A boat does
+# nothing in a cave or the nether, and running it there only makes a sweep longer.
 
-walker:
-  description: survival on foot, no tools and no boat
-  excludedModes: [MINE, BOAT]
-
-miner:
-  description: survival on foot, free to dig
-  excludedModes: [BOAT]
-
-boater:
-  description: carries a boat, will not dig
-  hasBoat: true
-  excludedModes: [MINE]
-
-miner-boater:
-  description: carries a boat and will dig; the fullest survival loadout
-  hasBoat: true
+player:
+  description: survival, carries a pickaxe, no boat
 
 flyer:
-  description: creative flight, no digging
+  description: creative flight
   canFly: true
+
+player-with-boat:
+  description: survival, carries a pickaxe and a boat
+  hasBoat: true
+  only: [surface]
+
+player-no-pickaxe:
+  description: survival with nothing to dig with; has to go around
   excludedModes: [MINE]
+  only: [no-pickaxe]

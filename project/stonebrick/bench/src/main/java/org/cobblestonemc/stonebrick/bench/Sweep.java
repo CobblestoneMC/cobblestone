@@ -85,6 +85,9 @@ final class Sweep {
     List<Point> points = new ArrayList<>();
     for (Scenario scenario : scenarios) {
       for (Loadout loadout : loadouts) {
+        if (!loadout.appliesTo(scenario)) {
+          continue;
+        }
         for (Scenario.Heuristic heuristic : heuristics) {
           for (double weight : weights) {
             Scenario variant = scenario.withHeuristic(heuristic).withHeuristicWeight(weight);

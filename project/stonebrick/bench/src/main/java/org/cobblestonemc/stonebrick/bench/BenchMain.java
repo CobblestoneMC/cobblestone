@@ -49,6 +49,9 @@ public final class BenchMain {
     if (options.command().equals("h3")) {
       for (Scenario scenario : scenarios) {
         for (Loadout loadout : loadouts) {
+          if (!loadout.appliesTo(scenario)) {
+            continue;
+          }
           HeuristicAccuracy.run(options.corpusRoot(), scenario, loadout, new QuietLogger());
         }
       }
@@ -58,9 +61,13 @@ public final class BenchMain {
     if (options.command().equals("verify")) {
       for (Scenario scenario : scenarios) {
         for (Loadout loadout : loadouts) {
+          if (!loadout.appliesTo(scenario)) {
+            continue;
+          }
           Verify.run(options.corpusRoot(), scenario, loadout, 12, new QuietLogger());
         }
       }
+      Verify.aggregate();
       return;
     }
 
@@ -114,10 +121,12 @@ public final class BenchMain {
     }
     System.out.printf(
         Locale.ROOT,
-        "%n%d scenarios x %d loadouts = %d runs.%n",
+        "%n%d scenarios, %d loadouts: %d runs.%n",
         scenarios.size(),
         loadouts.size(),
-        scenarios.size() * loadouts.size());
+        scenarios.stream()
+            .mapToLong(s -> loadouts.stream().filter(l -> l.appliesTo(s)).count())
+            .sum());
   }
 
   /** Applies the {@code --heuristic} and {@code --weight} overrides, if either was given. */
@@ -144,6 +153,9 @@ public final class BenchMain {
     List<Comparison.Verdict> verdicts = new ArrayList<>();
     for (Scenario scenario : scenarios) {
       for (Loadout loadout : loadouts) {
+        if (!loadout.appliesTo(scenario)) {
+          continue;
+        }
         // ASCII: a Windows console defaults to a code page that renders an ellipsis as a
         // replacement character, and the first thing a benchmark prints should not look broken.
         System.out.println("running " + scenario.runId(loadout) + "...");
@@ -195,6 +207,9 @@ public final class BenchMain {
     ScenarioRunner runner = new ScenarioRunner(options.corpusRoot(), new QuietLogger());
     for (Scenario scenario : scenarios) {
       for (Loadout loadout : loadouts) {
+        if (!loadout.appliesTo(scenario)) {
+          continue;
+        }
         // The same overrides a run honours. Accepting a configuration other than the one just
         // measured would make the baseline a record of something nobody looked at.
         RunResult result =

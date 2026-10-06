@@ -54,6 +54,38 @@ class LoadoutTest {
     assertTrue(flyer.excludedModes().isEmpty());
   }
 
+  @Test
+  void aLoadoutLimitedToTagsRunsOnlyWhereOneMatches(@TempDir Path dir) throws Exception {
+    List<Loadout> loadouts =
+        Loadout.loadAll(
+            write(
+                dir,
+                "player:\n  description: everywhere\nboat:\n  hasBoat: true\n  only: [surface]\n"));
+    Scenario surface = Scenario.loadAll(scenarios(dir, "surface")).get(0);
+    Scenario cave = Scenario.loadAll(scenarios(dir, "underground")).get(0);
+
+    assertTrue(loadouts.get(0).appliesTo(surface));
+    assertTrue(loadouts.get(0).appliesTo(cave));
+    assertTrue(loadouts.get(1).appliesTo(surface));
+    assertFalse(loadouts.get(1).appliesTo(cave));
+  }
+
+  private static Path scenarios(Path dir, String tag) throws IOException {
+    Path file = dir.resolve(tag + "-" + Scenario.FILE_NAME);
+    Files.writeString(
+        file,
+        """
+        minecraft:overworld:
+          route:
+            capture: route
+            tags: [%s]
+            origin: { x: 0, y: 64, z: 0 }
+            destination: { x: 10, y: 64, z: 0 }
+        """
+            .formatted(tag));
+    return file;
+  }
+
   /**
    * A player who may not dig still walks on soul sand. Production once dropped the medium alongside
    * mining, which priced soul sand at the fallback rate for every non-digging player, and the bench
@@ -113,6 +145,8 @@ class LoadoutTest {
     assertEquals("overworld/deep-cave", scenario.id());
     assertEquals(
         "overworld/deep-cave@flyer",
-        scenario.runId(new Loadout("flyer", "", Scenario.AgentSpec.plain(), java.util.Set.of())));
+        scenario.runId(
+            new Loadout(
+                "flyer", "", Scenario.AgentSpec.plain(), java.util.Set.of(), java.util.Set.of())));
   }
 }
