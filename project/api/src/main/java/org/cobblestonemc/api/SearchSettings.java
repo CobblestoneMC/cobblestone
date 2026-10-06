@@ -40,16 +40,25 @@ public final class SearchSettings {
   /** Default window width for the running-average heuristic. */
   public static final int DEFAULT_RUNNING_AVERAGE_WIDTH = 5;
 
-  /** Default A* heuristic weight (1.0 = admissible/optimal; &gt;1 = faster, weighted A*). */
-  public static final double DEFAULT_HEURISTIC_WEIGHT = 1.5;
+  /**
+   * Default A* heuristic weight (1.0 = admissible/optimal; &gt;1 = faster, weighted A*).
+   *
+   * <p>2.0 rather than 1.5, measured under {@link #DEFAULT_HEURISTIC}: for a survival player over
+   * 22 routes it solves 18 rather than 15 and expands under half the nodes (geometric mean 4,009
+   * against 9,241), for paths +5.4% over the best found against +1.6%. The coarse estimate sits
+   * well below the true cost underground, so a lower weight leaves the search under-informed there
+   * and it runs out of cells instead.
+   */
+  public static final double DEFAULT_HEURISTIC_WEIGHT = 2.0;
 
   /**
    * The estimate a search uses unless told otherwise.
    *
-   * <p>{@link Heuristic#COARSE} by default, from measurement. Benchmarked over 22 routes and five
-   * agent loadouts at this weight it returns paths three times closer to optimal than the running
-   * average (+5.7% over the best found, against +17.3%) and solves routes the running average
-   * cannot solve at any weight, for about 17% more expanded nodes.
+   * <p>{@link Heuristic#COARSE} by default, from measurement. Over 22 routes at {@link
+   * #DEFAULT_HEURISTIC_WEIGHT}, a survival player's paths are +5.4% over the best found against the
+   * running average's +19.2%, 18 routes solve against 16, and the search expands fewer nodes. With
+   * a boat the gap is wider (+5.4% against +33.1%), because the running average never finds the
+   * water worth reaching.
    *
    * <p>⚠️ It is not free: each solve profiles the terrain it reasons over, which on a long route is
    * thousands of chunk reads and seconds of CPU, and none of that is shared between searches yet. A

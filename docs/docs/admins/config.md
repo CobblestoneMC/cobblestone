@@ -78,18 +78,24 @@ limit; a manual `/navigate` always runs.
 | --- | --- | --- |
 | `search.algorithm.max_cells_visited` | `200000` | live |
 | `search.algorithm.max_wall_clock_seconds` | `60` | live |
-| `search.algorithm.heuristic_weight` | `1.5` | live |
+| `search.algorithm.heuristic` | `COARSE` | live |
+| `search.algorithm.heuristic_weight` | `2.0` | live |
 | `search.algorithm.tier1_unsolved_pessimism` | `1.5` | live |
 | `search.algorithm.running_average_width` | `5` | live |
 
 - **`max_cells_visited`**: Cell limit per search. Memory use is a few hundred bytes per cell, so the
   default peaks in the tens of megabytes. Increase for longer routes; decrease on small heaps.
 - **`max_wall_clock_seconds`**: Time limit per search.
+- **`heuristic`**: How the search estimates the rest of a route. `COARSE` reads summaries of the
+  terrain ahead, finding better routes and handling water, caves and boats, at the cost of extra
+  chunk reads per search. `RUNNING_AVERAGE` extrapolates from the last few steps; it is cheaper
+  but never routes a player onto the water by boat.
 - **`heuristic_weight`**: A* heuristic weight. `1.0` yields optimal routes; higher values search
   faster with routes at most this factor longer than optimal.
 - **`tier1_unsolved_pessimism`**: Cost multiplier for route legs that have not yet been solved.
   `1.0` disables it.
-- **`running_average_width`**: Window size of the running-average heuristic.
+- **`running_average_width`**: Window size of the running-average heuristic. Only used with
+  `heuristic: RUNNING_AVERAGE`.
 
 ### `search.chunks`
 
