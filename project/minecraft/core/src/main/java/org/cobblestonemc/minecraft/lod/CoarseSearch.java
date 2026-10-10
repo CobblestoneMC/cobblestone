@@ -248,14 +248,18 @@ public final class CoarseSearch {
       double span =
           SECTION
               * Math.sqrt(offset[0] * offset[0] + offset[1] * offset[1] + offset[2] * offset[2]);
-      SectionProfile.Axis[] axes = axesOf(offset);
-      double crossing = cost.crossingCost(into, span / 2, axes);
+      // The agent travels neighbour -> here, against the offset; mining needs to know which way
+      // is up, because climbing through rock costs three times what descending through it does.
+      int dx = -offset[0];
+      int dy = -offset[1];
+      int dz = -offset[2];
+      double crossing = cost.halfCrossingCost(into, span / 2, dx, dy, dz, true);
       crossing +=
           here == null
-              // Nothing known about where we are -- price the whole span on what we are entering,
+              // Nothing known about where we are -- price the whole span on what we are leaving,
               // which is what this did before there was a second half to charge.
-              ? cost.crossingCost(into, span / 2, axes)
-              : cost.crossingCost(here.whole(), span / 2, axes);
+              ? cost.halfCrossingCost(into, span / 2, dx, dy, dz, true)
+              : cost.halfCrossingCost(here.whole(), span / 2, dx, dy, dz, false);
       relax(key(nx, ny, nz), entry.cost() + crossing);
     }
   }
@@ -281,22 +285,6 @@ public final class CoarseSearch {
       }
     }
     return offsets;
-  }
-
-  private static SectionProfile.Axis[] axesOf(int[] offset) {
-    int count = (offset[0] != 0 ? 1 : 0) + (offset[1] != 0 ? 1 : 0) + (offset[2] != 0 ? 1 : 0);
-    SectionProfile.Axis[] axes = new SectionProfile.Axis[count];
-    int at = 0;
-    if (offset[0] != 0) {
-      axes[at++] = SectionProfile.Axis.X;
-    }
-    if (offset[1] != 0) {
-      axes[at++] = SectionProfile.Axis.Y;
-    }
-    if (offset[2] != 0) {
-      axes[at] = SectionProfile.Axis.Z;
-    }
-    return axes;
   }
 
   /**

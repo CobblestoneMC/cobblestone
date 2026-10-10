@@ -227,7 +227,12 @@ public final class SectionProfiler {
     byte[] coverage = new byte[SectionProfile.Axis.ALL.length * Medium.COUNT];
     applyMine(coverage, mine);
     // Solid rock touches every face: mining enters and leaves it from any side.
-    return new SectionProfile.Component(coverage, 0b111111, 0, mine.averageBreakTime());
+    return new SectionProfile.Component(
+        coverage,
+        new byte[SectionProfile.Axis.ALL.length * 2],
+        0b111111,
+        0,
+        mine.averageBreakTime());
   }
 
   private static void applyMine(byte[] coverage, MineStats mine) {
@@ -248,6 +253,7 @@ public final class SectionProfiler {
     private final int id;
     private final boolean[] slices =
         new boolean[SectionProfile.Axis.ALL.length * SIZE * Medium.COUNT];
+    private final boolean[] openSlices = new boolean[SectionProfile.Axis.ALL.length * SIZE];
     private int volume;
     private int faceMask;
 
@@ -260,6 +266,9 @@ public final class SectionProfiler {
       int x = cell & 15;
       int y = (cell >> 8) & 15;
       int z = (cell >> 4) & 15;
+      openSlices[x] = true;
+      openSlices[SIZE + y] = true;
+      openSlices[SIZE * 2 + z] = true;
       if (x == 0) {
         faceMask |= 1 << SectionProfile.Face.WEST.ordinal();
       }
@@ -312,6 +321,9 @@ public final class SectionProfiler {
       for (int i = 0; i < slices.length; i++) {
         slices[i] |= other.slices[i];
       }
+      for (int i = 0; i < openSlices.length; i++) {
+        openSlices[i] |= other.openSlices[i];
+      }
     }
 
     SectionProfile.Component build(MineStats mine) {
@@ -332,7 +344,18 @@ public final class SectionProfiler {
         }
       }
       applyMine(coverage, mine);
-      return new SectionProfile.Component(coverage, faceMask, volume, mine.averageBreakTime());
+      // Per half, low slices then high, because a crossing priced half to each section only
+      // passes through one half of each.
+      byte[] open = new byte[SectionProfile.Axis.ALL.length * 2];
+      for (SectionProfile.Axis axis : SectionProfile.Axis.ALL) {
+        for (int slice = 0; slice < SIZE; slice++) {
+          if (openSlices[axis.ordinal() * SIZE + slice]) {
+            open[axis.ordinal() * 2 + (slice < SIZE / 2 ? 0 : 1)]++;
+          }
+        }
+      }
+      return new SectionProfile.Component(
+          coverage, open, faceMask, volume, mine.averageBreakTime());
     }
   }
 

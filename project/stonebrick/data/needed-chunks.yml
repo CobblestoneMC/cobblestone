@@ -91,7 +91,7 @@ the_nether/distance:
   world: minecraft:the_nether
   from: { x: 286, y: 83, z: -75 }
   to: { x: 562, y: 49, z: 204 }
-  radiusChunks: 42
+  radiusChunks: 44
 the_nether/soul-sand-valley:
   world: minecraft:the_nether
   from: { x: -58, y: 63, z: 93 }

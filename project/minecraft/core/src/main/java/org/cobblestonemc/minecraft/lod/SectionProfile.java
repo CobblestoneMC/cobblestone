@@ -199,15 +199,50 @@ public final class SectionProfile {
   public static final class Component {
 
     private final byte[] coverage;
+    private final byte[] open;
     private final int faceMask;
     private final int openVolume;
     private final double averageBreakTime;
 
-    Component(byte[] coverage, int faceMask, int openVolume, double averageBreakTime) {
+    Component(byte[] coverage, byte[] open, int faceMask, int openVolume, double averageBreakTime) {
       this.coverage = coverage;
+      this.open = open;
       this.faceMask = faceMask;
       this.openVolume = openVolume;
       this.averageBreakTime = averageBreakTime;
+    }
+
+    /**
+     * Returns the fraction of slices along {@code axis} that hold any cell a body can occupy
+     * without breaking it, from 0 to 1.
+     *
+     * <p>The complement is what makes this a cost and not only a reach. A slice with no open cell
+     * at all cannot be crossed inside this section without digging through it, whatever the other
+     * slices hold -- so its share of a crossing is mining, or a detour through a neighbouring
+     * section, and never the cheap medium one slice over.
+     *
+     * @param axis the axis
+     * @return the open fraction
+     */
+    public double openCoverage(Axis axis) {
+      return ((open[axis.ordinal() * 2] & 0xFF) + (open[axis.ordinal() * 2 + 1] & 0xFF)) / 16.0;
+    }
+
+    /**
+     * Returns the open fraction of one half of the section's slices along {@code axis}: the eight
+     * on the low side, or the eight on the high side.
+     *
+     * <p>A crossing priced half to each section only passes through half of each, and which half
+     * decides the answer. A section of ground with sky above is solid in its lower layers and open
+     * in its upper ones; climbing out through the top crosses only the open half, and charging it
+     * the whole section's solid share would price a hillside as a tunnel.
+     *
+     * @param axis the axis
+     * @param high {@code true} for the high half
+     * @return the open fraction of that half
+     */
+    public double openCoverage(Axis axis, boolean high) {
+      return (open[axis.ordinal() * 2 + (high ? 1 : 0)] & 0xFF) / 8.0;
     }
 
     /**
@@ -256,7 +291,7 @@ public final class SectionProfile {
 
     /**
      * Returns the mean break time of the blocks that would have to be broken to dig through, for
-     * pricing {@link Medium#MINE}.
+     * pricing {@link Medium#MINEABLE}.
      *
      * @return the average break time in seconds
      */

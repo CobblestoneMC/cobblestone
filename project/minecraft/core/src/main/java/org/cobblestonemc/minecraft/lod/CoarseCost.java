@@ -67,7 +67,23 @@ public final class CoarseCost {
      * tolerates -- an estimate below the truth costs expansions, never correctness -- where {@link
      * #SHARED} is wrong in the direction that silently steers the search away from good routes.
      */
-    CHEAPEST
+    CHEAPEST,
+
+    /**
+     * {@link #CHEAPEST} across the open slices, and mining through the solid ones.
+     *
+     * <p>A slice with no open cell in it cannot be crossed inside the section without digging, so
+     * its share of the crossing is priced as mining it -- at the section's own break time, and by
+     * direction, since a miner climbs a staircase that breaks three blocks per block risen and
+     * descends breaking one. {@link #CHEAPEST} prices that share at whatever the cheapest medium in
+     * the <em>other</em> slices costs, which is why it measured at a quarter to a half of the true
+     * cost underground. Surface terrain is untouched: a section of ground and sky has open cells in
+     * every slice.
+     *
+     * <p>Still optimistic where it matters: a solid slice is charged one crossing of mining and the
+     * open slices the cheapest medium, as though the open slices lined up.
+     */
+    SOLID
   }
 
   /** How a diagonal's coverage is read from the axes it spans. */
@@ -298,6 +314,156 @@ public final class CoarseCost {
    * @return the cost in seconds
    */
   public double crossingCost(Component component, double blocks, Axis... axes) {
+    if (blend == Blend.SOLID) {
+      // No direction to go on: read each axis as travelled positively, so Y is a climb.
+      return crossingCost(
+          component,
+          blocks,
+          contains(axes, Axis.X) ? 1 : 0,
+          contains(axes, Axis.Y) ? 1 : 0,
+          contains(axes, Axis.Z) ? 1 : 0);
+    }
+    return blendedCost(component, blocks, axes);
+  }
+
+  private static boolean contains(Axis[] axes, Axis wanted) {
+    for (Axis axis : axes) {
+      if (axis == wanted) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Returns the seconds to cross {@code blocks} of a component travelling in a direction.
+   *
+   * <p>The direction matters for mining, which is not symmetric: a miner rises by a staircase that
+   * breaks three blocks per block of height (and gains one block of ground per step for free),
+   * walks through two per block, and digs down through one. Other mediums are priced as {@link
+   * #crossingCost(Component, double, Axis...)} prices them.
+   *
+   * @param component the component being crossed
+   * @param blocks how far, in blocks
+   * @param dx the direction of travel along X: -1, 0 or 1
+   * @param dy the direction of travel along Y; positive is up
+   * @param dz the direction of travel along Z
+   * @return the cost in seconds
+   */
+  public double crossingCost(Component component, double blocks, int dx, int dy, int dz) {
+    return crossingCost(component, blocks, dx, dy, dz, null);
+  }
+
+  /**
+   * Returns the seconds to cross half of a section, leaving it or entering it.
+   *
+   * <p>What the coarse search charges: a step between section centres crosses the far half of the
+   * section it leaves and the near half of the one it enters, and the solid share of each half is
+   * what has to be dug. Reading the whole section's share instead charges a hillside the solid rock
+   * under it.
+   *
+   * @param component the component being crossed
+   * @param blocks how far, in blocks
+   * @param dx the direction of travel along X: -1, 0 or 1
+   * @param dy the direction of travel along Y; positive is up
+   * @param dz the direction of travel along Z
+   * @param leaving {@code true} if the agent is leaving this section, {@code false} if entering
+   * @return the cost in seconds
+   */
+  public double halfCrossingCost(
+      Component component, double blocks, int dx, int dy, int dz, boolean leaving) {
+    return crossingCost(component, blocks, dx, dy, dz, leaving);
+  }
+
+  private double crossingCost(
+      Component component, double blocks, int dx, int dy, int dz, Boolean leaving) {
+    Axis[] axes = axesOf(dx, dy, dz);
+    if (blend != Blend.SOLID) {
+      return blendedCost(component, blocks, axes);
+    }
+    // Every axis's solid slices have to be crossed, so the largest share is the least the crossing
+    // can dig through. Leaving, the agent crosses the half on the side it travels towards;
+    // entering, the half on the side it comes from.
+    int[] direction = {dx, dy, dz};
+    double solid = 0;
+    for (Axis axis : axes) {
+      double open =
+          leaving == null
+              ? component.openCoverage(axis)
+              : component.openCoverage(axis, (direction[axis.ordinal()] > 0) == leaving);
+      solid = Math.max(solid, 1.0 - open);
+    }
+    double open = 1.0 - solid;
+    double cost = 0;
+    if (open > 0) {
+      Medium cheapest = null;
+      for (Medium medium : byCost) {
+        if (medium != Medium.MINEABLE && coverage(component, medium, axes) > 0) {
+          cheapest = medium;
+          break;
+        }
+      }
+      cost +=
+          open
+              * blocks
+              * (cheapest != null
+                  ? costPerBlock[cheapest.ordinal()]
+                  : miningPerBlock(component, dx, dy, dz));
+    }
+    if (solid > 0) {
+      cost += solid * blocks * miningPerBlock(component, dx, dy, dz);
+    }
+    return cost;
+  }
+
+  /**
+   * Returns what mining costs per block of travel in a direction, or the fallback if this agent
+   * cannot mine or nothing here can be broken.
+   *
+   * <p>Mirrors {@code MineMode}: a horizontal step breaks the two blocks a body occupies and walks;
+   * a step up breaks three (headroom, and the two it moves into) and walks a diagonal; a step down
+   * breaks one and falls. Mining moves only along the four horizontal axes, so horizontal distance
+   * is Manhattan, not straight-line -- a diagonal tunnel is a staircase of axis-aligned steps.
+   */
+  private double miningPerBlock(Component component, int dx, int dy, int dz) {
+    double breakTime = component.averageBreakTime();
+    if (!byCost.contains(Medium.MINEABLE) || breakTime <= 0) {
+      return fallbackCostPerBlock;
+    }
+    double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    double horizontal = (Math.abs(dx) + Math.abs(dz)) / length;
+    double vertical = dy / length;
+    double flat = 2 * breakTime + MINE_WALK;
+    if (vertical > 0) {
+      // Each step up also carries the miner one block sideways, so that much ground is free.
+      return vertical * (3 * breakTime + MINE_WALK * Math.sqrt(2))
+          + Math.max(0, horizontal - vertical) * flat;
+    }
+    return -vertical * (breakTime + MINE_FALL) + horizontal * flat;
+  }
+
+  /** {@code MovementCosts.WALK}, which a mining step pays on top of breaking. */
+  private static final double MINE_WALK = 0.20;
+
+  /** {@code MovementCosts.FALL_PER_BLOCK}, which a step down pays on top of breaking. */
+  private static final double MINE_FALL = 0.18;
+
+  private static Axis[] axesOf(int dx, int dy, int dz) {
+    Axis[] axes = new Axis[(dx != 0 ? 1 : 0) + (dy != 0 ? 1 : 0) + (dz != 0 ? 1 : 0)];
+    int at = 0;
+    if (dx != 0) {
+      axes[at++] = Axis.X;
+    }
+    if (dy != 0) {
+      axes[at++] = Axis.Y;
+    }
+    if (dz != 0) {
+      axes[at] = Axis.Z;
+    }
+    return axes;
+  }
+
+  private double blendedCost(Component component, double blocks, Axis... axes) {
     if (blend == Blend.CHEAPEST) {
       for (Medium medium : byCost) {
         if (coverage(component, medium, axes) > 0) {
