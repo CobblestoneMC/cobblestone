@@ -143,7 +143,6 @@ class BenchPipelineTest {
             real.nodesOpened(),
             real.nodesExpanded() * 2,
             real.chunkReads(),
-            real.profileChunkReads(),
             real.coldChunkReads(),
             real.virtualMillis(),
             real.ioDelayMicros(),
@@ -179,11 +178,7 @@ class BenchPipelineTest {
     Baselines.accept(
         baselines, runner.run(scenario, Loadout.fallback(), SearchObserver.none()), "testsha");
 
-    Scenario other =
-        scenario.withHeuristic(
-            scenario.heuristic() == Scenario.Heuristic.COARSE
-                ? Scenario.Heuristic.RUNNING_AVERAGE
-                : Scenario.Heuristic.COARSE);
+    Scenario other = scenario.withHeuristicWeight(scenario.settings().heuristicWeight() + 1.0);
     Comparison.Verdict verdict =
         Comparison.compare(
             runner.run(other, Loadout.fallback(), SearchObserver.none()),
@@ -215,7 +210,6 @@ class BenchPipelineTest {
             real.nodesOpened(),
             real.nodesExpanded(),
             real.chunkReads(),
-            real.profileChunkReads(),
             real.coldChunkReads(),
             real.virtualMillis(),
             real.ioDelayMicros(),

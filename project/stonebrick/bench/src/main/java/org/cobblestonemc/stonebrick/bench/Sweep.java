@@ -48,8 +48,7 @@ final class Sweep {
       double weight,
       String outcome,
       double cost,
-      long nodes,
-      int coarseColumns) {
+      long nodes) {
 
     boolean solved() {
       return outcome.equals("success");
@@ -95,7 +94,6 @@ final class Sweep {
               variant = variant.withIo(options.io());
             }
             RunResult result = runner.run(variant, loadout, SearchObserver.none());
-            CaptureProfiles profiles = runner.lastCoarseProfiles();
             Point point =
                 new Point(
                     scenario.runId(loadout),
@@ -104,23 +102,19 @@ final class Sweep {
                     weight,
                     result.outcome(),
                     result.pathCost(),
-                    result.nodesExpanded(),
-                    heuristic == Scenario.Heuristic.COARSE && profiles != null
-                        ? profiles.chunkColumns()
-                        : 0);
+                    result.nodesExpanded());
             points.add(point);
             // Each point as it lands, not only in the tables at the end: a full sweep runs for
             // hours, and one stopped partway through should leave its measurements behind.
             System.out.printf(
                 Locale.ROOT,
-                "point %s %s w=%.2f %s cost=%.3f expanded=%d columns=%d%n",
+                "point %s %s w=%.2f %s cost=%.3f expanded=%d%n",
                 point.scenario(),
                 heuristic,
                 weight,
                 point.outcome(),
                 point.cost(),
-                point.nodes(),
-                point.coarseColumns());
+                point.nodes());
           }
         }
       }
@@ -141,13 +135,12 @@ final class Sweep {
         System.out.printf(Locale.ROOT, "%n%s%n", current);
         System.out.printf(
             Locale.ROOT,
-            "  %-16s %6s %12s %10s %8s %8s%n",
+            "  %-16s %6s %12s %10s %8s%n",
             "heuristic",
             "w",
             "nodes",
             "cost",
-            "excess",
-            "columns");
+            "excess");
       }
       Double floor = best.get(point.scenario());
       String excess =
@@ -156,13 +149,12 @@ final class Sweep {
               : "-";
       System.out.printf(
           Locale.ROOT,
-          "  %-16s %6.2f %12d %10s %8s %8s%n",
+          "  %-16s %6.2f %12d %10s %8s%n",
           point.heuristic(),
           point.weight(),
           point.nodes(),
           point.solved() ? String.format(Locale.ROOT, "%.2f", point.cost()) : point.outcome(),
-          excess,
-          point.coarseColumns() == 0 ? "-" : String.valueOf(point.coarseColumns()));
+          excess);
     }
   }
 

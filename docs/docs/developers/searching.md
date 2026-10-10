@@ -91,7 +91,7 @@ MinecraftSearchSettings settings = new MinecraftSearchSettings(
     SearchSettings.builder()
         .maxCellsVisited(50_000)      // cheaper than the server default
         .maxWallClockMillis(5_000L)
-        .heuristicWeight(3.0)         // faster than the default, less optimal
+        .heuristicWeight(2.0)         // faster, slightly suboptimal
         .build(),
     Set.of(MinecraftStepType.MINE),   // don't route through digging
     Set.of(),                         // excluded world keys
@@ -107,8 +107,7 @@ queries, such as reachability checks, should set smaller limits.
 | --- | --- | --- |
 | `maxCellsVisited` | 200 000 | Cell limit; a few hundred bytes per cell |
 | `maxWallClockMillis` | 60 000 | Time limit |
-| `heuristic` | `COARSE` | `COARSE` reads the terrain ahead; `RUNNING_AVERAGE` extrapolates from recent steps |
-| `heuristicWeight` | 2.0 | `1.0` is optimal; higher is faster and bounded-suboptimal |
+| `heuristicWeight` | 1.5 | `1.0` is optimal; higher is faster and bounded-suboptimal |
 | `tier1UnsolvedPessimism` | 1.5 | Cost multiplier for unsolved route legs |
 | `runningAverageWidth` | 5 | Heuristic smoothing window |
 

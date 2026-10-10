@@ -350,8 +350,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   /**
    * Queues a node on the open set at cost {@code g}, pricing its remaining journey.
    *
-   * <p>If the heuristic cannot price it yet -- a coarse estimate whose chunks are still loading --
-   * the node is held until it can, rather than queued at a guessed priority.
+   * <p>If the heuristic cannot price it yet -- an estimate that reads terrain whose chunks are
+   * still loading -- the node is held until it can, rather than queued at a guessed priority.
    */
   private void offer(CellState key, double g, double trailAverage) {
     java.util.concurrent.CompletableFuture<Void> waiting = heuristic.prepare(key.cell());
@@ -383,13 +383,12 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
    * Retries the offers whose estimates have arrived.
    *
    * <p>Back through {@link #offer} rather than straight onto the open set. One completed fetch does
-   * not mean the estimate is ready: a coarse search walks outward a section at a time and may stop
-   * on the next chunk it needs, so a node can park several times before it can be priced. Queueing
-   * it after the first wake-up would price it from the optimistic backstop instead -- which
-   * measures as the heuristic collapsing entirely under any disk that is not free.
+   * not mean the estimate is ready: an estimate that reads terrain may need the next chunk as soon
+   * as it has this one, so a node can park several times before it can be priced. Queueing it after
+   * the first wake-up would price it from a guess instead.
    *
-   * <p>Terminating because the profile source must answer immediately once a fetch it handed out
-   * has completed, so every retry advances the coarse search.
+   * <p>Terminating as long as the heuristic answers immediately once a future it handed out has
+   * completed, so that every retry makes progress.
    *
    * <p>A node may have been closed, superseded or repaired away while its estimate was in flight,
    * so each one is re-checked against the node table rather than trusted.

@@ -34,7 +34,6 @@ import org.jetbrains.annotations.Nullable;
  * @param pathSteps how many steps it has
  * @param nodesOpened how many times a cell was placed on the open set
  * @param nodesExpanded how many cells were settled
- * @param profileChunkReads how many of those filled the coarse profile layer
  * @param chunkReads how many chunk reads were charged
  * @param coldChunkReads how many of those were a chunk's first read
  * @param virtualMillis elapsed time on the modelled clock
@@ -55,7 +54,6 @@ public record RunResult(
     long nodesOpened,
     long nodesExpanded,
     long chunkReads,
-    long profileChunkReads,
     long coldChunkReads,
     long virtualMillis,
     long ioDelayMicros,
@@ -89,9 +87,6 @@ public record RunResult(
     values.put("nodesOpened", nodesOpened);
     values.put("nodesExpanded", nodesExpanded);
     values.put("chunkReads", chunkReads);
-    // Split out rather than buried: these are the reads that fill the coarse layer, and on a slow
-    // disk they dominate. A total that hides them makes the heuristic look free.
-    values.put("profileChunkReads", profileChunkReads);
     values.put("coldChunkReads", coldChunkReads);
     values.put("virtualMillis", virtualMillis);
     values.put("ioDelayMicros", ioDelayMicros);

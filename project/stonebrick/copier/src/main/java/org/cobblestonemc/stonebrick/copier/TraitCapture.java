@@ -61,7 +61,6 @@ final class TraitCapture {
             .set(BlockTraits.SCAFFOLDING, block.isScaffolding())
             .set(BlockTraits.DANGEROUS, block.isDangerous())
             .set(BlockTraits.SUPPORTS_BOAT, block.supportsBoat())
-            .set(BlockTraits.SOUL_SAND, block.isSoulSand())
             .set(BlockTraits.DOOR, block.isDoor())
             .set(BlockTraits.TRAPDOOR, block.isTrapdoor())
             .set(BlockTraits.OPEN, block.isOpen())

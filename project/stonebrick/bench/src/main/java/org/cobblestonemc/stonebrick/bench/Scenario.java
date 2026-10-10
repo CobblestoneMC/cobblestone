@@ -63,24 +63,39 @@ public record Scenario(
     Set<Long> ungenerated,
     Heuristic heuristic) {
 
-  /** Which estimate the fine search runs on. */
+  /**
+   * Which estimate the fine search runs on.
+   *
+   * <p>Production's estimates, plus {@link #ZERO}. Each production constant names its {@link
+   * SearchSettings.Heuristic}, and the runner builds it through the same factory a server does, so
+   * a new estimate needs a constant here and nothing else in the bench.
+   */
   public enum Heuristic {
     /**
      * No estimate at all, turning the search into Dijkstra.
      *
      * <p>Not for production: it expands everything. It is the only way to get a route's <i>true</i>
-     * optimal cost, which is what {@code bench verify} measures the coarse estimates against.
+     * optimal cost, which is what any other estimate's paths can be measured against.
      */
-    ZERO,
+    ZERO(null),
 
-    /** The previous production heuristic: remaining distance times the recent per-block cost. */
-    RUNNING_AVERAGE,
+    /** Remaining distance times the recent per-block cost. */
+    RUNNING_AVERAGE(SearchSettings.Heuristic.RUNNING_AVERAGE);
+
+    private final SearchSettings.@org.jetbrains.annotations.Nullable Heuristic production;
+
+    Heuristic(SearchSettings.@org.jetbrains.annotations.Nullable Heuristic production) {
+      this.production = production;
+    }
 
     /**
-     * The coarse layer's estimate, from a backward search over section profiles. Production's
-     * default, and so the bench's.
+     * Returns the production heuristic this runs, or {@code null} for {@link #ZERO}.
+     *
+     * @return the production heuristic
      */
-    COARSE
+    public SearchSettings.@org.jetbrains.annotations.Nullable Heuristic production() {
+      return production;
+    }
   }
 
   /** Which corpus a scenario belongs to. */

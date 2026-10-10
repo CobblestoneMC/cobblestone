@@ -10,9 +10,8 @@ package org.cobblestonemc.api;
 /**
  * Immutable, tunable limits and knobs for a single search.
  *
- * <p>Only the numeric knobs live here for now; the pluggable heuristic strategy is selected in the
- * {@code core} module (Phase 2), so it is not part of this API surface yet. Build instances with
- * {@link #builder()} or take {@link #defaults()}.
+ * <p>The heuristic is named here by {@link Heuristic}; the platform turns that name into a
+ * strategy. Build instances with {@link #builder()} or take {@link #defaults()}.
  */
 public final class SearchSettings {
 
@@ -40,32 +39,11 @@ public final class SearchSettings {
   /** Default window width for the running-average heuristic. */
   public static final int DEFAULT_RUNNING_AVERAGE_WIDTH = 5;
 
-  /**
-   * Default A* heuristic weight (1.0 = admissible/optimal; &gt;1 = faster, weighted A*).
-   *
-   * <p>2.0 rather than 1.5, measured under {@link #DEFAULT_HEURISTIC}: for a survival player over
-   * 22 routes it solves 18 rather than 15 and expands under half the nodes (geometric mean 4,009
-   * against 9,241), for paths +5.4% over the best found against +1.6%. The coarse estimate sits
-   * well below the true cost underground, so a lower weight leaves the search under-informed there
-   * and it runs out of cells instead.
-   */
-  public static final double DEFAULT_HEURISTIC_WEIGHT = 2.0;
+  /** Default A* heuristic weight (1.0 = admissible/optimal; &gt;1 = faster, weighted A*). */
+  public static final double DEFAULT_HEURISTIC_WEIGHT = 1.5;
 
-  /**
-   * The estimate a search uses unless told otherwise.
-   *
-   * <p>{@link Heuristic#COARSE} by default, from measurement. Over 22 routes at {@link
-   * #DEFAULT_HEURISTIC_WEIGHT}, a survival player's paths are +5.4% over the best found against the
-   * running average's +19.2%, 18 routes solve against 16, and the search expands fewer nodes. With
-   * a boat the gap is wider (+5.4% against +33.1%), because the running average never finds the
-   * water worth reaching.
-   *
-   * <p>⚠️ It is not free: each solve profiles the terrain it reasons over, which on a long route is
-   * thousands of chunk reads and seconds of CPU, and none of that is shared between searches yet. A
-   * server that runs many concurrent searches on slow storage should measure before trusting the
-   * default.
-   */
-  public static final Heuristic DEFAULT_HEURISTIC = Heuristic.COARSE;
+  /** The estimate a search uses unless told otherwise. */
+  public static final Heuristic DEFAULT_HEURISTIC = Heuristic.RUNNING_AVERAGE;
 
   private final int maxCellsVisited;
   private final long maxWallClockMillis;
@@ -166,7 +144,13 @@ public final class SearchSettings {
     return heuristic;
   }
 
-  /** Which estimate the fine search prices its remaining journey with. */
+  /**
+   * Which estimate the fine search prices its remaining journey with.
+   *
+   * <p>One value today. It is an enum so that a new estimate is a new constant here and a new
+   * branch where the platform builds its heuristic, and every platform and the benchmark pick it up
+   * from there.
+   */
   public enum Heuristic {
     /**
      * Remaining distance times the per-block cost of the last few steps.
@@ -175,16 +159,7 @@ public final class SearchSettings {
      * price a long journey at the rate of a river it is currently swimming down, because the river
      * really is cheap and simply does not go anywhere.
      */
-    RUNNING_AVERAGE,
-
-    /**
-     * A search over 16-block terrain summaries, run backwards from the destination.
-     *
-     * <p>Prices the journey from terrain it has actually looked at rather than from terrain it has
-     * just crossed. Costs chunk reads and CPU to build those summaries -- a long route touches
-     * thousands of columns -- and each solve currently pays for its own.
-     */
-    COARSE
+    RUNNING_AVERAGE
   }
 
   /** A fluent builder for {@link SearchSettings}. */

@@ -341,8 +341,8 @@ class Tier2SearchTest {
   /**
    * A heuristic that keeps handing back futures that are already done, without ever becoming able
    * to answer, must not wedge the search thread. Each retry parks and wakes at once; if the retries
-   * ran in one loop the deadline would never be checked and the solve would never finish. This is
-   * the shape a failed chunk read used to give the coarse heuristic.
+   * ran in one loop the deadline would never be checked and the solve would never finish. A failed
+   * chunk read under a terrain-reading heuristic takes exactly this shape.
    */
   @Test
   void anEstimateThatNeverBecomesReadyStillTimesOut() throws Exception {

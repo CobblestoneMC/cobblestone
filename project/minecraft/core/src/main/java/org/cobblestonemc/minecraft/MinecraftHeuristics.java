@@ -12,17 +12,14 @@ import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.Heuristics;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
-import org.cobblestonemc.minecraft.lod.CoarseCost;
-import org.cobblestonemc.minecraft.lod.CoarseHeuristic;
-import org.cobblestonemc.minecraft.lod.WorldSectionProfiles;
 import org.cobblestonemc.minecraft.modes.MinecraftModes;
 
 /**
  * Builds the estimate a player's search prices its remaining journey with.
  *
- * <p>Shared by every platform so that the configured {@link SearchSettings.Heuristic} means the
- * same thing on each of them: a platform that built its own would be one more place for the setting
- * to be read and then quietly ignored.
+ * <p>Shared by every platform and by the benchmark, so that a {@link SearchSettings.Heuristic}
+ * means the same thing in each of them. A new estimate is added here once, and is then both what a
+ * server can run and what the benchmark measures.
  */
 public final class MinecraftHeuristics {
 
@@ -35,14 +32,6 @@ public final class MinecraftHeuristics {
    * do, or Tier 1 prices every route as if they could fly. See {@link
    * MinecraftModes#cheapestCostPerBlock}.
    *
-   * <p>The coarse heuristic reads terrain, so its profile source is built per solve from the target
-   * region's own world -- a trip through a portal has legs in different worlds, and a source bound
-   * to the origin's world would answer every later leg from the wrong terrain without ever failing.
-   *
-   * <p>Nothing is profiled up front. The fine search parks on an estimate whose chunks have not
-   * arrived, the same way it parks on a mode waiting for blocks, so the terrain that gets
-   * summarised is the terrain the search actually asks about.
-   *
    * @param agent the navigating player
    * @param origin where the search starts
    * @param settings the search settings, which select the heuristic and the excluded modes
@@ -50,17 +39,10 @@ public final class MinecraftHeuristics {
    */
   public static HeuristicStrategy forPlayer(
       CobblestonePlayer agent, Cell origin, MinecraftSearchSettings settings) {
-    if (settings.settings().heuristic() == SearchSettings.Heuristic.RUNNING_AVERAGE) {
-      return Heuristics.runningAverage(
-          MinecraftModes.cheapestCostPerBlock(agent, settings.excludedModes()));
-    }
-    CoarseCost cost = CoarseCost.forPlayer(agent, settings.excludedModes());
-    return new CoarseHeuristic(
-        target ->
-            // The domain of a Tier-3 target region is always the world that leg runs in; the cast
-            // is the price of HeuristicStrategy being domain-agnostic.
-            new WorldSectionProfiles(
-                (MinecraftWorld) target.domain(), target.nearestBoundaryCell(origin)),
-        cost);
+    return switch (settings.settings().heuristic()) {
+      case RUNNING_AVERAGE ->
+          Heuristics.runningAverage(
+              MinecraftModes.cheapestCostPerBlock(agent, settings.excludedModes()));
+    };
   }
 }

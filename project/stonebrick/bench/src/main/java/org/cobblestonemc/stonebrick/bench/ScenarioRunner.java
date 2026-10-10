@@ -17,6 +17,7 @@ import org.cobblestonemc.Cell;
 import org.cobblestonemc.CobblestoneApi;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.DomainRegion;
+import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.Heuristics;
 import org.cobblestonemc.ModesProvider;
 import org.cobblestonemc.Position;
@@ -29,7 +30,9 @@ import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
+import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.cobblestonemc.minecraft.modes.MinecraftModes;
@@ -111,7 +114,7 @@ public final class ScenarioRunner {
 
       Counting counting = new Counting(observer);
       SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> handle =
-          start(scenario, loadout, world, player, scheduler, counting, platform);
+          start(scenario, loadout, world, player, scheduler, counting);
 
       long startedAt = System.nanoTime();
       boolean settled = scheduler.drainUntil(() -> handle.future().isDone(), MAX_TASKS);
@@ -158,7 +161,6 @@ public final class ScenarioRunner {
           counting.opened.get(),
           counting.closed.get(),
           platform.ioStats().reads(),
-          platform.profileReads(),
           platform.ioStats().coldReads(),
           scheduler.millis(),
           platform.ioStats().totalDelayMicros(),
@@ -176,8 +178,7 @@ public final class ScenarioRunner {
       MinecraftWorld world,
       StonebrickPlayer player,
       DeterministicScheduler scheduler,
-      SearchObserver observer,
-      StonebrickPlatformApi platform) {
+      SearchObserver observer) {
     // The exclusions come from the loadout, not from a constant. They used to be empty here, which
     // with a null break checker meant every scenario ran as a player free to tunnel through
     // anything -- one point in the space, and not the representative one.
@@ -198,6 +199,15 @@ public final class ScenarioRunner {
                 new Cell(goal.x() - radius, goal.y() - radius, goal.z() - radius),
                 new Cell(goal.x() + radius, goal.y() + radius, goal.z() + radius));
 
+    SearchSettings.Builder builder =
+        SearchSettings.builder()
+            .heuristicWeight(scenario.settings().heuristicWeight())
+            .maxCellsVisited(scenario.settings().maxCellsVisited())
+            .maxWallClockMillis(scenario.settings().maxWallClockMillis());
+    if (scenario.heuristic().production() != null) {
+      builder.heuristic(scenario.heuristic().production());
+    }
+    SearchSettings settings = builder.build();
     return CobblestoneApi.load()
         .navigate(
             logger,
@@ -208,51 +218,30 @@ public final class ScenarioRunner {
             cast,
             List.of(),
             List.of(),
-            heuristicFor(scenario, loadout, player, excluded, platform),
-            SearchSettings.builder()
-                .heuristicWeight(scenario.settings().heuristicWeight())
-                .maxCellsVisited(scenario.settings().maxCellsVisited())
-                .maxWallClockMillis(scenario.settings().maxWallClockMillis())
-                .build(),
+            heuristicFor(
+                scenario,
+                player,
+                new MinecraftSearchSettings(settings, excluded, Set.of(), Set.of())),
+            settings,
             observer);
   }
 
   /**
    * Builds the estimate the scenario asked for.
    *
-   * <p>Chosen per scenario rather than globally so the two can be compared over identical terrain,
-   * with identical settings, in one run of the suite — which is the only way a difference in
-   * expanded nodes means the heuristic rather than the world.
-   */
-  /**
-   * The profile source the last run used, or {@code null} if it did not run on the coarse layer.
+   * <p>Chosen per scenario rather than globally so that two estimates can be compared over
+   * identical terrain, with identical settings, in one run of the suite — which is the only way a
+   * difference in expanded nodes means the heuristic rather than the world.
    *
-   * <p>Exposed rather than folded into {@link RunResult} because the coarse pass's reads are not
-   * gated: they bypass the IO model entirely, and recording them as a deterministic metric would
-   * imply a rigour they do not have. The sweep prints them so the cost is at least visible.
+   * <p>Everything but {@link Scenario.Heuristic#ZERO} is built by {@link MinecraftHeuristics}, the
+   * same factory Paper and Sponge use, so the bench measures the estimate a server would run.
    */
-  private @org.jetbrains.annotations.Nullable CaptureProfiles lastCoarseProfiles;
-
-  public @org.jetbrains.annotations.Nullable CaptureProfiles lastCoarseProfiles() {
-    return lastCoarseProfiles;
-  }
-
-  private org.cobblestonemc.HeuristicStrategy heuristicFor(
-      Scenario scenario,
-      Loadout loadout,
-      StonebrickPlayer player,
-      Set<MinecraftStepType> excluded,
-      StonebrickPlatformApi platform) {
-    if (scenario.heuristic() == Scenario.Heuristic.ZERO) {
+  private static HeuristicStrategy heuristicFor(
+      Scenario scenario, StonebrickPlayer player, MinecraftSearchSettings settings) {
+    if (scenario.heuristic().production() == null) {
       return Heuristics.zero();
     }
-    if (scenario.heuristic() == Scenario.Heuristic.RUNNING_AVERAGE) {
-      return Heuristics.runningAverage(MinecraftModes.cheapestCostPerBlock(player, excluded));
-    }
-    CaptureProfiles profiles = new CaptureProfiles(platform, scenario.world());
-    lastCoarseProfiles = profiles;
-    return new org.cobblestonemc.minecraft.lod.CoarseHeuristic(
-        profiles, org.cobblestonemc.minecraft.lod.CoarseCost.forPlayer(player, excluded));
+    return MinecraftHeuristics.forPlayer(player, scenario.origin(), settings);
   }
 
   /**

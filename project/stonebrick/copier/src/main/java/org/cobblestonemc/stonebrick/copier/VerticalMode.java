@@ -82,8 +82,8 @@ public sealed interface VerticalMode {
    * <p>Trimming is a real lever on a capture of thousands of columns, and worth nothing below that.
    * Since captures are machine-local rather than version-controlled, a scenario-sized capture costs
    * a few megabytes either way — while a band too thin for wherever the search decides to go
-   * produces a degenerate run, and there is no way to predict that depth until the coarse tier is
-   * informing the search. Ask for a band deliberately, when the capture is big enough to care.
+   * produces a degenerate run, and there is no way to predict in advance how deep a search will go.
+   * Ask for a band deliberately, when the capture is big enough to care.
    *
    * @return the default vertical mode
    */

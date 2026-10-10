@@ -5,22 +5,20 @@ design as written, and where the build departed from it the commit history says 
 
 **Built**
 - `stonebrick-format`, `stonebrick-copier`, `stonebrick-platform`, `stonebrick-bench` (§1–§8).
-  `bench` commands: `run`, `accept`, `list`, `sweep` (heuristic × weight grid), `verify`
-  (estimates against a Dijkstra optimum), `h3`, `profile`.
+  `bench` commands: `run`, `accept`, `list`, `sweep` (heuristic × weight grid).
 - Core seams: `TimeSource`, `SearchObserver` (the §8.3 `Tier2Observer`, renamed), the
-  insertion-order tie-break, and `SolveHeuristic#prepare` so the fine search parks on an estimate
+  insertion-order tie-break, and `SolveHeuristic#prepare` so the fine search can park on an estimate
   whose chunks are not resident.
+- The heuristic is selected by name (`SearchSettings.Heuristic`) and built in one place
+  (`MinecraftHeuristics`), which Paper, Sponge and the bench all use. `RUNNING_AVERAGE` is the only
+  one today; the bench adds `ZERO` (Dijkstra) as a measuring instrument.
 - The corpus is generated from a seed (`./gradlew captureCorpus`), scenarios are run under every
   agent loadout in `agents.yml`, and the capture region grows to a fixpoint from `needed-chunks.yml`.
-- Tier 2 at L0 only: `SectionProfile`, `SectionProfiler`, `CoarseCost`, a backward 26-connected
-  `CoarseSearch`, and `CoarseHeuristic`, wired into Paper and Sponge as the default
-  (`search.algorithm.heuristic: COARSE`).
 
 **Not built**
 - The visualizer (§9), and the deletion of `:core-test` and `:playground` (§1.1).
-- The pyramid: L1–L3, persistent storage, sharing profiles between solves (§10.9–§10.13). Each solve
-  profiles its own terrain today.
-- Tier 1 work (§11) and the production behaviour in §13.
+- Any new search algorithm. The coarse tier this harness was built to measure is designed and
+  developed separately; this document covers only the platform that measures it.
 - Committed baselines and CI gating (§8.4). Baselines are local: a seed does not reproduce the
   blocks (§6.3), so a baseline is a fact about one capture.
 
@@ -221,8 +219,8 @@ rather than after.
 
 **Use `--full` for a scenario-sized capture.** Vertical trimming is a real lever at hundreds of
 chunks, but below that it buys a few megabytes and costs a class of failure: a band too thin for
-what the search wants to do produces a degenerate run (§5.1a), and until Tier 2 gives the search a
-real heuristic there is no way to predict how far it will wander. The first real scenario ran off a
+what the search wants to do produces a degenerate run (§5.1a), and there is no way to predict how
+far the search will wander. The first real scenario ran off a
 ±24 surface band twice before a `--full` capture of the same region — 288 columns, 6.6 MB — worked
 first time. Trim only when the capture is big enough for it to matter.
 
@@ -524,7 +522,7 @@ With terrain a function of a seed, everything that describes the corpus becomes 
 ⚠️ **Measured since: a seed does not reproduce the blocks.** Two captures of `along-river` from the
 same seed and Paper build differ in 157 of 521 columns, down to which decorations exist (cocoa, jungle
 logs, a melon), and the route moves with them: 89.53, 87.13 and 88.78 s across three captures, and
-777 against 1,137 coarse expansions. That is far past the gate's tolerances. Every run is therefore
+777 against 1,137 expansions. That is far past the gate's tolerances. Every run is therefore
 stamped with the capture it read (by `capturedAt`) along with its heuristic, weight, cell cap and IO
 model, and a baseline that measured anything else is reported as `CONFIGURATION` rather than
 compared. Comparisons *within* one capture -- a sweep, an A/B -- are unaffected: both sides read the
@@ -631,9 +629,9 @@ Sizing rules that get there:
 | A16 | Destination atop a 40-block tower | vertical endgame, climb/pillar | **fixtures** |
 | A17 | Destination at the bottom of a covered pit | fall mode, one-way descent | **fixtures** |
 | A18 | Route crossing a claimed/protected region | `ScriptedRestriction` rollback with delay | reuse A2 |
-| A19 | **Deceptive open plain ending in a cliff; the real route is a winding canyon** | coarse profiles will love the plain — the sharpest test of whether the LOD heuristic is honest | 80×60 |
-| A20 | **Optimistic peninsula: looks open at L2, dead-ends at L0** | the re-plan loop and its bound (§10.11) | 70×70 |
-| A21 | Amplified / extreme-verticality terrain | L2+ vertical saturation; walk-medium vertical reach | 60×60, full column |
+| A19 | **Deceptive open plain ending in a cliff; the real route is a winding canyon** | a terrain-reading heuristic will love the plain — the sharpest test of whether it is honest | 80×60 |
+| A20 | **Optimistic peninsula: looks open from afar, dead-ends up close** | whether a terrain-reading heuristic recovers from its own optimism | 70×70 |
+| A21 | Amplified / extreme-verticality terrain | walk-medium vertical reach | 60×60, full column |
 
 ### B. Caves & underground
 
@@ -789,7 +787,6 @@ deterministic. Wall time still gets recorded; it just never decides anything (§
 | path cost, path length, step count | from the result |
 | **path cost** and **path time** | the quality half of every result; never read without the time half, and never the reverse |
 | success / timeout / limit-exceeded | outcome distribution |
-| coarse-tier counters | §10.15 |
 
 Results land as `results/<timestamp>-<git-sha>-<algorithm>.json`.
 
@@ -894,9 +891,9 @@ open a run from last week.
   will tell you more than any metric.
 - **Toggles (keys 1–9 / a side panel):** open set · closed set · final path · candidate-parent edges ·
   parked cells · removed/rolled-back cells · chunk boundaries · capture boundary ·
-  restriction regions · **LOD cell bounds and their profiles** (§10), colored by dominant medium.
-- **Coloring modes:** by medium · by f · by g · by h · by **h-error** (coarse estimate minus
-  realized cost — the money view for §10) · by expansion order (heat over time) · by chunk (IO locality).
+  restriction regions.
+- **Coloring modes:** by medium · by f · by g · by h · by **h-error** (estimate minus
+  realized cost) · by expansion order (heat over time) · by chunk (IO locality).
 - **Y-slice clamp:** restrict rendering to `y ∈ [a, b]`. In practice you will use this constantly;
   a 3D cloud of 200 000 cells is unreadable without it.
 - **Side-by-side / A-B:** load two recordings of the same scenario and toggle between them, or show
@@ -904,444 +901,10 @@ open a run from last week.
 
 ---
 
-## 10. Tier 2: the coarse search and its LOD pyramid
-
-This is one piece of work, not two. The pyramid is the data structure; the coarse search is what
-reads it; neither is useful alone.
-
-### 10.1 Three tiers, four levels
-
-| | | |
-|---|---|---|
-| **Tier 1** | transition graph | portals, teleports, mounts. Unchanged in shape; better estimates (§11). |
-| **Tier 2** | coarse search over LOD profiles | **new.** Runs backward from the destination and produces a heuristic. |
-| **Tier 3** | fine A* over cells | today's `Tier2Search`, renamed. |
-
-**The LOD levels are internal to Tier 2, not tiers of their own.** There is one coarse tier that
-happens to search a four-level pyramid — L0 through L3 at 16³, 64³, 256³ and 1024³. Calling the
-levels "tiers" would imply they are separate stages with separate outputs, and they are not: they
-are one search descending through resolutions.
-
-### 10.2 It produces a heuristic, not a corridor
-
-Tier 2 runs **backward from the destination**. Every coarse node it settles therefore carries a
-cost-*to-goal* in its `g`, and Tier 3's heuristic is
-
-```
-h3(cell) = coarseCostToGoal(L0 component containing cell) + intraComponentCost(cell)
-```
-
-This is the whole design in one line, and the consequences are worth being explicit about:
-
-- **The river pathology disappears before it starts.** Cells in a river that runs away from the goal
-  belong to components with a large cost-to-goal, so their `f` is bad and the fine search never fans
-  into them. Nothing has to notice a stall and react.
-- **Completeness is preserved.** A corridor that gates the fine search can exclude the only real
-  route; a heuristic cannot. If a profile is wrong, the fine search pays extra and carries on. The
-  worst case is a slow search, never a failed one.
-- **A corridor remains available as an optimization**, expressed as a soft cost multiplier outside
-  the tube rather than a fence — but measure before adding it. The heuristic alone is expected to do
-  nearly all of the work.
-
-Keep coarse costs **optimistic** (§10.8) so `h3` stays near a lower bound, and let `heuristicWeight`
-carry greediness explicitly where it can be seen and tuned.
-
-### 10.3 The ladder
-
-Edge length quadruples per level: `edge(L) = 16 << (2L)`, so every cell has 64 children.
-
-| Level | Edge | Cells, 10k×10k world | Residency |
-|---|---|---|---|
-| L0 | 16 — one chunk section | 625×625×24 ≈ 9.4 M slots, ~1–2 M non-empty | on disk, mmap'd |
-| L1 | 64 | 157×157×6 ≈ 148 k | resident |
-| L2 | 256 | 40×40×2 ≈ 3.2 k | resident |
-| L3 | 1024 | 10×10×1 ≈ 100 | resident |
-
-4× rather than 8×: smoother refinement, and a block edit dirties 64 siblings' worth of parent rather
-than 512.
-
-**L0 is 16³ because that is the chunk section** — the IO unit, the storage unit, and the palette
-unit. A 32³ base level would span 2×2 chunks horizontally, so profiling one cell would cost four
-chunk fetches instead of one; a granularity chosen to save IO would cost more of it.
-
-**Vertical saturation.** A world is ~384 blocks tall, so vertical subdivision runs out before
-horizontal does: `cellHeight(L) = min(edge(L), worldHeight)`. L2 and above are therefore 2-D slabs
-of full world height, which is the right shape for long-range surface routing. Write the rule down
-explicitly — it is exactly the kind of thing that silently produces a wrong index.
-
-`MAX_LEVEL` derives from world size, capped at 3. The Nether (128 tall) saturates a level earlier.
-
-### 10.4 Components at L0, a plain grid above it
-
-At L0, one flood fill over the cube's passable cells splits it into **connected components**. A cube
-with a wall down the middle becomes two components with no edge between them, so the main way a
-coarse layer lies — "looks traversable, but the two halves are not connected" — goes away for the
-price of a single BFS over ≤4096 cells.
-
-**Cap at 4 components per cell**, merging the smallest beyond that and setting a `merged` flag. The
-cap costs precision in pathological cubes and buys a fixed-size record, which is what makes the
-storage in §10.9 work.
-
-**Above L0 there are no components — just one node per cell.** Deriving parent components would need
-a connectivity pass over the child graph, and that is exactly the machinery §10.5 is designed to
-avoid. The upper pyramid is a plain dense grid of profile vectors: a mipmap. It is more optimistic
-than the truth, which costs expanded nodes and never costs correctness (§10.2), and the descent to
-L0 corrects it.
-
-Node key packs into a `long`: level 2 bits · x 22 · z 22 · y 5 · component 2.
-
-### 10.5 The profile: per-medium, per-axis coverage fractions
-
-**Mediums, not modes.** A mode is a fine-grained step generator with exact costs; a medium is the
-coarse cost-regime a stretch of travel belongs to. Tier 2 reasons in mediums:
-
-```
-WALK (including jumping and step-up)   SWIM   BOAT   CLIMB   FLY   MINE
-```
-
-For each component, each of the **3 axes**, and each medium, store one number:
-
-```
-coverage[axis][medium] ∈ [0,1]
-```
-
-— **the fraction of the 16 slices perpendicular to that axis that contain at least one cell this
-medium can occupy**, counted within the component. Four bits each: 3 × 6 × 4 bits = **9 bytes** per
-component.
-
-Computing it is **one counting pass, no per-medium search**. For every cell, test which mediums can
-occupy it and set a bit in that medium's per-axis slice bitmask:
-
-| Medium | Occupiable cells |
-|---|---|
-| WALK | solid top below, 2 passable above |
-| SWIM | water |
-| BOAT | water with air above (a navigable surface) |
-| CLIMB | ladders, vines, scaffolding |
-| FLY | any passable cell |
-| MINE | any breakable cell (bedrock excluded) — a cube property, not confined to a component |
-
-Then `coverage = popcount(mask) / 16`. Six `short`s per axis, one pass over the cube.
-
-**Three axes, not six directions.** A slice has no direction, so `+X` and `−X` share a number.
-Direction asymmetry — falling is free, climbing is not — is a property of *cost*, not of terrain, and
-belongs in §10.8. This halves the record and removes a class of "did we populate both directions
-consistently" bugs.
-
-**Why slices rather than volume.** The cost model needs *distance* coverage — "how much of the
-crossing can this medium carry" — and a slice count answers exactly that. A volume fraction does
-not: a cube that is 50% water as a single deep pool covers far less crossing distance than one that
-is 50% water as a river running the length of it.
-
-**Anisotropy falls out rather than being special-cased.** A lake surface occupies one Y-slice, so
-`coverage[Y][BOAT] = 1/16` — nobody writes a rule saying boats do not go up. WALK's Y coverage is the
-fraction of Y-slices holding walkable surface, which is your "variability of surface blocks"
-intuition, counted rather than estimated. FLY's Y coverage is the air column. MINE covers nearly
-everything, at mining cost.
-
-⚠️ **What this deliberately gives up.** Coverage is a *marginal* statistic: 50% boat and 50% walk on
-the same axis does not prove the water and the land connect, and interleaved strips with a wall at
-every boundary would score identically to a clean half-and-half crossing. We accept that, for two
-reasons. First, over-optimism in a heuristic costs **expanded nodes, never correctness** — the fine
-search meets the wall, pays, and carries on — whereas the per-medium connectivity search that would
-detect it is fiddly, easy to get subtly wrong, and would have to be reimplemented for aggregation at
-every level. Second, the L0 component split already catches the coarsest version of the error (a
-wall that separates open space), which is the common case.
-
-⚠️ The real risk is not any single wrong cell, it is **systematic optimism making `h3`
-uninformative**: if every cell reports "cheap", `h3` collapses toward `euclidean ×
-cheapestCostPerBlock` and we are back where we started. `h3` accuracy (§10.15) is the measurement
-that detects this, per level, and §10.6 is the mitigation.
-
-### 10.6 Aggregation, and paying for optimism
-
-A parent's coverage along an axis is the mean of its children's coverage along that axis. Sixty-four
-children, one average per axis per medium — trivially cheap, and **levels ≥1 cost no chunk IO at
-all**, which is the property the whole pyramid rests on.
-
-⚠️ **Optimism compounds upward.** Each level averages away more structure, so an L3 cell is a much
-more generous liar than an L0 one. Unchecked, the entry-level search (which runs at L2 or L3) would
-be the least trustworthy part of the whole system.
-
-Rather than guessing a correction, **learn one**: keep a per-level scalar `levelBias[L]`, applied to
-that level's estimated costs, and fit it from the `h3`-accuracy data the harness already collects
-(§10.15) — coarse estimate against realized cost. Ship defaults from a corpus run; let a server
-refine them from its own solves if that proves worthwhile. A constant per level is crude, but it is
-measured rather than invented, and it directly targets the failure mode that would otherwise be
-invisible until someone wondered why long routes plan badly.
-
-Volumes and flags aggregate by summation and union. `partial` is set if any child is unbuilt
-(§10.11).
-
-### 10.7 Diagonals — in the coarse search only
-
-The backward passes use **26-connectivity**: all 6 faces, 12 edges, 8 corners. At coarse resolution a
-diagonal jump is a real saving in admissibility — forcing an L2 route through axis-aligned steps
-overestimates a diagonal crossing by up to 41% (2-D) or 73% (3-D), and that error propagates into
-`h3` as systematic pessimism exactly where we want the estimate tight.
-
-Diagonal coverage is **derived, not stored**: `coverage[diag][m] = min` over the 2 or 3 constituent
-axes, with span scaled by √2 or √3. Deriving costs nothing to store, and the `min` is appropriately
-conservative about connectivity while staying optimistic about cost.
-
-Tier 3 keeps its existing neighborhood; this is a Tier-2-only change.
-
-### 10.8 Turning a profile into a cost, at query time
-
-Coverage is agent-independent; this function is the only place the agent's medium set `M` enters.
-
-Take the mediums available to the agent, order them cheapest-first, and let each claim coverage
-along the axis until the crossing is accounted for. Whatever is left over is **not impassable** — it
-is priced at a deliberately high but finite fallback:
-
-```
-blended(axis, M):
-  remaining = 1.0
-  cost      = 0.0
-  for m in M sorted by costPerBlock ascending:
-      share     = min(coverage[axis][m], remaining)
-      cost     += share × costPerBlock(m)
-      remaining = remaining - share
-      if remaining <= 0: break
-  cost += remaining × FALLBACK_COST_PER_BLOCK
-  return span(axis) × cost × levelBias[level]
-
-FALLBACK_COST_PER_BLOCK = 2 × mineCostPerBlock      // tunable
-```
-
-Your 80/10 example: 80% boat, 10% walk, and the last 10% at the fallback rather than at infinity.
-Half water and half land averages the two, on the optimistic assumption that they follow one another
-rather than interleaving behind a wall.
-
-**Cheapest-first claiming is what makes overlap behave.** FLY can occupy every passable cell, so its
-coverage overlaps everything; claiming greedily by cost means a flying agent simply prices the whole
-crossing at fly rate, and a walker's FLY coverage never enters the sum at all.
-
-⚠️ **The fallback constant is doing real work, and it is a genuine tuning risk.** Too low and every
-cell looks crossable, so `h3` flattens toward euclidean and the tier stops informing anything. Too
-high and sparsely-covered cells look like walls, `h3` becomes pessimistic, and the fine search is
-pushed away from routes that are in fact fine — which costs path quality, the one thing optimism was
-protecting. Sweep it on the corpus early; it is one number and it moves everything.
-
-A strictly-admissible variant — price the whole crossing at the cheapest medium with any coverage at
-all — is worth keeping behind a flag as an A/B baseline. It is a true lower bound and a weak
-estimate, and the harness should say which trade is better rather than this document guessing.
-
-### 10.9 Storage: a server-side runtime cache, not capture data
-
-⚠️ **The pyramid and the captures of §3 are unrelated things** and the design should never conflate
-them. Captures are machine-local benchmark *input*, one file per chunk column, optimized for
-byte-stable re-capture. The pyramid is a *derived runtime cache* living on a production server, optimized for
-dense spatial reads. Different lifetimes, different consumers, different layouts.
-
-```
-plugins/Cobblestone/lod/<world-key>/
-  L0/r.<rx>.<rz>.lod      32×32 cells in XZ, all Y layers
-  L1/r.<rx>.<rz>.lod
-  L2/, L3/                small enough to be one file per level
-  meta.json               world key, minY/maxY, level count, format version
-```
-
-"32×32 cells per file" is a *grouping* choice for this cache: it bounds file count and gives read
-locality, and unlike the captures there is no reason to keep diffs small because nothing versions it.
-
-**Not a database.** Access is dense, purely spatial, and never queried by anything but coordinates,
-so an embedded DB buys indexing we do not need and adds a dependency, a write path, and write
-amplification.
-
-**Sparsity without losing O(1) addressing.** A fixed slot for every L0 cell would be over a gigabyte
-on a large world, most of it solid stone. Instead each column carries a `long` **presence mask** of
-which Y-layers have any component, and a cell's slot index is
-
-```
-slot = columnBase + popcount(presenceMask & ((1L << layer) - 1))
-```
-
-One popcount, no index structure — the same trick as `sectionMask` in §3.2 and in Anvil itself. With
-4–8 interesting layers per column rather than 24, and ~12 bytes per component record (9 for
-coverage, 3 for volumes and flags), L0 lands around **150–250 MB for a fully explored 10k×10k
-world**. On disk, not heap.
-
-**Residency.** L1 and above load fully into RAM at startup (a few MB) — so *all long-range
-reasoning is in-memory*. L0 is `mmap`'d, so the OS page cache is the cache: warm reads are
-memcpy-speed, eviction is the kernel's problem, and it survives restarts. A small on-heap LRU holds
-decoded components for the cells the current searches are touching.
-
-⚠️ **Concurrency.** A background profiler writes while searches read from worker threads. Use a
-**seqlock per cell**: even version means stable, odd means being written; a reader reads version,
-record, version again, and retries on mismatch. Lock-free on the read side and it makes torn reads
-impossible. Do not skip it — a torn profile is a wrong heuristic that yields a plausible-looking bad
-path, the hardest kind of bug to notice.
-
-⚠️ **Disk budget is operator-visible.** Cap it in config, evict coldest L0 region files when over,
-and never let the pyramid grow unbounded on a server with a 200 GB world.
-
-### 10.10 The search: top-down, every level, each one cheap
-
-**Yes — every level, in order, no skipping.** You do not jump from L2 to L0. Each pass is cheap
-precisely because *the level above it is its heuristic*:
-
-1. **Pick the entry level** so the route spans roughly `TARGET_SPAN` ≈ 32 cells:
-   `L = clamp(0, floor(log4(distance / 16 / TARGET_SPAN)), MAX_LEVEL)`.
-   A 12 000-block route is 750 L0 cells, 187 L1, 47 L2 → enter at **L2**.
-2. **Backward A\*** at level L from the destination, over resident data, 26-connected. Its `g`
-   values are cost-to-goal for every level-L component it settles.
-3. **Descend.** Backward A* at level L−1, seeded from the destination, using the settled level-L
-   values as its heuristic and biased toward the children of the level-L route. Because that
-   heuristic is near-exact at this scale, the pass expands close to a tube rather than a disc.
-4. Repeat to **L0**. Its `g` values are what `h3` reads.
-5. Tier 3 runs with `h3`, resuming the L0 pass on demand (§10.12) — and that resumption is itself
-   guided by L1, so a miss costs a handful of expansions, not a new search.
-
-Short routes skip levels naturally: a 200-block route enters at L0 and the pyramid never engages,
-which is correct — overhead should scale with the problem.
-
-### 10.11 Optimism, partial cells, and the cold cache
-
-An unbuilt or partial cell is **optimistic**: traversable at the best plausible cost for its level.
-This is the freespace assumption, and it is what lets step 2 above run *before* L0 exists beneath it.
-
-Without it the pyramid would be useless on a cold cache, because an L2 value cannot exist until its
-L0 descendants are built. With it, the L2 search runs immediately over mostly-unbuilt cells, picks a
-plausible route, and **refinement builds L0 only in a tube along that route** rather than across
-everything the search considered. Cold cost is proportional to route length × tube width.
-
-So the pyramid's real contribution is that it **converts a per-search cost into a one-time-per-area
-cost**, and confines the cold-cache cost to a tube. The amortization is what makes it cheap, which
-makes persistence and the prewarm command load-bearing parts of the design rather than conveniences.
-
-The consequence is a plan–refine–replan loop: refinement discovers the truth, and if it is
-materially worse than assumed, the cells are marked and the level above re-plans. That is the same
-anytime-recalc shape `SearchImpl` already runs at Tier 1.
-
-⚠️ **Bound the re-planning.** A long peninsula that looks open at L2 and dead-ends at L0 can
-oscillate. Cap re-plans per level (say 3), then widen the refinement tube instead of re-planning
-again, then fall back to the euclidean backstop. Track re-plans per solve; a high count is the
-signal that the profile model is too optimistic. Scenario A20 exists to exercise exactly this.
-
-Partial cells must be **recomputed, not patched**, when their last child is built: a partial
-aggregate was optimistic, and incremental repair would leave the optimism baked in.
-
-### 10.12 When Tier 3 asks about a component Tier 2 never settled
-
-Three causes, which must not be conflated: the backward pass was budget-limited; the component is
-coarse-*unreachable* from the goal (possibly a false negative); or the area is not profiled at all.
-
-⚠️ **Never answer with infinity.** An infinite `h` is a fence wearing a heuristic's clothes, and it
-reintroduces the completeness hazard §10.2 removed.
-
-**The rule:** an `h3` query on an unsettled component **resumes the backward search** until that
-component settles or a small budget expires, then caches the answer for the solve. The backward
-search is not a preprocessing pass; it is a lazily-expanded search doing exactly as much work as the
-fine search turns out to need.
-
-**The backstop**, when the budget expires or the component really is unreachable:
-
-```
-h3(cell) = max(bestSettledCoarseValue, euclidean(cell, goal) × cheapestCostPerBlock)
-```
-
-Optimistic, never pessimistic. The fine search will still go there if it must — just last.
-
-⚠️ **Refined `h` values rise**, and changing `h` mid-search breaks the ordering A* assumes. A
-component given the backstop that later settles higher has had its `f` understated. **Decision:
-freeze a component's `h` for the rest of the solve once handed out.** Slightly stale, but simple and
-decoupled from the repair machinery. Revisit once the harness can measure the accuracy cost; the
-alternative — letting it change and leaning on the existing restriction-repair path — is more
-accurate and considerably more entangled.
-
-### 10.13 Building and invalidating
-
-**Lazy by default, eager on request.** Profile on demand during searches and write through; the
-cache fills where players actually go, which on most servers is a small fraction of generated
-chunks, and there is no first-run tax. Offer `/cobblestone lod prewarm <radius|world>` for operators
-who want predictable performance — throttled, resumable, with progress and an ETA.
-
-**Free profiling at generation.** Hook chunk generation and profile the column while its blocks are
-already in memory. New terrain then costs zero extra IO, forever.
-
-**Invalidation.** A block edit dirties one L0 cell → mark it and its ancestor chain → a background
-job re-aggregates dirty ancestors on a timer, coalescing edits. The pyramid shrinks 64× per level,
-so a single block change touches 1 + 1 + 1 + 1 cells. Bulk edits (WorldEdit) dirty a region and
-rebuild once.
-
-**Degrade, never block.** While the pyramid is cold the plugin must still navigate — fall back to
-the euclidean heuristic and let searches warm the cache as a side effect.
-
-### 10.14 Tier 3 runs at low weight
-
-Yes — the final fine-grained pass is a low-weight A*, and probably a much lower weight than today's
-1.5.
-
-`heuristicWeight = 1.5` exists because the current heuristic is uninformative, so speed is bought
-with greed. A coarse `h` removes that reason. And since `h3` is *already* inadmissible, stacking an
-explicit 1.5 on top double-counts the same trade with only half of it visible as a knob.
-
-Expect the optimum near **1.0–1.15**, with better paths at equal speed. `ENDGAME_RADIUS` may become
-unnecessary too, since the pocket problem it patches is caused by a weighted search refusing to
-retreat. Both are one-line sweeps; run them as soon as Tier 2 produces an `h`.
-
-### 10.15 What the harness must measure here
-
-Beyond §8.2: chunk columns profiled per solve, cold vs. warm · L0 slots written · pyramid bytes on
-disk · profile cache hit rate per level · nodes expanded per level · re-plans per level · seqlock
-read retries · `OPTIMISTIC` vs. `BLENDED` as an A/B axis.
-
-And above all, **`h3` accuracy**: the coarse estimate against the cost Tier 3 ultimately realized,
-per component, per level. Build this first. If the correlation is poor, nothing below it matters,
-and you will know within a day rather than a month. It is also the visualizer's best view — color
-cells by h-error and the failure mode is visible rather than inferred.
-
----
-
-## 11. Tier 1, once the pyramid exists
-
-Two changes that only become possible with a resident coarse model, both of which you raised.
-
-### 11.1 Estimate virtual paths from the pyramid
-
-`Tier1Estimator` currently prices an unsolved leg as `distance × cheapestCostPerBlock ×
-tier1UnsolvedPessimism` and corrects itself from legs it has actually solved. That is a very loose
-bound on real terrain, which is why the pessimism factor exists at all.
-
-With L1–L3 resident in memory, Tier 1 can instead query the coarse cost between two positions
-directly — no chunk IO, no leg solve, microseconds. That turns the transition graph's edge weights
-from a guess into a measurement, and it is exactly what decides:
-
-- **is the portal worth it?** (D5 vs. D6 — a 5 000-block overworld leg against a 625-block nether
-  leg plus two portal traversals);
-- **which of a town's regions should we aim at?** (H3/H4 — 200 goal nodes whose relative
-  attractiveness is currently guessed from straight-line distance).
-
-`tier1UnsolvedPessimism` should shrink or disappear once estimates are this good — another
-constant the harness should pick rather than a human.
-
-### 11.2 Re-plan Tier 1 when a leg overruns its estimate
-
-`SearchImpl` re-plans after every *completed* leg. The gap is mid-leg: a leg that is going to cost
-three times its estimate will still be solved to completion before anything reconsiders the route,
-and on the scenarios that matter that is most of the budget spent before the first decision point.
-
-Add a mid-leg check: when a running Tier 3 solve's `g` at the frontier exceeds its Tier 1 estimate
-by a factor, park the solve, feed the realized cost back into the Tier 1 graph, and re-plan. If the
-route still goes this way, resume the parked solve rather than restarting it.
-
-This is what makes "the actual path was expensive, so go a different way" possible at all, and you
-are right that it was previously untestable — a single Tier 3 solve was slow enough that nobody
-could afford to experiment with interrupting it.
-
-⚠️ **Hysteresis or it thrashes.** Two legs that alternately look better as each is partly explored
-will ping-pong. Require a decisive overrun (say 2×), cap re-plans per search, and **keep partial leg
-results** so a resumed leg does not redo its work. Track leg switches per search as a metric.
-
-Both of these belong to the Tier-1 work batch, after Tier 2 lands.
-
----
-
 ## 12. Phasing
 
-**Nothing in §10 or §11 gets built until phase 8 is done and baselines are committed.** Every
-algorithm decision in this document is a bet; the harness is what settles them.
+**No algorithm work should land until the harness can measure it.** Every algorithm decision is a
+bet; the harness is what settles them.
 
 ### Part 1 — the harness
 
@@ -1355,49 +918,9 @@ algorithm decision in this document is a bet; the harness is what settles them.
 8. **Capture the rest of the starter corpus and commit baselines.** Wire CI (§8.4).
 9. `stonebrick-visualizer`. Before any algorithm work — you will want to *see* the river.
 
-### Part 2 — Tier 2
-
-10. L0 profiling: components, per-medium `reach`, measured in isolation — profile cost per column,
-    component counts, bytes on disk.
-11. **`h3` accuracy harness** (§10.15). The go/no-go measurement, before any of the pyramid.
-12. Backward L0 search + `h3` into Tier 3, with lazy resume, optimistic backstop, frozen `h`.
-    Re-measure. Sweep `heuristicWeight` down; A/B `OPTIMISTIC` vs `BLENDED`.
-13. The pyramid: L1–L3 aggregation, mmap'd storage, seqlocks, 26-connected coarse search, top-down
-    refinement.
-14. Optimistic partial aggregates + bounded re-plan loop; lazy build, prewarm, invalidation,
-    profile-on-generate.
-
-### Part 3 — Tier 1
-
-15. Pyramid-backed `Tier1Estimator` (§11.1); retune or retire `tier1UnsolvedPessimism`.
-16. Mid-leg overrun re-planning with hysteresis (§11.2).
-17. Auto-replan when a trip's own movement generates chunks (§13, production behavior).
-
-### Part 4 — only if measurement still asks for it
-
-18. Bounded open set with beacons, if memory is still a problem after Tier 2 (Appendix A).
-19. Medium-scheduled frontier (Appendix A), which is most likely to earn its keep under
-    `LOADED_ONLY`, where Tier 2 is blind.
-
 ---
 
-## 13. Production behavior this design implies
-
-Two things that are not about benchmarking but fall out of the work:
-
-- **Re-plan when the agent's own movement generates chunks.** On a server where Cobblestone is
-  configured not to generate terrain, a player walking a trip generates chunks as they go, so
-  information the route was planned without now exists. Hook chunk generation near an active trip,
-  invalidate the affected L0 cells, and re-plan if the remaining route crosses them or is currently
-  blocked. ⚠️ Debounce it — a walking player generates chunks constantly, and re-planning on each
-  one would be worse than not re-planning at all.
-- **`ChunkLoadPolicy.LOADED_ONLY` leaves Tier 2 blind**, since the pyramid cannot be filled from
-  chunks the policy will not read. Under that policy the fine search is on its own, which is where
-  the medium-scheduled frontier in Appendix A still earns its keep.
-
----
-
-## 14. Decisions taken
+## 13. Decisions taken
 
 - **Captures**: one file per chunk column, cube-level `sectionMask`, column-local palette, **raw
   payloads** for byte-stability across JDKs.
@@ -1419,76 +942,11 @@ Two things that are not about benchmarking but fall out of the work:
   against committed baselines, gated on deterministic counters, with wall time advisory only.
 - **Missing capture data is a loud error by default**, `WALL` only where the scenario is about
   ungenerated terrain.
-- **Tiers**: Tier 1 transitions · Tier 2 coarse LOD search · Tier 3 fine A*. Four LOD levels inside
-  Tier 2, not four tiers.
-- **Tier 2 produces a heuristic, not a corridor**, running backward from the destination.
-- **Profiles store per-medium, per-axis `coverage`** — the fraction of 16 slices a medium can
-  occupy, counted in one pass with no per-medium search. Agent-independent; cost is blended at query
-  time cheapest-medium-first, with uncovered span priced at a finite fallback rather than infinity.
-- **Components at L0 only**; L1+ is a plain mipmap of coverage vectors, aggregated by averaging.
-- **Optimism compounds upward**, corrected by a per-level `levelBias` fitted from h3-accuracy data.
-- **Diagonals in Tier 2 only** (26-connected), derived from axis coverage rather than stored.
-- **LOD storage**: mmap'd fixed-stride region files with per-column presence masks, L1+ resident.
-  Not a database. Unrelated to the capture format.
-- **Unsettled components**: lazily resume the backward search; optimistic euclidean backstop; never
-  infinity. Refined `h` frozen per component per solve.
-- **Tier 3 weight expected to fall to ~1.0–1.15**; `ENDGAME_RADIUS` may become unnecessary.
-- **Medium scheduling and memory bounding are demoted to Appendix A** — reconsidered only if Tier 2
-  underdelivers.
 - **Towny regions**: [issue #23](https://github.com/CobblestoneMC/cobblestone/issues/23).
 
 ---
 
-## 15. Open questions
+## 14. Open questions
 
 - Is `:playground` safe to delete, or does something outside this tree depend on it?
-- Does the visualizer need Tier-1 graph state, or are Tier 2 and Tier 3 enough?
-- Should §10–§11 eventually move to their own `designs/tiered-search.md`? They are production
-  architecture living in a test-harness document, and they will keep growing.
-
----
-
-## Appendix A — medium-scheduled frontier and memory bounds
-
-Kept because these are real, demoted because Tier 2 is expected to remove the need for them. This
-absorbs the substance of the retired `design/13-medium-scheduled-search.md`, which reached the same
-shape independently — the `OpenNodeExpansionPolicy` seam, the watermark, and the stall counter are
-all from there.
-
-**The idea.** Partition the Tier 3 frontier into one priority queue per medium behind an
-`OpenNodeExpansionPolicy` seam. Track per medium a *watermark* — the smallest straight-line
-distance-to-goal ever reached in it — and expansions since the watermark improved. A medium that
-stalls is demoted; one that beats its watermark by a margin is restored.
-
-Measuring progress as **distance-to-goal shrinking**, not blocks traversed, is what makes a fixed
-stall limit robust to medium size, and it is the load-bearing detail.
-
-**Prefer credits to a binary lock.** Rather than locking a stalled medium outright, give each a
-credit multiplier in `[1/64, 1]` that halves on a stall window and snaps back to 1.0 on genuine
-progress, with per-round expansion quotas proportional to credit. The stalled medium is still being
-sipped, so there is no need for an unlock rule or an all-locked fallback — both fall out. Decay
-gradual, recovery instant: being wrong about abandoning a medium costs far more than being wrong
-about keeping one.
-
-Concerns if it is ever built:
-- Watermarks never worsen, so late in a long search every medium stalls together and the scheduler
-  degenerates to round-robin. Benign, but measure "fraction of expansions with all mediums floored".
-- Long routes have phases (land → ocean → land). Reset all credits when the *global* watermark
-  improves by a large margin, rather than relying on floor-rate luck.
-- Keep quota allocation deterministic — largest-remainder over the weights, never sampling — or the
-  A/B ability the harness exists for is lost.
-
-**Memory bounding, if still needed.** Not SMA*: it requires reopening closed nodes (which the pump
-does not do), it conflicts with the multiple-candidate-parents design that makes restriction
-rollback safe, and regeneration here costs disk IO rather than CPU, so thrashing at the bound is
-catastrophic. Prefer, in order:
-
-1. **Fewer nodes** — Tier 2. An informed `h` cuts node count by orders of magnitude rather than by a
-   constant factor.
-2. **Bounded open set with beacons** — batch-drop the worst `f` over a cap, keeping the best-`h`
-   nodes immune. ~20 lines, no reopening, no thrash. Turns failure at the cap into degradation at
-   the cap, which is what was actually wanted.
-3. **Compress the closed set** — exact open-addressed `long` set for duplicate detection (~20×
-   cheaper than retaining `Node`s), anchors every k-th parent for reconstruction. Never requires
-   reopening.
-4. **Spill cold closed nodes off-heap.** Targets OOM specifically, no algorithmic change.
+- Does the visualizer need Tier-1 graph state, or is the fine search enough?

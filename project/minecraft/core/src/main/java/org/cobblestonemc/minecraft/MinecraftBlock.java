@@ -107,20 +107,6 @@ public interface MinecraftBlock {
     return Double.POSITIVE_INFINITY;
   }
 
-  /**
-   * Returns whether this block is soul sand or soul soil.
-   *
-   * <p>Its own question rather than a reading of {@link #speedFactor()} because what it costs to
-   * cross depends on the agent: Soul Speed boots make it faster than ordinary ground, while honey
-   * -- which also slows -- has no such exception. The profile layer needs to tell them apart to
-   * price either correctly.
-   *
-   * @return {@code true} for soul sand and soul soil
-   */
-  default boolean isSoulSand() {
-    return false;
-  }
-
   /** whether a boat can ride on top of this block (water, and ice for speed). */
   default boolean supportsBoat() {
     return isWater();
