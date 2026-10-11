@@ -33,14 +33,15 @@ import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.HeuristicStrategy;
-import org.cobblestonemc.Heuristics;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.Restriction;
+import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.minecraft.BreakChecker;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
+import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
@@ -188,9 +189,7 @@ public final class PaperNavigationServiceImpl
             settings.excludedModes(),
             breakChecker,
             countEnderPearls(player));
-    // Per-player, not a shared constant: the bound has to reflect what this player can actually do,
-    // or Tier-1 prices every route as if they could fly.
-    HeuristicStrategy heuristic = Heuristics.runningAverage(behavior.cheapestCostPerBlock());
+    HeuristicStrategy heuristic = MinecraftHeuristics.forPlayer(behavior, settings);
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
         gatherTransitions(
@@ -206,7 +205,8 @@ public final class PaperNavigationServiceImpl
                         gathered,
                         restrictions,
                         heuristic,
-                        settings.settings()));
+                        settings.settings(),
+                        SearchObserver.none()));
     return new PaperSearchHandle(handleFuture);
   }
 

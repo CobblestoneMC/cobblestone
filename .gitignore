@@ -1,2 +1,15 @@
 local/
 .idea/
+# Captured block data. Large, so it is generated from the seed in corpus.yml rather than stored:
+# ./gradlew captureCorpus -PacceptMinecraftEula=true
+#
+# Everything that *describes* the corpus is committed: which scenarios exist, what terrain each
+# needs, and which world they come from. The seed fixes the landforms those describe, but not every
+# block -- decorations differ between two generations of the same seed -- so a capture is not
+# byte-reproducible.
+project/stonebrick/data/captures/
+
+# Baselines stay local. Each is a fact about one capture and records which, and a re-capture moves
+# routes by several percent, so a baseline means nothing against anyone else's terrain. Sharing them
+# would mean sharing the captures too.
+project/stonebrick/baselines/

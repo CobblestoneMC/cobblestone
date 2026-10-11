@@ -1,0 +1,183 @@
+# Benchmark scenarios, grouped by the world they touch and then by name.
+# Positions are written by /copier mark; everything else is edited by hand.
+
+minecraft:overworld:
+  along-river:
+    capture: along-river
+    tier: LOCAL
+    tags: [surface]
+    io: zero
+    origin: { x: 398, y: 63, z: 84 }
+    destination: { x: 706, y: 63, z: 155 }
+
+  around-mountain:
+    capture: around-mountain
+    tier: LOCAL
+    tags: [surface, no-pickaxe]
+    io: zero
+    origin: { x: 631, y: 70, z: -317 }
+    destination: { x: 517, y: 63, z: -161 }
+
+  cave-lateral:
+    capture: cave-lateral
+    tier: LOCAL
+    tags: [underground]
+    io: zero
+    origin: { x: 96, y: -41, z: -119 }
+    destination: { x: 19, y: -32, z: -92 }
+
+  cave-to-surface:
+    capture: cave-to-surface
+    tier: LOCAL
+    tags: [underground]
+    io: zero
+    origin: { x: -77, y: 19, z: -65 }
+    destination: { x: -34, y: 115, z: -370 }
+
+  cave-tunnel:
+    capture: cave-tunnel
+    tier: LOCAL
+    tags: [underground]
+    io: zero
+    origin: { x: 4, y: -11, z: -155 }
+    destination: { x: -47, y: 4, z: -133 }
+
+  cliff-down:
+    capture: cliff-down
+    tier: LOCAL
+    tags: [surface]
+    io: zero
+    origin: { x: 780, y: 116, z: 100 }
+    destination: { x: 780, y: 64, z: 101 }
+
+  cliff-up:
+    capture: cliff-up
+    tier: LOCAL
+    tags: [surface]
+    io: zero
+    origin: { x: 780, y: 64, z: 101 }
+    destination: { x: 780, y: 116, z: 100 }
+
+  deep-cave:
+    capture: deep-cave
+    tier: LOCAL
+    tags: [underground]
+    io: zero
+    origin: { x: 117, y: 63, z: -58 }
+    destination: { x: 107, y: -54, z: 12 }
+
+  hilly-jungle:
+    capture: jungle
+    tier: LOCAL
+    tags: [surface]
+    io: zero
+    origin: { x: 2, y: 64, z: -43 }
+    destination: { x: 310, y: 104, z: -267 }
+
+  mangrove-small:
+    capture: mangrove-small
+    tier: LOCAL
+    tags: [surface]
+    io: zero
+    origin: { x: 1269, y: 63, z: -332 }
+    destination: { x: 1138, y: 63, z: -45 }
+
+  mixed-biome-surface:
+    capture: mixed-biome-surface
+    tier: LOCAL
+    tags: [surface, no-pickaxe]
+    io: zero
+    origin: { x: 788, y: 72, z: 55 }
+    destination: { x: 850, y: 63, z: -869 }
+
+  mountain-peaks:
+    capture: mountain-peaks
+    tier: LOCAL
+    tags: [surface, no-pickaxe]
+    io: zero
+    origin: { x: 7, y: 124, z: -413 }
+    destination: { x: 146, y: 127, z: -450 }
+
+  mountain-peaks-2:
+    capture: mountain-peaks-2
+    tier: LOCAL
+    tags: [surface]
+    io: zero
+    origin: { x: 761, y: 163, z: -67 }
+    destination: { x: 619, y: 146, z: -235 }
+
+  ocean:
+    capture: ocean
+    tier: LOCAL
+    tags: [surface]
+    io: zero
+    origin: { x: 1103, y: 63, z: -675 }
+    destination: { x: 1451, y: 64, z: -1123 }
+
+  savanna-small:
+    capture: savanna-small
+    tier: LOCAL
+    tags: [surface]
+    io: zero
+    origin: { x: 1056, y: 63, z: -227 }
+    destination: { x: 1208, y: 64, z: -337 }
+
+
+minecraft:the_end:
+  end-small:
+    capture: end-small
+    tier: LOCAL
+    tags: [end]
+    io: zero
+    origin: { x: 93, y: 57, z: -18 }
+    destination: { x: -95, y: 57, z: 50 }
+
+
+minecraft:the_nether:
+  around-lava-pool:
+    capture: around-lava-pool
+    tier: LOCAL
+    tags: [nether]
+    io: zero
+    origin: { x: 211, y: 81, z: -82 }
+    destination: { x: 218, y: 84, z: -263 }
+
+  distance:
+    capture: distance
+    tier: LOCAL
+    tags: [nether]
+    io: zero
+    origin: { x: 286, y: 83, z: -75 }
+    destination: { x: 562, y: 49, z: 204 }
+
+  soul-sand-valley:
+    capture: soul-sand-valley
+    tier: LOCAL
+    tags: [nether]
+    io: zero
+    origin: { x: -58, y: 63, z: 93 }
+    destination: { x: -206, y: 102, z: 179 }
+
+  through-wart:
+    capture: through-wart
+    tier: LOCAL
+    tags: [nether]
+    io: zero
+    origin: { x: 71, y: 85, z: -42 }
+    destination: { x: 231, y: 92, z: -19 }
+
+  vertical-small:
+    capture: vertical-small
+    tier: LOCAL
+    tags: [nether]
+    io: zero
+    origin: { x: 80, y: 50, z: -161 }
+    destination: { x: 71, y: 95, z: -174 }
+
+  vertical-small-down:
+    capture: vertical-small-down
+    tier: LOCAL
+    tags: [nether]
+    io: zero
+    origin: { x: -168, y: 92, z: 181 }
+    destination: { x: -174, y: 34, z: 197 }

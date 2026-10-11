@@ -34,6 +34,10 @@ public interface CobblestoneApi {
   /**
    * Begins a search from {@code origin} toward {@code destination}.
    *
+   * <p>The observer is for recording a solve so it can be looked at afterwards. It must not affect
+   * the search, and recording costs real time, so a run being measured passes {@link
+   * SearchObserver#none()}.
+   *
    * @param logger the logger to track logging events
    * @param scheduler the scheduler of tasks for the algorithm to parallelize work
    * @param origin the starting position
@@ -43,6 +47,7 @@ public interface CobblestoneApi {
    * @param restrictions the passability restrictions barring certain cells
    * @param heuristic the heuristic to use for approaching the destination
    * @param settings the search limits and knobs
+   * @param observer receives what the search does; {@link SearchObserver#none()} for nothing
    * @param <T> the payload type
    * @param <D> the domain type
    * @return a handle to the in-flight search
@@ -56,5 +61,6 @@ public interface CobblestoneApi {
       List<? extends Transition<T, D>> transitions,
       List<? extends Restriction<D>> restrictions,
       HeuristicStrategy heuristic,
-      SearchSettings settings);
+      SearchSettings settings,
+      SearchObserver observer);
 }
