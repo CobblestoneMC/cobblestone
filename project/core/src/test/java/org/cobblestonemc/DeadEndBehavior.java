@@ -13,27 +13,27 @@ import java.util.function.Supplier;
 import org.cobblestonemc.api.TraversalState;
 
 /**
- * A test {@link Mode} laying out a short corridor that stops at a dead end, where the last step is
- * <b>mode-restricted</b> — the shape a mining move has when an integration may forbid breaking the
- * block.
+ * A test {@link MovementBehavior} laying out a short corridor that stops at a dead end, where the
+ * last step is <b>edge-restricted</b> — the shape a mining move has when an integration may forbid
+ * breaking the block.
  *
  * <p>The corridor runs {@code (0,0,0) → (1,0,0) → … → (deadEnd,0,0)} at cost 1 a step, and offers
  * nothing beyond the dead end. Only the edge arriving at the dead end carries a restriction; every
  * other step is unconditional.
  */
-final class DeadEndMode implements Mode<TestAgent, TestStep, TestDomain> {
+final class DeadEndBehavior implements MovementBehavior<TestAgent, TestStep, TestDomain> {
 
   private final int deadEndX;
   private final Supplier<FutureOr<Boolean>> deadEndBarred;
 
-  DeadEndMode(int deadEndX, Supplier<FutureOr<Boolean>> deadEndBarred) {
+  DeadEndBehavior(int deadEndX, Supplier<FutureOr<Boolean>> deadEndBarred) {
     this.deadEndX = deadEndX;
     this.deadEndBarred = deadEndBarred;
   }
 
   @Override
-  public FutureOr<Collection<Movement<TestStep>>> step(
-      TestAgent agent, Cell from, TestDomain domain, TraversalState state, Cell destination) {
+  public FutureOr<Collection<Movement<TestStep>>> movements(
+      TestAgent agent, Cell from, TestDomain domain, TraversalState state, Cell goal) {
     if (from.x() >= deadEndX) {
       return FutureOr.of(List.of()); // the dead end goes nowhere
     }

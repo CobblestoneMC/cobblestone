@@ -30,7 +30,7 @@ public final class CobblestoneApiImpl implements CobblestoneApi {
       A agent,
       Position<D> origin,
       Destination<DomainRegion<D>> destination,
-      ModesProvider<A, T, D> modes,
+      MovementBehavior<A, T, D> behavior,
       List<? extends Transition<T, D>> transitions,
       List<? extends Restriction<A, D>> restrictions,
       HeuristicStrategy heuristic,
@@ -43,7 +43,7 @@ public final class CobblestoneApiImpl implements CobblestoneApi {
             agent,
             origin,
             destination,
-            modes,
+            behavior,
             transitions,
             restrictions,
             settings);

@@ -5,7 +5,7 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.minecraft.modes;
+package org.cobblestonemc.minecraft.movement;
 
 import org.cobblestonemc.Cell;
 

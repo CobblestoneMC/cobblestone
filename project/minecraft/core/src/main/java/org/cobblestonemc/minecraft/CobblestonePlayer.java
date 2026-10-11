@@ -14,7 +14,8 @@ import org.cobblestonemc.Position;
 
 /**
  * A human player. Each platform implements this as a thin wrapper around its native player type (no
- * downcasting). The capability accessors here drive mode-list assembly and transition building.
+ * downcasting). The capability accessors here drive movement-behavior assembly and transition
+ * building.
  */
 public interface CobblestonePlayer extends MinecraftAgent {
 

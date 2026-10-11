@@ -13,15 +13,16 @@ import org.cobblestonemc.api.TraversalState;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The output unit of {@link Mode#step}: a single reachable neighbor and how the agent got there.
+ * The output unit of {@link MovementBehavior#movements}: a single reachable neighbor and how the
+ * agent got there.
  *
- * <p>A movement carries no domain — it is always within the domain the mode was invoked on, and the
- * search stamps that domain onto the {@link Step} it builds. The {@code instruction} is {@code
+ * <p>A movement carries no domain — it is always within the domain the behavior was invoked on, and
+ * the search stamps that domain onto the {@link Step} it builds. The {@code instruction} is {@code
  * null} unless this step requires the player to act.
  *
- * <p>{@code restricted} is the mode-scoped, optimistic counterpart to the search's global
- * passability restrictions: a mode that produces an edge whose validity it cannot yet confirm (the
- * mining mode, whose blocks a protection plugin may forbid breaking; the ender-pearl mode, whose
+ * <p>{@code restricted} is the edge-scoped, optimistic counterpart to the search's global
+ * passability restrictions: a behavior that produces an edge whose validity it cannot yet confirm
+ * (a mining step, whose blocks a protection plugin may forbid breaking; an ender-pearl throw, whose
  * ballistic path must be clear) attaches a <b>supplier</b> here. The check is <i>lazy</i> — the
  * supplier is not invoked until the search pops the edge, so the (possibly expensive) integration
  * query or block scan runs only for edges the search actually commits to. The search relaxes the
@@ -47,7 +48,7 @@ public record Movement<T>(
     TraversalState state,
     @Nullable Supplier<FutureOr<Boolean>> restricted) {
 
-  /** A movement that can never be restricted (no mode-scoped edge check). */
+  /** A movement that can never be restricted (no edge-scoped check). */
   public Movement(Cell cell, double cost, double time, T payload, TraversalState state) {
     this(cell, cost, time, payload, state, null);
   }

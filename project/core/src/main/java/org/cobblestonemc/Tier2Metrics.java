@@ -12,12 +12,12 @@ package org.cobblestonemc;
  * is read by the algorithm, which is why it lives out here rather than among the search's state.
  *
  * <p>Two numbers carry most of the diagnostic weight. <b>Parking</b> is what a search does while a
- * mode waits on a block it does not have: wall time is essentially active + parked, so the split
- * says whether a slow search is thinking too hard or waiting too long, and the mean park says how
- * long each wait costs. <b>Approach</b> is how near the target the search actually got against how
- * far it started, which separates the two ways a solve runs out of time — a search grinding along a
- * route it is following closes the gap, while one walled in (by terrain, or by chunks the load
- * policy will not materialize) burns its whole budget without the gap moving.
+ * movement behavior waits on a block it does not have: wall time is essentially active + parked, so
+ * the split says whether a slow search is thinking too hard or waiting too long, and the mean park
+ * says how long each wait costs. <b>Approach</b> is how near the target the search actually got
+ * against how far it started, which separates the two ways a solve runs out of time — a search
+ * grinding along a route it is following closes the gap, while one walled in (by terrain, or by
+ * chunks the load policy will not materialize) burns its whole budget without the gap moving.
  *
  * <p>Not thread-safe: every method is called from inside the search's single-flight pump.
  */

@@ -16,17 +16,18 @@ import org.cobblestonemc.api.TraversalState;
  *
  * <p><b>The problem.</b> A leg's only cheap estimate is straight-line distance times the cheapest
  * per-block cost the agent could manage — admissible, and wrong by a wide margin, because a real
- * route winds and the cheapest mode is rarely the one taken. Every leg therefore comes back several
- * times dearer than promised, which makes some other unexplored route look cheaper, so Tier-1
- * re-plans and works through the alternatives one Tier-2 solve at a time. Those solves run into
- * seconds; spending several to discover that the first route was fine is the single most expensive
- * thing this search does.
+ * route winds and the cheapest movement is rarely the one taken. Every leg therefore comes back
+ * several times dearer than promised, which makes some other unexplored route look cheaper, so
+ * Tier-1 re-plans and works through the alternatives one Tier-2 solve at a time. Those solves run
+ * into seconds; spending several to discover that the first route was fine is the single most
+ * expensive thing this search does.
  *
  * <p><b>The fix is to measure rather than guess.</b> Every solved leg hands back a true cost
  * alongside the estimate it was given, and their ratio is exactly how optimistic the bound was on
- * <i>this</i> terrain, for <i>this</i> agent's modes. Fold that ratio back into the remaining legs
- * and the estimate stops being systematically optimistic after the very first solve — so the route
- * Tier-1 committed to has to be genuinely beaten, not merely beaten by a promise nothing can keep.
+ * <i>this</i> terrain, for <i>this</i> agent's movement. Fold that ratio back into the remaining
+ * legs and the estimate stops being systematically optimistic after the very first solve — so the
+ * route Tier-1 committed to has to be genuinely beaten, not merely beaten by a promise nothing can
+ * keep.
  *
  * <p><b>Ratios, not costs per block.</b> The two are the same number: multiply a ratio by the
  * agent's cheapest cost per block and you have that world's measured average cost per block.

@@ -33,8 +33,8 @@ public final class Heuristics {
    * times a globally-cheapest per-block cost.
    *
    * <p>{@code cheapestCostPerBlock} must be a true lower bound on the cost of moving one block by
-   * any available means (e.g. the fastest mode's per-block cost); using a global lower bound keeps
-   * the estimate admissible for every agent without needing per-agent knowledge here.
+   * any available means (e.g. the fastest movement's per-block cost); using a global lower bound
+   * keeps the estimate admissible for every agent without needing per-agent knowledge here.
    *
    * @param cheapestCostPerBlock a lower bound on per-block traversal cost, in seconds
    * @return the euclidean heuristic

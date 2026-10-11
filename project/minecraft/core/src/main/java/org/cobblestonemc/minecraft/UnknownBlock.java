@@ -9,7 +9,8 @@ package org.cobblestonemc.minecraft;
 
 /**
  * The sentinel block returned for cells whose chunk isn't available under the current load policy:
- * impassable and unbreakable, so modes treat it exactly like a wall they can't get through.
+ * impassable and unbreakable, so movement rules treat it exactly like a wall they can't get
+ * through.
  */
 public enum UnknownBlock implements MinecraftBlock {
   INSTANCE;

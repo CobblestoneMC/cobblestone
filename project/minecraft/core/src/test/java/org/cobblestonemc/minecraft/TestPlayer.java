@@ -13,7 +13,7 @@ import java.util.UUID;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.Position;
 
-/** A configurable {@link CobblestonePlayer} for mode/assembly tests. */
+/** A configurable {@link CobblestonePlayer} for movement tests. */
 public final class TestPlayer implements CobblestonePlayer {
 
   private final boolean canFly;

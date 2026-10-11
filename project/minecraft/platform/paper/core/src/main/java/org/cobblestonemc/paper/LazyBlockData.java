@@ -15,7 +15,7 @@ import org.cobblestonemc.Cell;
  * The block data a chunk holds at one cell, read on first use and remembered.
  *
  * <p>This is what a break checker is handed. Checkers are promised the block's real state, and the
- * {@link org.cobblestonemc.minecraft.MinecraftBlock} a mode read cannot supply it: {@link
+ * {@link org.cobblestonemc.minecraft.MinecraftBlock} a movement rule read cannot supply it: {@link
  * PaperBlocks} shares one instance per material, carrying that material's default state. So the
  * state is read from the chunk instead — but lazily, because reading it is a copy ({@link
  * PaperChunk#blockData}), a mining route asks about every block it considers breaking, and most

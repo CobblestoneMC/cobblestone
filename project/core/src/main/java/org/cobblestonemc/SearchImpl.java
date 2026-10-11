@@ -49,7 +49,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
   private final HeuristicStrategy heuristic;
   private final A agent;
   private final Position<D> origin;
-  private final ModesProvider<A, T, D> modes;
+  private final MovementBehavior<A, T, D> behavior;
   private final List<? extends Restriction<A, D>> restrictions;
   private final SearchSettings settings;
   private final Tier1Estimator estimator;
@@ -74,7 +74,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
       A agent,
       Position<D> origin,
       Destination<DomainRegion<D>> destination,
-      ModesProvider<A, T, D> modes,
+      MovementBehavior<A, T, D> behavior,
       List<? extends Transition<T, D>> transitions,
       List<? extends Restriction<A, D>> restrictions,
       SearchSettings settings) {
@@ -84,7 +84,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
     this.heuristic = heuristic;
     this.agent = agent;
     this.origin = origin;
-    this.modes = modes;
+    this.behavior = behavior;
     this.restrictions = List.copyOf(restrictions);
     this.settings = settings;
 
@@ -175,7 +175,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
               logger,
               agent,
               edge.virtualPath(),
-              modes.modesFor(edge.virtualPath().targetRegion()),
+              behavior,
               restrictions,
               heuristic,
               settings.maxCellsVisited(),

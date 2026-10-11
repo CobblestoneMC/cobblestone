@@ -42,7 +42,6 @@ class SearchIntegrationTest {
   @Test
   void singleDomainStraightLine() {
     TestDomain domain = new TestDomain("overworld");
-    List<CorridorMode> modes = List.of(new CorridorMode(false));
     List<Transition<TestStep, TestDomain>> transitions = List.of();
 
     NavigationResult<Position<TestDomain>, TestStep> result =
@@ -52,7 +51,7 @@ class SearchIntegrationTest {
                 new TestAgent(),
                 new Position<>(new Cell(0, 0, 0), domain),
                 new SingleDestination<>(new CellRegion<>(new Cell(5, 0, 0), domain)),
-                ModesProvider.of(modes),
+                new CorridorBehavior(false),
                 transitions,
                 List.of(),
                 Heuristics.zero(),
@@ -77,7 +76,6 @@ class SearchIntegrationTest {
             new Position<>(new Cell(0, 0, 0), nether),
             10.0,
             TestStep.TELEPORT);
-    List<CorridorMode> modes = List.of(new CorridorMode(false));
 
     NavigationResult<Position<TestDomain>, TestStep> result =
         api.navigate(
@@ -86,7 +84,7 @@ class SearchIntegrationTest {
                 new TestAgent(),
                 new Position<>(new Cell(0, 0, 0), overworld),
                 new SingleDestination<>(new CellRegion<>(new Cell(0, 0, 0), nether)),
-                ModesProvider.of(modes),
+                new CorridorBehavior(false),
                 List.of(portal),
                 List.of(),
                 Heuristics.zero(),
@@ -107,7 +105,6 @@ class SearchIntegrationTest {
   void unreachableDestinationDomainFails() {
     TestDomain overworld = new TestDomain("overworld");
     TestDomain nether = new TestDomain("nether");
-    List<CorridorMode> modes = List.of(new CorridorMode(false));
     List<Transition<TestStep, TestDomain>> noTransitions = List.of();
 
     NavigationResult<Position<TestDomain>, TestStep> result =
@@ -117,7 +114,7 @@ class SearchIntegrationTest {
                 new TestAgent(),
                 new Position<>(new Cell(0, 0, 0), overworld),
                 new SingleDestination<>(new CellRegion<>(new Cell(0, 0, 0), nether)),
-                ModesProvider.of(modes),
+                new CorridorBehavior(false),
                 noTransitions,
                 List.of(),
                 Heuristics.zero(),

@@ -5,19 +5,15 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.minecraft.modes;
+package org.cobblestonemc.minecraft.movement;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
-import java.util.Set;
 import java.util.function.Supplier;
 import org.cobblestonemc.Cell;
-import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.Movement;
 import org.cobblestonemc.api.TraversalState;
-import org.cobblestonemc.minecraft.MinecraftAgent;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftKeys;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -25,10 +21,9 @@ import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 
 /**
- * A goal-aware fail-safe: when the agent is within throwing range of the leg's target and still has
+ * A goal-aware fail-safe: when the agent is within throwing range of the leg's goal and still has
  * ender pearls, it can pearl straight to it — the only way to reach a floating target like an end
- * gateway without flight. Unlike the local modes, this one needs to know where the leg is headed,
- * so it is built per leg with the target injected (via {@code ModesProvider}).
+ * gateway without flight.
  *
  * <p>It is deliberately <b>expensive</b> ({@code cost} ≈ five minutes, the rough value of the
  * pearls an enderman drops) so A* only ever chooses it when there is no cheaper route — a genuine
@@ -38,10 +33,8 @@ import org.cobblestonemc.minecraft.api.MinecraftStepType;
  * <p>Whether the throw is actually clear (no blocks in the ballistic path) rides on the movement's
  * lazy {@link Movement#restricted() restricted} supplier, so those block lookups run only if the
  * search actually pops this edge — not for every cell within range.
- *
- * @param <A> the agent type
  */
-final class EnderPearlMode<A extends MinecraftAgent> extends AbstractMinecraftMode<A> {
+final class EnderPearl {
 
   private static final double RANGE = 32.0; // max throw distance, blocks
   private static final double MIN_RANGE = 2.0; // below this, just walk
@@ -50,43 +43,35 @@ final class EnderPearlMode<A extends MinecraftAgent> extends AbstractMinecraftMo
   private static final double SPEED = 25.0; // pearl flight speed, blocks/second
   private static final double THROW_SECONDS = 2.0; // pull it to the hotbar and throw
 
-  private final DomainRegion<MinecraftWorld> target;
-  private final int pearlCount;
+  private EnderPearl() {}
 
-  EnderPearlMode(DomainRegion<MinecraftWorld> target, int pearlCount) {
-    this.target = target;
-    this.pearlCount = pearlCount;
-  }
-
-  @Override
-  protected Set<Cell> requiredCells(Cell from) {
-    return Set.of(); // no local blocks — the ballistic check runs in the restricted supplier
-  }
-
-  @Override
-  protected FutureOr<Collection<Movement<MinecraftStepPayload>>> movements(
-      A agent, Cell from, MinecraftWorld world, TraversalState state, BlockView view) {
+  /** Offers a throw from {@code from} to {@code goal}, if it is in range and a pearl is left. */
+  static void offer(
+      MinecraftWorld world,
+      Cell from,
+      TraversalState state,
+      Cell goal,
+      int pearlCount,
+      Edges edges) {
     Integer used = state.get(MinecraftKeys.PEARLS_USED);
     int usedCount = used == null ? 0 : used;
     if (usedCount >= pearlCount) {
-      return FutureOr.of(List.of()); // out of pearls on this route
+      return; // out of pearls on this route
     }
-    Cell to = target.nearestBoundaryCell(from);
-    double distance = from.distance(to);
+    double distance = from.distance(goal);
     if (distance < MIN_RANGE || distance > RANGE) {
-      return FutureOr.of(List.of());
+      return;
     }
     double time = distance / SPEED + THROW_SECONDS;
     TraversalState next = state.with(MinecraftKeys.PEARLS_USED, usedCount + 1);
-    Movement<MinecraftStepPayload> move =
+    edges.add(
         new Movement<>(
-            to,
+            goal,
             COST,
             time,
             MinecraftStepPayload.of(MinecraftStepType.TELEPORT),
             next,
-            ballisticCheck(world, from, to));
-    return FutureOr.of(List.of(move));
+            ballisticCheck(world, from, goal)));
   }
 
   /** A lazy check that every block on the throw's line is passable (else the throw is blocked). */

@@ -144,9 +144,9 @@ public final class ChunkProvider {
    * on a miss — the same path {@link #block} takes, without resolving a single block.
    *
    * <p>Callers that need many blocks around one point should use this and index the snapshot
-   * directly. A mode's neighborhood is a couple of hundred cells spread over about four chunks, so
-   * resolving it a cell at a time costs a key allocation, this provider's monitor, and an
-   * access-ordered map relink <i>per block</i> — tens of millions of times per search.
+   * directly. An expansion's neighborhood is a couple of hundred cells spread over about four
+   * chunks, so resolving it a cell at a time costs a key allocation, this provider's monitor, and
+   * an access-ordered map relink <i>per block</i> — tens of millions of times per search.
    *
    * @param cell a cell in the wanted chunk
    * @param world the world

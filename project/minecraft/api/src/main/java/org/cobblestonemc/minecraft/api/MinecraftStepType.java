@@ -8,8 +8,8 @@
 package org.cobblestonemc.minecraft.api;
 
 /**
- * The {@code StepType} enum for Minecraft — both movement types (produced by modes) and
- * discrete-action types (produced by transitions, or by a vehicle mode's first movement).
+ * The {@code StepType} enum for Minecraft — both movement types (produced by the movement behavior)
+ * and discrete-action types (produced by transitions, or by boarding a vehicle).
  */
 public enum MinecraftStepType {
 

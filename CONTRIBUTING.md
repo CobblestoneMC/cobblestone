@@ -39,7 +39,7 @@ Useful tasks:
 project/
   api/                     core navigation API (Path, Step, SearchHandle, …)
   core/                    the A* search engine
-  core-test/               pure-Java test engine: fake worlds and modes
+  core-test/               pure-Java test engine: fake worlds and behaviors
   playground/              debug visualizer, not shipped
   minecraft/
     api/  core/            Minecraft model shared by both platforms
