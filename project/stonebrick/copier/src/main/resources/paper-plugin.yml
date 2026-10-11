@@ -1,0 +1,12 @@
+name: stonebrickcopier
+version: '$projectVersion'
+description: Captures world data into the Stonebrick benchmark format. Development tooling.
+author: whimxiqal
+main: org.cobblestonemc.stonebrick.copier.StonebrickCopierPlugin
+api-version: '1.21'
+folia-supported: false
+
+permissions:
+  stonebrick.copier:
+    description: "Use of /copier"
+    default: op

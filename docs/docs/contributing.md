@@ -35,6 +35,7 @@ Before opening a pull request:
 | `project/minecraft/platform/paper`, `…/sponge*` | Platform implementations |
 | `project/minecraft/integrations` | Third-party integrations |
 | `project/examples/paper-warps` | Example integration |
+| `project/stonebrick` | Benchmarking; see [Benchmarking](benchmarking.md) |
 | `docs/` | This site |
 
 ## Bug reports

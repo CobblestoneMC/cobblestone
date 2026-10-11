@@ -52,6 +52,8 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
   private final ModesProvider<A, T, D> modes;
   private final List<? extends Restriction<A, D>> restrictions;
   private final SearchSettings settings;
+  private final TimeSource time;
+  private final SearchObserver observer;
   private final Tier1Estimator estimator;
   private final Tier1Graph<T, D> tier1;
   private final long deadlineMillis;
@@ -77,7 +79,8 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
       ModesProvider<A, T, D> modes,
       List<? extends Transition<T, D>> transitions,
       List<? extends Restriction<A, D>> restrictions,
-      SearchSettings settings) {
+      SearchSettings settings,
+      SearchObserver observer) {
     this.logger = new ScopedCobblestoneLogger(logger, "search[" + searchId + "]");
     this.scheduler = scheduler;
     this.executor = scheduler.asyncExecutor();
@@ -88,9 +91,11 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
     this.restrictions = List.copyOf(restrictions);
     this.settings = settings;
 
+    this.time = scheduler.time();
+    this.observer = observer;
     this.estimator = new Tier1Estimator(heuristic, settings.tier1UnsolvedPessimism());
     this.tier1 = new Tier1Graph<>(origin, transitions, destination.regions(), this.estimator);
-    this.deadlineMillis = System.currentTimeMillis() + settings.maxWallClockMillis();
+    this.deadlineMillis = this.time.millis() + settings.maxWallClockMillis();
 
     this.logger.debug("Constructed for agent {} and destination {}", agent, destination);
   }
@@ -122,7 +127,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
     if (cancelled.get()) {
       return;
     }
-    if (System.currentTimeMillis() > deadlineMillis) {
+    if (time.millis() > deadlineMillis) {
       finish(new NavigationResult.Failure<>(FailureReason.TIMED_OUT));
       return;
     }
@@ -183,6 +188,8 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
               settings.heuristicWeight(),
               cancelled::get,
               executor,
+              time,
+              observer,
               deadlineMillis);
       activeSolve = tier2;
       tier2

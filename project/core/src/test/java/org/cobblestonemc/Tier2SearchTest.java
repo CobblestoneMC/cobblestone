@@ -22,6 +22,37 @@ import org.junit.jupiter.api.Test;
 
 class Tier2SearchTest {
 
+  /**
+   * Runs delayed tasks on a real timer, so a test that sets a deadline still times out.
+   *
+   * <p>Tests that pass {@code 0} for the deadline never schedule anything here at all.
+   */
+  private static final Scheduler DIRECT_SCHEDULER =
+      new Scheduler() {
+        private final java.util.concurrent.ScheduledExecutorService timer =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
+                runnable -> {
+                  Thread thread = new Thread(runnable, "tier2-test-timer");
+                  thread.setDaemon(true);
+                  return thread;
+                });
+
+        @Override
+        public void runAsync(Runnable task) {
+          task.run();
+        }
+
+        @Override
+        public void runAsyncLater(Runnable task, long delayMillis) {
+          timer.schedule(task, delayMillis, TimeUnit.MILLISECONDS);
+        }
+
+        @Override
+        public java.util.concurrent.ExecutorService asyncExecutor() {
+          return timer;
+        }
+      };
+
   private static final TestDomain DOMAIN = new TestDomain("test");
 
   private VirtualPath<TestStep, TestDomain> virtualPath(Cell from, Cell target) {
@@ -53,6 +84,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Executors.newSingleThreadExecutor(),
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             System.currentTimeMillis() + 100);
 
     Tier2Result<TestStep, TestDomain> result = search.solve().get(10, TimeUnit.SECONDS);
@@ -101,6 +134,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -144,6 +179,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -192,6 +229,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -207,6 +246,130 @@ class Tier2SearchTest {
 
     assertTrue(future.isDone());
     assertInstanceOf(Tier2Result.Failed.class, future.getNow(null));
+  }
+
+  /**
+   * A heuristic whose {@link SolveHeuristic#prepare} hands out futures from {@code waiting}, one
+   * per call, until it runs out; after that it answers immediately. Estimates are zero.
+   */
+  private static HeuristicStrategy preparing(
+      java.util.function.Supplier<CompletableFuture<Void>> waiting) {
+    return new HeuristicStrategy() {
+      @Override
+      public double estimate(Cell from, DomainRegion<?> target, TraversalState state) {
+        return 0.0;
+      }
+
+      @Override
+      public SolveHeuristic newSolve(int windowWidth, DomainRegion<?> target) {
+        return new SolveHeuristic() {
+          @Override
+          public double seed() {
+            return 0.0;
+          }
+
+          @Override
+          public double advance(double trailAverage, double stepCost, double blocks) {
+            return trailAverage;
+          }
+
+          @Override
+          public double estimate(
+              Cell from, double distance, TraversalState state, double trailAverage) {
+            return 0.0;
+          }
+
+          @Override
+          public CompletableFuture<Void> prepare(Cell from) {
+            return waiting.get();
+          }
+        };
+      }
+    };
+  }
+
+  /**
+   * A node whose estimate is not ready is held, not queued, and an open set that is empty only
+   * because of it is not mistaken for an unreachable goal.
+   */
+  @Test
+  void parksOnAnEstimateUntilItIsReadyThenSolves() {
+    java.util.ArrayDeque<CompletableFuture<Void>> handedOut = new java.util.ArrayDeque<>();
+    boolean[] ready = {false};
+    HeuristicStrategy heuristic =
+        preparing(
+            () -> {
+              if (ready[0]) {
+                return null;
+              }
+              CompletableFuture<Void> future = new CompletableFuture<>();
+              handedOut.add(future);
+              return future;
+            });
+
+    Tier2Search<TestAgent, TestStep, TestDomain> search =
+        new Tier2Search<>(
+            new TestCobblestoneLogger(),
+            new TestAgent(),
+            virtualPath(new Cell(0, 0, 0), new Cell(2, 0, 0)),
+            List.of(new CorridorMode(false)),
+            List.of(),
+            heuristic,
+            1000,
+            5,
+            1.0,
+            () -> false,
+            Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
+            0);
+
+    CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
+
+    assertFalse(future.isDone(), "the start node's estimate is pending, so nothing can expand");
+    assertEquals(1, handedOut.size());
+
+    ready[0] = true;
+    handedOut.poll().complete(null);
+
+    assertTrue(future.isDone());
+    Tier2Result<TestStep, TestDomain> result = future.getNow(null);
+    assertInstanceOf(Tier2Result.Solved.class, result);
+    assertEquals(2.0, ((Tier2Result.Solved<TestStep, TestDomain>) result).cost(), 1e-9);
+  }
+
+  /**
+   * A heuristic that keeps handing back futures that are already done, without ever becoming able
+   * to answer, must not wedge the search thread. Each retry parks and wakes at once; if the retries
+   * ran in one loop the deadline would never be checked and the solve would never finish. A failed
+   * chunk read under a terrain-reading heuristic takes exactly this shape.
+   */
+  @Test
+  void anEstimateThatNeverBecomesReadyStillTimesOut() throws Exception {
+    Tier2Search<TestAgent, TestStep, TestDomain> search =
+        new Tier2Search<>(
+            new TestCobblestoneLogger(),
+            new TestAgent(),
+            virtualPath(new Cell(0, 0, 0), new Cell(3, 0, 0)),
+            List.of(new CorridorMode(false)),
+            List.of(),
+            preparing(
+                () -> CompletableFuture.failedFuture(new IllegalStateException("read failed"))),
+            1000,
+            5,
+            1.0,
+            () -> false,
+            Executors.newSingleThreadExecutor(),
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
+            System.currentTimeMillis() + 100);
+
+    Tier2Result<TestStep, TestDomain> result = search.solve().get(10, TimeUnit.SECONDS);
+
+    assertInstanceOf(Tier2Result.Failed.class, result);
+    assertEquals(
+        Tier2Result.FailureOutcome.TIMED_OUT,
+        ((Tier2Result.Failed<TestStep, TestDomain>) result).outcome());
   }
 
   @Test
@@ -225,6 +388,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -252,6 +417,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -289,6 +456,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
@@ -311,6 +480,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
@@ -338,6 +509,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
@@ -366,6 +539,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -399,6 +574,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -462,6 +639,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -504,6 +683,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
@@ -637,6 +818,8 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            SearchObserver.none(),
             0);
 
     CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();

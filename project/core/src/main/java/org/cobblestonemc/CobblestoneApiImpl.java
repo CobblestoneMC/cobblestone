@@ -34,7 +34,8 @@ public final class CobblestoneApiImpl implements CobblestoneApi {
       List<? extends Transition<T, D>> transitions,
       List<? extends Restriction<A, D>> restrictions,
       HeuristicStrategy heuristic,
-      SearchSettings settings) {
+      SearchSettings settings,
+      SearchObserver observer) {
     SearchImpl<A, T, D> search =
         new SearchImpl<>(
             logger,
@@ -46,7 +47,8 @@ public final class CobblestoneApiImpl implements CobblestoneApi {
             modes,
             transitions,
             restrictions,
-            settings);
+            settings,
+            observer);
     search.start();
     return search;
   }
