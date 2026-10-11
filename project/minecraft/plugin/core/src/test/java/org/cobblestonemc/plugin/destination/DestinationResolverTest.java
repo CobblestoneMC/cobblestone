@@ -377,7 +377,7 @@ class DestinationResolverTest {
   void resolvesADestinationFollowedByItsOptions() {
     var roots = roots(node("cobblestone").template("coordinates"));
 
-    Resolved<String, Integer> resolved =
+    Resolved<?, ?> resolved =
         assertInstanceOf(Resolved.class, resolve(roots, List.of("coordinates", "1", "2", "-3")));
     assertEquals(List.of("cobblestone", "coordinates"), resolved.address());
     assertEquals(Component.text("1 2 -3"), resolved.destination().displayName());
@@ -398,11 +398,10 @@ class DestinationResolverTest {
                 .leaf("surface")
                 .sub(node("coordinates").strict().template("surface").template("block")));
 
-    Resolved<String, Integer> nearest =
-        assertInstanceOf(Resolved.class, resolve(roots, List.of("surface")));
+    Resolved<?, ?> nearest = assertInstanceOf(Resolved.class, resolve(roots, List.of("surface")));
     assertEquals(List.of("cobblestone", "surface"), nearest.address());
 
-    Resolved<String, Integer> column =
+    Resolved<?, ?> column =
         assertInstanceOf(
             Resolved.class, resolve(roots, List.of("coordinates", "surface", "1", "2", "3")));
     assertEquals(List.of("cobblestone", "coordinates", "surface"), column.address());
@@ -421,7 +420,7 @@ class DestinationResolverTest {
             List.of("coordinates"),
             List.of("coordinates", "1", "2"),
             List.of("coordinates", "1", "2", "3", "nether", "extra"))) {
-      InvalidOptions<String, Integer> invalid =
+      InvalidOptions<?, ?> invalid =
           assertInstanceOf(InvalidOptions.class, resolve(roots, args), args.toString());
       assertNull(invalid.invalidToken(), args.toString());
       assertEquals(
@@ -429,7 +428,7 @@ class DestinationResolverTest {
           DestinationResolver.usage(invalid.address(), invalid.options()));
     }
 
-    InvalidOptions<String, Integer> invalid =
+    InvalidOptions<?, ?> invalid =
         assertInstanceOf(
             InvalidOptions.class, resolve(roots, List.of("coordinates", "1", "two", "3")));
     assertEquals("two", invalid.invalidToken());
@@ -445,8 +444,7 @@ class DestinationResolverTest {
     // is only reached through its own key.
     var roots = roots(node("cobblestone").template("coordinates").leaf("1"));
 
-    Resolved<String, Integer> resolved =
-        assertInstanceOf(Resolved.class, resolve(roots, List.of("1")));
+    Resolved<?, ?> resolved = assertInstanceOf(Resolved.class, resolve(roots, List.of("1")));
     assertEquals(List.of("cobblestone", "1"), resolved.address());
     assertInstanceOf(NotFound.class, resolve(roots, List.of("1", "2", "3")));
   }
@@ -466,7 +464,7 @@ class DestinationResolverTest {
             node("cobblestone").template("coordinates"),
             node("other").sub(node("coordinates").leaf("home")));
 
-    Resolved<String, Integer> resolved =
+    Resolved<?, ?> resolved =
         assertInstanceOf(Resolved.class, resolve(roots, List.of("coordinates", "home")));
     assertEquals(List.of("other", "coordinates", "home"), resolved.address());
   }
