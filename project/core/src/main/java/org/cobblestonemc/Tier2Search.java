@@ -19,6 +19,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -145,8 +146,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
    * <p>Filled from whatever thread completes the heuristic's future and drained on the search's own
    * thread, like the verdict mailboxes above it.
    */
-  private final java.util.Queue<DeferredOffer> deferredOffers =
-      new java.util.concurrent.ConcurrentLinkedQueue<>();
+  private final Queue<DeferredOffer> deferredOffers = new ConcurrentLinkedQueue<>();
 
   /**
    * How many offers are waiting on an estimate.
@@ -155,8 +155,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
    * the offer is deferred and falls only once the node is queued, so an empty open set with work
    * still outstanding is never mistaken for an exhausted one.
    */
-  private final java.util.concurrent.atomic.AtomicInteger pendingEstimates =
-      new java.util.concurrent.atomic.AtomicInteger();
+  private final AtomicInteger pendingEstimates = new AtomicInteger();
 
   private CellState pendingGoal; // an optimistically-reached goal awaiting path confirmation
 
@@ -350,11 +349,11 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   /**
    * Queues a node on the open set at cost {@code g}, pricing its remaining journey.
    *
-   * <p>If the heuristic cannot price it yet -- an estimate that reads terrain whose chunks are
-   * still loading -- the node is held until it can, rather than queued at a guessed priority.
+   * <p>If the heuristic cannot price it yet — an estimate that reads terrain whose chunks are still
+   * loading — the node is held until it can, rather than queued at a guessed priority.
    */
   private void offer(CellState key, double g, double trailAverage) {
-    java.util.concurrent.CompletableFuture<Void> waiting = heuristic.prepare(key.cell());
+    CompletableFuture<Void> waiting = heuristic.prepare(key.cell());
     if (waiting == null) {
       queue(key, g, trailAverage);
       return;

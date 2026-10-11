@@ -23,7 +23,7 @@ Every scenario runs under every loadout that applies to it.
 ## Setup
 
 You need the JDKs from [Contributing](contributing.md), including **JDK 25**, which runs the Paper
-server. Gradle uses the JDKs already installed on your machine and never downloads one.
+server. Gradle finds the JDKs installed on your machine.
 
 Generate the terrain once:
 

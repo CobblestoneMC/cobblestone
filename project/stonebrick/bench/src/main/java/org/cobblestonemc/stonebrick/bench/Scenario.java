@@ -341,59 +341,6 @@ public record Scenario(
         heuristic);
   }
 
-  /**
-   * Returns this scenario started somewhere else.
-   *
-   * <p>For asking what a route costs from partway along it, which is what verifying a cost-to-goal
-   * estimate needs.
-   *
-   * @param cell where to start
-   * @return the variant
-   */
-  public Scenario withOrigin(Cell cell) {
-    return new Scenario(
-        id,
-        description,
-        tags,
-        tier,
-        capture,
-        world,
-        cell,
-        destination,
-        destinationRadius,
-        settings,
-        io,
-        onMissingCapture,
-        expectedOutcome,
-        ungenerated,
-        heuristic);
-  }
-
-  /**
-   * Returns this scenario run under different limits.
-   *
-   * @param limits the limits to run under
-   * @return the variant
-   */
-  public Scenario withLimits(SearchLimits limits) {
-    return new Scenario(
-        id,
-        description,
-        tags,
-        tier,
-        capture,
-        world,
-        origin,
-        destination,
-        destinationRadius,
-        limits,
-        io,
-        onMissingCapture,
-        expectedOutcome,
-        ungenerated,
-        heuristic);
-  }
-
   private static Scenario from(Map<String, Object> root, Path file) throws IOException {
     String id = string(root, "id", "unnamed");
     Map<String, Object> agent = map(root, "agent");

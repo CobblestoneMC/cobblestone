@@ -24,8 +24,8 @@ import org.junit.jupiter.api.io.TempDir;
  *
  * <p>A change to the trait bits leaves every column file on disk exactly as valid as it was and
  * every description of those columns wrong. The provisioner has to ask for a capture anyway, or a
- * developer who changes a medium gets "Corpus is complete; nothing to capture" and then silently
- * wrong terrain for as long as they keep that directory.
+ * developer who changes a block trait gets "Corpus is complete; nothing to capture" and then
+ * silently wrong terrain for as long as they keep that directory.
  */
 class StaleTraitsTest {
 

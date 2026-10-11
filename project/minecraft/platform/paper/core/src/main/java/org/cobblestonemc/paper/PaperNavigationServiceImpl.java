@@ -190,8 +190,7 @@ public final class PaperNavigationServiceImpl
     ModesProvider<CobblestonePlayer, MinecraftStepPayload, MinecraftWorld> modes =
         MinecraftModes.providerFor(
             agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
-    HeuristicStrategy heuristic =
-        MinecraftHeuristics.forPlayer(agent, originPosition.cell(), settings);
+    HeuristicStrategy heuristic = MinecraftHeuristics.forPlayer(agent, settings);
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
         gatherTransitions(

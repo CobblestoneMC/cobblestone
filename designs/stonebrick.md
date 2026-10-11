@@ -17,8 +17,7 @@ design as written, and where the build departed from it the commit history says 
 
 **Not built**
 - The visualizer (§9), and the deletion of `:core-test` and `:playground` (§1.1).
-- Any new search algorithm. The coarse tier this harness was built to measure is designed and
-  developed separately; this document covers only the platform that measures it.
+- Any new search algorithm. This document covers only the platform that measures one.
 - Committed baselines and CI gating (§8.4). Baselines are local: a seed does not reproduce the
   blocks (§6.3), so a baseline is a fact about one capture.
 
@@ -530,8 +529,8 @@ same blocks. Shareable baselines would need shared captures.
 
 ### 6.4 No golden solves
 
-A true Dijkstra over these distances is not computable — it is the problem the coarse tier exists to
-avoid — so a "cost ratio versus optimal" would be either unobtainable or restricted to toy cases.
+A true Dijkstra over these distances is not computable — it is the problem the tiered search exists
+to avoid — so a "cost ratio versus optimal" would be either unobtainable or restricted to toy cases.
 
 Instead **every result records both `solveMillis` and `pathCost`**, and neither is read alone. A
 change that halves solve time and raises path cost by 30% is not a win; one that does the reverse
@@ -545,7 +544,7 @@ margin, not a straight line** — a weight-1.5 search on awkward terrain routine
 route length perpendicular to the straight line. A search that runs off the capture aborts the run
 loudly (§5.1a), naming the region to capture, so the failure is a prompt rather than a silent bad
 number. Rule of thumb: a rectangle whose short side is `max(64 blocks, 0.6 × route length)`, and
-expect to narrow that considerably once the coarse tier supplies a real heuristic.
+expect to narrow that considerably as the heuristic improves.
 
 ### 7.1 Two corpus tiers, and a file budget
 
@@ -695,7 +694,7 @@ Sizing rules that get there:
 | G4 | Built maze / spiral | heuristic provides nothing | **fixtures** |
 | G5 | One-wide bridge over a void chasm | single viable corridor | **fixtures** |
 | G6 | Two plausible routes of nearly equal cost | tie-group behavior, determinism check | reuse A4 |
-| G7 | Destination 12 000 blocks away | the long-haul case the coarse tier exists for | **out of git**, fetched |
+| G7 | Destination 12 000 blocks away | the long-haul case | **out of git**, fetched |
 | G8 | **Deliberately narrow capture around a known-good route** | with `onMissingCapture: ERROR`, asserts the search stayed in its corridor — a width regression test | narrow A2 |
 
 ### H. Destination shape

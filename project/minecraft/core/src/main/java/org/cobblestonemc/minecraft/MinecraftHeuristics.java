@@ -7,7 +7,6 @@
 
 package org.cobblestonemc.minecraft;
 
-import org.cobblestonemc.Cell;
 import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.Heuristics;
 import org.cobblestonemc.api.SearchSettings;
@@ -33,12 +32,11 @@ public final class MinecraftHeuristics {
    * MinecraftModes#cheapestCostPerBlock}.
    *
    * @param agent the navigating player
-   * @param origin where the search starts
    * @param settings the search settings, which select the heuristic and the excluded modes
    * @return the heuristic strategy
    */
   public static HeuristicStrategy forPlayer(
-      CobblestonePlayer agent, Cell origin, MinecraftSearchSettings settings) {
+      CobblestonePlayer agent, MinecraftSearchSettings settings) {
     return switch (settings.settings().heuristic()) {
       case RUNNING_AVERAGE ->
           Heuristics.runningAverage(

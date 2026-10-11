@@ -42,9 +42,8 @@ tasks.register<JavaExec>("captureCorpus") {
     classpath = sourceSets["main"].runtimeClasspath
 
     // Modern Paper needs a newer Java than this build compiles with, so the toolchain finds one
-    // rather than trusting whatever `java` happens to be on PATH. It only *finds* one: nothing here
-    // downloads a JDK on the developer's behalf (see gradle.properties), so a machine without Java
-    // 25 gets told to install it.
+    // rather than trusting whatever `java` happens to be on PATH. A machine without Java 25 gets told
+    // to install it.
     val serverJava = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
     fun serverJavaPath(): String =
         try {

@@ -241,7 +241,7 @@ public final class ScenarioRunner {
     if (scenario.heuristic().production() == null) {
       return Heuristics.zero();
     }
-    return MinecraftHeuristics.forPlayer(player, scenario.origin(), settings);
+    return MinecraftHeuristics.forPlayer(player, settings);
   }
 
   /**
