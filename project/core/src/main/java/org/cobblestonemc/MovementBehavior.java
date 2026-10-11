@@ -29,4 +29,13 @@ public interface MovementBehavior<T, D extends Domain> {
    * @return the reachable movements, possibly pending on I/O
    */
   FutureOr<Collection<Movement<T>>> movements(Cell from, D domain, TraversalState state, Cell goal);
+
+  /**
+   * Returns the traversal state a search starts in.
+   *
+   * @return the starting state
+   */
+  default TraversalState initialState() {
+    return TraversalState.DEFAULT;
+  }
 }

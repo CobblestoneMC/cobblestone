@@ -49,6 +49,7 @@ import org.cobblestonemc.sponge.api.Transition;
 import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockState;
+import org.spongepowered.api.data.value.Value;
 import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.item.ItemTypes;
@@ -214,7 +215,7 @@ public final class SpongeNavigationServiceImpl
       Destination<DomainRegion<MinecraftWorld>> destination,
       MinecraftSearchSettings settings) {
     logger.debug("Search triggered for player {} to destination {}", player.name(), destination);
-    ServerLocation origin = player.serverLocation();
+    ServerLocation origin = originOf(player);
     Position<MinecraftWorld> originPosition =
         new Position<>(SpongeConversions.cell(origin), wrap(origin.world()));
     // One snapshot of the registered modifiers drives all three influences on this search.
@@ -348,6 +349,24 @@ public final class SpongeNavigationServiceImpl
           return FutureOr.from(anyFalse(results));
         };
     return List.of(restriction);
+  }
+
+  /**
+   * Where a search for {@code player} starts. A player in a boat starts from the boat's block: the
+   * water or ice it floats on, which is one below the boat when it sits on top of it.
+   */
+  private static ServerLocation originOf(ServerPlayer player) {
+    Optional<Entity> vehicle = player.vehicle().map(Value::get);
+    if (vehicle.isEmpty() || !SpongePlayer.isBoat(vehicle.get().type())) {
+      return player.serverLocation();
+    }
+    ServerLocation at = vehicle.get().serverLocation();
+    ServerLocation below = at.sub(0, 1, 0);
+    if (!new SpongeBlock(at.block()).supportsBoat()
+        && new SpongeBlock(below.block()).supportsBoat()) {
+      return below;
+    }
+    return at;
   }
 
   /** Counts the ender pearls in the player's inventory (read on the server thread). */

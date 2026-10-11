@@ -23,6 +23,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.entity.Boat;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -175,7 +176,7 @@ public final class PaperNavigationServiceImpl
       Player player,
       Destination<DomainRegion<MinecraftWorld>> destination,
       MinecraftSearchSettings settings) {
-    Location origin = player.getLocation();
+    Location origin = originOf(player);
     Position<MinecraftWorld> originPosition =
         new Position<>(PaperConversions.cell(origin), wrap(origin.getWorld()));
     // One snapshot of the registered modifiers drives all three influences on this search.
@@ -320,6 +321,23 @@ public final class PaperNavigationServiceImpl
           return FutureOr.from(anyFalse(results));
         };
     return List.of(restriction);
+  }
+
+  /**
+   * Where a search for {@code player} starts. A player in a boat starts from the boat's block: the
+   * water or ice it floats on, which is one below the boat when it sits on top of it.
+   */
+  private static Location originOf(Player player) {
+    if (!(player.getVehicle() instanceof Boat boat)) {
+      return player.getLocation();
+    }
+    Location at = boat.getLocation();
+    Location below = at.clone().subtract(0, 1, 0);
+    if (!new PaperBlock(at.getBlock().getBlockData()).supportsBoat()
+        && new PaperBlock(below.getBlock().getBlockData()).supportsBoat()) {
+      return below;
+    }
+    return at;
   }
 
   /** Counts the ender pearls in the player's inventory (read on the server thread). */

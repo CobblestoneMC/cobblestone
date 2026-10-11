@@ -36,11 +36,12 @@ final class Tier1Graph<T, D extends Domain> extends Graph<Tier1Node<T, D>, Tier1
 
   Tier1Graph(
       Position<D> origin,
+      TraversalState originState,
       List<? extends Transition<T, D>> transitions,
       Collection<? extends DomainRegion<D>> destinationRegions,
       Tier1Estimator estimator) {
     this.estimator = estimator;
-    this.originNode = new Tier1Node.Source<>(origin, TraversalState.DEFAULT);
+    this.originNode = new Tier1Node.Source<>(origin, originState);
     for (Transition<T, D> transition : transitions) {
       transitionsByOriginDomain
           .computeIfAbsent(transition.origin().domain(), key -> new ArrayList<>())

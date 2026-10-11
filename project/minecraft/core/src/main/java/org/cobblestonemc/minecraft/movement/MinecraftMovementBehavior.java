@@ -37,9 +37,12 @@ public final class MinecraftMovementBehavior
   private final Abilities can;
   private final @Nullable Mining mining;
   private final int[][] dismountedOffsets;
+  private final TraversalState initialState;
 
-  MinecraftMovementBehavior(Abilities can, @Nullable BreakChecker breakChecker) {
+  MinecraftMovementBehavior(
+      Abilities can, @Nullable BreakChecker breakChecker, TraversalState initialState) {
     this.can = can;
+    this.initialState = initialState;
     this.mining = can.mine() ? new Mining(breakChecker) : null;
     this.dismountedOffsets = dismountedOffsets(can.doors(), can.mine());
   }
@@ -76,6 +79,7 @@ public final class MinecraftMovementBehavior
     // flier skips them. Gliding is not flight: a glider cannot hover or climb.
     boolean flies = !excluded.contains(MinecraftStepType.FLY) && player.canFly();
     boolean walks = !excluded.contains(MinecraftStepType.WALK);
+    boolean boats = !excluded.contains(MinecraftStepType.BOAT);
     int flightHeight = 0;
     if (!excluded.contains(MinecraftStepType.FLY)) {
       // A glider is modelled 1 tall so it can slip through a 1-block hole (an end gateway).
@@ -96,9 +100,16 @@ public final class MinecraftMovementBehavior
             !excluded.contains(MinecraftStepType.CLIMB) && !flies,
             !excluded.contains(MinecraftStepType.HORSE),
             flightHeight,
-            !excluded.contains(MinecraftStepType.BOAT) && player.hasBoatInInventory(),
+            boats && player.hasBoatInInventory(),
+            boats && (player.hasBoatInInventory() || player.isInBoat()),
             Math.max(0, enderPearls));
-    return new MinecraftMovementBehavior(can, breakChecker);
+    // A player already in a boat starts in it. Getting out is always open to them, so excluding
+    // boats leaves them only that.
+    TraversalState initialState =
+        player.isInBoat()
+            ? TraversalState.DEFAULT.with(MinecraftKeys.VEHICLE, MinecraftKeys.Vehicle.BOAT)
+            : TraversalState.DEFAULT;
+    return new MinecraftMovementBehavior(can, breakChecker, initialState);
   }
 
   @Override
@@ -117,7 +128,7 @@ public final class MinecraftMovementBehavior
           BlockLookup.fetch(world, from, cells(from, IN_VEHICLE), goal)
               .map(
                   view -> {
-                    if (can.boat()) {
+                    if (can.paddle()) {
                       Vehicles.boat(from, state, view, edges);
                     }
                     Vehicles.leaveBoat(can, from, state, view, edges);
@@ -146,7 +157,7 @@ public final class MinecraftMovementBehavior
   private FutureOr<Edges> dismounted(
       Cell from, MinecraftWorld world, TraversalState state, BlockView view, Edges edges) {
     Dismounted.offer(can, mining, world, from, state, view, edges);
-    if (can.boat()) {
+    if (can.boardBoat()) {
       Vehicles.boardBoat(from, state, view, edges);
     }
     if (can.fall()) {
@@ -171,10 +182,15 @@ public final class MinecraftMovementBehavior
     if (can.horse()) {
       cheapest = Math.min(cheapest, MovementCosts.HORSE);
     }
-    if (can.boat()) {
+    if (can.paddle()) {
       cheapest = Math.min(cheapest, MovementCosts.BOAT);
     }
     return cheapest;
+  }
+
+  @Override
+  public TraversalState initialState() {
+    return initialState;
   }
 
   /** The abilities this behavior was built with. */

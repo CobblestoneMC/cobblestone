@@ -89,7 +89,9 @@ final class SearchImpl<T, D extends Domain> implements SearchHandle<Position<D>,
     this.time = scheduler.time();
     this.observer = observer;
     this.estimator = new Tier1Estimator(heuristic, settings.tier1UnsolvedPessimism());
-    this.tier1 = new Tier1Graph<>(origin, transitions, destination.regions(), this.estimator);
+    this.tier1 =
+        new Tier1Graph<>(
+            origin, behavior.initialState(), transitions, destination.regions(), this.estimator);
     this.deadlineMillis = this.time.millis() + settings.maxWallClockMillis();
 
     this.logger.debug("Constructed for destination {}", destination);

@@ -101,6 +101,51 @@ class BoatTest {
     assertTrue(moves.reaches(new Cell(2, 1, 0), MinecraftStepType.SWIM));
   }
 
+  /** A player sitting in a boat, with no boat item. */
+  private final CobblestonePlayer inBoat = TestPlayer.create(false, false, true);
+
+  @Test
+  void aPlayerInABoatStartsInItAndPaddles() {
+    MinecraftMovementBehavior behavior = MinecraftMovementBehavior.forPlayer(inBoat, Set.of());
+    assertEquals(MinecraftKeys.Vehicle.BOAT, behavior.initialState().get(MinecraftKeys.VEHICLE));
+
+    Moves moves = TestMovements.from(behavior, shore(), new Cell(1, 1, 0), behavior.initialState());
+    assertTrue(moves.reaches(new Cell(2, 1, 0), MinecraftStepType.BOAT));
+  }
+
+  /** With boats excluded, a player in one starts in it, and getting out is all they may do. */
+  @Test
+  void excludingBoatsLeavesAPlayerInOneOnlyGettingOut() {
+    MinecraftMovementBehavior behavior =
+        MinecraftMovementBehavior.forPlayer(inBoat, Set.of(MinecraftStepType.BOAT));
+    assertEquals(MinecraftKeys.Vehicle.BOAT, behavior.initialState().get(MinecraftKeys.VEHICLE));
+
+    Moves moves = TestMovements.from(behavior, shore(), new Cell(1, 1, 0), behavior.initialState());
+    assertEquals(2, moves.size());
+    assertTrue(moves.reaches(new Cell(0, 1, 0), MinecraftStepType.WALK));
+    assertTrue(moves.reaches(new Cell(2, 1, 0), MinecraftStepType.SWIM));
+  }
+
+  /** Paddling a boat you are in is not the same as holding one to place. */
+  @Test
+  void aPlayerInABoatWithoutOneInHandCannotPlaceAnother() {
+    TestWorld world =
+        TestWorld.builder("w")
+            .floor(0, -1, -1, 0, 1, TestBlocks.solid())
+            .set(1, 1, 0, TestBlocks.water())
+            .build();
+    assertTrue(
+        TestMovements.from(
+                MinecraftMovementBehavior.forPlayer(inBoat, Set.of()), world, new Cell(0, 1, 0))
+            .ofType(MinecraftStepType.PLACE_BOAT)
+            .isEmpty());
+  }
+
+  @Test
+  void aPlayerOutOfABoatStartsDismounted() {
+    assertEquals(TraversalState.DEFAULT, boat.initialState());
+  }
+
   @Test
   void offersNoBoatOnDryLand() {
     // Dismounted with a boat in hand, the boat only comes out at water's edge.

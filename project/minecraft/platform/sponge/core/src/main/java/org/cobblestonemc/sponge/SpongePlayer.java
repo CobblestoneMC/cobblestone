@@ -113,7 +113,7 @@ final class SpongePlayer implements CobblestonePlayer {
         .orElse(false);
   }
 
-  private static boolean isBoat(EntityType<?> type) {
+  static boolean isBoat(EntityType<?> type) {
     return type.equals(EntityTypes.BOAT.get()) || type.equals(EntityTypes.CHEST_BOAT.get());
   }
 
