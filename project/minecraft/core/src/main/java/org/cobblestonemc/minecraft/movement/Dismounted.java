@@ -18,14 +18,14 @@ import org.jetbrains.annotations.Nullable;
  * Movement out of any vehicle — walking, jumping, swimming, climbing, doorways, mining and flying —
  * decided in one pass over the neighbors.
  */
-final class OnFoot {
+final class Dismounted {
 
   /** Cardinals first, then diagonals. */
   private static final int[][] HORIZONTAL = {
     {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}
   };
 
-  private OnFoot() {}
+  private Dismounted() {}
 
   static void offer(
       Abilities can,

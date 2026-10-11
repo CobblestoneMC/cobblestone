@@ -28,20 +28,20 @@ import org.jetbrains.annotations.Nullable;
 public final class MinecraftMovementBehavior
     implements MovementBehavior<MinecraftStepPayload, MinecraftWorld> {
 
-  /** The cells read on foot: one block out, two down to three up. */
-  private static final int[][] ON_FOOT = box(1, -2, 3);
+  /** The cells read dismounted: one block out, two down to three up. */
+  private static final int[][] DISMOUNTED = box(1, -2, 3);
 
   /** The cells read in a vehicle: one block out, one down to two up. */
   private static final int[][] IN_VEHICLE = box(1, -1, 2);
 
   private final Abilities can;
   private final @Nullable Mining mining;
-  private final int[][] onFoot;
+  private final int[][] dismountedOffsets;
 
   MinecraftMovementBehavior(Abilities can, @Nullable BreakChecker breakChecker) {
     this.can = can;
     this.mining = can.mine() ? new Mining(breakChecker) : null;
-    this.onFoot = onFoot(can.doors(), can.mine());
+    this.dismountedOffsets = dismountedOffsets(can.doors(), can.mine());
   }
 
   /**
@@ -96,10 +96,7 @@ public final class MinecraftMovementBehavior
             !excluded.contains(MinecraftStepType.CLIMB) && !flies,
             !excluded.contains(MinecraftStepType.HORSE),
             flightHeight,
-            // A player already in a boat can boat whatever the exclusion says: nothing else moves
-            // a vehicle, so without it they could not move at all.
-            (!excluded.contains(MinecraftStepType.BOAT) && player.hasBoatInInventory())
-                || player.isInBoat(),
+            !excluded.contains(MinecraftStepType.BOAT) && player.hasBoatInInventory(),
             Math.max(0, enderPearls));
     return new MinecraftMovementBehavior(can, breakChecker);
   }
@@ -112,14 +109,18 @@ public final class MinecraftMovementBehavior
     FutureOr<Edges> local;
     if (vehicle == null) {
       local =
-          BlockLookup.fetch(world, from, cells(from, onFoot), goal)
-              .flatMap(view -> onFoot(from, world, state, view, edges));
-    } else if (vehicle == MinecraftKeys.Vehicle.BOAT && can.boat()) {
+          BlockLookup.fetch(world, from, cells(from, dismountedOffsets), goal)
+              .flatMap(view -> dismounted(from, world, state, view, edges));
+    } else if (vehicle == MinecraftKeys.Vehicle.BOAT) {
+      // Getting out is always open to a player in a boat; only paddling needs the boat ability.
       local =
           BlockLookup.fetch(world, from, cells(from, IN_VEHICLE), goal)
               .map(
                   view -> {
-                    Vehicles.boat(from, state, view, edges);
+                    if (can.boat()) {
+                      Vehicles.boat(from, state, view, edges);
+                    }
+                    Vehicles.leaveBoat(can, from, state, view, edges);
                     return edges;
                   });
     } else if (vehicle == MinecraftKeys.Vehicle.HORSE && can.horse()) {
@@ -142,9 +143,9 @@ public final class MinecraftMovementBehavior
         });
   }
 
-  private FutureOr<Edges> onFoot(
+  private FutureOr<Edges> dismounted(
       Cell from, MinecraftWorld world, TraversalState state, BlockView view, Edges edges) {
-    OnFoot.offer(can, mining, world, from, state, view, edges);
+    Dismounted.offer(can, mining, world, from, state, view, edges);
     if (can.boat()) {
       Vehicles.boardBoat(from, state, view, edges);
     }
@@ -181,9 +182,9 @@ public final class MinecraftMovementBehavior
     return can;
   }
 
-  /** Every offset in the view box that a rule may read on foot or in a vehicle. */
+  /** Every offset in the view box that a rule may read, dismounted or in a vehicle. */
   static List<int[]> allOffsets() {
-    List<int[]> all = new ArrayList<>(List.of(onFoot(true, true)));
+    List<int[]> all = new ArrayList<>(List.of(dismountedOffsets(true, true)));
     all.addAll(List.of(IN_VEHICLE));
     return all;
   }
@@ -209,16 +210,16 @@ public final class MinecraftMovementBehavior
   }
 
   /**
-   * The cells read on foot: {@link #ON_FOOT}, plus the cells two blocks out along each cardinal
-   * that doorways (landing) and mining (lava checks) read.
+   * The cells read dismounted: {@link #DISMOUNTED}, plus the cells two blocks out along each
+   * cardinal that doorways (landing) and mining (lava checks) read.
    */
-  private static int[][] onFoot(boolean doors, boolean mine) {
+  private static int[][] dismountedOffsets(boolean doors, boolean mine) {
     if (!doors && !mine) {
-      return ON_FOOT;
+      return DISMOUNTED;
     }
     int dyLow = doors ? -1 : 0;
     int dyHigh = mine ? 2 : 1;
-    List<int[]> offsets = new ArrayList<>(List.of(ON_FOOT));
+    List<int[]> offsets = new ArrayList<>(List.of(DISMOUNTED));
     int[][] cardinals = {{2, 0}, {-2, 0}, {0, 2}, {0, -2}};
     for (int[] cardinal : cardinals) {
       for (int dy = dyLow; dy <= dyHigh; dy++) {

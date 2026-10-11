@@ -8,6 +8,7 @@
 package org.cobblestonemc.minecraft.movement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Set;
@@ -64,9 +65,45 @@ class BoatTest {
     assertEquals(MinecraftKeys.Vehicle.BOAT, travel.state().get(MinecraftKeys.VEHICLE));
   }
 
+  /** A boat on water at x=1, with land to the west and more water to the east. */
+  private static TestWorld shore() {
+    return TestWorld.builder("w")
+        .set(0, 0, 0, TestBlocks.solid())
+        .set(1, 1, 0, TestBlocks.water())
+        .set(2, 1, 0, TestBlocks.water())
+        .build();
+  }
+
+  private static final TraversalState BOATING =
+      TraversalState.DEFAULT.with(MinecraftKeys.VEHICLE, MinecraftKeys.Vehicle.BOAT);
+
+  @Test
+  void getsOutOfTheBoatOntoLandOrIntoWater() {
+    Moves moves = TestMovements.from(boat, shore(), new Cell(1, 1, 0), BOATING);
+
+    Movement<MinecraftStepPayload> ashore = moves.to(new Cell(0, 1, 0));
+    assertEquals(MinecraftStepType.WALK, ashore.payload().stepType());
+    assertNull(ashore.state().get(MinecraftKeys.VEHICLE));
+
+    Movement<MinecraftStepPayload> overboard = moves.to(new Cell(2, 1, 0), MinecraftStepType.SWIM);
+    assertNull(overboard.state().get(MinecraftKeys.VEHICLE));
+  }
+
+  /** Excluding boats stops a player in one from paddling, not from getting out. */
+  @Test
+  void excludingBoatsStillLetsAPlayerInOneGetOut() {
+    MinecraftMovementBehavior noBoat =
+        MinecraftMovementBehavior.forPlayer(withBoat, Set.of(MinecraftStepType.BOAT));
+    Moves moves = TestMovements.from(noBoat, shore(), new Cell(1, 1, 0), BOATING);
+
+    assertTrue(moves.ofType(MinecraftStepType.BOAT).isEmpty());
+    assertTrue(moves.reaches(new Cell(0, 1, 0), MinecraftStepType.WALK));
+    assertTrue(moves.reaches(new Cell(2, 1, 0), MinecraftStepType.SWIM));
+  }
+
   @Test
   void offersNoBoatOnDryLand() {
-    // On foot with a boat in hand, the boat only comes out at water's edge.
+    // Dismounted with a boat in hand, the boat only comes out at water's edge.
     TestWorld dryLand = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
     Moves moves = TestMovements.from(boat, dryLand, new Cell(0, 1, 0));
     assertTrue(moves.ofType(MinecraftStepType.PLACE_BOAT).isEmpty());

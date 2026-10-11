@@ -35,20 +35,31 @@ final class Vehicles {
     }
   }
 
-  /** Travelling fast over water while boating, or stepping out onto adjacent land. */
+  /** Travelling over water while boating. */
   static void boat(Cell from, TraversalState state, BlockView view, Edges edges) {
     for (int[] dir : HORIZONTAL) {
       Cell dest = from.plus(dir[0], 0, dir[1]);
-      boolean diagonal = dir[0] != 0 && dir[1] != 0;
       if (view.at(dest).supportsBoat()
           && view.at(dest, 0, 1, 0).isPassable()
           && !view.at(dest, 0, 1, 0).isWater()) {
+        boolean diagonal = dir[0] != 0 && dir[1] != 0;
         double cost = MovementCosts.BOAT * (diagonal ? MovementCosts.DIAGONAL : 1.0);
         edges.add(dest, cost, MinecraftStepType.BOAT, state);
-      } else if (!diagonal && Geometry.standable(view, dest)) {
-        TraversalState onLand =
-            state.without(MinecraftKeys.VEHICLE).without(MinecraftKeys.BOAT_CONSUMED);
-        edges.add(dest, MovementCosts.BOAT, MinecraftStepType.WALK, onLand);
+      }
+    }
+  }
+
+  /** Getting out of a boat: stepping onto adjacent land, or into adjacent water. */
+  static void leaveBoat(
+      Abilities can, Cell from, TraversalState state, BlockView view, Edges edges) {
+    TraversalState dismounted =
+        state.without(MinecraftKeys.VEHICLE).without(MinecraftKeys.BOAT_CONSUMED);
+    for (int i = 0; i < 4; i++) {
+      Cell dest = from.plus(HORIZONTAL[i][0], 0, HORIZONTAL[i][1]);
+      if (can.walk() && Geometry.standable(view, dest)) {
+        edges.add(dest, MovementCosts.WALK, MinecraftStepType.WALK, dismounted);
+      } else if (can.swim() && view.at(dest).isWater()) {
+        edges.add(dest, MovementCosts.SWIM, MinecraftStepType.SWIM, dismounted);
       }
     }
   }
