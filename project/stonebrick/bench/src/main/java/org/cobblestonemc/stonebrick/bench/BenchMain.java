@@ -40,7 +40,17 @@ public final class BenchMain {
    * @throws IOException if the corpus cannot be read
    */
   public static void main(String[] args) throws IOException {
-    Options options = Options.parse(args);
+    Options options;
+    try {
+      options = Options.parse(args);
+    } catch (IllegalArgumentException | ArrayIndexOutOfBoundsException e) {
+      System.err.println(
+          e instanceof ArrayIndexOutOfBoundsException
+              ? "Missing a value after " + args[args.length - 1] + "."
+              : e.getMessage());
+      System.exit(2);
+      return;
+    }
     List<Scenario> scenarios = select(Scenario.loadAll(options.scenariosDir()), options);
     List<Loadout> loadouts =
         selectLoadouts(Loadout.loadAll(options.corpusRoot().resolve(Loadout.FILE_NAME)), options);
@@ -271,9 +281,20 @@ public final class BenchMain {
               heuristic = Scenario.Heuristic.valueOf(args[++i].toUpperCase(Locale.ROOT));
           case "--weight", "--weights" -> weights = weights(args[++i]);
           case "--agent", "--loadout" -> agent = args[++i];
-          case "--io" -> io = org.cobblestonemc.stonebrick.platform.IoProfile.byName(args[++i]);
+          case "--io" -> {
+            String name = args[++i];
+            io = org.cobblestonemc.stonebrick.platform.IoProfile.byName(name);
+            if (io == null) {
+              throw new IllegalArgumentException(
+                  "Unknown --io '" + name + "'. Known: zero, nvme, sata, spinning, busy.");
+            }
+          }
           default -> {
-            // positional command, already taken
+            // The positional command, already taken. Anything else is a typo, and ignoring it
+            // would quietly run something other than what was asked for.
+            if (i != 0 || args[i].startsWith("--")) {
+              throw new IllegalArgumentException("Unknown option '" + args[i] + "'.");
+            }
           }
         }
       }
