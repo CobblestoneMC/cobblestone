@@ -58,6 +58,7 @@ import org.cobblestonemc.plugin.search.SearchRegistry;
 import org.cobblestonemc.plugin.trip.GuideSearch;
 import org.cobblestonemc.plugin.trip.LiveSearch;
 import org.cobblestonemc.plugin.trip.Trip;
+import org.cobblestonemc.plugin.trip.TripLabel;
 import org.joml.Vector3i;
 
 /**
@@ -198,7 +199,7 @@ final class NavigateCommand {
       return Command.SINGLE_SUCCESS;
     }
 
-    String destinationLabel = String.join(" ", address);
+    TripLabel tripLabel = TripLabel.address(address);
     boolean live =
         switch (flags.liveness()) {
           case LIVE -> true;
@@ -208,7 +209,7 @@ final class NavigateCommand {
     startSearch(
         player,
         locale,
-        destinationLabel,
+        tripLabel,
         destination,
         flags,
         live,
@@ -225,7 +226,7 @@ final class NavigateCommand {
   private static void startSearch(
       Player player,
       Locale locale,
-      String destinationLabel,
+      TripLabel tripLabel,
       MinecraftDestination<World, Vector3i> destination,
       NavigationFlags flags,
       boolean live,
@@ -236,6 +237,7 @@ final class NavigateCommand {
       Supplier<SearchSettings> searchSettings,
       CobblestoneLogger log,
       Messages messages) {
+    String destinationLabel = tripLabel.text();
     UUID uuid = player.getUniqueId();
     final long startNanos = System.nanoTime();
     gate.beginForced(uuid); // a manual search always runs and counts toward the budget
@@ -306,7 +308,7 @@ final class NavigateCommand {
                       .start(
                           player,
                           path,
-                          destinationLabel,
+                          tripLabel,
                           settings,
                           liveSearch(
                               player,

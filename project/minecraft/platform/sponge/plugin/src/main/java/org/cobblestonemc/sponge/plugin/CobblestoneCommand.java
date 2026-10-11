@@ -21,6 +21,7 @@ import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.Location;
 import org.cobblestonemc.plugin.data.LocationDao;
 import org.cobblestonemc.plugin.data.PortalTransitionDao;
+import org.cobblestonemc.plugin.hud.TripHud;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchRegistry;
@@ -49,6 +50,7 @@ final class CobblestoneCommand {
       LocationDao locations,
       PortalTransitionDao portals,
       TripManager<Entity, SpongeTripAgent, ServerLocation> trips,
+      TripHud<Entity, SpongeTripAgent, ServerLocation> hud,
       SearchRegistry<ServerLocation> searches) {
     Parameter.Value<Integer> cancelId = Parameter.integerNumber().key("id").optional().build();
     Parameter.Value<String> name = Parameter.string().key("name").build();
@@ -101,6 +103,17 @@ final class CobblestoneCommand {
             .permission(Permissions.NAVIGATE.value())
             .executor(ctx -> trips(ctx, messages, trips))
             .build();
+    Command.Parameterized hudOn =
+        Command.builder().executor(ctx -> hud(ctx, messages, hud, true)).build();
+    Command.Parameterized hudOff =
+        Command.builder().executor(ctx -> hud(ctx, messages, hud, false)).build();
+    Command.Parameterized hudCmd =
+        Command.builder()
+            .permission(Permissions.HUD.value())
+            .addChild(hudOn, "on")
+            .addChild(hudOff, "off")
+            .executor(ctx -> hud(ctx, messages, hud, null))
+            .build();
     Command.Parameterized portalsClear =
         Command.builder()
             .permission(Permissions.PORTALS.value())
@@ -142,6 +155,7 @@ final class CobblestoneCommand {
         .addChild(loglevel, "loglevel")
         .addChild(cancel, "cancel")
         .addChild(tripsCmd, "trips")
+        .addChild(hudCmd, "hud")
         .addChild(portalsCmd, "portals")
         .addChild(locationCmd, "location", "loc")
         .executor(ctx -> help(ctx, messages))
@@ -162,6 +176,8 @@ final class CobblestoneCommand {
         "command.cobblestone.help.cancel");
     SpongeCommandHelp.line(
         audience, messages, locale, "/cobblestone trips", "command.cobblestone.help.trips");
+    SpongeCommandHelp.line(
+        audience, messages, locale, "/cobblestone hud [on|off]", "command.cobblestone.help.hud");
     SpongeCommandHelp.line(
         audience,
         messages,
@@ -295,6 +311,33 @@ final class CobblestoneCommand {
           trip.destination(),
           messages.formatDuration(locale, trip.remainingSeconds()));
     }
+    return CommandResult.success();
+  }
+
+  /**
+   * Shows or hides the caller's trip HUD; {@code show} is {@code null} to flip the current choice.
+   */
+  private static CommandResult hud(
+      CommandContext ctx,
+      Messages messages,
+      TripHud<Entity, SpongeTripAgent, ServerLocation> hud,
+      Boolean show) {
+    Locale locale = localeOf(ctx, messages);
+    Optional<ServerPlayer> player = ctx.cause().first(ServerPlayer.class);
+    if (player.isEmpty()) {
+      messages.send(ctx.cause().audience(), locale, CobblestoneMessages.PLAYERS_ONLY);
+      return CommandResult.success();
+    }
+    if (!hud.available()) {
+      messages.send(player.get(), locale, CobblestoneMessages.HUD_UNAVAILABLE);
+      return CommandResult.success();
+    }
+    boolean shown = show != null ? show : !hud.isShown(player.get().uniqueId());
+    hud.setShown(new SpongeTripAgent(player.get()), shown);
+    messages.send(
+        player.get(),
+        locale,
+        shown ? CobblestoneMessages.HUD_SHOWN : CobblestoneMessages.HUD_HIDDEN);
     return CommandResult.success();
   }
 
