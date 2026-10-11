@@ -11,29 +11,36 @@ import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.cobblestonemc.plugin.LogoutCleanup;
+import org.cobblestonemc.plugin.hud.TripHud;
 import org.cobblestonemc.plugin.search.SearchRegistry;
 import org.cobblestonemc.plugin.trip.TripManager;
 
-/**
- * Cleans up a player's navigation state on logout: stop their trips and cancel their in-flight
- * searches so no work runs for an absent player. The teardown itself lives in the platform-neutral
- * {@link LogoutCleanup}; this class is just the Bukkit event binding.
- */
+/** Loads a player's state on join and tears it down on quit. */
 final class CobblestoneListener implements Listener {
 
   private final TripManager<Entity, PaperTripAgent, Location> trips;
   private final SearchRegistry<Location> searches;
+  private final TripHud<Entity, PaperTripAgent, Location> hud;
 
   CobblestoneListener(
-      TripManager<Entity, PaperTripAgent, Location> trips, SearchRegistry<Location> searches) {
+      TripManager<Entity, PaperTripAgent, Location> trips,
+      SearchRegistry<Location> searches,
+      TripHud<Entity, PaperTripAgent, Location> hud) {
     this.trips = trips;
     this.searches = searches;
+    this.hud = hud;
+  }
+
+  @EventHandler
+  void onJoin(PlayerJoinEvent event) {
+    hud.load(event.getPlayer().getUniqueId());
   }
 
   @EventHandler
   void onQuit(PlayerQuitEvent event) {
-    LogoutCleanup.onLogout(event.getPlayer().getUniqueId(), trips, searches);
+    LogoutCleanup.onLogout(event.getPlayer().getUniqueId(), trips, searches, hud);
   }
 }

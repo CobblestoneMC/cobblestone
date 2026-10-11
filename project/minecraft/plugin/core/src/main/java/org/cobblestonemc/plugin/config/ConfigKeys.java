@@ -55,6 +55,9 @@ public final class ConfigKeys {
   /** Blocks a player may stray from the trail before the trip quietly recalculates. Mutable. */
   public final ConfigKey<Integer> tripsRecalculateDistance;
 
+  /** Whether players' active trips are shown in a HUD. Mutable. */
+  public final ConfigKey<Boolean> tripsHud;
+
   /** The most concurrent searches (manual + live) one player may run. Requires a restart. */
   public final ConfigKey<Integer> searchMaxConcurrentPerPlayer;
 
@@ -233,6 +236,16 @@ public final class ConfigKeys {
             .comment(
                 "How far (blocks) a player may stray from the trail before the trip quietly"
                     + " recalculates.")
+            .mutable()
+            .register();
+    this.tripsHud =
+        manager
+            .key("trips.hud", true, Codec.ofBoolean())
+            .comment(
+                """
+                Whether to show each player's active trips in a HUD. Players can hide it with
+                "/cobblestone hud off". The HUD gives the player a scoreboard of their own, so turn
+                this off if another plugin relies on player scoreboards.""")
             .mutable()
             .register();
 

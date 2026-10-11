@@ -52,21 +52,6 @@ Cobblestone runs an A* search over the live world and renders the route as a par
 
 Integrations are distributed as separate plugins.
 
-Player permissions default to allow; admin permissions default to op.
-
-| Node | Default | Grants |
-| --- | --- | --- |
-| `cobblestone.navigate` | everyone | `/navigate`, `/cobblestone trips`, `/cobblestone cancel` |
-| `cobblestone.location` | everyone | personal locations |
-| `cobblestone.navigator` | everyone | non-default navigators |
-| `cobblestone.admin.*` | op | `reload`, `portals`, `loglevel`, `-global` locations |
-
-Each destination also has a node derived from its address:
-
-```
-/lp group default permission set cobblestone.navigate.towny.town.riverwood.* false
-```
-
 → [Admin documentation](https://cobblestonemc.org/admins/)
 
 ## For players

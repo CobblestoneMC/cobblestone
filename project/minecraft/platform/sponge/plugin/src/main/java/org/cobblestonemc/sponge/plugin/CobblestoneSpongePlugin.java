@@ -21,6 +21,7 @@ import org.cobblestonemc.plugin.config.ConfigManager;
 import org.cobblestonemc.plugin.data.DataStore;
 import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.DataStores;
+import org.cobblestonemc.plugin.hud.TripHud;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchGate;
 import org.cobblestonemc.plugin.search.SearchRegistry;
@@ -35,6 +36,7 @@ import org.spongepowered.api.Sponge;
 import org.spongepowered.api.command.Command;
 import org.spongepowered.api.config.ConfigDir;
 import org.spongepowered.api.entity.Entity;
+import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.lifecycle.ConstructPluginEvent;
 import org.spongepowered.api.event.lifecycle.RegisterCommandEvent;
@@ -80,6 +82,7 @@ public final class CobblestoneSpongePlugin {
   private Messages messages;
   private SpongeIntegrationRegistry integrationRegistry;
   private TripManager<Entity, SpongeTripAgent, ServerLocation> tripManager;
+  private TripHud<Entity, SpongeTripAgent, ServerLocation> tripHud;
   private SpongeTripServiceImpl tripService;
   private SearchRegistry<ServerLocation> searchRegistry;
   private SearchGate searchGate;
@@ -169,6 +172,17 @@ public final class CobblestoneSpongePlugin {
         container,
         TrailNavigatorSettings.NAVIGATOR_ID,
         new SpongeTrailNavigatorFactory(config, keys, messages));
+    this.tripHud =
+        new TripHud<>(
+            tripManager,
+            navigationService.scheduler(),
+            messages,
+            dataStore.playerPreferences(),
+            () -> config.get(keys.tripsHud),
+            agent -> new SpongeHudDisplay((ServerPlayer) agent.entity()),
+            agent -> ((ServerPlayer) agent.entity()).locale(),
+            cobblestoneLogger);
+    tripManager.onChange(tripHud::refresh);
     integrationRegistry.registerDestinations(
         container,
         new CobblestoneDestinationService(
@@ -249,6 +263,7 @@ public final class CobblestoneSpongePlugin {
             dataStore.locations(),
             dataStore.portalTransitions(),
             tripManager,
+            tripHud,
             searchRegistry),
         "cobblestone",
         "stone");
@@ -267,7 +282,15 @@ public final class CobblestoneSpongePlugin {
         "nav");
   }
 
-  /** Stops a departing player's trips and in-flight searches. */
+  /** Loads a joining player's state. */
+  @Listener
+  public void onJoin(ServerSideConnectionEvent.Join event) {
+    if (tripHud != null) {
+      tripHud.load(event.player().uniqueId());
+    }
+  }
+
+  /** Tears down a departing player's state. */
   @Listener
   public void onDisconnect(ServerSideConnectionEvent.Disconnect event) {
     if (tripManager == null) {
@@ -276,7 +299,7 @@ public final class CobblestoneSpongePlugin {
     event
         .profile()
         .map(GameProfile::uuid)
-        .ifPresent(uuid -> LogoutCleanup.onLogout(uuid, tripManager, searchRegistry));
+        .ifPresent(uuid -> LogoutCleanup.onLogout(uuid, tripManager, searchRegistry, tripHud));
   }
 
   /** Tears down: stop the search workers, withdraw the core services, close the data store. */
@@ -284,6 +307,9 @@ public final class CobblestoneSpongePlugin {
   public void onStoppingEngine(StoppingEngineEvent<Server> event) {
     if (metrics != null) {
       metrics.shutdown();
+    }
+    if (tripHud != null) {
+      tripHud.closeAll();
     }
     if (tripManager != null) {
       tripManager.stopEverything();

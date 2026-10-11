@@ -7,13 +7,16 @@
 
 package org.cobblestonemc.paper.plugin;
 
+import io.papermc.paper.ServerBuildInfo;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Supplier;
+import net.kyori.adventure.key.Key;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.cobblestonemc.api.SearchSettings;
@@ -29,6 +32,7 @@ import org.cobblestonemc.plugin.config.ConfigManager;
 import org.cobblestonemc.plugin.data.DataStore;
 import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.DataStores;
+import org.cobblestonemc.plugin.hud.TripHud;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchGate;
 import org.cobblestonemc.plugin.search.SearchRegistry;
@@ -47,6 +51,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
   private PaperNavigationServiceImpl platformApi;
   private DataStore dataStore;
   private TripManager<Entity, PaperTripAgent, Location> tripManager;
+  private TripHud<Entity, PaperTripAgent, Location> tripHud;
   private PaperMetrics metrics;
   private final SearchRegistry<Location> searchRegistry = new SearchRegistry<>();
 
@@ -122,6 +127,24 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
         TrailNavigatorSettings.NAVIGATOR_ID,
         new PaperTrailNavigatorFactory(config, keys, messages));
 
+    // Folia has no scoreboard API.
+    boolean folia = isFolia();
+    if (folia && config.get(keys.tripsHud)) {
+      getLogger().info("The trip HUD is unavailable on Folia.");
+    }
+    this.tripHud =
+        new TripHud<>(
+            tripManager,
+            platformApi.scheduler(),
+            messages,
+            dataStore.playerPreferences(),
+            () -> !folia && config.get(keys.tripsHud),
+            agent -> new PaperHudDisplay((Player) agent.entity()),
+            agent -> ((Player) agent.entity()).locale(),
+            logger);
+    tripManager.onChange(tripHud::refresh);
+    getServer().getOnlinePlayers().forEach(player -> tripHud.load(player.getUniqueId()));
+
     // Discovered vanilla portals are surfaced to searches as an internal transition provider, and
     // learned from player teleports by the portal listener.
     platformApi.register(
@@ -151,7 +174,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
 
     getServer()
         .getPluginManager()
-        .registerEvents(new CobblestoneListener(tripManager, searchRegistry), this);
+        .registerEvents(new CobblestoneListener(tripManager, searchRegistry, tripHud), this);
     // Keep the chunk cache honest: a block changing evicts the snapshot it belongs to.
     // When another plugin disables, drop everything it registered into our registries.
     getServer()
@@ -200,6 +223,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                           dataStore.locations(),
                           dataStore.portalTransitions(),
                           tripManager,
+                          tripHud,
                           searchRegistry),
                       "Cobblestone admin and utility commands",
                       List.of("stone"));
@@ -231,10 +255,17 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     getLogger().info("Cobblestone enabled.");
   }
 
+  private static boolean isFolia() {
+    return ServerBuildInfo.buildInfo().isBrandCompatible(Key.key("papermc", "folia"));
+  }
+
   @Override
   public void onDisable() {
     if (metrics != null) {
       metrics.shutdown();
+    }
+    if (tripHud != null) {
+      tripHud.closeAll();
     }
     if (tripManager != null) {
       tripManager.stopEverything();
