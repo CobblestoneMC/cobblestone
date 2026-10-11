@@ -5,7 +5,7 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.plugin.sidebar;
+package org.cobblestonemc.plugin.hud;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -14,28 +14,17 @@ import java.util.stream.IntStream;
 import org.cobblestonemc.plugin.trip.TripLabel;
 
 /**
- * Shortens trip labels to the least text that still tells a player's trips apart, for the narrow
- * sidebar.
- *
- * <p>A label built from a destination address ({@code cobblestone location private home}) is cut
- * down to the fewest of its keys that no other trip's label could also be read as — just {@code
- * home} when it is the only trip, {@code private home} beside a trip to {@code location global
- * home}. The destination's own key always stays, and the remaining keys keep their order, the same
- * shapes {@code /navigate} accepts. Between equally short choices, keys nearer the destination win,
- * since they say the most about it.
- *
- * <p>A label supplied through the API carries no address and is shown exactly as given; the caller
- * chose it. It still counts as a neighbour that an address must not be shortened into.
+ * Shortens trip labels to the least text that still tells a player's trips apart. An address label
+ * like {@code cobblestone location private home} becomes {@code home} when it is the only trip, or
+ * {@code private home} beside a trip to {@code location global home}. Labels without an address are
+ * shown as given.
  */
-public final class SidebarLabels {
+public final class HudLabels {
 
-  /**
-   * Addresses longer than this are shown in full rather than searched: the candidates double with
-   * each key, and no real destination tree is anywhere near this deep.
-   */
+  /** Candidates double with each key, so longer addresses are shown in full. */
   private static final int MAX_SHORTENED_KEYS = 12;
 
-  private SidebarLabels() {}
+  private HudLabels() {}
 
   /**
    * Shortens each label against all the others.

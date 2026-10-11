@@ -226,8 +226,7 @@ public final class Messages {
   }
 
   /**
-   * Formats a duration in seconds as compact text for tight spaces (e.g. "3m 24s", "1h 0m 5s").
-   * Leading zero units are dropped; the unit suffixes come from the message bundle.
+   * Formats a duration in seconds compactly, e.g. "3m 24s".
    *
    * @param locale the recipient's locale
    * @param seconds the duration in seconds

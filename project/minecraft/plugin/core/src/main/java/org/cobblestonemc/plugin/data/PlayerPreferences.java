@@ -13,9 +13,9 @@ import java.util.UUID;
  * The display choices one player has made for themselves.
  *
  * @param player the player
- * @param sidebar whether their active trips are listed in the sidebar
+ * @param hud whether their trip HUD is shown
  */
-public record PlayerPreferences(UUID player, boolean sidebar) {
+public record PlayerPreferences(UUID player, boolean hud) {
 
   /**
    * The preferences of a player who has never changed any.

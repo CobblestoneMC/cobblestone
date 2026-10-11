@@ -18,17 +18,13 @@ import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
 import org.bukkit.scoreboard.Score;
 import org.bukkit.scoreboard.Scoreboard;
-import org.cobblestonemc.plugin.sidebar.SidebarDisplay;
+import org.cobblestonemc.plugin.hud.HudDisplay;
 
 /**
- * A player's trip sidebar on Paper. A client shows a single scoreboard, so the player is given one
- * of their own while the sidebar is open, and handed back the one they had when it closes.
- *
- * <p>Each row is a score whose custom name carries the text and whose number is hidden; scores
- * count down from the top so rows keep the order they were given in. The sidebar is redrawn every
- * second, so only what changed is sent on to the client.
+ * A trip HUD drawn in the scoreboard sidebar. The player is given their own scoreboard while it is
+ * open.
  */
-final class PaperSidebarDisplay implements SidebarDisplay {
+final class PaperHudDisplay implements HudDisplay {
 
   private static final String OBJECTIVE = "cobblestone_trips";
 
@@ -39,7 +35,7 @@ final class PaperSidebarDisplay implements SidebarDisplay {
   private Component shownTitle;
   private final List<Component> shownLines = new ArrayList<>();
 
-  PaperSidebarDisplay(Player player) {
+  PaperHudDisplay(Player player) {
     this.player = player;
     this.previous = player.getScoreboard();
     this.board = Bukkit.getScoreboardManager().getNewScoreboard();
@@ -54,8 +50,7 @@ final class PaperSidebarDisplay implements SidebarDisplay {
       objective.displayName(title);
       shownTitle = title;
     }
-    // A row's position is its score, counted from the bottom, so all of them move when the count
-    // changes.
+    // Rows are ordered by score, so every row moves when the count changes.
     boolean resized = lines.size() != shownLines.size();
     for (int i = 0; i < lines.size(); i++) {
       Score score = objective.getScore(entry(i));
@@ -76,13 +71,11 @@ final class PaperSidebarDisplay implements SidebarDisplay {
 
   @Override
   public void close() {
-    // Only hand the old scoreboard back if nobody has replaced ours in the meantime.
     if (player.isOnline() && player.getScoreboard() == board) {
       player.setScoreboard(previous);
     }
   }
 
-  /** The hidden score holder for a row; only its custom name is ever seen. */
   private static String entry(int line) {
     return "cobblestone-trip-" + line;
   }

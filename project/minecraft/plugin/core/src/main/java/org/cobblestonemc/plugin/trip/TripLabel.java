@@ -11,17 +11,13 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * What a trip is called: the text shown to the player and used to replace a same-named trip, plus —
- * for trips started from {@code /navigate} — the canonical destination address that text was built
- * from. The address lets the sidebar shorten the name to just what tells the player's trips apart;
- * a label supplied through the API has no address and is always shown exactly as given.
+ * What a trip is called, and the destination address it was built from, if any.
  *
  * @param text the full label text
  * @param address the canonical destination address, or empty for a caller-supplied label
  */
 public record TripLabel(String text, List<String> address) {
 
-  /** Validates and defensively copies the components. */
   public TripLabel {
     Objects.requireNonNull(text, "text");
     address = List.copyOf(address);
@@ -38,7 +34,7 @@ public record TripLabel(String text, List<String> address) {
   }
 
   /**
-   * A label for a resolved destination address; its text is the address joined by spaces.
+   * A label for a resolved destination address.
    *
    * @param address the canonical address (non-empty)
    * @return the label

@@ -21,11 +21,11 @@ import org.cobblestonemc.plugin.data.PlayerPreferencesDao;
 final class JdbcPlayerPreferencesDao implements PlayerPreferencesDao {
 
   private static final String INSERT =
-      "INSERT INTO cobblestone_player_preferences (player, sidebar) VALUES (?, ?)";
+      "INSERT INTO cobblestone_player_preferences (player, hud) VALUES (?, ?)";
   private static final String DELETE =
       "DELETE FROM cobblestone_player_preferences WHERE player = ?";
   private static final String SELECT =
-      "SELECT player, sidebar FROM cobblestone_player_preferences WHERE player = ?";
+      "SELECT player, hud FROM cobblestone_player_preferences WHERE player = ?";
 
   private final AbstractJdbcDataStore store;
 
@@ -44,7 +44,7 @@ final class JdbcPlayerPreferencesDao implements PlayerPreferencesDao {
           }
           try (PreparedStatement insert = connection.prepareStatement(INSERT)) {
             insert.setString(1, preferences.player().toString());
-            insert.setBoolean(2, preferences.sidebar());
+            insert.setBoolean(2, preferences.hud());
             insert.executeUpdate();
           }
           return null;
@@ -64,7 +64,7 @@ final class JdbcPlayerPreferencesDao implements PlayerPreferencesDao {
               }
               return Optional.of(
                   new PlayerPreferences(
-                      UUID.fromString(rows.getString("player")), rows.getBoolean("sidebar")));
+                      UUID.fromString(rows.getString("player")), rows.getBoolean("hud")));
             }
           }
         });

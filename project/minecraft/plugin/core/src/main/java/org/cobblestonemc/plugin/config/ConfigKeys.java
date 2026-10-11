@@ -55,8 +55,8 @@ public final class ConfigKeys {
   /** Blocks a player may stray from the trail before the trip quietly recalculates. Mutable. */
   public final ConfigKey<Integer> tripsRecalculateDistance;
 
-  /** Whether players' active trips are listed in their sidebar with a countdown. Mutable. */
-  public final ConfigKey<Boolean> tripsSidebar;
+  /** Whether players' active trips are shown in a HUD. Mutable. */
+  public final ConfigKey<Boolean> tripsHud;
 
   /** The most concurrent searches (manual + live) one player may run. Requires a restart. */
   public final ConfigKey<Integer> searchMaxConcurrentPerPlayer;
@@ -238,15 +238,14 @@ public final class ConfigKeys {
                     + " recalculates.")
             .mutable()
             .register();
-    this.tripsSidebar =
+    this.tripsHud =
         manager
-            .key("trips.sidebar", true, Codec.ofBoolean())
+            .key("trips.hud", true, Codec.ofBoolean())
             .comment(
                 """
-                Whether to list each player's active trips in their sidebar, with the time left on
-                each. Players can still hide it for themselves with "/cobblestone sidebar off".
-                Showing it gives the player a scoreboard of their own while they have trips, so
-                turn this off if another plugin needs the sidebar or player scoreboards.""")
+                Whether to show each player's active trips in a HUD. Players can hide it with
+                "/cobblestone hud off". The HUD gives the player a scoreboard of their own, so turn
+                this off if another plugin relies on player scoreboards.""")
             .mutable()
             .register();
 

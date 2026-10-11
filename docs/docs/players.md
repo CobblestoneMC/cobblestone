@@ -163,13 +163,13 @@ Up to three trips may run at once by default.
 /stone trips              # list active trips
 /stone cancel <id>        # cancel one trip
 /stone cancel all         # cancel all trips and pending searches
-/stone sidebar [on|off]   # show or hide your trips in the sidebar
+/stone hud [on|off]       # show or hide your trip HUD
 ```
 
 `/stone cancel` with no argument is equivalent to `all`.
 
-While you have trips, the sidebar on the right of the screen lists each one with its estimated time
-left, updated every second:
+While you have trips, a HUD on the right of the screen lists each one with its estimated time left,
+updated every second:
 
 ```
 Trips
@@ -178,7 +178,7 @@ caves - 48s
 ```
 
 Each trip is named by the shortest part of its address that tells it apart from your other trips.
-`/stone sidebar` with no argument switches it on or off; your choice is remembered.
+`/stone hud` with no argument switches it on or off; your choice is remembered.
 
 ## Errors
 

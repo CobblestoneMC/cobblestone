@@ -31,7 +31,7 @@ player strays and end on arrival. `TripService` starts trips programmatically.
     ```
 
 This runs the search and starts the trip. Every trip needs a label. It names the trip in
-`/cobblestone trips` and in the player's trip sidebar, where it is shown exactly as given. Keep it
+`/cobblestone trips` and in the player's trip HUD, where it is shown exactly as given. Keep it
 short, and make it tell your own trips apart: unlike a `/navigate` address, Cobblestone cannot
 shorten or disambiguate it. The label is also the trip's identity. Starting another trip for the
 same player with the same label replaces the first one, which suits a quest objective that moves.
@@ -153,7 +153,7 @@ Trips started this way are not live. Use `navigate` for trips that re-search.
 
 ## Lifecycle
 
-Programmatic trips appear in `/cobblestone trips` and the trip sidebar, count toward
+Programmatic trips appear in `/cobblestone trips` and the trip HUD, count toward
 `trips.max_active_per_player`, and can be cancelled by the player. Do not restart a trip the player
 has cancelled.
 

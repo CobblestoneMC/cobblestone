@@ -5,7 +5,7 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.plugin.sidebar;
+package org.cobblestonemc.plugin.hud;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -43,8 +43,8 @@ import org.cobblestonemc.plugin.trip.TripManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** When {@link TripSidebar} opens, redraws, and closes a player's sidebar, and what it shows. */
-class TripSidebarTest {
+/** When {@link TripHud} opens, redraws, and closes a player's HUD, and what it shows. */
+class TripHudTest {
 
   private static final CobblestoneLogger LOGGER =
       new CobblestoneLogger() {
@@ -71,17 +71,17 @@ class TripSidebarTest {
   private final TestTripAgent player = new TestTripAgent(UUID.randomUUID());
 
   private TripManager<Object, TestTripAgent, Object> trips;
-  private TripSidebar<Object, TestTripAgent, Object> sidebar;
+  private TripHud<Object, TestTripAgent, Object> hud;
 
   @BeforeEach
   void setUp() {
     trips = new TripManager<>(scheduler, 5);
-    sidebar = newSidebar();
-    trips.onChange(sidebar::refresh);
+    hud = newHud();
+    trips.onChange(hud::refresh);
   }
 
-  private TripSidebar<Object, TestTripAgent, Object> newSidebar() {
-    return new TripSidebar<>(
+  private TripHud<Object, TestTripAgent, Object> newHud() {
+    return new TripHud<>(
         trips,
         scheduler,
         new Messages(Locale.ENGLISH, true, LOGGER),
@@ -138,14 +138,14 @@ class TripSidebarTest {
     start(TripLabel.of("Lost Lantern"), 0);
 
     FakeDisplay display = onlyDisplay();
-    assertEquals(20L, scheduler.sidebarPeriod, "redraws once a second");
+    assertEquals(20L, scheduler.hudPeriod, "redraws once a second");
     assertEquals(
         List.of(
             "caves - 5s", "private home - 1h 1m 40s", "global home - 1m 1s", "Lost Lantern - 0s"),
         display.plainLines());
 
     caves.remaining = 4;
-    scheduler.runSidebarTicker();
+    scheduler.runHudTicker();
     assertEquals("caves - 4s", display.plainLines().getFirst());
   }
 
@@ -161,23 +161,23 @@ class TripSidebarTest {
 
     trips.stop(second);
     assertTrue(display.closed);
-    assertTrue(scheduler.sidebarHandle.cancelled);
+    assertTrue(scheduler.hudHandle.cancelled);
   }
 
   @Test
   void aPlayerCanHideItAndTheChoiceIsStored() {
     start(TripLabel.of("a"), 10);
-    sidebar.setShown(player, false);
+    hud.setShown(player, false);
     assertTrue(onlyDisplay().closed);
-    assertFalse(preferences.get(player.uuid()).orElseThrow().sidebar());
+    assertFalse(preferences.get(player.uuid()).orElseThrow().hud());
 
     // A fresh controller (as after a reconnect or restart) reads the stored choice back.
-    TripSidebar<Object, TestTripAgent, Object> reloaded = newSidebar();
+    TripHud<Object, TestTripAgent, Object> reloaded = newHud();
     assertFalse(reloaded.isShown(player.uuid()));
     reloaded.refresh(player);
     assertEquals(1, displays.size(), "nothing reopened while hidden");
 
-    sidebar.setShown(player, true);
+    hud.setShown(player, true);
     assertEquals(2, displays.size());
     assertFalse(displays.getLast().closed);
   }
@@ -187,23 +187,23 @@ class TripSidebarTest {
     enabled.set(false);
     start(TripLabel.of("a"), 10);
     assertTrue(displays.isEmpty());
-    assertFalse(sidebar.available());
+    assertFalse(hud.available());
   }
 
   @Test
-  void turningItOffServerWideClosesOpenSidebarsOnTheNextRedraw() {
+  void turningItOffServerWideClosesOpenHudsOnTheNextRedraw() {
     start(TripLabel.of("a"), 10);
     enabled.set(false);
-    scheduler.runSidebarTicker();
+    scheduler.runHudTicker();
     assertTrue(onlyDisplay().closed);
   }
 
   @Test
-  void forgetClosesTheSidebarOnLogout() {
+  void forgetClosesTheHudOnLogout() {
     start(TripLabel.of("a"), 10);
-    sidebar.forget(player.uuid());
+    hud.forget(player.uuid());
     assertTrue(onlyDisplay().closed);
-    assertTrue(scheduler.sidebarHandle.cancelled);
+    assertTrue(scheduler.hudHandle.cancelled);
   }
 
   /** The text of a component tree, without styling. */
@@ -216,8 +216,8 @@ class TripSidebarTest {
     return out.toString();
   }
 
-  /** Records what the sidebar was last told to show. */
-  private static final class FakeDisplay implements SidebarDisplay {
+  /** Records what the HUD was last told to show. */
+  private static final class FakeDisplay implements HudDisplay {
     Component title;
     List<Component> lines = List.of();
     boolean closed;
@@ -234,7 +234,7 @@ class TripSidebarTest {
     }
 
     List<String> plainLines() {
-      return lines.stream().map(TripSidebarTest::plain).toList();
+      return lines.stream().map(TripHudTest::plain).toList();
     }
   }
 
@@ -284,16 +284,16 @@ class TripSidebarTest {
   }
 
   /**
-   * Runs one-shot work immediately. Of the repeating tasks it keeps only the sidebar's (period 20),
-   * so a test can fire its redraw; trip ticks (period 1) are not needed here.
+   * Runs one-shot work immediately. Of the repeating tasks it keeps only the HUD's (period 20), so
+   * a test can fire its redraw; trip ticks (period 1) are not needed here.
    */
   private static final class TestScheduler implements MinecraftScheduler<Object> {
-    Runnable sidebarTicker;
-    long sidebarPeriod;
-    Handle sidebarHandle;
+    Runnable hudTicker;
+    long hudPeriod;
+    Handle hudHandle;
 
-    void runSidebarTicker() {
-      sidebarTicker.run();
+    void runHudTicker() {
+      hudTicker.run();
     }
 
     @Override
@@ -306,9 +306,9 @@ class TripSidebarTest {
         Object entity, Runnable task, long periodTicks) {
       Handle handle = new Handle();
       if (periodTicks != 1L) {
-        sidebarTicker = task;
-        sidebarPeriod = periodTicks;
-        sidebarHandle = handle;
+        hudTicker = task;
+        hudPeriod = periodTicks;
+        hudHandle = handle;
       }
       return handle;
     }

@@ -38,11 +38,9 @@ public interface TripService {
   /**
    * Searches to {@code destination}, then starts a trip if a route is found. Non-blocking.
    *
-   * <p>{@code label} names the trip to the player — in {@code /cobblestone trips} and, exactly as
-   * given, in their trip sidebar — so keep it short, and tell your own trips apart with it. It is
-   * also the trip's stable identity: crucially for a moving target you re-navigate to repeatedly (a
-   * quest objective, an escort), a fresh {@code navigate} with the same {@code label}
-   * <em>replaces</em> that player's previous trip rather than stacking a new one.
+   * <p>{@code label} is shown to the player as given, so keep it short and distinct. It is also the
+   * trip's identity: a fresh {@code navigate} with the same {@code label} <em>replaces</em> that
+   * player's previous trip, which suits a moving target like a quest objective.
    *
    * @param player the player to guide
    * @param destination where to route to

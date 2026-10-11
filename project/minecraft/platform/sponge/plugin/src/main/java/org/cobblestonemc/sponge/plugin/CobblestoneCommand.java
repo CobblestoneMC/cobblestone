@@ -21,10 +21,10 @@ import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.Location;
 import org.cobblestonemc.plugin.data.LocationDao;
 import org.cobblestonemc.plugin.data.PortalTransitionDao;
+import org.cobblestonemc.plugin.hud.TripHud;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchRegistry;
-import org.cobblestonemc.plugin.sidebar.TripSidebar;
 import org.cobblestonemc.plugin.trip.Trip;
 import org.cobblestonemc.plugin.trip.TripManager;
 import org.spongepowered.api.command.Command;
@@ -50,7 +50,7 @@ final class CobblestoneCommand {
       LocationDao locations,
       PortalTransitionDao portals,
       TripManager<Entity, SpongeTripAgent, ServerLocation> trips,
-      TripSidebar<Entity, SpongeTripAgent, ServerLocation> sidebar,
+      TripHud<Entity, SpongeTripAgent, ServerLocation> hud,
       SearchRegistry<ServerLocation> searches) {
     Parameter.Value<Integer> cancelId = Parameter.integerNumber().key("id").optional().build();
     Parameter.Value<String> name = Parameter.string().key("name").build();
@@ -103,16 +103,16 @@ final class CobblestoneCommand {
             .permission(Permissions.NAVIGATE.value())
             .executor(ctx -> trips(ctx, messages, trips))
             .build();
-    Command.Parameterized sidebarOn =
-        Command.builder().executor(ctx -> sidebar(ctx, messages, sidebar, true)).build();
-    Command.Parameterized sidebarOff =
-        Command.builder().executor(ctx -> sidebar(ctx, messages, sidebar, false)).build();
-    Command.Parameterized sidebarCmd =
+    Command.Parameterized hudOn =
+        Command.builder().executor(ctx -> hud(ctx, messages, hud, true)).build();
+    Command.Parameterized hudOff =
+        Command.builder().executor(ctx -> hud(ctx, messages, hud, false)).build();
+    Command.Parameterized hudCmd =
         Command.builder()
-            .permission(Permissions.SIDEBAR.value())
-            .addChild(sidebarOn, "on")
-            .addChild(sidebarOff, "off")
-            .executor(ctx -> sidebar(ctx, messages, sidebar, null))
+            .permission(Permissions.HUD.value())
+            .addChild(hudOn, "on")
+            .addChild(hudOff, "off")
+            .executor(ctx -> hud(ctx, messages, hud, null))
             .build();
     Command.Parameterized portalsClear =
         Command.builder()
@@ -155,7 +155,7 @@ final class CobblestoneCommand {
         .addChild(loglevel, "loglevel")
         .addChild(cancel, "cancel")
         .addChild(tripsCmd, "trips")
-        .addChild(sidebarCmd, "sidebar")
+        .addChild(hudCmd, "hud")
         .addChild(portalsCmd, "portals")
         .addChild(locationCmd, "location", "loc")
         .executor(ctx -> help(ctx, messages))
@@ -177,11 +177,7 @@ final class CobblestoneCommand {
     SpongeCommandHelp.line(
         audience, messages, locale, "/cobblestone trips", "command.cobblestone.help.trips");
     SpongeCommandHelp.line(
-        audience,
-        messages,
-        locale,
-        "/cobblestone sidebar [on|off]",
-        "command.cobblestone.help.sidebar");
+        audience, messages, locale, "/cobblestone hud [on|off]", "command.cobblestone.help.hud");
     SpongeCommandHelp.line(
         audience,
         messages,
@@ -319,13 +315,12 @@ final class CobblestoneCommand {
   }
 
   /**
-   * Shows or hides the caller's trip sidebar; {@code show} is {@code null} to flip the current
-   * choice.
+   * Shows or hides the caller's trip HUD; {@code show} is {@code null} to flip the current choice.
    */
-  private static CommandResult sidebar(
+  private static CommandResult hud(
       CommandContext ctx,
       Messages messages,
-      TripSidebar<Entity, SpongeTripAgent, ServerLocation> sidebar,
+      TripHud<Entity, SpongeTripAgent, ServerLocation> hud,
       Boolean show) {
     Locale locale = localeOf(ctx, messages);
     Optional<ServerPlayer> player = ctx.cause().first(ServerPlayer.class);
@@ -333,16 +328,16 @@ final class CobblestoneCommand {
       messages.send(ctx.cause().audience(), locale, CobblestoneMessages.PLAYERS_ONLY);
       return CommandResult.success();
     }
-    if (!sidebar.available()) {
-      messages.send(player.get(), locale, CobblestoneMessages.SIDEBAR_UNAVAILABLE);
+    if (!hud.available()) {
+      messages.send(player.get(), locale, CobblestoneMessages.HUD_UNAVAILABLE);
       return CommandResult.success();
     }
-    boolean shown = show != null ? show : !sidebar.isShown(player.get().uniqueId());
-    sidebar.setShown(new SpongeTripAgent(player.get()), shown);
+    boolean shown = show != null ? show : !hud.isShown(player.get().uniqueId());
+    hud.setShown(new SpongeTripAgent(player.get()), shown);
     messages.send(
         player.get(),
         locale,
-        shown ? CobblestoneMessages.SIDEBAR_SHOWN : CobblestoneMessages.SIDEBAR_HIDDEN);
+        shown ? CobblestoneMessages.HUD_SHOWN : CobblestoneMessages.HUD_HIDDEN);
     return CommandResult.success();
   }
 

@@ -47,9 +47,8 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
   }
 
   /**
-   * Sets the callback told whenever a player's set of active trips changes (a trip started, ended,
-   * or was cancelled) — e.g. to redraw a display of them. It is called while this manager's lock is
-   * held, from whichever thread made the change, so it should only hand work off, not do it.
+   * Sets the callback run whenever a player's active trips change. It runs under this manager's
+   * lock, so it should only hand work off.
    *
    * @param onChange receives the player whose trips changed
    */

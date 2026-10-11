@@ -314,10 +314,10 @@ class DataStoreContractTest {
           "a player who changed nothing has no record");
 
       store.playerPreferences().upsert(new PlayerPreferences(player, false));
-      assertFalse(store.playerPreferences().get(player).orElseThrow().sidebar());
+      assertFalse(store.playerPreferences().get(player).orElseThrow().hud());
 
       store.playerPreferences().upsert(new PlayerPreferences(player, true));
-      assertTrue(store.playerPreferences().get(player).orElseThrow().sidebar());
+      assertTrue(store.playerPreferences().get(player).orElseThrow().hud());
     } finally {
       store.close();
     }
@@ -335,7 +335,7 @@ class DataStoreContractTest {
     }
     DataStore second = opened(backend, dir);
     try {
-      assertFalse(second.playerPreferences().get(player).orElseThrow().sidebar());
+      assertFalse(second.playerPreferences().get(player).orElseThrow().hud());
     } finally {
       second.close();
     }
