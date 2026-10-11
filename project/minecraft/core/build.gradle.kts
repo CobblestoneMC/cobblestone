@@ -1,4 +1,4 @@
-// minecraft — the Minecraft world model + concrete modes (Walk/Swim/Fly/…).
+// minecraft — the Minecraft world model + its movement behavior (walk/swim/fly/…).
 plugins {
     id("cobblestone.java-conventions")
 }

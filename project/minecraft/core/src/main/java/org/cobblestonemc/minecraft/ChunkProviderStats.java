@@ -16,7 +16,7 @@ package org.cobblestonemc.minecraft;
  * {@link #since(ChunkProviderStats)} remains for comparing two readings within a solve.
  *
  * @param chunkLookups calls to {@link ChunkProvider#chunk} — once per chunk per caller that wants
- *     blocks in it, <b>not</b> once per block: a mode resolves its whole neighborhood from a
+ *     blocks in it, <b>not</b> once per block: an expansion resolves its whole neighborhood from a
  *     handful of snapshots
  * @param cacheHits requests served from a cached snapshot without waiting
  * @param directFetches non-speculative chunk fetches issued (a request had to wait for one)

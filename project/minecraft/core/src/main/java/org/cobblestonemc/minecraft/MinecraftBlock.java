@@ -8,9 +8,9 @@
 package org.cobblestonemc.minecraft;
 
 /**
- * An immutable snapshot of the <b>local</b> facts about one block that modes need — no neighbor
- * awareness. Contextual decisions (corner-cutting, "vine needs a wall", door activators) are made
- * by modes composing several {@code MinecraftBlock} lookups.
+ * An immutable snapshot of the <b>local</b> facts about one block that movement rules need — no
+ * neighbor awareness. Contextual decisions (corner-cutting, "vine needs a wall", door activators)
+ * are made by movement rules composing several {@code MinecraftBlock} lookups.
  *
  * <p>Many methods have sensible defaults so a platform implementation only overrides what differs
  * from a plain solid block. Facts that depend on the live block state (passability, door
@@ -22,7 +22,7 @@ public interface MinecraftBlock {
   /**
    * Returns whether a body can freely occupy this block (air, tall grass, …). Water/lava are not
    * "passable" in this sense (handled by swim/danger); doors and partial blocks are not passable to
-   * general modes (handled by specialist modes / step-up).
+   * plain walking (handled by doorways / step-up).
    *
    * @return {@code true} if freely occupiable
    */
@@ -132,7 +132,7 @@ public interface MinecraftBlock {
    *
    * <p>A trapdoor is the one openable barrier that lies in the horizontal plane: closed it is a
    * panel at the floor or ceiling of its cell, and open it stands vertically against one face. So
-   * it bars and admits movement the opposite way round from a door, and modes that step through
+   * it bars and admits movement the opposite way round from a door, and the rules that step through
    * doorways leave it alone.
    */
   default boolean isTrapdoor() {

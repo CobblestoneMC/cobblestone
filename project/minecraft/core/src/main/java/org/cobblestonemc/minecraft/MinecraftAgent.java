@@ -13,9 +13,9 @@ import org.cobblestonemc.Cell;
 /**
  * A Minecraft {@link Agent}: anything that can be navigated (usually an {@link CobblestonePlayer}).
  *
- * <p>Capability gating that decides <i>which</i> modes an agent has (e.g. flying) happens when the
- * mode list is assembled, not here. The methods on this interface are ones a mode may consult
- * <i>during</i> a step.
+ * <p>Capability gating that decides <i>which</i> movements an agent has (e.g. flying) happens when
+ * its movement behavior is built, not here. The methods on this interface are ones the behavior may
+ * consult <i>during</i> a step.
  */
 public interface MinecraftAgent extends Agent {
 

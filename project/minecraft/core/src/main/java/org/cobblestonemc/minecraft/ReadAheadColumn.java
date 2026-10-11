@@ -21,9 +21,9 @@ import org.jetbrains.annotations.Nullable;
 final class ReadAheadColumn {
 
   /**
-   * Lateral half-width, in blocks, of the column. Most modes read a block or so to either side of
-   * the cell they are expanding from, so a five-block-wide column is enough of a buffer to have
-   * what they ask for next without dragging in chunks they will never touch.
+   * Lateral half-width, in blocks, of the column. A search reads a block or so to either side of
+   * the cell it is expanding, so a five-block-wide column is enough of a buffer to have what it
+   * asks for next without dragging in chunks it will never touch.
    */
   static final int LATERAL_RADIUS = 2;
 

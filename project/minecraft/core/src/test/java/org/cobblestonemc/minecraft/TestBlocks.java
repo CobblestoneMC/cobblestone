@@ -114,6 +114,25 @@ public final class TestBlocks {
     };
   }
 
+  public static MinecraftBlock lava() {
+    return new MinecraftBlock() {
+      @Override
+      public boolean isPassable() {
+        return false;
+      }
+
+      @Override
+      public boolean isSolidTop() {
+        return false;
+      }
+
+      @Override
+      public boolean isLava() {
+        return true;
+      }
+    };
+  }
+
   public static MinecraftBlock pressurePlate() {
     return new MinecraftBlock() {
       @Override

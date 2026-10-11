@@ -376,8 +376,11 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         return;
       }
       if (pendingExpansion != null) {
-        if (!pendingExpansion.movements().future().isDone()) {
-          return; // still waiting on block I/O; the expansion future will wake us
+        CompletableFuture<Collection<Movement<T>>> blocks = pendingExpansion.movements().future();
+        if (!blocks.isDone() || blocks.isCompletedExceptionally()) {
+          // Still waiting on block I/O, or it failed and the expansion's callback is failing the
+          // solve; either way that callback wakes us.
+          return;
         }
         PendingExpansion<T> ready = pendingExpansion;
         pendingExpansion = null;
@@ -434,8 +437,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       // The cap counts cell-states reached, not expansions: it is a memory guard, and what a solve
       // holds is one Node per reached cell-state (each with its candidate parents and children),
       // not one per expansion. A 26-neighbourhood behavior reaches several cells per expansion, so
-      // a
-      // cap on expansions bounds the table only loosely — loosely enough to run out of heap first.
+      // a cap on expansions bounds the table only loosely — loosely enough to run out of heap
+      // first.
       if (nodes.size() > maxCellsVisited) {
         logger.debug("Visited cells ({}) > max ({}); {}", nodes.size(), maxCellsVisited, stats());
         result.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.LIMIT_EXCEEDED));
@@ -485,8 +488,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       Node<T> neighbor = getOrCreate(key);
       neighbor.putParent(parentKey, movement); // retained candidate parent
       // A movement-scoped edge restriction (mining breakability, pearl ballistics) is checked
-      // lazily —
-      // when this node is popped, not here — so its supplier fires only for edges we commit to.
+      // lazily — when this node is popped, not here — so its supplier fires only for edges we
+      // commit to.
       // Use the parent's current g: a repair may have raised it while these movements were pending.
       double tentative = parent.cost + movement.cost();
       if (tentative < neighbor.cost) {

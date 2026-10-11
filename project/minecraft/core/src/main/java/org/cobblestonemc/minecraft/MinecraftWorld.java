@@ -16,9 +16,9 @@ import org.cobblestonemc.FutureOr;
  * Dimensions are distinguished by {@link #environment()}, never by subtyping (so the {@code D}
  * generic stays a single type across a search).
  *
- * <p>A world is also the block-access handle a mode uses: {@link #blockAt(Cell, Cell)} returns a
- * {@link FutureOr} that is immediate on a cache hit and pending on a miss (the platform's chunk
- * provider backs it). Equality/hash are by the world's namespaced {@link #key()}.
+ * <p>A world is also the block-access handle movement rules use: {@link #blockAt(Cell, Cell)}
+ * returns a {@link FutureOr} that is immediate on a cache hit and pending on a miss (the platform's
+ * chunk provider backs it). Equality/hash are by the world's namespaced {@link #key()}.
  */
 public interface MinecraftWorld extends Domain {
 

@@ -39,11 +39,8 @@ import org.jetbrains.annotations.Nullable;
 public final class MinecraftMovementBehavior<A extends MinecraftAgent>
     implements MovementBehavior<A, MinecraftStepPayload, MinecraftWorld> {
 
-  /** The cells read on foot without doors: one block out, two down to three up. */
+  /** The cells read on foot: one block out, two down to three up. */
   private static final int[][] ON_FOOT = box(1, -2, 3);
-
-  /** The cells read on foot with doors: also the doorway's far side, two blocks out. */
-  private static final int[][] ON_FOOT_WITH_DOORS = withDoorways(ON_FOOT);
 
   /** The cells read in a vehicle: one block out, one down to two up. */
   private static final int[][] IN_VEHICLE = box(1, -1, 2);
@@ -55,7 +52,7 @@ public final class MinecraftMovementBehavior<A extends MinecraftAgent>
   MinecraftMovementBehavior(Abilities can, @Nullable BreakChecker<A> breakChecker) {
     this.can = can;
     this.mining = can.mine() ? new Mining<>(breakChecker) : null;
-    this.onFoot = can.doors() ? ON_FOOT_WITH_DOORS : ON_FOOT;
+    this.onFoot = onFoot(can.doors(), can.mine());
   }
 
   /**
@@ -212,7 +209,7 @@ public final class MinecraftMovementBehavior<A extends MinecraftAgent>
 
   /** Every offset in the view box that a rule may read on foot or in a vehicle. */
   static List<int[]> allOffsets() {
-    List<int[]> all = new ArrayList<>(List.of(ON_FOOT_WITH_DOORS));
+    List<int[]> all = new ArrayList<>(List.of(onFoot(true, true)));
     all.addAll(List.of(IN_VEHICLE));
     return all;
   }
@@ -237,12 +234,21 @@ public final class MinecraftMovementBehavior<A extends MinecraftAgent>
     return offsets.toArray(new int[0][]);
   }
 
-  /** {@code base} plus, two blocks out along each cardinal, the cell a doorway step lands in. */
-  private static int[][] withDoorways(int[][] base) {
-    List<int[]> offsets = new ArrayList<>(List.of(base));
+  /**
+   * The cells read on foot: {@link #ON_FOOT}, plus cells two blocks out along each cardinal where a
+   * rule reaches that far — a doorway step lands there (one down to one up), and mining checks the
+   * far faces of the blocks it breaks there for lava (level to two up).
+   */
+  private static int[][] onFoot(boolean doors, boolean mine) {
+    if (!doors && !mine) {
+      return ON_FOOT;
+    }
+    int dyLow = doors ? -1 : 0;
+    int dyHigh = mine ? 2 : 1;
+    List<int[]> offsets = new ArrayList<>(List.of(ON_FOOT));
     int[][] cardinals = {{2, 0}, {-2, 0}, {0, 2}, {0, -2}};
     for (int[] cardinal : cardinals) {
-      for (int dy = -1; dy <= 1; dy++) {
+      for (int dy = dyLow; dy <= dyHigh; dy++) {
         offsets.add(new int[] {cardinal[0], dy, cardinal[1]});
       }
     }

@@ -71,6 +71,35 @@ class MiningTest {
   }
 
   @Test
+  void willNotTunnelBesideLava() {
+    TestWorld world =
+        TestWorld.builder("w")
+            .floor(0, -1, -1, 2, 1, TestBlocks.solid())
+            .set(1, 1, 0, TestBlocks.solid(2.0))
+            .set(1, 2, 0, TestBlocks.solid(2.0))
+            .set(2, 2, 0, TestBlocks.lava()) // behind the head block, two blocks out
+            .build();
+    assertFalse(
+        TestMovements.from(walker, player, world, new Cell(0, 1, 0)).reaches(new Cell(1, 1, 0)));
+  }
+
+  /** The block above a mined step's landing is also checked: its far face is two blocks out. */
+  @Test
+  void willNotMineUpAStepBesideLava() {
+    TestWorld world =
+        TestWorld.builder("w")
+            .floor(0, -1, -1, 2, 1, TestBlocks.solid())
+            .set(1, 1, 0, TestBlocks.solid()) // the step
+            .set(1, 2, 0, TestBlocks.solid(2.0))
+            .set(1, 3, 0, TestBlocks.solid(2.0))
+            .set(2, 3, 0, TestBlocks.lava())
+            .build();
+    assertFalse(
+        TestMovements.from(walker, player, world, new Cell(0, 1, 0))
+            .reaches(new Cell(1, 2, 0), MinecraftStepType.MINE));
+  }
+
+  @Test
   void willNotMineWhenBreakingIsNotAllowed() {
     TestWorld world = wallTo(1, TestBlocks.solid(2.0), TestBlocks.solid(2.0));
     CobblestonePlayer cannotBreak = TestPlayer.create(false, false, false, false);
