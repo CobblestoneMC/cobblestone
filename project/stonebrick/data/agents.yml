@@ -1,0 +1,29 @@
+# Player loadouts. A scenario is only a pair of positions; the loadout decides what a player can do
+# about the terrain between them.
+#
+# Capabilities rather than mode lists, deliberately. Production derives its modes from what the
+# player is and carries (MinecraftModes#providerFor); naming the modes here directly would bypass
+# that derivation and hide a bug in it.
+#
+# Players can mine unless a loadout says otherwise: nearly every real player carries a pickaxe. The
+# bench runs without a break checker, so an unconstrained MineMode will tunnel through anything.
+#
+# `only` limits a loadout to scenarios carrying one of those tags (see scenarios.yml). A boat does
+# nothing in a cave or the nether, and running it there only makes a sweep longer.
+
+player:
+  description: survival, carries a pickaxe, no boat
+
+flyer:
+  description: creative flight
+  canFly: true
+
+player-with-boat:
+  description: survival, carries a pickaxe and a boat
+  hasBoat: true
+  only: [surface]
+
+player-no-pickaxe:
+  description: survival with nothing to dig with; has to go around
+  excludedModes: [MINE]
+  only: [no-pickaxe]

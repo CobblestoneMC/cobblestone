@@ -10,9 +10,8 @@ package org.cobblestonemc.api;
 /**
  * Immutable, tunable limits and knobs for a single search.
  *
- * <p>Only the numeric knobs live here for now; the pluggable heuristic strategy is selected in the
- * {@code core} module (Phase 2), so it is not part of this API surface yet. Build instances with
- * {@link #builder()} or take {@link #defaults()}.
+ * <p>The heuristic is named here by {@link Heuristic}; the platform turns that name into a
+ * strategy. Build instances with {@link #builder()} or take {@link #defaults()}.
  */
 public final class SearchSettings {
 
@@ -43,11 +42,15 @@ public final class SearchSettings {
   /** Default A* heuristic weight (1.0 = admissible/optimal; &gt;1 = faster, weighted A*). */
   public static final double DEFAULT_HEURISTIC_WEIGHT = 1.5;
 
+  /** The estimate a search uses unless told otherwise. */
+  public static final Heuristic DEFAULT_HEURISTIC = Heuristic.RUNNING_AVERAGE;
+
   private final int maxCellsVisited;
   private final long maxWallClockMillis;
   private final double tier1UnsolvedPessimism;
   private final int runningAverageWidth;
   private final double heuristicWeight;
+  private final Heuristic heuristic;
 
   private SearchSettings(Builder builder) {
     this.maxCellsVisited = builder.maxCellsVisited;
@@ -55,6 +58,7 @@ public final class SearchSettings {
     this.tier1UnsolvedPessimism = builder.tier1UnsolvedPessimism;
     this.runningAverageWidth = builder.runningAverageWidth;
     this.heuristicWeight = builder.heuristicWeight;
+    this.heuristic = builder.heuristic;
   }
 
   /**
@@ -131,6 +135,33 @@ public final class SearchSettings {
     return heuristicWeight;
   }
 
+  /**
+   * Returns which estimate the fine search runs on.
+   *
+   * @return the heuristic
+   */
+  public Heuristic heuristic() {
+    return heuristic;
+  }
+
+  /**
+   * Which estimate the fine search prices its remaining journey with.
+   *
+   * <p>One value today. It is an enum so that a new estimate is a new constant here and a new
+   * branch where the platform builds its heuristic, and every platform and the benchmark pick it up
+   * from there.
+   */
+  public enum Heuristic {
+    /**
+     * Remaining distance times the per-block cost of the last few steps.
+     *
+     * <p>Cheap and needs nothing but the path already walked, but it extrapolates: it will happily
+     * price a long journey at the rate of a river it is currently swimming down, because the river
+     * really is cheap and simply does not go anywhere.
+     */
+    RUNNING_AVERAGE
+  }
+
   /** A fluent builder for {@link SearchSettings}. */
   public static final class Builder {
 
@@ -139,8 +170,20 @@ public final class SearchSettings {
     private double tier1UnsolvedPessimism = DEFAULT_TIER1_UNSOLVED_PESSIMISM;
     private int runningAverageWidth = DEFAULT_RUNNING_AVERAGE_WIDTH;
     private double heuristicWeight = DEFAULT_HEURISTIC_WEIGHT;
+    private Heuristic heuristic = DEFAULT_HEURISTIC;
 
     private Builder() {}
+
+    /**
+     * Sets which estimate the fine search runs on.
+     *
+     * @param value the heuristic
+     * @return this builder
+     */
+    public Builder heuristic(Heuristic value) {
+      this.heuristic = java.util.Objects.requireNonNull(value, "heuristic");
+      return this;
+    }
 
     /**
      * Sets the A* heuristic weight (must be &gt;= 1.0).

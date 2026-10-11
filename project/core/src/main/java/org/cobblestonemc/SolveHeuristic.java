@@ -7,7 +7,9 @@
 
 package org.cobblestonemc;
 
+import java.util.concurrent.CompletableFuture;
 import org.cobblestonemc.api.TraversalState;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * A heuristic for a single Tier-2 A* solve, created by {@link HeuristicStrategy#newSolve(int,
@@ -65,4 +67,28 @@ public interface SolveHeuristic {
    * @return a cost estimate in seconds (not necessarily a lower bound)
    */
   double estimate(Cell from, double distance, TraversalState state, double trailAverage);
+
+  /**
+   * Returns a future that completes once {@link #estimate} can answer for {@code from}, or {@code
+   * null} if it already can.
+   *
+   * <p>The escape hatch for a heuristic that has to read the world. A running average is computed
+   * from the path already walked and always answers immediately; an estimate that consults the
+   * terrain ahead may need chunks that are not in memory, and on a live server those arrive through
+   * a future.
+   *
+   * <p>Returning {@code null} rather than a completed future is deliberate: this is called for
+   * every node the search offers, and the common implementation should allocate nothing at all.
+   *
+   * <p>The search parks the node rather than guessing. Offering it with a placeholder and
+   * correcting later would put it on the open set at the wrong priority, and A* would expand it in
+   * the wrong order -- the one thing the ordering is for.
+   *
+   * @param from the cell being estimated
+   * @return a future completing when the estimate is available, or {@code null} if it is available
+   *     now
+   */
+  default @Nullable CompletableFuture<Void> prepare(Cell from) {
+    return null;
+  }
 }

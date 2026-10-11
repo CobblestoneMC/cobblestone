@@ -1,0 +1,13 @@
+# The world the benchmark corpus is generated from.
+#
+# The seed fixes the landforms *within a Minecraft version*, so the version is part of the corpus's
+# identity: regenerating against a different one produces different terrain. captureCorpus pins the
+# Paper build. Even pinned, decorations differ between generations, so a capture is not
+# byte-reproducible and baselines are tied to the capture they measured.
+seed: 8450468245224589493
+minecraftVersion: "26.2"
+paperBuild: 129
+
+# Captures that cannot come from a seed, because they were built by hand. These are committed as
+# .sbc data rather than regenerated; they are small, and there is no other way to get them back.
+handBuilt: []
