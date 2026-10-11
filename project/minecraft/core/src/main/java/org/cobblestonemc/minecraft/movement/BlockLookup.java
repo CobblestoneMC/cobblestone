@@ -19,19 +19,10 @@ import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.UnknownBlock;
 
-/**
- * Fetches the blocks one expansion reads and packages them as a {@link BlockView}.
- *
- * <p><b>Chunks, not blocks.</b> An expansion's neighborhood spans only a handful of chunks —
- * usually one — so cells are grouped by chunk and each distinct chunk is resolved once, then
- * indexed directly. This is the innermost loop of a search, so it matters.
- */
+/** Fetches the blocks an expansion reads into a {@link BlockView}, resolving each chunk once. */
 final class BlockLookup {
 
-  /**
-   * The box every local movement rule reads within, around the expanding cell. Widen it if a rule
-   * ever reaches further; {@code BlockLookupTest} fails if one does.
-   */
+  /** The box, around the expanding cell, that every expansion's reads fall within. */
   static final int VIEW_XZ_RADIUS = 2;
 
   static final int VIEW_DY_LOW = -2;
@@ -46,10 +37,7 @@ final class BlockLookup {
     return fill(world, view, cells, destination);
   }
 
-  /**
-   * Fetches cells outside the view box — a second-phase scan, such as the columns under a ledge —
-   * into a view of their own.
-   */
+  /** Fetches cells outside the view box into a view of their own. */
   static FutureOr<BlockView> fetchApart(
       MinecraftWorld world, Collection<Cell> cells, Cell destination) {
     if (cells.isEmpty()) {

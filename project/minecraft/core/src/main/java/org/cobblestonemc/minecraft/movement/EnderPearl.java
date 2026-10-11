@@ -21,7 +21,7 @@ import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 
 /**
- * A goal-aware fail-safe: when the agent is within throwing range of the leg's goal and still has
+ * A goal-aware fail-safe: when the agent is within throwing range of the leg's target and still has
  * ender pearls, it can pearl straight to it — the only way to reach a floating target like an end
  * gateway without flight.
  *

@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import java.util.Set;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.Movement;
-import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.TestBlocks;
 import org.cobblestonemc.minecraft.TestMovements;
 import org.cobblestonemc.minecraft.TestMovements.Moves;
@@ -26,7 +25,7 @@ import org.junit.jupiter.api.Test;
 class FallingTest {
 
   private final TestPlayer player = TestPlayer.walker();
-  private final MinecraftMovementBehavior<CobblestonePlayer> walker =
+  private final MinecraftMovementBehavior walker =
       MinecraftMovementBehavior.forPlayer(player, Set.of());
 
   @Test
@@ -38,7 +37,7 @@ class FallingTest {
             .set(1, 0, 0, TestBlocks.solid())
             .build();
     Movement<MinecraftStepPayload> landing =
-        TestMovements.from(walker, player, world, new Cell(0, 5, 0)).to(new Cell(1, 1, 0));
+        TestMovements.from(walker, world, new Cell(0, 5, 0)).to(new Cell(1, 1, 0));
 
     assertEquals(MinecraftStepType.FALL, landing.payload().stepType());
     double distance = 4;
@@ -58,7 +57,7 @@ class FallingTest {
             .set(0, 4, 0, TestBlocks.solid())
             .set(1, 3, 0, TestBlocks.solid())
             .build();
-    Moves moves = TestMovements.from(walker, player, world, new Cell(0, 5, 0));
+    Moves moves = TestMovements.from(walker, world, new Cell(0, 5, 0));
     assertFalse(moves.reaches(new Cell(1, 4, 0), MinecraftStepType.FALL));
     assertEquals(MinecraftStepType.WALK, moves.to(new Cell(1, 4, 0)).payload().stepType());
   }
@@ -70,9 +69,8 @@ class FallingTest {
             .set(0, 4, 0, TestBlocks.solid())
             .set(1, 0, 0, TestBlocks.solid())
             .build();
-    MinecraftMovementBehavior<CobblestonePlayer> noFall =
+    MinecraftMovementBehavior noFall =
         MinecraftMovementBehavior.forPlayer(player, Set.of(MinecraftStepType.FALL));
-    assertFalse(
-        TestMovements.from(noFall, player, world, new Cell(0, 5, 0)).reaches(new Cell(1, 1, 0)));
+    assertFalse(TestMovements.from(noFall, world, new Cell(0, 5, 0)).reaches(new Cell(1, 1, 0)));
   }
 }

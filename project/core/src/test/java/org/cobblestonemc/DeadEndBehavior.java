@@ -21,7 +21,7 @@ import org.cobblestonemc.api.TraversalState;
  * nothing beyond the dead end. Only the edge arriving at the dead end carries a restriction; every
  * other step is unconditional.
  */
-final class DeadEndBehavior implements MovementBehavior<TestAgent, TestStep, TestDomain> {
+final class DeadEndBehavior implements MovementBehavior<TestStep, TestDomain> {
 
   private final int deadEndX;
   private final Supplier<FutureOr<Boolean>> deadEndBarred;
@@ -33,7 +33,7 @@ final class DeadEndBehavior implements MovementBehavior<TestAgent, TestStep, Tes
 
   @Override
   public FutureOr<Collection<Movement<TestStep>>> movements(
-      TestAgent agent, Cell from, TestDomain domain, TraversalState state, Cell goal) {
+      Cell from, TestDomain domain, TraversalState state, Cell goal) {
     if (from.x() >= deadEndX) {
       return FutureOr.of(List.of()); // the dead end goes nowhere
     }

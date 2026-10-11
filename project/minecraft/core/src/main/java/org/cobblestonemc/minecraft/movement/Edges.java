@@ -21,27 +21,19 @@ import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The movements one expansion offers, keeping a single edge per destination: the cheapest way to
- * reach each (cell, resulting state).
- *
- * <p>Several rules can reach the same cell — a walker and a swimmer both into shallow water, a door
- * and a pickaxe through the same wall — and the search retains one edge per parent anyway, so only
- * the cheapest is worth handing it. Edges that leave the agent in different states (on foot versus
- * in a boat) lead to different search nodes, and are kept apart.
- *
- * <p>On a tie, an unconditional edge beats one carrying a {@link Movement#restricted() restriction}
- * — it can never be withdrawn.
+ * The movements one expansion offers, keeping only the cheapest edge per (cell, resulting state).
+ * On a tie, an edge with no {@link Movement#restricted() restriction} wins.
  */
 final class Edges {
 
   private final Map<Key, Movement<MinecraftStepPayload>> best = new LinkedHashMap<>();
 
-  /** Offers a movement with no instruction. Time equals cost until danger weighting diverges. */
+  /** Offers a movement with no instruction. */
   void add(Cell cell, double cost, MinecraftStepType type, TraversalState state) {
     add(cell, cost, type, state, null);
   }
 
-  /** Offers a movement carrying a lazily-checked edge restriction (see {@link Movement}). */
+  /** Offers a movement carrying a lazily-checked restriction. */
   void add(
       Cell cell,
       double cost,

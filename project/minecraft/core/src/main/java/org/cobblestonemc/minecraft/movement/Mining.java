@@ -16,48 +16,36 @@ import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.Movement;
 import org.cobblestonemc.api.TraversalState;
 import org.cobblestonemc.minecraft.BreakChecker;
-import org.cobblestonemc.minecraft.MinecraftAgent;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Tunnelling through breakable blocks.
+ * Tunnelling through breakable blocks. Cost is the break time of the blocks cleared plus the move.
+ * Unbreakable blocks and blocks holding back lava are never mined, and a move that breaks nothing
+ * is not mining.
  *
- * <p>Cost is the sum of stone-tool break times of the blocks that must be cleared plus a move.
- * Blocks that are synchronously off-limits — unbreakable (bedrock, {@code +∞} break time), barred
- * by the coarse {@link MinecraftAgent#canBreak} gate, or holding back lava — yield nothing. A move
- * that would break nothing is not mining at all, and is left to the rules for walking.
- *
- * <p>An optional {@link BreakChecker} lets integrations forbid breaking specific blocks
- * asynchronously (protected regions, man-made block types). Mining does not wait on it: the edge is
- * emitted <b>optimistically</b> with the check attached as its {@link Movement#restricted()
- * restricted} future (the logical OR of the per-block checks), so the search drops just that edge
- * if a block turns out barred. With no checker (the common case) no future is attached at all.
- * Cobblestone never actually breaks blocks — this only routes through blocks the player is expected
- * to mine.
- *
- * @param <A> the agent type
+ * <p>The optional {@link BreakChecker} is not awaited: it rides on the movement as its {@link
+ * Movement#restricted() restriction}.
  */
-final class Mining<A extends MinecraftAgent> {
+final class Mining {
 
   private static final int[][] FACES = {
     {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, 1, 0}, {0, -1, 0}
   };
 
-  private final @Nullable BreakChecker<A> breakChecker; // null = no integration constrains mining
+  private final @Nullable BreakChecker breakChecker;
 
-  Mining(@Nullable BreakChecker<A> breakChecker) {
+  Mining(@Nullable BreakChecker breakChecker) {
     this.breakChecker = breakChecker;
   }
 
   /**
    * Offers the mining move onto {@code dest} that clears {@code breakCells}, unless the destination
-   * has no footing, a required block is synchronously off-limits, or there is nothing to break.
+   * has no footing, a block may not be broken, or there is nothing to break.
    */
   void offer(
-      A agent,
       MinecraftWorld world,
       BlockView view,
       TraversalState state,
@@ -80,8 +68,8 @@ final class Mining<A extends MinecraftAgent> {
         return;
       }
       double time = block.breakTimeSeconds();
-      if (!Double.isFinite(time) || !agent.canBreak(cell)) {
-        return; // unbreakable or off-limits — settled synchronously
+      if (!Double.isFinite(time)) {
+        return; // unbreakable
       }
       breakTime += time;
       broken++;
@@ -96,11 +84,7 @@ final class Mining<A extends MinecraftAgent> {
       return; // the way is already clear
     }
     edges.add(
-        dest,
-        breakTime + moveCost,
-        MinecraftStepType.MINE,
-        state,
-        restricted(agent, world, targets));
+        dest, breakTime + moveCost, MinecraftStepType.MINE, state, restricted(world, targets));
   }
 
   private static boolean uncoversLava(BlockView view, Cell cell) {
@@ -113,22 +97,20 @@ final class Mining<A extends MinecraftAgent> {
   }
 
   /**
-   * A lazy supplier of the edge's combined breakability verdict: invoked only when the search pops
-   * the edge, so the integration's per-block checks fire just for edges actually considered. The
-   * verdict is {@code true} (restricted) if any of the cells may not be broken. {@code null} when
-   * there is nothing to check.
+   * A lazy supplier of the edge's verdict: {@code true} if any of the blocks may not be broken.
+   * {@code null} when there is nothing to check.
    */
   @Nullable
   private Supplier<FutureOr<Boolean>> restricted(
-      A agent, MinecraftWorld world, @Nullable List<CheckTarget> targets) {
+      MinecraftWorld world, @Nullable List<CheckTarget> targets) {
     if (breakChecker == null || targets == null) {
       return null;
     }
-    BreakChecker<A> checker = breakChecker;
+    BreakChecker checker = breakChecker;
     return () -> {
       List<CompletableFuture<Boolean>> checks = new ArrayList<>(targets.size());
       for (CheckTarget target : targets) {
-        checks.add(checker.breakable(agent, target.cell(), world, target.block()));
+        checks.add(checker.breakable(target.cell(), world, target.block()));
       }
       return FutureOr.from(combine(checks));
     };

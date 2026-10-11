@@ -36,8 +36,8 @@ import org.jetbrains.annotations.Nullable;
  * A single-domain A* solve for one {@link VirtualPath}, run cooperatively so it never blocks a
  * worker thread.
  *
- * <p>The {@link MovementBehavior} may return a pending {@link FutureOr} (a chunk-load cache miss);
- * the search parks that expansion and resumes when the blocks arrive.
+ * <p><b>Expansions</b> may be pending on {@link FutureOr} (a chunk-load cache miss); the search
+ * parks that expansion and resumes when the blocks arrive.
  *
  * <p><b>Restrictions</b> (integration passability checks) are handled <i>optimistically</i>: a cell
  * whose verdict is not yet known is expanded through as if passable, and its check is fired in the
@@ -53,17 +53,15 @@ import org.jetbrains.annotations.Nullable;
  * pruning only the nodes with no route left. No global re-solve, no re-exploration.
  *
  * <p>All state mutation happens inside {@link #pump()}, which the {@code scheduled}/{@code
- * signalled} flags keep single-flight; verdict and expansion callbacks only enqueue/wake, so no
- * locks are needed.
+ * signalled} flags keep single-flight; verdict and I/O-completion callbacks only enqueue/wake, so
+ * no locks are needed.
  *
- * @param <A> the agent type
  * @param <T> the payload type
  * @param <D> the domain type
  */
-final class Tier2Search<A extends Agent, T, D extends Domain> {
+final class Tier2Search<T, D extends Domain> {
 
   private final CobblestoneLogger logger;
-  private final A agent;
   private final D domain;
 
   /**
@@ -77,8 +75,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private final D readDomain;
 
   private final DomainRegion<D> target;
-  private final MovementBehavior<A, T, D> behavior;
-  private final List<? extends Restriction<A, D>> restrictions;
+  private final MovementBehavior<T, D> behavior;
+  private final List<? extends Restriction<D>> restrictions;
   private final boolean hasRestrictions;
   private final SolveHeuristic heuristic;
   private final double heuristicWeight;
@@ -119,8 +117,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private final ConcurrentLinkedQueue<Verdict> mailbox = new ConcurrentLinkedQueue<>();
   private final ConcurrentLinkedQueue<EdgeRef> edgeMailbox = new ConcurrentLinkedQueue<>();
   private final AtomicInteger pendingChecks = new AtomicInteger();
-  // scheduled: a pump task is queued/running. signalled: new work arrived (mailbox add, expansion
-  // or verdict completion) — the pump consumes it so no wakeup is ever lost.
+  // scheduled: a pump task is queued/running. signalled: new work arrived (mailbox add, I/O or
+  // verdict completion) — the pump consumes it so no wakeup is ever lost.
   private final AtomicBoolean scheduled = new AtomicBoolean();
   private final AtomicBoolean signalled = new AtomicBoolean();
 
@@ -157,10 +155,9 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
 
   Tier2Search(
       CobblestoneLogger logger,
-      A agent,
       VirtualPath<T, D> virtualPath,
-      MovementBehavior<A, T, D> behavior,
-      List<? extends Restriction<A, D>> restrictions,
+      MovementBehavior<T, D> behavior,
+      List<? extends Restriction<D>> restrictions,
       HeuristicStrategy heuristic,
       int maxCellsVisited,
       int runningAverageWidth,
@@ -172,7 +169,6 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         new ScopedCobblestoneLogger(
             logger,
             "DomainLocal[" + virtualPath.fromCell() + " to " + virtualPath.targetRegion() + "]");
-    this.agent = agent;
     this.domain = virtualPath.domain();
     @SuppressWarnings("unchecked")
     D scoped = (D) virtualPath.domain().scopedForSolve();
@@ -221,8 +217,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
    * parked.
    *
    * <p>The deadline is tested inside {@link #loop()}, which only runs when something calls {@link
-   * #wake()} — an expansion's blocks arriving, or a restriction verdict landing. Every park
-   * therefore depends on a callback that may never come: a chunk future that never completes, or an
+   * #wake()} — a cell's blocks arriving, or a restriction verdict landing. Every park therefore
+   * depends on a callback that may never come: a chunk future that never completes, or an
    * integration that schedules its verdict onto a server thread and loses it. Without this timer
    * such a search waits forever rather than timing out, and the greedier the heuristic the likelier
    * it is to get there — a search that reaches its goal quickly spends most of its life parked on
@@ -238,7 +234,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     // open set — for the full budget after the search finished; on a busy server that is gigabytes
     // of finished searches waiting on their own timers. The logger and the result future are small
     // and reference nothing of the search, so they can be held outright.
-    WeakReference<Tier2Search<A, T, D>> self = new WeakReference<>(this);
+    WeakReference<Tier2Search<T, D>> self = new WeakReference<>(this);
     CompletableFuture<Tier2Result<T, D>> pending = result;
     CobblestoneLogger timerLogger = logger;
     BooleanSupplier abandoned = cancelled;
@@ -247,7 +243,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
           if (pending.isDone()) {
             return;
           }
-          Tier2Search<A, T, D> search = self.get();
+          Tier2Search<T, D> search = self.get();
           if (search != null) {
             // The normal path: wake it, and let the loop report the timeout with its stats, so
             // there is exactly one place a solve gives up and one line that says so.
@@ -376,11 +372,9 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         return;
       }
       if (pendingExpansion != null) {
-        CompletableFuture<Collection<Movement<T>>> blocks = pendingExpansion.movements().future();
+        var blocks = pendingExpansion.movements().future();
         if (!blocks.isDone() || blocks.isCompletedExceptionally()) {
-          // Still waiting on block I/O, or it failed and the expansion's callback is failing the
-          // solve; either way that callback wakes us.
-          return;
+          return; // still waiting on block I/O, or failed; the callback will wake us
         }
         PendingExpansion<T> ready = pendingExpansion;
         pendingExpansion = null;
@@ -436,9 +430,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       }
       // The cap counts cell-states reached, not expansions: it is a memory guard, and what a solve
       // holds is one Node per reached cell-state (each with its candidate parents and children),
-      // not one per expansion. A 26-neighbourhood behavior reaches several cells per expansion, so
-      // a cap on expansions bounds the table only loosely — loosely enough to run out of heap
-      // first.
+      // not one per expansion. One expansion can reach dozens of cells, so a
+      // cap on expansions bounds the table only loosely — loosely enough to run out of heap first.
       if (nodes.size() > maxCellsVisited) {
         logger.debug("Visited cells ({}) > max ({}); {}", nodes.size(), maxCellsVisited, stats());
         result.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.LIMIT_EXCEEDED));
@@ -452,7 +445,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   /** Expands one closed node, where {@code goal} is the target cell its movements aim at. */
   private void expand(Node<T> node, Cell goal) {
     FutureOr<Collection<Movement<T>>> movements =
-        behavior.movements(agent, node.key.cell(), readDomain, node.key.state(), goal);
+        behavior.movements(node.key.cell(), readDomain, node.key.state(), goal);
     if (!movements.isImmediate()) {
       pendingExpansion = new PendingExpansion<>(node.key, movements);
       movements
@@ -487,10 +480,9 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       CellState key = new CellState(cell, movement.state());
       Node<T> neighbor = getOrCreate(key);
       neighbor.putParent(parentKey, movement); // retained candidate parent
-      // A movement-scoped edge restriction (mining breakability, pearl ballistics) is checked
-      // lazily — when this node is popped, not here — so its supplier fires only for edges we
-      // commit to.
-      // Use the parent's current g: a repair may have raised it while these movements were pending.
+      // A per-edge restriction is checked lazily —
+      // when this node is popped, not here — so its supplier fires only for edges we commit to.
+      // Use the parent's current g: a repair may have raised it while these were pending.
       double tentative = parent.cost + movement.cost();
       if (tentative < neighbor.cost) {
         // setBestParent first: it folds this edge into the neighbor's trail average, which is what
@@ -640,8 +632,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   /** Combined verdict over all restrictions: impassable if any bars the cell. */
   private FutureOr<Boolean> impassable(Cell cell) {
     List<FutureOr<Boolean>> verdicts = new ArrayList<>(restrictions.size());
-    for (Restriction<A, D> restriction : restrictions) {
-      verdicts.add(restriction.impassable(agent, cell, readDomain));
+    for (Restriction<D> restriction : restrictions) {
+      verdicts.add(restriction.impassable(cell, readDomain));
     }
     return FutureOr.all(verdicts).map(list -> list.contains(Boolean.TRUE));
   }
@@ -678,9 +670,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     repairFrom(seeds);
   }
 
-  /**
-   * Drops one movement-scoped edge; if it was the child's best route, repairs the child's subtree.
-   */
+  /** Drops one barred edge; if it was the child's best route, repairs the child's subtree. */
   private void removeEdge(CellState parentKey, CellState childKey) {
     Node<T> child = nodes.get(childKey);
     if (child == null || child.removeParent(parentKey) == null) {

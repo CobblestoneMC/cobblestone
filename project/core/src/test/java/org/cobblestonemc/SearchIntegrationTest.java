@@ -48,7 +48,6 @@ class SearchIntegrationTest {
         api.navigate(
                 new TestCobblestoneLogger(),
                 scheduler,
-                new TestAgent(),
                 new Position<>(new Cell(0, 0, 0), domain),
                 new SingleDestination<>(new CellRegion<>(new Cell(5, 0, 0), domain)),
                 new CorridorBehavior(false),
@@ -81,7 +80,6 @@ class SearchIntegrationTest {
         api.navigate(
                 new TestCobblestoneLogger(),
                 scheduler,
-                new TestAgent(),
                 new Position<>(new Cell(0, 0, 0), overworld),
                 new SingleDestination<>(new CellRegion<>(new Cell(0, 0, 0), nether)),
                 new CorridorBehavior(false),
@@ -111,7 +109,6 @@ class SearchIntegrationTest {
         api.navigate(
                 new TestCobblestoneLogger(),
                 scheduler,
-                new TestAgent(),
                 new Position<>(new Cell(0, 0, 0), overworld),
                 new SingleDestination<>(new CellRegion<>(new Cell(0, 0, 0), nether)),
                 new CorridorBehavior(false),

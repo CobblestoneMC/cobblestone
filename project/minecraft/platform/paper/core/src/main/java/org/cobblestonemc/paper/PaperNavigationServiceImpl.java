@@ -41,7 +41,6 @@ import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.minecraft.BreakChecker;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
-import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
@@ -175,23 +174,22 @@ public final class PaperNavigationServiceImpl
       Player player,
       Destination<DomainRegion<MinecraftWorld>> destination,
       MinecraftSearchSettings settings) {
-    CobblestonePlayer agent = new PaperPlayer(player);
     Location origin = player.getLocation();
     Position<MinecraftWorld> originPosition =
         new Position<>(PaperConversions.cell(origin), wrap(origin.getWorld()));
     // One snapshot of the registered modifiers drives all three influences on this search.
     Collection<SearchModificationService> modifiers = searchModifiers.map().values();
-    BreakChecker<CobblestonePlayer> breakChecker = buildBreakChecker(modifiers, player);
-    List<Restriction<CobblestonePlayer, MinecraftWorld>> restrictions =
-        buildRestrictions(modifiers, player);
-    // Built now, on the calling (server) thread: it reads the player's abilities and pearl count,
-    // and is then invoked on worker threads, where it must not touch the Bukkit player.
-    MinecraftMovementBehavior<CobblestonePlayer> behavior =
+    BreakChecker breakChecker = buildBreakChecker(modifiers, player);
+    List<Restriction<MinecraftWorld>> restrictions = buildRestrictions(modifiers, player);
+    // Built on the server thread: it reads the Bukkit player, which worker threads must not touch.
+    MinecraftMovementBehavior behavior =
         MinecraftMovementBehavior.forPlayer(
-            agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
+            new PaperPlayer(player),
+            settings.excludedModes(),
+            breakChecker,
+            countEnderPearls(player));
     // Per-player, not a shared constant: the bound has to reflect what this player can actually do,
-    // or Tier-1 prices every route as if they could fly. See
-    // MinecraftMovementBehavior#cheapestCostPerBlock.
+    // or Tier-1 prices every route as if they could fly.
     HeuristicStrategy heuristic = Heuristics.runningAverage(behavior.cheapestCostPerBlock());
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
@@ -202,7 +200,6 @@ public final class PaperNavigationServiceImpl
                     core.navigate(
                         logger,
                         scheduler,
-                        agent,
                         originPosition,
                         destination,
                         behavior,
@@ -252,7 +249,7 @@ public final class PaperNavigationServiceImpl
   /**
    * Composes every modifier's break checker into one; a block is breakable only if all permit it.
    */
-  private BreakChecker<CobblestonePlayer> buildBreakChecker(
+  private BreakChecker buildBreakChecker(
       Collection<SearchModificationService> modifiers, Player player) {
     List<org.cobblestonemc.paper.api.BreakChecker> checkers = new ArrayList<>();
     for (SearchModificationService modifier : modifiers) {
@@ -262,21 +259,17 @@ public final class PaperNavigationServiceImpl
       }
     }
     if (checkers.isEmpty()) {
-      return null; // no constraint: mining attaches no restriction future at all
+      return null; // no constraint
     }
     UUID playerId = player.getUniqueId();
-    return (agent, cell, world, block) -> {
+    return (cell, world, block) -> {
       Player online = Bukkit.getPlayer(playerId);
       World bukkitWorld = bukkitWorld(world.key());
       if (online == null || bukkitWorld == null) {
         return CompletableFuture.completedFuture(true); // cannot evaluate; do not block mining
       }
       Location location = new Location(bukkitWorld, cell.x(), cell.y(), cell.z());
-      // Checkers are promised the block's real state, which the block a movement rule read cannot
-      // give them;
-      // see LazyBlockData. The chunk is a cache hit, since mining has just read this
-      // block,
-      // and whether it was snapshotted from memory or read off disk makes no difference here.
+      // Checkers are promised the block's real state; see LazyBlockData.
       return world
           .chunkAt(cell, cell)
           .toFuture()
@@ -299,7 +292,7 @@ public final class PaperNavigationServiceImpl
   }
 
   /** One composite passability restriction; a cell is impassable if any modifier bars entry. */
-  private List<Restriction<CobblestonePlayer, MinecraftWorld>> buildRestrictions(
+  private List<Restriction<MinecraftWorld>> buildRestrictions(
       Collection<SearchModificationService> modifiers, Player player) {
     List<PassChecker> checkers = new ArrayList<>();
     for (SearchModificationService modifier : modifiers) {
@@ -312,8 +305,8 @@ public final class PaperNavigationServiceImpl
       return List.of(); // no constraint: Tier-2 skips restriction filtering entirely
     }
     UUID playerId = player.getUniqueId();
-    Restriction<CobblestonePlayer, MinecraftWorld> restriction =
-        (agent, cell, domain) -> {
+    Restriction<MinecraftWorld> restriction =
+        (cell, domain) -> {
           Player online = Bukkit.getPlayer(playerId);
           World bukkitWorld = bukkitWorld(domain.key());
           if (online == null || bukkitWorld == null) {

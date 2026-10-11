@@ -16,11 +16,9 @@ import org.cobblestonemc.api.SearchSettings;
 /**
  * The generic, Minecraft-agnostic navigation service.
  *
- * <p>Given an origin, a destination, and how an agent moves and the transitions available to it, it
- * runs a two-tier search asynchronously and returns a {@link SearchHandle}. The five type
- * parameters are verbose here, but downstream façades bind them all to concrete types (e.g. {@code
- * CobblestonePlayer}, {@code MinecraftStepType}, {@code MinecraftInstruction}, {@code
- * CobblestoneWorld}) so end users never see a generic.
+ * <p>Given an origin, a destination, and the movement and transitions available, it runs a two-tier
+ * search asynchronously and returns a {@link SearchHandle}. Downstream façades bind the type
+ * parameters to concrete types so end users never see a generic.
  */
 public interface CobblestoneApi {
 
@@ -38,28 +36,25 @@ public interface CobblestoneApi {
    *
    * @param logger the logger to track logging events
    * @param scheduler the scheduler of tasks for the algorithm to parallelize work
-   * @param agent the navigating agent
    * @param origin the starting position
    * @param destination the goal
-   * @param behavior how the agent moves from cell to cell
-   * @param transitions the transitions (portals, teleports, mounts, …) available to the agent
-   * @param restrictions the passability restrictions barring the agent from certain cells
+   * @param behavior how to move from cell to cell
+   * @param transitions the transitions (portals, teleports, mounts, …) available
+   * @param restrictions the passability restrictions barring certain cells
    * @param heuristic the heuristic to use for approaching the destination
    * @param settings the search limits and knobs
-   * @param <A> the agent type
    * @param <T> the payload type
    * @param <D> the domain type
    * @return a handle to the in-flight search
    */
-  <A extends Agent, T, D extends Domain> SearchHandle<Position<D>, T> navigate(
+  <T, D extends Domain> SearchHandle<Position<D>, T> navigate(
       CobblestoneLogger logger,
       Scheduler scheduler,
-      A agent,
       Position<D> origin,
       Destination<DomainRegion<D>> destination,
-      MovementBehavior<A, T, D> behavior,
+      MovementBehavior<T, D> behavior,
       List<? extends Transition<T, D>> transitions,
-      List<? extends Restriction<A, D>> restrictions,
+      List<? extends Restriction<D>> restrictions,
       HeuristicStrategy heuristic,
       SearchSettings settings);
 }

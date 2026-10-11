@@ -11,7 +11,6 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import org.cobblestonemc.Cell;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -61,12 +60,6 @@ final class SpongePlayer implements CobblestonePlayer {
 
   private Optional<ServerPlayer> player() {
     return Sponge.server().player(uuid);
-  }
-
-  @Override
-  public boolean canBreak(Cell cell) {
-    // v1: unconstrained. Region-protection plugins refine this via an integration hook later.
-    return true;
   }
 
   @Override

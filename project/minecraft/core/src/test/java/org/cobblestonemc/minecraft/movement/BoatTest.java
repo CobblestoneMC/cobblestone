@@ -27,8 +27,8 @@ import org.junit.jupiter.api.Test;
 
 class BoatTest {
 
-  private final CobblestonePlayer withBoat = TestPlayer.create(false, true, false, true);
-  private final MinecraftMovementBehavior<CobblestonePlayer> boat =
+  private final CobblestonePlayer withBoat = TestPlayer.create(false, true, false);
+  private final MinecraftMovementBehavior boat =
       MinecraftMovementBehavior.forPlayer(withBoat, Set.of());
 
   @Test
@@ -39,7 +39,7 @@ class BoatTest {
             .set(1, 1, 0, TestBlocks.water())
             .build();
     Movement<MinecraftStepPayload> place =
-        TestMovements.from(boat, withBoat, world, new Cell(0, 1, 0))
+        TestMovements.from(boat, world, new Cell(0, 1, 0))
             .to(new Cell(1, 1, 0), MinecraftStepType.PLACE_BOAT);
 
     assertEquals(MinecraftStepType.PLACE_BOAT, place.payload().stepType());
@@ -57,7 +57,7 @@ class BoatTest {
     TraversalState boating =
         TraversalState.DEFAULT.with(MinecraftKeys.VEHICLE, MinecraftKeys.Vehicle.BOAT);
     Movement<MinecraftStepPayload> travel =
-        TestMovements.from(boat, withBoat, world, new Cell(1, 1, 0), boating).to(new Cell(2, 1, 0));
+        TestMovements.from(boat, world, new Cell(1, 1, 0), boating).to(new Cell(2, 1, 0));
 
     assertEquals(MinecraftStepType.BOAT, travel.payload().stepType());
     assertEquals(MovementCosts.BOAT, travel.cost(), 1e-9);
@@ -68,7 +68,7 @@ class BoatTest {
   void offersNoBoatOnDryLand() {
     // On foot with a boat in hand, the boat only comes out at water's edge.
     TestWorld dryLand = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
-    Moves moves = TestMovements.from(boat, withBoat, dryLand, new Cell(0, 1, 0));
+    Moves moves = TestMovements.from(boat, dryLand, new Cell(0, 1, 0));
     assertTrue(moves.ofType(MinecraftStepType.PLACE_BOAT).isEmpty());
     assertTrue(moves.ofType(MinecraftStepType.BOAT).isEmpty());
   }
@@ -84,10 +84,7 @@ class BoatTest {
     CobblestonePlayer walker = TestPlayer.walker();
     assertTrue(
         TestMovements.from(
-                MinecraftMovementBehavior.forPlayer(walker, Set.of()),
-                walker,
-                world,
-                new Cell(0, 1, 0))
+                MinecraftMovementBehavior.forPlayer(walker, Set.of()), world, new Cell(0, 1, 0))
             .ofType(MinecraftStepType.PLACE_BOAT)
             .isEmpty());
   }

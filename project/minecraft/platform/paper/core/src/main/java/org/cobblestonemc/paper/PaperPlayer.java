@@ -15,7 +15,6 @@ import org.bukkit.Material;
 import org.bukkit.entity.Boat;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
-import org.cobblestonemc.Cell;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -33,12 +32,6 @@ final class PaperPlayer implements CobblestonePlayer {
 
   private Optional<Player> player() {
     return Optional.ofNullable(Bukkit.getPlayer(uuid));
-  }
-
-  @Override
-  public boolean canBreak(Cell cell) {
-    // v1: unconstrained. Region-protection plugins refine this via an integration hook later.
-    return true;
   }
 
   @Override

@@ -14,8 +14,8 @@ import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
 
 /**
- * An in-memory {@link MinecraftWorld} for movement tests. Cells default to air; set blocks with the
- * builder. Every block is served immediately (no parking), exercising the cache-hit path.
+ * An in-memory {@link MinecraftWorld} for tests. Cells default to air; set blocks with the builder.
+ * Every block is served immediately (no parking), exercising the cache-hit path.
  */
 public final class TestWorld implements MinecraftWorld {
 

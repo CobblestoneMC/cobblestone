@@ -8,8 +8,7 @@
 package org.cobblestonemc.minecraft.movement;
 
 /**
- * What one agent may do on a search, settled once when its {@link MinecraftMovementBehavior} is
- * built — from the agent's capabilities and the step types the search excludes.
+ * What a player may do on a search, settled when its {@link MinecraftMovementBehavior} is built.
  *
  * @param walk walk, jump and step down a block
  * @param doors step through a doorway at all (an open door needs nothing more)

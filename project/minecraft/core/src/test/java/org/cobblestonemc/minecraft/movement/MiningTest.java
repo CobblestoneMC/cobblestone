@@ -18,7 +18,6 @@ import java.util.concurrent.CompletableFuture;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.Movement;
 import org.cobblestonemc.minecraft.BreakChecker;
-import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.TestBlocks;
 import org.cobblestonemc.minecraft.TestMovements;
@@ -31,7 +30,7 @@ import org.junit.jupiter.api.Test;
 class MiningTest {
 
   private final TestPlayer player = TestPlayer.walker();
-  private final MinecraftMovementBehavior<CobblestonePlayer> walker =
+  private final MinecraftMovementBehavior walker =
       MinecraftMovementBehavior.forPlayer(player, Set.of());
 
   private static TestWorld wallTo(int wallX, MinecraftBlock feet, MinecraftBlock head) {
@@ -46,7 +45,7 @@ class MiningTest {
   void tunnelsThroughBreakableWall() {
     TestWorld world = wallTo(1, TestBlocks.solid(2.0), TestBlocks.solid(2.0));
     Movement<MinecraftStepPayload> dig =
-        TestMovements.from(walker, player, world, new Cell(0, 1, 0)).to(new Cell(1, 1, 0));
+        TestMovements.from(walker, world, new Cell(0, 1, 0)).to(new Cell(1, 1, 0));
 
     assertEquals(MinecraftStepType.MINE, dig.payload().stepType());
     // break feet (2s) + head (2s) + a walk step
@@ -58,7 +57,7 @@ class MiningTest {
   void aClearPathIsWalkedNotMined() {
     TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
     assertTrue(
-        TestMovements.from(walker, player, world, new Cell(0, 1, 0))
+        TestMovements.from(walker, world, new Cell(0, 1, 0))
             .ofType(MinecraftStepType.MINE)
             .isEmpty());
   }
@@ -66,8 +65,7 @@ class MiningTest {
   @Test
   void willNotMineUnbreakableBlocks() {
     TestWorld world = wallTo(1, TestBlocks.bedrock(), TestBlocks.solid(2.0));
-    assertFalse(
-        TestMovements.from(walker, player, world, new Cell(0, 1, 0)).reaches(new Cell(1, 1, 0)));
+    assertFalse(TestMovements.from(walker, world, new Cell(0, 1, 0)).reaches(new Cell(1, 1, 0)));
   }
 
   @Test
@@ -79,8 +77,7 @@ class MiningTest {
             .set(1, 2, 0, TestBlocks.solid(2.0))
             .set(2, 2, 0, TestBlocks.lava()) // behind the head block, two blocks out
             .build();
-    assertFalse(
-        TestMovements.from(walker, player, world, new Cell(0, 1, 0)).reaches(new Cell(1, 1, 0)));
+    assertFalse(TestMovements.from(walker, world, new Cell(0, 1, 0)).reaches(new Cell(1, 1, 0)));
   }
 
   /** The block above a mined step's landing is also checked: its far face is two blocks out. */
@@ -95,21 +92,8 @@ class MiningTest {
             .set(2, 3, 0, TestBlocks.lava())
             .build();
     assertFalse(
-        TestMovements.from(walker, player, world, new Cell(0, 1, 0))
+        TestMovements.from(walker, world, new Cell(0, 1, 0))
             .reaches(new Cell(1, 2, 0), MinecraftStepType.MINE));
-  }
-
-  @Test
-  void willNotMineWhenBreakingIsNotAllowed() {
-    TestWorld world = wallTo(1, TestBlocks.solid(2.0), TestBlocks.solid(2.0));
-    CobblestonePlayer cannotBreak = TestPlayer.create(false, false, false, false);
-    assertFalse(
-        TestMovements.from(
-                MinecraftMovementBehavior.forPlayer(cannotBreak, Set.of()),
-                cannotBreak,
-                world,
-                new Cell(0, 1, 0))
-            .reaches(new Cell(1, 1, 0)));
   }
 
   @Test
@@ -118,7 +102,6 @@ class MiningTest {
     assertFalse(
         TestMovements.from(
                 MinecraftMovementBehavior.forPlayer(player, Set.of(MinecraftStepType.MINE)),
-                player,
                 world,
                 new Cell(0, 1, 0))
             .reaches(new Cell(1, 1, 0)));
@@ -130,14 +113,14 @@ class MiningTest {
     // An integration forbids breaking the block at the wall's feet. The tunnel move is still
     // emitted (optimistically), but tagged with a restricted future that resolves true — the search
     // drops the edge when it does.
-    BreakChecker<CobblestonePlayer> forbidWall =
-        (agent, cell, breakWorld, block) ->
+    BreakChecker forbidWall =
+        (cell, breakWorld, block) ->
             CompletableFuture.completedFuture(!cell.equals(new Cell(1, 1, 0)));
-    MinecraftMovementBehavior<CobblestonePlayer> checked =
+    MinecraftMovementBehavior checked =
         MinecraftMovementBehavior.forPlayer(player, Set.of(), forbidWall, 0);
 
     Movement<MinecraftStepPayload> tunnel =
-        TestMovements.from(checked, player, world, new Cell(0, 1, 0)).to(new Cell(1, 1, 0));
+        TestMovements.from(checked, world, new Cell(0, 1, 0)).to(new Cell(1, 1, 0));
     assertNotNull(tunnel, "the move is emitted optimistically");
     assertNotNull(tunnel.restricted(), "and carries a breakability check");
     assertTrue(
@@ -149,7 +132,7 @@ class MiningTest {
   void noBreakCheckerLeavesTheMoveUnrestricted() {
     TestWorld world = wallTo(1, TestBlocks.solid(2.0), TestBlocks.solid(2.0));
     Movement<MinecraftStepPayload> tunnel =
-        TestMovements.from(walker, player, world, new Cell(0, 1, 0)).to(new Cell(1, 1, 0));
+        TestMovements.from(walker, world, new Cell(0, 1, 0)).to(new Cell(1, 1, 0));
     assertNotNull(tunnel);
     assertNull(tunnel.restricted(), "no integration checker → no future allocated");
   }

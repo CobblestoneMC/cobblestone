@@ -21,7 +21,7 @@ import org.cobblestonemc.api.TraversalState;
  * the test completes on demand via {@link #releaseNext()}, exercising the search's park/resume
  * machinery. Otherwise it returns immediate results (the cache-hit fast path).
  */
-final class CorridorBehavior implements MovementBehavior<TestAgent, TestStep, TestDomain> {
+final class CorridorBehavior implements MovementBehavior<TestStep, TestDomain> {
 
   private final boolean gated;
   private final List<Gate> gates = new ArrayList<>();
@@ -33,7 +33,7 @@ final class CorridorBehavior implements MovementBehavior<TestAgent, TestStep, Te
 
   @Override
   public FutureOr<Collection<Movement<TestStep>>> movements(
-      TestAgent agent, Cell from, TestDomain domain, TraversalState state, Cell goal) {
+      Cell from, TestDomain domain, TraversalState state, Cell goal) {
     Collection<Movement<TestStep>> movements =
         List.of(new Movement<>(from.plus(1, 0, 0), 1.0, 1.0, TestStep.MOVE, state));
     if (!gated) {

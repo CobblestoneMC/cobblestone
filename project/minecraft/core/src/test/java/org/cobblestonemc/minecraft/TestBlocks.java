@@ -7,7 +7,7 @@
 
 package org.cobblestonemc.minecraft;
 
-/** Factory helpers producing {@link MinecraftBlock}s for movement tests. */
+/** Factory helpers producing {@link MinecraftBlock}s for tests. */
 public final class TestBlocks {
 
   private TestBlocks() {}
@@ -213,8 +213,7 @@ public final class TestBlocks {
 
   /**
    * A door standing open. Still impassable — passability is a material-level fact, so a door reads
-   * the same whichever way it is standing (see {@code MinecraftBlock}); only a doorway step can
-   * cross one.
+   * the same whichever way it is standing (see {@code MinecraftBlock}).
    */
   public static MinecraftBlock openDoor() {
     return new MinecraftBlock() {

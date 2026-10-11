@@ -9,35 +9,14 @@ package org.cobblestonemc.minecraft.movement;
 
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.api.TraversalState;
-import org.cobblestonemc.minecraft.MinecraftAgent;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The local movements of an agent out of any vehicle: one pass over the neighbors of the expanding
- * cell, deciding for each how — if at all — the agent gets there.
- *
- * <ul>
- *   <li><b>Walk</b> onto a standable neighbor (no corner-cutting through solids), <b>jump</b> up a
- *       block (a half-height step is still a walk), or step down one. Speed is scaled by the
- *       footing block's {@code speedFactor} (ice fast, soul sand slow). Larger drops are {@link
- *       Falls}.
- *   <li><b>Swim</b> into any face-adjacent or horizontally-diagonal water.
- *   <li><b>Climb</b> ladders, vines and scaffolding: up and down while on one, grabbing an adjacent
- *       one, and stepping sideways off scaffolding.
- *   <li>Step through a <b>doorway</b> — a door or fence gate — to the far side. Passability is a
- *       material-level fact, so a door reads impassable whichever way it stands and nothing else
- *       crosses it. A shut door is crossable if it opens by hand (wooden) or is iron with a
- *       pressure plate the player is standing on; buttons, levers and distant redstone are out of
- *       scope. Either way the step lands <em>beyond</em> the doorway, so the player never ends up
- *       standing in a door about to shut. Trapdoors are left out: open, one stands as a wall across
- *       the face it hangs on rather than opening a way through.
- *   <li><b>Mine</b> into a cardinal neighbor the agent cannot simply walk to, up a step it cannot
- *       simply jump, or down through the floor. See {@link Mining}.
- *   <li><b>Fly</b> to any of the 26 neighbors a body fits in, with no footing requirement.
- * </ul>
+ * Movement out of any vehicle — walking, jumping, swimming, climbing, doorways, mining and flying —
+ * decided in one pass over the neighbors.
  */
 final class OnFoot {
 
@@ -48,10 +27,9 @@ final class OnFoot {
 
   private OnFoot() {}
 
-  static <A extends MinecraftAgent> void offer(
+  static void offer(
       Abilities can,
-      @Nullable Mining<A> mining,
-      A agent,
+      @Nullable Mining mining,
       MinecraftWorld world,
       Cell from,
       TraversalState state,
@@ -79,7 +57,7 @@ final class OnFoot {
       }
     }
     if (mining != null) {
-      mining.offer(agent, world, view, state, edges, down, MovementCosts.FALL_PER_BLOCK, down);
+      mining.offer(world, view, state, edges, down, MovementCosts.FALL_PER_BLOCK, down);
     }
 
     for (int[] dir : HORIZONTAL) {
@@ -146,19 +124,10 @@ final class OnFoot {
       if (mining != null) {
         if (!standable) {
           mining.offer(
-              agent,
-              world,
-              view,
-              state,
-              edges,
-              level,
-              MovementCosts.WALK,
-              level,
-              level.plus(0, 1, 0));
+              world, view, state, edges, level, MovementCosts.WALK, level, level.plus(0, 1, 0));
         }
         if (!stepUp) {
           mining.offer(
-              agent,
               world,
               view,
               state,
@@ -177,7 +146,10 @@ final class OnFoot {
     }
   }
 
-  /** Stepping through the doorway one block out in direction {@code (dx, dz)}, if there is one. */
+  /**
+   * Stepping through the door or fence gate one block out in direction {@code (dx, dz)}, landing
+   * beyond it. A shut door must open by hand, or by the pressure plate the player stands on.
+   */
   private static void doorway(
       Abilities can,
       Cell from,
@@ -206,12 +178,7 @@ final class OnFoot {
     }
   }
 
-  /**
-   * Free 3D flight (creative / allow-flight, or elytra gliding) to any of the 26 neighbors where a
-   * body fits; cost scales with euclidean distance. {@code height} is the clearance a body needs: 2
-   * for a walking-height flier, 1 for an elytra glider modelled thin enough to slip through a
-   * 1-block hole (an end gateway).
-   */
+  /** Flight to any of the 26 neighbors where a {@code height}-tall body fits. */
   private static void fly(
       int height, Cell from, TraversalState state, BlockView view, Edges edges) {
     for (int dx = -1; dx <= 1; dx++) {

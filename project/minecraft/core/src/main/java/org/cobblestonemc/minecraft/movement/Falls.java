@@ -19,15 +19,9 @@ import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 
 /**
- * Falling: stepping off a cardinal edge (or straight down) and dropping to the first supported cell
- * or water below. Handles drops of two or more blocks (a one-block step-down is a walk). Damage
- * beyond the safe distance is costed as a deterrent (a multiple of heal time); a fall into water
- * takes no damage; a fall onto a hazard is not offered.
- *
- * <p>Deciding <em>whether</em> anything falls from here needs only the immediate neighborhood, but
- * following a fall needs the columns beneath it — sixteen blocks down each ledge. Reading those up
- * front would be over 150 cells on every expansion, nearly all discarded on flat ground. So the
- * ledges are found in the shared view, and only their columns are fetched, in a second phase.
+ * Dropping two or more blocks — off a cardinal ledge or straight down — to the first supported cell
+ * or water below. Fall damage is costed; hazards are never landed on. The columns below are fetched
+ * only for ledges actually found.
  */
 final class Falls {
 

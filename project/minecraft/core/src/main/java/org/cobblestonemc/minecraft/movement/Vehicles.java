@@ -12,10 +12,7 @@ import org.cobblestonemc.api.TraversalState;
 import org.cobblestonemc.minecraft.MinecraftKeys;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 
-/**
- * Movements tied to a vehicle, where the {@link MinecraftKeys#VEHICLE} traversal state says which
- * one the agent is in.
- */
+/** Boarding a boat, and moving while in a vehicle. */
 final class Vehicles {
 
   private static final int[][] HORIZONTAL = {
@@ -24,10 +21,7 @@ final class Vehicles {
 
   private Vehicles() {}
 
-  /**
-   * Boarding a boat from foot: entering adjacent water places the boat and sets {@code VEHICLE =
-   * BOAT} (a {@code PLACE_BOAT} step).
-   */
+  /** Placing a boat in adjacent water and boarding it. */
   static void boardBoat(Cell from, TraversalState state, BlockView view, Edges edges) {
     TraversalState inBoat =
         state
@@ -59,11 +53,7 @@ final class Vehicles {
     }
   }
 
-  /**
-   * Fast ground travel while mounted — a state entered via the horse mount transition (Tier-1), so
-   * the graph prefers horse routes once the horse is reached. Behaves like a faster walk (flat
-   * moves and one-block step-ups), staying mounted.
-   */
+  /** Ground travel while mounted: flat moves and one-block step-ups. */
   static void horse(Cell from, TraversalState state, BlockView view, Edges edges) {
     for (int[] dir : HORIZONTAL) {
       int dx = dir[0];

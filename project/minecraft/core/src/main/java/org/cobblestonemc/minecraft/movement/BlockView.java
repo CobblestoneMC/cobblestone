@@ -13,14 +13,9 @@ import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.UnknownBlock;
 
 /**
- * A read-only snapshot of the blocks fetched for one expansion, over a box of cells. Cells outside
- * the box, and cells inside it that were never fetched, read as {@link UnknownBlock#INSTANCE}.
- *
- * <p>Backed by a dense array rather than a map. The movement rules and {@link Geometry} read this a
- * few hundred times per expansion — {@code bodyFits} alone is two reads, and it is called per
- * direction — so a map cost a hash of a {@link Cell} record on each read, and the relative form
- * {@link #at(Cell, int, int, int)} allocated a fresh {@code Cell} for the key. Here both are index
- * arithmetic on ints, and nothing is allocated.
+ * A read-only snapshot of fetched blocks over a box of cells. Cells outside the box, and cells
+ * inside it that were never fetched, read as {@link UnknownBlock#INSTANCE}. Backed by a dense
+ * array, so reads neither hash nor allocate.
  */
 final class BlockView {
 

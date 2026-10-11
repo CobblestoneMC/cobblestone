@@ -7,10 +7,7 @@
 
 package org.cobblestonemc.minecraft.api;
 
-/**
- * The {@code StepType} enum for Minecraft — both movement types (produced by the movement behavior)
- * and discrete-action types (produced by transitions, or by boarding a vehicle).
- */
+/** The kinds of step a Minecraft route is made of. */
 public enum MinecraftStepType {
 
   // movement
