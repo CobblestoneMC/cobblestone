@@ -8,6 +8,7 @@
 package org.cobblestonemc.plugin.api;
 
 import java.util.List;
+import java.util.Optional;
 import net.kyori.adventure.text.Component;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.minecraft.api.WorldRegion;
@@ -55,5 +56,46 @@ public interface MinecraftDestination<W, V> {
    */
   default boolean isMobile() {
     return false;
+  }
+
+  /**
+   * Returns the options this destination takes after its key, in the order they are typed — e.g.
+   * {@code <x> <y> <z> [world]}. Required options come first. Empty (the default) for a destination
+   * that is complete as it stands.
+   *
+   * <p>A destination with options is a template: its {@link #destination()} is not searched
+   * directly. The command parses the typed tokens and searches whatever {@link
+   * #configure(OptionValues)} returns.
+   *
+   * @return the options
+   */
+  default List<DestinationOption<?>> options() {
+    return List.of();
+  }
+
+  /**
+   * Returns this destination with its options applied — e.g. the coordinates template configured to
+   * point at {@code 100 64 -200}. Called once per command, with a value for every required option
+   * and for each optional one that was typed. The default, for a destination without options,
+   * returns itself.
+   *
+   * @param values the parsed option values
+   * @return the configured destination
+   */
+  default MinecraftDestination<W, V> configure(OptionValues values) {
+    return this;
+  }
+
+  /**
+   * Returns extra detail to show when the player hovers over this destination in command feedback
+   * ("Searching for a route…", and the failure that may follow) — beneath its address, which is
+   * always shown. Meant for destinations at one specific place, whose coordinates the player can
+   * use to get there by hand even if no route is found (most of all {@code death}, whose location
+   * they may have no other way to learn). Empty (the default) for anything else.
+   *
+   * @return the detail, if any
+   */
+  default Optional<Component> detail() {
+    return Optional.empty();
   }
 }

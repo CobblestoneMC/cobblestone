@@ -32,7 +32,10 @@ Navigate back to it from anywhere:
 ```
 
 Cobblestone reports `Searching for a route...`, then `Success!` once a route is found. Hover over
-the message to see the search time and estimated travel time. The trip ends automatically when you
+`Success!` to see the search time and estimated travel time. Hover over `Searching for a route...`,
+or over the error if no route is found, to see the destination's address. For a fixed place, such
+as a saved location, your death location or a set of coordinates, the coordinates are shown too,
+so you can still find your way there by hand. The trip ends automatically when you
 arrive within two blocks of the destination.
 
 ## The trail
@@ -67,6 +70,61 @@ plugins installed on the server.
 ```
 
 Your most recent death location. Admins may disable this destination.
+
+### Respawn point
+
+```
+/nav respawn
+```
+
+Where you will respawn: your bed, a charged respawn anchor, or a point set by `/spawnpoint`. Not
+offered if you have none.
+
+### World spawn
+
+```
+/nav spawn                         # this world's spawn
+/nav spawn world_nether            # another world's spawn
+```
+
+### Surface
+
+```
+/nav surface
+```
+
+The nearest place open to the sky. The route heads upward, so it is the quickest way out of a cave
+or a mine. Water, leaves and glass count as a roof.
+
+### Coordinates
+
+```
+/nav coordinates 100 64 -200                  # a block in this world
+/nav coordinates 100 64 -200 world_nether     # a block in another world
+/nav coordinate-surface 100 -200              # the open-sky spot at x=100, z=-200
+```
+
+Whole numbers only. The world is optional and defaults to the one you are in. Tab completion offers
+your own coordinates.
+
+### Mount
+
+```
+/nav mount
+```
+
+The horse, donkey, mule, llama or camel you last rode. Cobblestone follows it while it is loaded,
+and otherwise heads to where it was last seen. Not offered if you have not ridden one, or it has
+died.
+
+### Pets
+
+```
+/nav pet Rex
+```
+
+Your named, tamed animals that are currently loaded. Pets that share a name are numbered by when
+they were tamed: `Rex`, `Rex-2`, … The route is recomputed periodically as the pet moves.
 
 ### Players
 
@@ -109,8 +167,9 @@ may be omitted as long as the remainder identifies exactly one destination:
 /nav home
 ```
 
-The final word is always required. Some levels, such as town and NPC names, are marked strict by
-their provider and are also required.
+The destination's own name is always required. Some levels, such as town and NPC names, are marked
+strict by their provider and are also required. A destination that takes values, such as
+`coordinates`, takes them after its name; they are never part of the address.
 
 If the input matches more than one destination, the candidates are listed:
 
@@ -189,6 +248,8 @@ Each trip is named by the shortest part of its address that tells it apart from 
 | `The search took too long and was stopped.` | The search reached its time limit. |
 | `No destination matches ...` | No destination has that name. |
 | `That destination is ambiguous; be more specific: ...` | Add a word from the full address. |
+| `Usage: /navigate ...` | The destination takes values; type them as shown. |
+| `... is not valid there. Usage: /navigate ...` | One of the values could not be read. |
 | `You already have too many active trips; cancel one first.` | Cancel a trip with `/stone cancel`. |
 | `You don't have permission to do that.` | The destination or navigator is restricted. |
 

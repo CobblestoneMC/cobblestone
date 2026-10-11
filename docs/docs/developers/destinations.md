@@ -213,6 +213,55 @@ public record NpcDestination(NPC npc) implements MinecraftDestination<World, Vec
 
 `isMobile()` sets the default for live trips. Players may override it with `-live` or `-no-live`.
 
+### Options
+
+A destination may take values typed after its name, such as the coordinates in
+`/nav coordinates 100 64 -200`. Override `options()` to declare them, in the order they are typed,
+and `configure(OptionValues)` to build the real destination from what was typed. The destination
+returned by `configure` is the one searched.
+
+```java
+public final class OutpostDestination implements MinecraftDestination<World, Vector3i> {
+  private final DestinationOption<Outpost> outpost;
+
+  public OutpostDestination(Town town) {
+    this.outpost =
+        DestinationOption.required(
+            "outpost",
+            partial -> town.outposts().stream().map(Outpost::name).toList(),
+            token -> Optional.ofNullable(town.outpost(token)));
+  }
+
+  @Override
+  public List<DestinationOption<?>> options() {
+    return List.of(outpost);
+  }
+
+  @Override
+  public MinecraftDestination<World, Vector3i> configure(OptionValues values) {
+    Outpost chosen = values.get(outpost);
+    return Destination.at(chosen.spawn(), chosen.name());
+  }
+
+  // destination(), displayName() and permissions() as usual; destination() is never searched.
+}
+```
+
+- Each option reads one word. `DestinationOption.integer(name, hint)` reads a whole number and
+  suggests `hint`; `required(…)` and `optional(…)` take any suggestion and parsing logic.
+- Required options come first. Optional ones may be left off from the end.
+- Options are never part of the address, so they never affect the destination's permission node
+  and are never promoted past its name.
+- If the words after the name do not fit, the player is shown the usage, such as
+  `/navigate outpost <outpost>`.
+
+### Hover detail
+
+Override `detail()` to add a line to the hover text of `Searching for a route...` and of the error
+that follows if no route is found. The address is always shown; the detail goes beneath it.
+Cobblestone's own destinations use it for the coordinates of fixed places, such as `death`, so a
+player can find the place by hand.
+
 ## Permissions
 
 - **Destination node**: `cobblestone.navigate.<address>`. Generated automatically, default allow,

@@ -15,12 +15,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 
 /**
  * Splits the raw tokens of a {@code /navigate} invocation into the positional destination arguments
- * and the {@link NavigationFlags}. Any token starting with {@code -} is a flag; everything else is
- * a destination token (fed to the {@code DestinationResolver}).
+ * and the {@link NavigationFlags}. Any token starting with {@code -} is a flag, other than a
+ * negative number; everything else is a destination token (fed to the {@code DestinationResolver}).
  *
  * <p>Recognized flags: {@code -navigator <id>}, {@code -no-world <world>}, {@code -no-dimension
  * <dim>}, {@code -no-mode <mode>}, {@code -live}, plus per-mode aliases {@code -no-<mode>} (e.g.
@@ -39,6 +40,8 @@ public final class FlagParser {
   private static final Set<String> VALUE_FLAGS =
       Set.of("-navigator", "-no-world", "-no-dimension", "-no-mode");
 
+  private static final Pattern NEGATIVE_NUMBER = Pattern.compile("-\\d+");
+
   static {
     MODE_WORDS.put("walk", MinecraftStepType.WALK);
     MODE_WORDS.put("swim", MinecraftStepType.SWIM);
@@ -52,6 +55,17 @@ public final class FlagParser {
   }
 
   private FlagParser() {}
+
+  /**
+   * Whether a token is a flag: it starts with {@code -} and is not a negative whole number, which
+   * is a destination token instead (the {@code -200} of {@code coordinates 100 64 -200}).
+   *
+   * @param token the token
+   * @return {@code true} if it is a flag
+   */
+  public static boolean isFlag(String token) {
+    return token.startsWith("-") && !NEGATIVE_NUMBER.matcher(token).matches();
+  }
 
   /** Why a parse failed. */
   public enum Error {
@@ -129,7 +143,7 @@ public final class FlagParser {
       }
       if (VALUE_FLAGS.contains(token.toLowerCase(Locale.ROOT))) {
         skipValue = true;
-      } else if (!token.startsWith("-")) {
+      } else if (!isFlag(token)) {
         out.add(token);
       }
     }
@@ -153,7 +167,7 @@ public final class FlagParser {
     int i = 0;
     while (i < tokens.size()) {
       String token = tokens.get(i);
-      if (!token.startsWith("-")) {
+      if (!isFlag(token)) {
         destination.add(token);
         i++;
         continue;

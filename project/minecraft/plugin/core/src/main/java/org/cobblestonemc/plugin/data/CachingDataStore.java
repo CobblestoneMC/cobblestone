@@ -8,9 +8,9 @@
 package org.cobblestonemc.plugin.data;
 
 /**
- * Wraps a {@link DataStore} so the DAOs behind player-facing tab-completion — locations and death
- * locations — read through a one-second per-player cache ({@link ExpiringCache}). Every backend
- * gets the same buffer this way, and the layers above keep talking to plain DAO interfaces.
+ * Wraps a {@link DataStore} so the DAOs behind player-facing tab-completion — locations, death
+ * locations and mounts — read through a one-second per-player cache ({@link ExpiringCache}). Every
+ * backend gets the same buffer this way, and the layers above keep talking to plain DAO interfaces.
  *
  * <p>The portal DAOs are not cached: nothing tab-completes them, and searches read them in bulk,
  * once per search.
@@ -21,6 +21,7 @@ final class CachingDataStore implements DataStore {
 
   private LocationDao locations;
   private DeathLocationDao deaths;
+  private MountDao mounts;
 
   CachingDataStore(DataStore delegate) {
     this.delegate = delegate;
@@ -31,6 +32,7 @@ final class CachingDataStore implements DataStore {
     delegate.init();
     this.locations = new CachingLocationDao(delegate.locations());
     this.deaths = new CachingDeathLocationDao(delegate.deaths());
+    this.mounts = new CachingMountDao(delegate.mounts());
   }
 
   @Override
@@ -47,6 +49,14 @@ final class CachingDataStore implements DataStore {
       throw new IllegalStateException("DataStore.init() has not been called");
     }
     return deaths;
+  }
+
+  @Override
+  public MountDao mounts() {
+    if (mounts == null) {
+      throw new IllegalStateException("DataStore.init() has not been called");
+    }
+    return mounts;
   }
 
   @Override

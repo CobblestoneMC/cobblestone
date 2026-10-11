@@ -105,7 +105,10 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     integrationRegistry.registerDestinations(
         this,
         new CobblestoneDestinationSource(
-            dataStore.locations(), dataStore.deaths(), () -> config.get(keys.deathsTrack)));
+            dataStore.locations(),
+            dataStore.deaths(),
+            dataStore.mounts(),
+            () -> config.get(keys.deathsTrack)));
     // Each player's last death is recorded so they can navigate back to it.
     getServer()
         .getPluginManager()
@@ -113,6 +116,11 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             new DeathListener(
                 dataStore.deaths(), platformApi.scheduler(), () -> config.get(keys.deathsTrack)),
             this);
+    // So are their last mount, and when each of their pets was tamed (to number same-named pets).
+    getServer()
+        .getPluginManager()
+        .registerEvents(new MountListener(dataStore.mounts(), platformApi.scheduler()), this);
+    getServer().getPluginManager().registerEvents(new PetListener(), this);
 
     Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
     Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), logger);

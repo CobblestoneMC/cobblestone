@@ -8,14 +8,18 @@
 package org.cobblestonemc.plugin.destination;
 
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import org.cobblestonemc.plugin.api.DestinationOption;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
+import org.cobblestonemc.plugin.api.OptionValues;
 import org.cobblestonemc.plugin.api.PlatformDestinationTree;
 
 /**
@@ -33,8 +37,17 @@ import org.cobblestonemc.plugin.api.PlatformDestinationTree;
  * <ul>
  *   <li>a node's own key is always required when the node is {@linkplain
  *       PlatformDestinationTree#strict() strict}, and
- *   <li>the destination's own key (the final token) is always required.
+ *   <li>the destination's own key is always required.
  * </ul>
+ *
+ * <h2>Options</h2>
+ *
+ * <p>A destination may take {@linkplain MinecraftDestination#options() options} — tokens typed
+ * after its key, such as the {@code 100 64 -200} of {@code coordinates 100 64 -200}. Options are
+ * never part of the address and are never promoted: the key comes first, then one token per option,
+ * in order. A destination with no options must be the last token. When a destination's key matches
+ * but the tokens after it do not fit its options, and nothing else matches, the result is {@link
+ * InvalidOptions} so the player can be shown how to use it.
  *
  * <p>Matching is case-insensitive throughout, so two providers registering {@code quest} and {@code
  * Quest} collide deliberately rather than silently offering the player two look-alike paths.
@@ -99,6 +112,37 @@ public final class DestinationResolver {
   public record NotFound<W, V>() implements Resolution<W, V> {}
 
   /**
+   * A destination's key matched, but the tokens after it do not fit its options — too few, too
+   * many, or one that does not parse — and nothing else matched.
+   *
+   * @param address the canonical key path of the destination
+   * @param options the destination's options, for a usage hint (see {@link #usage})
+   * @param invalidToken the first token that did not parse, or {@code null} if the problem was the
+   *     number of tokens
+   * @param <W> the world type
+   * @param <V> the vector type
+   */
+  public record InvalidOptions<W, V>(
+      List<String> address, List<DestinationOption<?>> options, String invalidToken)
+      implements Resolution<W, V> {}
+
+  /**
+   * How to type a destination with options, e.g. {@code coordinates <x> <y> <z> [world]}.
+   *
+   * @param address the destination's address
+   * @param options its options
+   * @return the usage
+   */
+  public static String usage(List<String> address, List<DestinationOption<?>> options) {
+    StringBuilder usage = new StringBuilder(String.join(" ", address));
+    for (DestinationOption<?> option : options) {
+      usage.append(option.required() ? " <" : " [").append(option.name());
+      usage.append(option.required() ? '>' : ']');
+    }
+    return usage.toString();
+  }
+
+  /**
    * Resolves the given arguments.
    *
    * @param roots the destination-tree roots from every provider
@@ -136,20 +180,13 @@ public final class DestinationResolver {
     if (args.isEmpty()) {
       return new NotFound<>();
     }
-    List<Match<W, V>> matches = new ArrayList<>();
+    Results<W, V> results = new Results<>(hasPermission, canNavigate);
     for (var root : roots.entrySet()) {
-      match(
-          root.getKey(),
-          root.getValue(),
-          args,
-          0,
-          new ArrayList<>(),
-          matches,
-          hasPermission,
-          canNavigate);
+      match(root.getKey(), root.getValue(), args, 0, new ArrayList<>(), results);
     }
+    List<Match<W, V>> matches = results.matches;
     if (matches.isEmpty()) {
-      return new NotFound<>();
+      return results.invalid.isEmpty() ? new NotFound<>() : results.invalid.getFirst();
     }
     if (matches.size() == 1) {
       return new Resolved<>(matches.getFirst().destination(), matches.getFirst().address());
@@ -200,8 +237,9 @@ public final class DestinationResolver {
       Predicate<List<String>> canNavigate) {
     int index = args.isEmpty() ? 0 : args.size() - 1;
     List<String> prefix = args.isEmpty() ? List.of() : args.subList(0, index);
-    String partial = (args.isEmpty() ? "" : args.get(index)).toLowerCase(Locale.ROOT);
-    Access<W, V> access = new Access<>(hasPermission, canNavigate);
+    String typed = args.isEmpty() ? "" : args.get(index);
+    String partial = typed.toLowerCase(Locale.ROOT);
+    Access<W, V> access = new Access<>(hasPermission, canNavigate, typed);
     Candidates candidates = new Candidates();
     for (var root : roots.entrySet()) {
       suggestFrom(root.getKey(), root.getValue(), prefix, 0, new ArrayList<>(), candidates, access);
@@ -224,15 +262,13 @@ public final class DestinationResolver {
       List<String> args,
       int ai,
       List<String> trail,
-      List<Match<W, V>> out,
-      Predicate<String> hasPermission,
-      Predicate<List<String>> canNavigate) {
+      Results<W, V> out) {
     trail.add(key);
     if (ai < args.size() && args.get(ai).equalsIgnoreCase(key)) {
-      matchChildren(node, args, ai + 1, trail, out, hasPermission, canNavigate);
+      matchChildren(node, args, ai + 1, trail, out);
     }
     if (!node.strict()) {
-      matchChildren(node, args, ai, trail, out, hasPermission, canNavigate);
+      matchChildren(node, args, ai, trail, out);
     }
     trail.removeLast();
   }
@@ -243,48 +279,97 @@ public final class DestinationResolver {
       List<String> args,
       int ai,
       List<String> trail,
-      List<Match<W, V>> out,
-      Predicate<String> hasPermission,
-      Predicate<List<String>> canNavigate) {
+      Results<W, V> out) {
     if (ai >= args.size()) {
       return; // nothing left to match, and a destination's own key is never optional
     }
-    if (ai == args.size() - 1) {
-      // Only the last token can name a destination, and only by its exact key — so at most one
-      // destination per node is ever materialized.
-      String last = args.get(ai);
-      for (Map.Entry<String, Supplier<MinecraftDestination<W, V>>> entry :
-          node.destinations().entrySet()) {
-        if (!entry.getKey().equalsIgnoreCase(last)) {
-          continue;
-        }
-        trail.add(entry.getKey());
-        List<String> address = List.copyOf(trail);
-        trail.removeLast();
-        MinecraftDestination<W, V> destination = entry.getValue().get();
-        if (hasAll(hasPermission, destination.permissions()) && canNavigate.test(address)) {
-          out.add(new Match<>(address, destination));
-        }
+    // A destination is named by its exact key, followed by nothing but its options — so at most
+    // one destination per node is ever materialized.
+    String token = args.get(ai);
+    for (Map.Entry<String, Supplier<MinecraftDestination<W, V>>> entry :
+        node.destinations().entrySet()) {
+      if (!entry.getKey().equalsIgnoreCase(token)) {
+        continue;
+      }
+      trail.add(entry.getKey());
+      List<String> address = List.copyOf(trail);
+      trail.removeLast();
+      MinecraftDestination<W, V> destination = entry.getValue().get();
+      if (out.allows(address, destination)) {
+        applyOptions(address, destination, args.subList(ai + 1, args.size()), out);
       }
     }
-    // Sub-trees are still worth descending on the final token: the child's own key may be omitted,
+    // Sub-trees are still worth descending on the same token: the child's own key may be omitted,
     // leaving that token to name a destination inside it.
     for (var child : node.subTrees().entrySet()) {
-      match(
-          child.getKey(), child.getValue().get(), args, ai, trail, out, hasPermission, canNavigate);
+      match(child.getKey(), child.getValue().get(), args, ai, trail, out);
     }
+  }
+
+  /**
+   * Fits the tokens after a matched destination's key to its options: a match if they all parse, an
+   * {@link InvalidOptions} if the destination takes options but these do not fit, and nothing at
+   * all if it takes none (the tokens must be meant for something else).
+   */
+  private static <W, V> void applyOptions(
+      List<String> address,
+      MinecraftDestination<W, V> destination,
+      List<String> tokens,
+      Results<W, V> out) {
+    List<DestinationOption<?>> options = destination.options();
+    if (options.isEmpty()) {
+      if (tokens.isEmpty()) {
+        out.matches.add(new Match<>(address, destination));
+      }
+      return;
+    }
+    long required = options.stream().filter(DestinationOption::required).count();
+    if (tokens.size() < required || tokens.size() > options.size()) {
+      out.invalid.add(new InvalidOptions<>(address, options, null));
+      return;
+    }
+    Map<DestinationOption<?>, Object> values = new IdentityHashMap<>();
+    for (int i = 0; i < tokens.size(); i++) {
+      Optional<?> value = options.get(i).parse(tokens.get(i));
+      if (value.isEmpty()) {
+        out.invalid.add(new InvalidOptions<>(address, options, tokens.get(i)));
+        return;
+      }
+      values.put(options.get(i), value.get());
+    }
+    out.matches.add(new Match<>(address, destination.configure(OptionValues.of(values))));
   }
 
   /** One destination matched by the typed args, with the canonical address it is filed under. */
   private record Match<W, V>(List<String> address, MinecraftDestination<W, V> destination) {}
 
+  /** What a resolution walk has found so far, and the permission gates it applies. */
+  private static final class Results<W, V> {
+    private final List<Match<W, V>> matches = new ArrayList<>();
+    private final List<InvalidOptions<W, V>> invalid = new ArrayList<>();
+    private final Predicate<String> hasPermission;
+    private final Predicate<List<String>> canNavigate;
+
+    Results(Predicate<String> hasPermission, Predicate<List<String>> canNavigate) {
+      this.hasPermission = hasPermission;
+      this.canNavigate = canNavigate;
+    }
+
+    boolean allows(List<String> address, MinecraftDestination<W, V> destination) {
+      return hasAll(hasPermission, destination.permissions()) && canNavigate.test(address);
+    }
+  }
+
   // -----------------------------------------------------------------------------------------
   // Suggestion
   // -----------------------------------------------------------------------------------------
 
-  /** The two permission gates, carried together through the suggestion walk. */
+  /**
+   * The two permission gates, carried together through the suggestion walk, along with the token
+   * being completed (as typed) for options that want it.
+   */
   private record Access<W, V>(
-      Predicate<String> hasPermission, Predicate<List<String>> canNavigate) {
+      Predicate<String> hasPermission, Predicate<List<String>> canNavigate, String partial) {
 
     boolean allows(List<String> address, MinecraftDestination<W, V> destination) {
       return hasAll(hasPermission, destination.permissions()) && canNavigate.test(address);
@@ -341,10 +426,55 @@ public final class DestinationResolver {
       }
       return;
     }
-    // A destination is always the last token, so only sub-trees can carry a longer prefix.
+    // A destination with options may already have been named, and the player is now typing them.
+    suggestOptions(node, prefix, pi, trail, out, access);
     for (var child : node.subTrees().entrySet()) {
       suggestFrom(child.getKey(), child.getValue().get(), prefix, pi, trail, out, access);
     }
+  }
+
+  /**
+   * If {@code prefix[pi]} names one of {@code node}'s destinations that takes options, and every
+   * option token typed after it so far is valid, offers the candidates of the option being typed.
+   */
+  private static <W, V> void suggestOptions(
+      PlatformDestinationTree<W, V> node,
+      List<String> prefix,
+      int pi,
+      List<String> trail,
+      Candidates out,
+      Access<W, V> access) {
+    String key = prefix.get(pi);
+    List<String> typedOptions = prefix.subList(pi + 1, prefix.size());
+    for (Map.Entry<String, Supplier<MinecraftDestination<W, V>>> entry :
+        node.destinations().entrySet()) {
+      if (!entry.getKey().equalsIgnoreCase(key)) {
+        continue;
+      }
+      MinecraftDestination<W, V> destination = entry.getValue().get();
+      List<DestinationOption<?>> options = destination.options();
+      if (typedOptions.size() >= options.size()) {
+        continue; // takes no options, or all of them have been typed
+      }
+      trail.add(entry.getKey());
+      List<String> address = List.copyOf(trail);
+      trail.removeLast();
+      if (!access.allows(address, destination) || !allParse(options, typedOptions)) {
+        continue;
+      }
+      for (String candidate : options.get(typedOptions.size()).suggest(access.partial())) {
+        out.node(candidate, true);
+      }
+    }
+  }
+
+  private static boolean allParse(List<DestinationOption<?>> options, List<String> tokens) {
+    for (int i = 0; i < tokens.size(); i++) {
+      if (options.get(i).parse(tokens.get(i)).isEmpty()) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -363,10 +493,17 @@ public final class DestinationResolver {
       trail.add(entry.getKey());
       List<String> address = List.copyOf(trail);
       trail.removeLast();
-      if (!access.allows(address, entry.getValue().get())) {
+      MinecraftDestination<W, V> destination = entry.getValue().get();
+      if (!access.allows(address, destination)) {
         continue;
       }
-      out.destination(entry.getKey());
+      List<DestinationOption<?>> options = destination.options();
+      if (options.isEmpty() || !options.getFirst().required()) {
+        out.destination(entry.getKey()); // complete as typed
+      }
+      if (!options.isEmpty()) {
+        out.node(entry.getKey(), true); // and options may follow
+      }
       if (out.size() > limit) {
         return null;
       }

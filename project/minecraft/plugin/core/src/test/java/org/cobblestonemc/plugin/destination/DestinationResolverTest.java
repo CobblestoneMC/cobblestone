@@ -9,20 +9,24 @@ package org.cobblestonemc.plugin.destination;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.minecraft.api.WorldRegion;
+import org.cobblestonemc.plugin.api.DestinationOption;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.cobblestonemc.plugin.api.PlatformDestinationTree;
 import org.cobblestonemc.plugin.destination.DestinationResolver.Ambiguous;
+import org.cobblestonemc.plugin.destination.DestinationResolver.InvalidOptions;
 import org.cobblestonemc.plugin.destination.DestinationResolver.NotFound;
 import org.cobblestonemc.plugin.destination.DestinationResolver.Resolution;
 import org.cobblestonemc.plugin.destination.DestinationResolver.Resolved;
@@ -354,6 +358,120 @@ class DestinationResolverTest {
   }
 
   // -----------------------------------------------------------------------------------------
+  // Options
+  // -----------------------------------------------------------------------------------------
+
+  private static final DestinationOption<Integer> X = DestinationOption.integer("x", () -> 7);
+  private static final DestinationOption<Integer> Y = DestinationOption.integer("y", () -> 64);
+  private static final DestinationOption<Integer> Z = DestinationOption.integer("z", () -> -3);
+  private static final DestinationOption<String> WORLD =
+      DestinationOption.optional(
+          "world",
+          partial -> List.of("nether", "overworld"),
+          token ->
+              List.of("nether", "overworld").contains(token)
+                  ? Optional.of(token)
+                  : Optional.empty());
+
+  @Test
+  void resolvesADestinationFollowedByItsOptions() {
+    var roots = roots(node("cobblestone").template("coordinates"));
+
+    Resolved<String, Integer> resolved =
+        assertInstanceOf(Resolved.class, resolve(roots, List.of("coordinates", "1", "2", "-3")));
+    assertEquals(List.of("cobblestone", "coordinates"), resolved.address());
+    assertEquals(Component.text("1 2 -3"), resolved.destination().displayName());
+
+    resolved =
+        assertInstanceOf(
+            Resolved.class,
+            resolve(roots, List.of("cobblestone", "coordinates", "1", "2", "3", "nether")));
+    assertEquals(Component.text("1 2 3 nether"), resolved.destination().displayName());
+  }
+
+  @Test
+  void reportsOptionsThatDoNotFit() {
+    var roots = roots(node("cobblestone").template("coordinates"));
+
+    for (List<String> args :
+        List.of(
+            List.of("coordinates"),
+            List.of("coordinates", "1", "2"),
+            List.of("coordinates", "1", "2", "3", "nether", "extra"))) {
+      InvalidOptions<String, Integer> invalid =
+          assertInstanceOf(InvalidOptions.class, resolve(roots, args), args.toString());
+      assertNull(invalid.invalidToken(), args.toString());
+      assertEquals(
+          "cobblestone coordinates <x> <y> <z> [world]",
+          DestinationResolver.usage(invalid.address(), invalid.options()));
+    }
+
+    InvalidOptions<String, Integer> invalid =
+        assertInstanceOf(
+            InvalidOptions.class, resolve(roots, List.of("coordinates", "1", "two", "3")));
+    assertEquals("two", invalid.invalidToken());
+    invalid =
+        assertInstanceOf(
+            InvalidOptions.class, resolve(roots, List.of("coordinates", "1", "2", "3", "moon")));
+    assertEquals("moon", invalid.invalidToken());
+  }
+
+  @Test
+  void optionsAreNeverPromotedPastTheirKey() {
+    // A destination named "1" next to a template: a lone "1" is the destination, and the template
+    // is only reached through its own key.
+    var roots = roots(node("cobblestone").template("coordinates").leaf("1"));
+
+    Resolved<String, Integer> resolved =
+        assertInstanceOf(Resolved.class, resolve(roots, List.of("1")));
+    assertEquals(List.of("cobblestone", "1"), resolved.address());
+    assertInstanceOf(NotFound.class, resolve(roots, List.of("1", "2", "3")));
+  }
+
+  @Test
+  void aDestinationWithoutOptionsMustBeTheLastToken() {
+    var roots = roots(node("mco").leaf("spawn"));
+
+    assertInstanceOf(NotFound.class, resolve(roots, List.of("spawn", "1")));
+  }
+
+  @Test
+  void aMatchElsewhereWinsOverOptionsThatDoNotFit() {
+    // "coordinates home" does not fit the template, but names a real destination elsewhere.
+    var roots =
+        roots(
+            node("cobblestone").template("coordinates"),
+            node("other").sub(node("coordinates").leaf("home")));
+
+    Resolved<String, Integer> resolved =
+        assertInstanceOf(Resolved.class, resolve(roots, List.of("coordinates", "home")));
+    assertEquals(List.of("other", "coordinates", "home"), resolved.address());
+  }
+
+  @Test
+  void suggestsTheOptionBeingTyped() {
+    var roots = roots(node("cobblestone").template("coordinates"));
+
+    assertTrue(suggest(roots, List.of()).contains("coordinates"));
+    assertEquals(List.of("7"), suggest(roots, List.of("coordinates", "")));
+    assertEquals(List.of("64"), suggest(roots, List.of("cobblestone", "coordinates", "1", "")));
+    assertEquals(List.of("-3"), suggest(roots, List.of("coordinates", "1", "2", "-")));
+    assertEquals(
+        List.of("nether", "overworld"), suggest(roots, List.of("coordinates", "1", "2", "3", "")));
+    assertEquals(List.of("nether"), suggest(roots, List.of("coordinates", "1", "2", "3", "n")));
+    // Nothing after the last option, and nothing after one that does not parse.
+    assertEquals(List.of(), suggest(roots, List.of("coordinates", "1", "2", "3", "nether", "")));
+    assertEquals(List.of(), suggest(roots, List.of("coordinates", "one", "")));
+  }
+
+  @Test
+  void suggestsATemplateWhenItsKeyIsTypedInFull() {
+    var roots = roots(node("cobblestone").template("coordinates"));
+
+    assertEquals(List.of("coordinates"), suggest(roots, List.of("coord")));
+  }
+
+  // -----------------------------------------------------------------------------------------
   // Fixtures
   // -----------------------------------------------------------------------------------------
 
@@ -407,6 +525,35 @@ class DestinationResolverTest {
             Destination<WorldRegion<String, Integer>> destination = List::of;
             return new SimpleMinecraftDestination<>(
                 destination, Component.text(leafKey), List.of(permissions));
+          });
+      return this;
+    }
+
+    /**
+     * A {@code <x> <y> <z> [world]} template, which configures into a destination named after the
+     * values it was given.
+     */
+    Tree template(String leafKey) {
+      leaves.put(
+          leafKey,
+          () -> {
+            destinationsBuilt++;
+            return new TemplateDestination<>(
+                Component.text(leafKey),
+                List.of(),
+                List.of(X, Y, Z, WORLD),
+                values -> {
+                  String name =
+                      values.get(X)
+                          + " "
+                          + values.get(Y)
+                          + " "
+                          + values.get(Z)
+                          + values.find(WORLD).map(world -> " " + world).orElse("");
+                  Destination<WorldRegion<String, Integer>> destination = List::of;
+                  return new SimpleMinecraftDestination<>(
+                      destination, Component.text(name), List.of());
+                });
           });
       return this;
     }

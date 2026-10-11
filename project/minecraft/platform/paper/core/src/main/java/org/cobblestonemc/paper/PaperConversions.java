@@ -15,7 +15,9 @@ import org.cobblestonemc.Cell;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.SurfaceRegion;
 import org.cobblestonemc.minecraft.api.WorldRegion;
+import org.cobblestonemc.paper.api.SurfaceWorldRegion;
 import org.joml.Vector3i;
 
 /**
@@ -29,6 +31,14 @@ public final class PaperConversions {
 
   static DomainRegion<MinecraftWorld> region(
       WorldRegion<World, Vector3i> region, WorldWrapper wrapper) {
+    if (region instanceof SurfaceWorldRegion surface) {
+      // Its extent depends on the blocks, so it reads them itself, through the solve's chunks.
+      MinecraftWorld world = wrapper.wrap(surface.world());
+      Vector3i column = surface.column();
+      return column == null
+          ? SurfaceRegion.anywhere(world)
+          : SurfaceRegion.column(world, column.x, column.z);
+    }
     return new DomainRegion.Impl<>(
         wrapper.wrap(region.world()),
         cell -> region.contains(vector(cell)),

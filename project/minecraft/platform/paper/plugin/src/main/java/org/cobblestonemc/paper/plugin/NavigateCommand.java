@@ -49,9 +49,11 @@ import org.cobblestonemc.plugin.api.PlatformDestinationTree;
 import org.cobblestonemc.plugin.api.TripOutcome;
 import org.cobblestonemc.plugin.command.FlagParser;
 import org.cobblestonemc.plugin.command.NavigationFlags;
+import org.cobblestonemc.plugin.destination.DestinationDetails;
 import org.cobblestonemc.plugin.destination.DestinationResolver;
 import org.cobblestonemc.plugin.destination.NavigationPermissions;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
+import org.cobblestonemc.plugin.message.Message0;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchGate;
 import org.cobblestonemc.plugin.search.SearchRegistry;
@@ -186,6 +188,10 @@ final class NavigateCommand {
           formatAddresses(addresses));
       return Command.SINGLE_SUCCESS;
     }
+    if (resolution instanceof DestinationResolver.InvalidOptions<World, Vector3i> invalid) {
+      sendUsage(player, locale, messages, invalid);
+      return Command.SINGLE_SUCCESS;
+    }
     if (!(resolution
         instanceof
         DestinationResolver.Resolved<World, Vector3i>(
@@ -200,6 +206,7 @@ final class NavigateCommand {
     }
 
     TripLabel tripLabel = TripLabel.address(address);
+    Component hover = DestinationDetails.hover(address, destination);
     boolean live =
         switch (flags.liveness()) {
           case LIVE -> true;
@@ -210,6 +217,7 @@ final class NavigateCommand {
         player,
         locale,
         tripLabel,
+        hover,
         destination,
         flags,
         live,
@@ -227,6 +235,7 @@ final class NavigateCommand {
       Player player,
       Locale locale,
       TripLabel tripLabel,
+      Component hover,
       MinecraftDestination<World, Vector3i> destination,
       NavigationFlags flags,
       boolean live,
@@ -251,7 +260,12 @@ final class NavigateCommand {
                 flags.excludedWorlds(),
                 flags.excludedDimensions()));
     searches.track(uuid, handle);
-    messages.send(player, locale, CobblestoneMessages.NAVIGATE_SEARCHING);
+    // Hovering shows where the search is headed — for a fixed place, its coordinates, so the player
+    // can still get there by hand if no route turns up.
+    player.sendMessage(
+        messages
+            .render(locale, CobblestoneMessages.NAVIGATE_SEARCHING)
+            .hoverEvent(HoverEvent.showText(hover)));
 
     handle
         .future()
@@ -286,7 +300,7 @@ final class NavigateCommand {
                       destinationLabel,
                       v.reason(),
                       elapsedMillis);
-                  sendFailure(player, locale, messages, v.reason());
+                  sendFailure(player, locale, messages, v.reason(), hover);
                 }
                 case NavigationResult.Success<Location, MinecraftStepPayload> v -> {
                   Path<Location, MinecraftStepPayload> path =
@@ -428,17 +442,29 @@ final class NavigateCommand {
           .filter(word -> word.startsWith(last))
           .sorted()
           .forEach(offset::suggest);
-    } else if (last.startsWith("-")) {
+    } else if (FlagParser.isFlag(last)) {
       flagNames().stream().filter(flag -> flag.startsWith(last)).forEach(offset::suggest);
+      if (last.equals("-")) {
+        // Not yet a flag or a negative number: offer an option's negative values as well.
+        List<String> destination =
+            new ArrayList<>(FlagParser.destinationTokens(tokens.subList(0, tokens.size() - 1)));
+        destination.add(last);
+        suggestDestinations(integrations, player, destination).forEach(offset::suggest);
+      }
     } else {
-      DestinationResolver.suggest(
-              destinationRoots(integrations, player),
-              FlagParser.destinationTokens(tokens),
-              player::hasPermission,
-              canNavigate(player))
+      suggestDestinations(integrations, player, FlagParser.destinationTokens(tokens))
           .forEach(offset::suggest);
     }
     return offset.buildFuture();
+  }
+
+  private static List<String> suggestDestinations(
+      PaperIntegrationRegistry integrations, Player player, List<String> destinationTokens) {
+    return DestinationResolver.suggest(
+        destinationRoots(integrations, player),
+        destinationTokens,
+        player::hasPermission,
+        canNavigate(player));
   }
 
   /**
@@ -490,18 +516,37 @@ final class NavigateCommand {
     return flags;
   }
 
+  /** Reports a failed search, with the same hover as the "Searching…" line that preceded it. */
   private static void sendFailure(
-      Player player, Locale locale, Messages messages, FailureReason reason) {
-    switch (reason) {
-      case NO_ROUTE, DESTINATION_UNREACHABLE ->
-          messages.send(player, locale, CobblestoneMessages.NAVIGATE_NO_ROUTE);
-      case LIMIT_EXCEEDED ->
-          messages.send(player, locale, CobblestoneMessages.NAVIGATE_LIMIT_EXCEEDED);
-      case TIMED_OUT -> messages.send(player, locale, CobblestoneMessages.NAVIGATE_TIMED_OUT);
-      case CANCELLED -> {
-        /* silent: the player asked for it */
-      }
-      default -> messages.send(player, locale, CobblestoneMessages.NAVIGATE_ERROR);
+      Player player, Locale locale, Messages messages, FailureReason reason, Component hover) {
+    Message0 message =
+        switch (reason) {
+          case NO_ROUTE, DESTINATION_UNREACHABLE -> CobblestoneMessages.NAVIGATE_NO_ROUTE;
+          case LIMIT_EXCEEDED -> CobblestoneMessages.NAVIGATE_LIMIT_EXCEEDED;
+          case TIMED_OUT -> CobblestoneMessages.NAVIGATE_TIMED_OUT;
+          case CANCELLED -> null; // silent: the player asked for it
+          default -> CobblestoneMessages.NAVIGATE_ERROR;
+        };
+    if (message != null) {
+      player.sendMessage(messages.render(locale, message).hoverEvent(HoverEvent.showText(hover)));
+    }
+  }
+
+  private static void sendUsage(
+      Player player,
+      Locale locale,
+      Messages messages,
+      DestinationResolver.InvalidOptions<World, Vector3i> invalid) {
+    String usage = DestinationResolver.usage(invalid.address(), invalid.options());
+    if (invalid.invalidToken() == null) {
+      messages.send(player, locale, CobblestoneMessages.NAVIGATE_DESTINATION_USAGE, usage);
+    } else {
+      messages.send(
+          player,
+          locale,
+          CobblestoneMessages.NAVIGATE_OPTION_INVALID,
+          invalid.invalidToken(),
+          usage);
     }
   }
 
