@@ -13,29 +13,34 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
+import org.cobblestonemc.minecraft.MinecraftScheduler;
 
 /**
  * An entity a destination follows — a pet or a mount — read safely from any thread.
  *
- * <p>Entities may only be looked up on the main thread, but a live trip's re-search asks for the
- * destination's location off it. So the entity is looked up only when on the main thread — when the
- * command runs, and each time the trip checks that its target {@linkplain #alive() still exists},
- * about once a second — and anywhere else gets the location seen then.
+ * <p>Entities may only be looked up on a server thread, and (on Folia) only read by the region that
+ * owns them, but a live trip's re-search asks for the destination's location from a search thread.
+ * So the entity is looked up only on a server thread — when the command runs, and each time the
+ * trip checks that its target {@linkplain #alive() still exists}, about once a second — and its
+ * location is read there if that thread owns it, or else by a task on the entity's own scheduler.
+ * Anywhere else gets the location last read.
  *
  * <p>Nothing is looked up on construction, since destinations are built while tab-completing.
  */
 final class TrackedEntity {
 
   private final UUID uuid;
+  private final MinecraftScheduler<Entity> scheduler;
   private volatile Entity lastSeen;
   private volatile Location lastLocation;
 
-  TrackedEntity(UUID uuid) {
+  TrackedEntity(UUID uuid, MinecraftScheduler<Entity> scheduler) {
     this.uuid = uuid;
+    this.scheduler = scheduler;
   }
 
   /**
-   * Where the entity is, as of the last look on the main thread (taken now, if this is it).
+   * Where the entity is, as of the last read (taken now, if this thread may).
    *
    * @return its location, or empty if it has not been seen loaded
    */
@@ -67,8 +72,16 @@ final class TrackedEntity {
       return;
     }
     lastSeen = current;
-    if (current.isValid()) {
-      lastLocation = current.getLocation();
+    if (Bukkit.isOwnedByCurrentRegion(current)) {
+      read(current);
+    } else {
+      scheduler.runAtEntity(current, () -> read(current));
+    }
+  }
+
+  private void read(Entity entity) {
+    if (entity.isValid()) {
+      lastLocation = entity.getLocation();
     }
   }
 }

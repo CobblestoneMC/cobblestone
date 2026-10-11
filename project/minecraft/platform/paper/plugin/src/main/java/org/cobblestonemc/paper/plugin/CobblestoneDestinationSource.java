@@ -28,11 +28,13 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Tameable;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.RayTraceResult;
 import org.cobblestonemc.api.Destination;
+import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.api.WorldRegion;
 import org.cobblestonemc.paper.PaperTerrain;
 import org.cobblestonemc.paper.api.SingleCellWorldRegion;
@@ -88,6 +90,7 @@ public class CobblestoneDestinationSource implements DestinationService {
   private final LocationDao locations;
   private final DeathLocationDao deaths;
   private final MountDao mounts;
+  private final MinecraftScheduler<Entity> scheduler;
   private final BooleanSupplier trackDeaths;
   private final Messages messages;
   private final ExpiringCache<UUID, List<Pet>> petsByOwner = new ExpiringCache<>();
@@ -96,11 +99,13 @@ public class CobblestoneDestinationSource implements DestinationService {
       LocationDao locations,
       DeathLocationDao deaths,
       MountDao mounts,
+      MinecraftScheduler<Entity> scheduler,
       BooleanSupplier trackDeaths,
       Messages messages) {
     this.locations = locations;
     this.deaths = deaths;
     this.mounts = mounts;
+    this.scheduler = scheduler;
     this.trackDeaths = trackDeaths;
     this.messages = messages;
   }
@@ -306,16 +311,16 @@ public class CobblestoneDestinationSource implements DestinationService {
         () ->
             mounts
                 .get(player.getUniqueId())
-                .map(CobblestoneDestinationSource::toDestination)
+                .map(this::mountDestination)
                 .orElseGet(
                     () ->
                         invalid(MOUNT_KEY, render(player, CobblestoneMessages.NAVIGATE_NO_MOUNT))));
   }
 
-  private static MinecraftDestination<World, Vector3i> toDestination(MountLocation mount) {
+  private MinecraftDestination<World, Vector3i> mountDestination(MountLocation mount) {
     // Follows the mount while it is loaded, so live trips track it; otherwise heads to where it
     // was last seen.
-    TrackedEntity tracked = new TrackedEntity(mount.mount());
+    TrackedEntity tracked = new TrackedEntity(mount.mount(), scheduler);
     Destination<WorldRegion<World, Vector3i>> destination =
         () ->
             List.of(SingleCellWorldRegion.of(tracked.location().orElseGet(() -> recorded(mount))));
@@ -418,7 +423,7 @@ public class CobblestoneDestinationSource implements DestinationService {
           key,
           () -> {
             // Follows the pet, so live trips track it, and ends the trip if it dies.
-            TrackedEntity tracked = new TrackedEntity(uuid);
+            TrackedEntity tracked = new TrackedEntity(uuid, scheduler);
             Destination<WorldRegion<World, Vector3i>> destination =
                 () ->
                     tracked

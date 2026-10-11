@@ -111,6 +111,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             dataStore.locations(),
             dataStore.deaths(),
             dataStore.mounts(),
+            platformApi.scheduler(),
             () -> config.get(keys.deathsTrack),
             messages));
     // Each player's last death is recorded so they can navigate back to it.
