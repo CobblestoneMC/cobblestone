@@ -60,8 +60,15 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   private static final double MINE_MARGIN = 0.05; // cage hugs the block to mine
   private static final double PARTICLE_FLOW_SPEED = 1.0;
 
-  /** Identifies a path step by its exact block, for the "player stood on a later step" shortcut. */
-  private record BlockKey(int x, int y, int z) {}
+  /**
+   * A real short path back to the trail, smoothed like the trail.
+   *
+   * @param steps the guide path's steps
+   * @param trail node 0 = the guide path's origin, node i + 1 = step i's destination
+   * @param world the key of the guide path's world
+   */
+  private record Guide<L>(
+      List<Step<L, MinecraftStepPayload>> steps, SmoothedTrail trail, String world) {}
 
   private final int bufferCells;
   private final double density;
@@ -70,10 +77,11 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   private final Locale locale;
 
   private List<Step<L, MinecraftStepPayload>> steps;
-  private List<Vec3> points; // step destinations, index-aligned with steps
-  private Vec3
-      origin; // where step 0 departs from (the player's start); the segment before points[0]
-  private Map<BlockKey, Integer> stepByBlock;
+  private String originWorld;
+  // node 0 = where step 0 departs from (the player's start), node i + 1 = step i's destination
+  private SmoothedTrail trail;
+  private String lastPlayerWorld;
+  private Map<BlockPos, Integer> stepByBlock;
   private int foremost; // the step the player still needs to complete (0 = the first step)
   private int lastPromptedIndex = -1;
   private boolean complete;
@@ -82,9 +90,7 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   private int tickCounter;
   private boolean guideRequested;
   private int guideCooldown;
-  private List<Step<L, MinecraftStepPayload>> guideSteps;
-  private List<Vec3> guidePoints; // a real short path back to the trail; null when on-trail
-  private String guideWorld; // world key of the current guide path
+  private Guide<L> guide; // null when on-trail
   // record last prompted instruction so we don't repeat ourselves on a recalculation
   private MinecraftInstruction lastPromptedInstruction;
 
@@ -123,8 +129,15 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
 
   protected abstract void spawnHighlightParticle(double x, double y, double z);
 
-  /** Whether a solid, renderable block occupies the given block position. */
-  protected abstract boolean solidAt(int blockX, int blockY, int blockZ);
+  /**
+   * A reader of what occupies each block position in the player's world, used for the current tick
+   * only (so it may cache what it learns). It must not load a chunk: a block that can't be read
+   * immediately (chunk not loaded, or owned by another region thread) is {@link
+   * TrailBlock#UNLOADED}.
+   *
+   * @return a probe for this tick
+   */
+  protected abstract TrailSmoother.BlockProbe blockProbe();
 
   // --- navigator ------------------------------------------------------------
 
@@ -136,23 +149,18 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
    */
   protected final void setPath(Path<L, MinecraftStepPayload> path) {
     this.steps = path.steps();
-    // points are the step destinations, index-aligned with steps; the origin (where step 0 departs
-    // from) is tracked separately, so foremost == i means "step i is not yet completed".
-    this.origin = renderPoint(path.origin());
-    this.points = new ArrayList<>(steps.size());
+    this.originWorld = worldKey(path.origin());
+    this.trail = smoothedTrail(path);
     this.stepByBlock = new HashMap<>();
     for (int i = 0; i < steps.size(); i++) {
-      Vec3 point = renderPoint(steps.get(i).position());
-      points.add(point);
       // Highest index wins, so standing on a repeated block jumps to the furthest occurrence.
-      stepByBlock.put(blockKeyOf(point), i);
+      stepByBlock.put(BlockPos.of(trail.original(i + 1)), i);
     }
     this.foremost = 0;
     this.lastPromptedIndex = -1;
     this.recalcCooldown = 0;
     this.complete = steps.isEmpty();
-    guideSteps = null;
-    guidePoints = null;
+    guide = null;
   }
 
   @Override
@@ -175,18 +183,31 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     Vec3 playerVec = playerPoint();
     String playerWorld = playerWorldKey();
     boolean onTrailWorld = sameWorld(playerWorld, worldKey(steps.get(foremost).position()));
+    TrailSmoother.BlockProbe probe = blockProbe();
+    if (!Objects.equals(playerWorld, lastPlayerWorld)) {
+      // Nodes in the player's new world couldn't be read before, but now they can.
+      trail.resetUnavailable();
+      lastPlayerWorld = playerWorld;
+    }
+    // Smooth what's about to be followed and drawn: from the corner behind the current step
+    // (node foremost - 1) to the corner after the last drawn step.
+    trail.refresh(
+        foremost - 1,
+        foremost + bufferCells + 1,
+        tickCounter,
+        node -> sameWorld(playerWorld, trailNodeWorld(node)),
+        probe);
 
     // Advance only in the trail head's world; a cross-domain hop is handled by the action prompt.
     if (onTrailWorld) {
-      // advance returns points.size() once every step is done; clamp so it stays a valid index.
+      // advance returns steps.size() once every step is done; clamp so it stays a valid index.
       foremost =
-          Math.min(TrailProgress.advance(points, origin, foremost, playerVec), steps.size() - 1);
+          Math.min(TrailProgress.advance(trail.nodes(), foremost, playerVec), steps.size() - 1);
     }
     // Shortcut: if the player is standing exactly on a later step within the buffer (e.g. they cut
-    // a
-    // curve the projection didn't credit), jump the trail forward to it. Standing on step i means
-    // the player has reached point i + 1.
-    Integer atBlock = stepByBlock.get(blockKeyOf(playerVec));
+    // a curve the projection didn't credit), jump the trail forward to it. Standing on step i's
+    // destination means step i is done, so step i + 1 is next.
+    Integer atBlock = stepByBlock.get(BlockPos.of(playerVec));
     if (atBlock != null) {
       int reached = Math.min(atBlock + 1, steps.size() - 1);
       if (reached > foremost && reached <= foremost + bufferCells) {
@@ -220,15 +241,14 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
       }
     } else {
       // back on the trail: drop any guide
-      guideSteps = null;
-      guidePoints = null;
+      guide = null;
     }
 
     promptForActionIfNeeded();
     ThreadLocalRandom random = ThreadLocalRandom.current();
-    renderTrail(playerVec, playerWorld, random);
+    renderTrail(playerVec, playerWorld, probe, random);
     if (nextStepIsVanilla) {
-      renderGuide(playerVec, playerWorld, random);
+      renderGuide(playerVec, playerWorld, probe, random);
     }
   }
 
@@ -266,17 +286,14 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   @Override
   public void setGuidePath(Path<L, MinecraftStepPayload> guide) {
     if (guide.steps().isEmpty()) {
-      guideSteps = null;
-      guidePoints = null;
+      this.guide = null;
       return;
     }
-    guideSteps = List.copyOf(guide.steps());
-    List<Vec3> pts = new ArrayList<>(guideSteps.size());
-    for (var step : guideSteps) {
-      pts.add(renderPoint(step.position()));
-    }
-    guideWorld = worldKey(guideSteps.getFirst().position());
-    guidePoints = pts;
+    this.guide =
+        new Guide<>(
+            List.copyOf(guide.steps()),
+            smoothedTrail(guide),
+            worldKey(guide.steps().getFirst().position()));
   }
 
   @Override
@@ -298,7 +315,7 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   }
 
   private boolean reachedGoal(Vec3 playerVec, String playerWorld) {
-    Vec3 goal = points.getLast();
+    Vec3 goal = trail.original(trail.size() - 1);
     return sameWorld(playerWorld, worldKey(steps.getLast().position()))
         && playerVec.minus(goal).lengthSquared() <= COMPLETION_RADIUS_SQUARED;
   }
@@ -342,7 +359,11 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     }
   }
 
-  private void renderTrail(Vec3 playerVec, String playerWorld, ThreadLocalRandom random) {
+  private void renderTrail(
+      Vec3 playerVec,
+      String playerWorld,
+      TrailSmoother.BlockProbe probe,
+      ThreadLocalRandom random) {
     int end = Math.min(steps.size(), foremost + bufferCells);
     for (int i = foremost; i < end; i++) {
       var step = steps.get(i);
@@ -362,28 +383,40 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
         // if the next step is an action, highlight this step
         highlight = true;
       }
-      renderBlock(
-          smoothTrailInto(i - 1) ? trailNode(i - 2) : null,
-          trailNode(i - 1),
-          points.get(i),
-          smoothTrailInto(i) ? points.get(i + 1) : null,
-          playerVec,
-          payload,
-          highlight,
-          random);
+      // Step i is the trail's segment i; skip it where the world isn't readable.
+      if (trail.segmentDrawable(i)) {
+        renderStep(trail, i, payload, highlight, playerVec, probe, random);
+      }
     }
   }
 
-  /** The start of the trail ({@code -1}, the origin) or the destination of step {@code index}. */
-  private Vec3 trailNode(int index) {
-    return index < 0 ? origin : points.get(index);
+  /**
+   * The world of trail node {@code node}: the origin's for node 0, else step {@code node - 1}'s.
+   */
+  private String trailNodeWorld(int node) {
+    return node == 0 ? originWorld : worldKey(steps.get(node - 1).position());
+  }
+
+  /** The smoothed trail through {@code path}: node 0 is its origin, node i + 1 step i's end. */
+  private SmoothedTrail smoothedTrail(Path<L, MinecraftStepPayload> path) {
+    List<Step<L, MinecraftStepPayload>> pathSteps = path.steps();
+    List<Vec3> nodes = new ArrayList<>(pathSteps.size() + 1);
+    nodes.add(renderPoint(path.origin()));
+    for (var step : pathSteps) {
+      nodes.add(renderPoint(step.position()));
+    }
+    // A mined node stays at the block it mines, so the trail goes straight through it.
+    return new SmoothedTrail(
+        nodes,
+        node -> rounds(pathSteps, node - 1),
+        node -> pathSteps.get(node - 1).payload().stepType() == MinecraftStepType.MINE);
   }
 
   /**
-   * Whether the corner at the destination of step {@code index} is rounded: only between two walked
-   * steps in the same world, never into or out of an action (e.g. a teleport).
+   * Whether the corner at the destination of {@code steps[index]} is rounded: only between two
+   * walked steps in the same world, never into or out of an action (e.g. a teleport).
    */
-  private boolean smoothTrailInto(int index) {
+  private boolean rounds(List<Step<L, MinecraftStepPayload>> steps, int index) {
     if (index < 0 || index + 1 >= steps.size()) {
       return false;
     }
@@ -394,42 +427,43 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
         && Objects.equals(worldKey(arriving.position()), worldKey(leaving.position()));
   }
 
-  private void renderBlock(
-      Vec3 prev,
-      Vec3 from,
-      Vec3 to,
-      Vec3 next,
-      Vec3 playerVec,
+  /**
+   * Draws step {@code i} of {@code path} (its segment {@code i}), a highlight at its destination if
+   * asked, and a mine marker on its unsmoothed block if it mines.
+   */
+  private void renderStep(
+      SmoothedTrail path,
+      int i,
       MinecraftStepPayload payload,
       boolean highlight,
+      Vec3 playerVec,
+      TrailSmoother.BlockProbe probe,
       ThreadLocalRandom random) {
-    if (playerVec.minus(to).lengthSquared() < NEAR_BUFFER_SQUARED) {
+    Vec3 destination = path.node(i + 1);
+    if (playerVec.minus(destination).lengthSquared() < NEAR_BUFFER_SQUARED) {
       return; // keep the player's immediate view clear
     }
-    scatter(prev, from, to, next, random);
+    scatter(path, i, random);
     if (highlight) {
-      highlight(to, random);
+      highlight(destination, random);
     }
 
     if (payload != null && payload.stepType() == MinecraftStepType.MINE) {
-      int blockX = (int) Math.floor(to.x());
-      int blockY = (int) Math.floor(to.y());
-      int blockZ = (int) Math.floor(to.z());
-      if (solidAt(blockX, blockY, blockZ)) {
-        renderMineMarker(blockX, blockY, blockZ, random);
-      }
-      if (solidAt(blockX, blockY + 1, blockZ)) {
-        renderMineMarker(blockX, blockY + 1, blockZ, random);
+      var feet = BlockPos.of(path.original(i + 1));
+      for (BlockPos mined : List.of(feet, feet.above())) {
+        if (probe.at(mined.x(), mined.y(), mined.z()) == TrailBlock.SOLID) {
+          renderMineMarker(mined, random);
+        }
       }
     }
   }
 
   /** A cage just outside the block plus an X on each face — "mine this block". */
-  private void renderMineMarker(int blockX, int blockY, int blockZ, ThreadLocalRandom random) {
+  private void renderMineMarker(BlockPos block, ThreadLocalRandom random) {
     double h = 0.5 + MINE_MARGIN;
-    double cx = blockX + 0.5;
-    double cy = blockY + 0.5;
-    double cz = blockZ + 0.5;
+    double cx = block.x() + 0.5;
+    double cy = block.y() + 0.5;
+    double cz = block.z() + 0.5;
     // 6 faces of the cube.
     for (double sx : new double[] {-h, h}) {
       renderMineFace(random, cx + sx, cy - h, cz - h, cx + sx, cy + h, cz + h);
@@ -459,53 +493,41 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     }
   }
 
-  private void renderGuide(Vec3 playerVec, String playerWorld, ThreadLocalRandom random) {
-    if (!sameWorld(playerWorld, worldKey(steps.get(foremost).position()))) {
-      return;
-    }
-    if (guidePoints == null || guideWorld == null || !guideWorld.equals(playerWorld)) {
+  private void renderGuide(
+      Vec3 playerVec,
+      String playerWorld,
+      TrailSmoother.BlockProbe probe,
+      ThreadLocalRandom random) {
+    Guide<L> guide = this.guide;
+    if (guide == null
+        || !sameWorld(playerWorld, worldKey(steps.get(foremost).position()))
+        || !sameWorld(playerWorld, guide.world())) {
       // No fallback while the guide search is pending/failed
       return;
     }
-    for (int i = 0; i < guidePoints.size(); i++) {
-      MinecraftStepPayload payload = guideSteps.get(i).payload();
-      Vec3 prev = null;
-      if (smoothGuideInto(i - 1)) {
-        prev = i == 1 ? playerVec : guidePoints.get(i - 2);
+    List<Step<L, MinecraftStepPayload>> guideSteps = guide.steps();
+    SmoothedTrail path = guide.trail();
+    path.refresh(0, path.size() - 1, tickCounter, node -> true, probe);
+    path.drawFrom(playerVec); // the guide leads from wherever the player now is
+    for (int i = 0; i < guideSteps.size(); i++) {
+      if (path.segmentDrawable(i)) {
+        renderStep(path, i, guideSteps.get(i).payload(), false, playerVec, probe, random);
       }
-      renderBlock(
-          prev,
-          i == 0 ? playerVec : guidePoints.get(i - 1),
-          guidePoints.get(i),
-          smoothGuideInto(i) ? guidePoints.get(i + 1) : null,
-          playerVec,
-          payload,
-          false,
-          random);
     }
   }
 
-  /** Whether the guide path's corner at the destination of guide step {@code index} is rounded. */
-  private boolean smoothGuideInto(int index) {
-    return index >= 0
-        && index + 1 < guideSteps.size()
-        && !guideSteps.get(index).payload().stepType().isAction()
-        && !guideSteps.get(index + 1).payload().stepType().isAction();
-  }
-
   /**
-   * Spawns ~{@code density} Gaussian-scattered particles per block around a random point on the
-   * segment, flowing along it. The segment's corners are rounded by {@link TrailCurve} toward
-   * {@code prev} and {@code next} (either {@code null} for a sharp end). A fractional density is
-   * probabilistic (0.7 → 70%).
+   * Spawns ~{@code density} Gaussian-scattered particles per block around a random point on segment
+   * {@code i} of {@code path} as drawn, flowing along it. A fractional density is probabilistic
+   * (0.7 → 70%).
    */
-  private void scatter(Vec3 prev, Vec3 from, Vec3 to, Vec3 next, ThreadLocalRandom random) {
-    double floatCount = density * to.minus(from).length();
+  private void scatter(SmoothedTrail path, int i, ThreadLocalRandom random) {
+    double floatCount = density * path.segmentLength(i);
     int count = (int) floatCount;
     if (random.nextDouble() < floatCount - count) {
       count++;
     }
-    TrailCurve.Sample sample = TrailCurve.sample(prev, from, to, next, random.nextDouble());
+    TrailCurve.Sample sample = path.sample(i, random.nextDouble());
     var center = sample.point();
     var velocity = sample.direction().times(PARTICLE_FLOW_SPEED);
     for (int p = 0; p < count; p++) {
@@ -533,13 +555,13 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   }
 
   /**
-   * The nearest point on the current step's segment — so a slight deviation nudges back, not
-   * rewinds. The segment runs from the previous destination (or the origin for step 0) to {@code
-   * points[foremost]}.
+   * The nearest point on the current step's smoothed segment — so a slight deviation nudges back,
+   * not rewinds. The segment runs from trail node {@code foremost} (the previous destination, or
+   * the origin for step 0) to node {@code foremost + 1}.
    */
   private Vec3 projectedTarget(Vec3 playerVec) {
-    Vec3 start = foremost == 0 ? origin : points.get(foremost - 1);
-    Vec3 segment = points.get(foremost).minus(start);
+    Vec3 start = trail.node(foremost);
+    Vec3 segment = trail.node(foremost + 1).minus(start);
     double lengthSquared = segment.lengthSquared();
     double t =
         lengthSquared == 0.0
@@ -549,12 +571,12 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
         start.x() + segment.x() * t, start.y() + segment.y() * t, start.z() + segment.z() * t);
   }
 
-  private static boolean sameWorld(String playerWorld, String stepWorld) {
-    return playerWorld != null && playerWorld.equals(stepWorld);
+  /** The trail's node {@code node} as smoothed so far (node 0 = the origin), for tests. */
+  Vec3 trailNode(int node) {
+    return trail.node(node);
   }
 
-  private static BlockKey blockKeyOf(Vec3 point) {
-    return new BlockKey(
-        (int) Math.floor(point.x()), (int) Math.floor(point.y()), (int) Math.floor(point.z()));
+  private static boolean sameWorld(String playerWorld, String stepWorld) {
+    return playerWorld != null && playerWorld.equals(stepWorld);
   }
 }

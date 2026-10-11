@@ -16,10 +16,10 @@ import org.cobblestonemc.plugin.search.SearchRegistry;
 import org.cobblestonemc.plugin.trip.TripManager;
 
 /**
- * Anonymous usage metrics via bStats (shaded + relocated, design/10). Builds the Bukkit {@link
- * Metrics} object and hands its {@code addCustomChart} to the shared {@link MetricsCharts}, which
- * defines the chart set both platforms report. bStats is opt-out via {@code
- * plugins/bStats/config.yml} and Cobblestone's own {@code metrics.enabled}.
+ * Anonymous usage metrics via bStats (shaded + relocated). Builds the Bukkit {@link Metrics} object
+ * and hands its {@code addCustomChart} to the shared {@link MetricsCharts}, which defines the chart
+ * set both platforms report. bStats is opt-out via {@code plugins/bStats/config.yml} and
+ * Cobblestone's own {@code metrics.enabled}.
  */
 final class PaperMetrics {
 

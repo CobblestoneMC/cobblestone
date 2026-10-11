@@ -170,6 +170,16 @@ public final class CobblestoneMessages {
   /** Shown when the player has no active trips. */
   public static final Message0 TRIPS_NONE = Message0.info("command.cobblestone.trips.none");
 
+  /** Confirms the player's HUD is shown. */
+  public static final Message0 HUD_SHOWN = Message0.success("command.cobblestone.hud.shown");
+
+  /** Confirms the player's HUD is hidden. */
+  public static final Message0 HUD_HIDDEN = Message0.success("command.cobblestone.hud.hidden");
+
+  /** Shown when the server has the trip HUD turned off. */
+  public static final Message0 HUD_UNAVAILABLE =
+      Message0.error("command.cobblestone.hud.unavailable");
+
   /** Confirms the discovered-portal cache was cleared ({@code {0}} = how many were removed). */
   public static final Message1 PORTALS_CLEARED =
       Message1.success("command.cobblestone.portals.cleared");

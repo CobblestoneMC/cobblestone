@@ -14,10 +14,10 @@ import org.cobblestonemc.plugin.trip.TripManager;
 import org.spongepowered.api.event.lifecycle.ConstructPluginEvent;
 
 /**
- * Anonymous usage metrics via bStats (shaded + relocated, design/10). Builds the Sponge {@link
- * Metrics} via the injected {@link Metrics.Factory} and hands its {@code addCustomChart} to the
- * shared {@link MetricsCharts}, which defines the chart set both platforms report. Opt-out is via
- * the Sponge server metrics config and Cobblestone's own {@code metrics.enabled}.
+ * Anonymous usage metrics via bStats (shaded + relocated). Builds the Sponge {@link Metrics} via
+ * the injected {@link Metrics.Factory} and hands its {@code addCustomChart} to the shared {@link
+ * MetricsCharts}, which defines the chart set both platforms report. Opt-out is via the Sponge
+ * server metrics config and Cobblestone's own {@code metrics.enabled}.
  */
 final class SpongeMetrics {
 

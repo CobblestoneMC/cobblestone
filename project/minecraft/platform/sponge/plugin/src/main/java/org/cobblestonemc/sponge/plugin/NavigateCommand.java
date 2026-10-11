@@ -44,6 +44,7 @@ import org.cobblestonemc.plugin.search.SearchGate;
 import org.cobblestonemc.plugin.search.SearchRegistry;
 import org.cobblestonemc.plugin.trip.GuideSearch;
 import org.cobblestonemc.plugin.trip.LiveSearch;
+import org.cobblestonemc.plugin.trip.TripLabel;
 import org.cobblestonemc.sponge.SpongeNavigationServiceImpl;
 import org.spongepowered.api.command.Command;
 import org.spongepowered.api.command.CommandCompletion;
@@ -221,7 +222,7 @@ final class NavigateCommand {
     startSearch(
         player,
         locale,
-        String.join(" ", address),
+        TripLabel.address(address),
         destination.destination(),
         flags,
         live,
@@ -238,7 +239,7 @@ final class NavigateCommand {
   private static void startSearch(
       ServerPlayer player,
       Locale locale,
-      String label,
+      TripLabel tripLabel,
       Destination<WorldRegion<ServerWorld, Vector3i>> destination,
       NavigationFlags flags,
       boolean live,
@@ -250,6 +251,7 @@ final class NavigateCommand {
       Supplier<SearchSettings> searchSettings,
       CobblestoneLogger log,
       Messages messages) {
+    String label = tripLabel.text();
     UUID uuid = player.uniqueId();
     long startNanos = System.nanoTime();
     gate.beginForced(uuid);
@@ -286,7 +288,7 @@ final class NavigateCommand {
                     .start(
                         player,
                         path,
-                        label,
+                        tripLabel,
                         settings,
                         liveSearch(
                             player,

@@ -4,7 +4,7 @@
 //
 // This is a library, not a shippable jar. The shaded plugin jars are built by the per-version
 // modules (:minecraft:platform:sponge-latest:sponge-latest-plugin and friends), each of which adds
-// only an entry point and the server internals for its Minecraft version. (design/07)
+// only an entry point and the server internals for its Minecraft version.
 plugins {
     id("cobblestone.java-conventions")
 }

@@ -1,4 +1,4 @@
-// core-test — pure-Java test engine (fake worlds/modes) + the algorithm tests. Not published. (design/09)
+// core-test — pure-Java test engine (fake worlds/modes) + the algorithm tests. Not published.
 plugins {
     id("cobblestone.java-conventions")
 }

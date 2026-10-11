@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.plugin.trip;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -94,9 +95,6 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
   protected abstract Navigator<L> createNavigator(
       P player, Path<L, MinecraftStepPayload> path, NavigatorSettings settings);
 
-  /** A short human label for a location (its world and block coordinates). */
-  protected abstract String describe(L location);
-
   // --- shared flow ----------------------------------------------------------
 
   /**
@@ -105,11 +103,12 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
    * @param player the player to guide
    * @param destination where to route to
    * @param settings which navigator to display with, and its overrides
-   * @param label the stable trip identity, or {@code null} for a coordinate label
+   * @param label the trip's name and stable identity
    * @return the outcome, once the search completes and the trip is (or is not) started
    */
   public CompletableFuture<TripOutcome> navigate(
       P player, L destination, NavigatorSettings settings, String label) {
+    Objects.requireNonNull(label, "label");
     UUID uuid = uuid(player);
     gate.beginForced(uuid);
     SearchHandle<L, MinecraftStepPayload> handle = navigate(player, destination, defaults());
@@ -136,7 +135,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
                     start(
                             player,
                             v.path(),
-                            label != null ? label : describe(destination),
+                            TripLabel.of(label),
                             settings,
                             liveSearch(player, destination),
                             guideSearch(player),
@@ -158,11 +157,13 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
    * @param player the player to guide
    * @param path the path to follow
    * @param settings which navigator to display with, and its overrides
+   * @param label the trip's name and stable identity
    * @return the outcome, once the trip is (or is not) started on the path's region thread
    */
   public CompletableFuture<TripOutcome> startTrip(
-      P player, Path<L, MinecraftStepPayload> path, NavigatorSettings settings) {
-    return start(player, path, describe(path), settings, null, null, false);
+      P player, Path<L, MinecraftStepPayload> path, NavigatorSettings settings, String label) {
+    Objects.requireNonNull(label, "label");
+    return start(player, path, TripLabel.of(label), settings, null, null, false);
   }
 
   /**
@@ -182,7 +183,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
   public CompletableFuture<TripOutcome> start(
       P player,
       Path<L, MinecraftStepPayload> path,
-      String label,
+      TripLabel label,
       NavigatorSettings settings,
       LiveSearch<L> liveSearch,
       GuideSearch<L> guideSearch,
@@ -196,7 +197,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
       return outcome;
     }
     // Re-navigating to a place you already have a trip for replaces it rather than piling on.
-    trips.cancelByDestination(uuid(player), label);
+    trips.cancelByDestination(uuid(player), label.text());
     scheduler()
         .runAtPosition(
             originPosition,
@@ -270,12 +271,5 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
 
   private MinecraftSearchSettings defaults() {
     return new MinecraftSearchSettings(searchSettings.get(), Set.of(), Set.of(), Set.of());
-  }
-
-  /** Labels an already-computed path by its final step's position. */
-  protected final String describe(Path<L, MinecraftStepPayload> path) {
-    return path.steps().isEmpty()
-        ? "path"
-        : describe(path.steps().get(path.steps().size() - 1).position());
   }
 }

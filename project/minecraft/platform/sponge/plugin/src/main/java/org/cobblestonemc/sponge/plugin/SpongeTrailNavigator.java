@@ -7,7 +7,9 @@
 
 package org.cobblestonemc.sponge.plugin;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -16,8 +18,11 @@ import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.navigator.AbstractTrailNavigator;
+import org.cobblestonemc.plugin.navigator.TrailBlock;
+import org.cobblestonemc.plugin.navigator.TrailSmoother;
 import org.cobblestonemc.plugin.navigator.Vec3;
 import org.spongepowered.api.Sponge;
+import org.spongepowered.api.block.BlockState;
 import org.spongepowered.api.data.Keys;
 import org.spongepowered.api.effect.particle.ParticleEffect;
 import org.spongepowered.api.effect.particle.ParticleOptions;
@@ -42,6 +47,8 @@ final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> 
   private final List<ParticleType> particles;
   private final List<ParticleType> highlightParticles;
   private final List<Color> colors;
+  // Block states are immutable and shared, and a data lookup is slow, so remember each answer.
+  private final Map<BlockState, Boolean> solidByState = new HashMap<>();
 
   SpongeTrailNavigator(
       ServerPlayer player,
@@ -130,15 +137,46 @@ final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> 
   }
 
   @Override
-  protected boolean solidAt(int blockX, int blockY, int blockZ) {
+  protected TrailSmoother.BlockProbe blockProbe() {
     Optional<ServerPlayer> player = player();
     if (player.isEmpty()) {
-      return false;
+      return (x, y, z) -> TrailBlock.UNLOADED;
     }
-    ServerWorld world = player.get().world();
-    if (blockY < world.min().y() || blockY > world.max().y()) {
-      return false;
+    return new WorldProbe(player.get().world());
+  }
+
+  /** Reads one world for one tick, checking whether a chunk is loaded once per run of lookups. */
+  private final class WorldProbe implements TrailSmoother.BlockProbe {
+
+    private final ServerWorld world;
+    private final int minY;
+    private final int maxY;
+    private long lastChunk = Long.MIN_VALUE; // a chunk far beyond the world border
+    private boolean lastLoaded;
+
+    WorldProbe(ServerWorld world) {
+      this.world = world;
+      this.minY = world.min().y();
+      this.maxY = world.max().y();
     }
-    return world.block(blockX, blockY, blockZ).get(Keys.IS_SOLID).orElse(false);
+
+    @Override
+    public TrailBlock at(int x, int y, int z) {
+      if (y < minY || y > maxY) {
+        return TrailBlock.OPEN;
+      }
+      long chunk = ((long) (x >> 4) << 32) | ((z >> 4) & 0xFFFFFFFFL);
+      if (chunk != lastChunk) {
+        lastChunk = chunk;
+        lastLoaded = world.isBlockLoaded(x, y, z); // never let a lookup load the chunk
+      }
+      if (!lastLoaded) {
+        return TrailBlock.UNLOADED;
+      }
+      return solidByState.computeIfAbsent(
+              world.block(x, y, z), state -> state.get(Keys.IS_SOLID).orElse(false))
+          ? TrailBlock.SOLID
+          : TrailBlock.OPEN;
+    }
   }
 }

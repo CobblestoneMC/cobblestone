@@ -16,12 +16,13 @@ import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.World;
-import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.navigator.AbstractTrailNavigator;
+import org.cobblestonemc.plugin.navigator.TrailBlock;
+import org.cobblestonemc.plugin.navigator.TrailSmoother;
 import org.cobblestonemc.plugin.navigator.Vec3;
 
 /**
@@ -131,12 +132,51 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
   }
 
   @Override
-  protected boolean solidAt(int blockX, int blockY, int blockZ) {
+  protected TrailSmoother.BlockProbe blockProbe() {
     World world = player.getWorld();
     if (world == null) {
-      return false;
+      return (x, y, z) -> TrailBlock.UNLOADED;
     }
-    Block block = world.getBlockAt(blockX, blockY, blockZ);
-    return Bukkit.isOwnedByCurrentRegion(block) && block.getType().isSolid();
+    return new WorldProbe(world);
+  }
+
+  /**
+   * Reads one world for one tick. Whether a chunk is readable is checked once per run of lookups in
+   * it, not per block, and a block is read without creating a {@code Block}.
+   */
+  private static final class WorldProbe implements TrailSmoother.BlockProbe {
+
+    private final World world;
+    private final int minY;
+    private final int maxY;
+    private long lastChunk = Long.MIN_VALUE; // a chunk far beyond the world border
+    private boolean lastReadable;
+
+    WorldProbe(World world) {
+      this.world = world;
+      this.minY = world.getMinHeight();
+      this.maxY = world.getMaxHeight();
+    }
+
+    @Override
+    public TrailBlock at(int x, int y, int z) {
+      if (y < minY || y >= maxY) {
+        return TrailBlock.OPEN;
+      }
+      int chunkX = x >> 4;
+      int chunkZ = z >> 4;
+      long chunk = ((long) chunkX << 32) | (chunkZ & 0xFFFFFFFFL);
+      if (chunk != lastChunk) {
+        lastChunk = chunk;
+        // Check ownership first (Folia), and never let a lookup load the chunk.
+        lastReadable =
+            Bukkit.isOwnedByCurrentRegion(world, chunkX, chunkZ)
+                && world.isChunkLoaded(chunkX, chunkZ);
+      }
+      if (!lastReadable) {
+        return TrailBlock.UNLOADED;
+      }
+      return world.getType(x, y, z).isSolid() ? TrailBlock.SOLID : TrailBlock.OPEN;
+    }
   }
 }

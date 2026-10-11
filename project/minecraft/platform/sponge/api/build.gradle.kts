@@ -1,6 +1,6 @@
 // sponge-api — SpongeAPI developer façade (ServerPlayer, ServerLocation, …), compiled against the
 // API floor so one jar serves every Minecraft version Cobblestone supports. Nothing here is
-// version-specific; see settings.gradle.kts for how the Sponge modules are split. (design/05)
+// version-specific; see settings.gradle.kts for how the Sponge modules are split.
 plugins {
     id("cobblestone.publish-conventions")
 }

@@ -135,6 +135,25 @@ Active trips (2):
 [2] towny town riverwood home - 48 seconds
 ```
 
+### `/cobblestone hud [on|off]`
+
+**Permission:** `cobblestone.hud` · **Players only**
+
+Shows or hides the caller's trip HUD; with no argument, switches it. The choice is stored and
+survives reconnects. While the caller has trips, the HUD lists each one with its estimated remaining
+time, refreshed every second:
+
+```
+Trips
+private home - 2m 10s
+riverwood home - 48s
+```
+
+A trip from `/navigate` is named by the fewest words of its address that tell it apart from the
+caller's other trips. A trip started by another plugin shows the label that plugin gave it.
+
+If `trips.hud` is off, the command reports that the HUD is turned off on the server.
+
 ### `/cobblestone cancel [<id>|all]`
 
 **Permission:** `cobblestone.navigate` · **Players only**

@@ -4,7 +4,7 @@
 // :minecraft:platform:sponge and compiles once; this module decides which SpongeAPI the jar
 // declares and what the jar is called. Sponge has no Maven library resolver, so the config parser
 // and JDBC drivers are shaded in; SpongeAPI, Adventure, Guice, and Log4j are provided by the
-// server. (design/07)
+// server.
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
