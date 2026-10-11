@@ -5,24 +5,27 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.minecraft.modes;
+package org.cobblestonemc.minecraft.movement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Set;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.TestBlocks;
-import org.cobblestonemc.minecraft.TestModes;
+import org.cobblestonemc.minecraft.TestMovements;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.TestWorld;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.junit.jupiter.api.Test;
 
-class DoorModeTest {
+class DoorwayTest {
 
-  private final DoorMode<CobblestonePlayer> door = new DoorMode<>(true);
+  private final TestPlayer player = TestPlayer.walker();
+  private final MinecraftMovementBehavior<CobblestonePlayer> door =
+      MinecraftMovementBehavior.forPlayer(player, Set.of());
 
   @Test
   void walksThroughClosedWoodenDoorToTheFarSide() {
@@ -31,21 +34,21 @@ class DoorModeTest {
             .floor(0, -1, -1, 3, 1, TestBlocks.solid())
             .set(1, 1, 0, TestBlocks.closedDoor(true))
             .build();
-    var moves = TestModes.from(door, TestPlayer.walker(), world, new Cell(0, 1, 0));
+    var moves = TestMovements.from(door, player, world, new Cell(0, 1, 0));
 
-    assertTrue(moves.containsKey(new Cell(2, 1, 0)));
-    assertEquals(MinecraftStepType.OPEN_DOOR, moves.get(new Cell(2, 1, 0)).payload().stepType());
+    assertTrue(moves.reaches(new Cell(2, 1, 0)));
+    assertEquals(MinecraftStepType.OPEN_DOOR, moves.to(new Cell(2, 1, 0)).payload().stepType());
     assertEquals(
         2 * MovementCosts.WALK + MovementCosts.OPEN_DOOR,
-        moves.get(new Cell(2, 1, 0)).cost(),
+        moves.to(new Cell(2, 1, 0)).cost(),
         1e-9,
         "two blocks of ground are covered, plus the opening");
   }
 
   /**
-   * An open door is impassable at the material level just like a shut one, so no other mode will
-   * cross it. If this mode skipped it too, any building whose door happens to stand open would be
-   * walled off.
+   * An open door is impassable at the material level just like a shut one, so nothing but a doorway
+   * step will cross it. If that skipped it too, any building whose door happens to stand open would
+   * be walled off.
    */
   @Test
   void walksThroughAnOpenDoorToTheFarSide() {
@@ -54,13 +57,13 @@ class DoorModeTest {
             .floor(0, -1, -1, 3, 1, TestBlocks.solid())
             .set(1, 1, 0, TestBlocks.openDoor())
             .build();
-    var moves = TestModes.from(door, TestPlayer.walker(), world, new Cell(0, 1, 0));
+    var moves = TestMovements.from(door, player, world, new Cell(0, 1, 0));
 
-    assertTrue(moves.containsKey(new Cell(2, 1, 0)), "an open door must be crossable");
-    assertEquals(MinecraftStepType.WALK, moves.get(new Cell(2, 1, 0)).payload().stepType());
+    assertTrue(moves.reaches(new Cell(2, 1, 0)), "an open door must be crossable");
+    assertEquals(MinecraftStepType.WALK, moves.to(new Cell(2, 1, 0)).payload().stepType());
     assertEquals(
         2 * MovementCosts.WALK,
-        moves.get(new Cell(2, 1, 0)).cost(),
+        moves.to(new Cell(2, 1, 0)).cost(),
         1e-9,
         "a two-block step must not be priced as one");
   }
@@ -80,36 +83,38 @@ class DoorModeTest {
             .build();
     Cell far = new Cell(2, 1, 0);
     assertTrue(
-        TestModes.from(door, TestPlayer.walker(), open, new Cell(0, 1, 0)).get(far).cost()
-            < TestModes.from(door, TestPlayer.walker(), shut, new Cell(0, 1, 0)).get(far).cost());
+        TestMovements.from(door, player, open, new Cell(0, 1, 0)).to(far).cost()
+            < TestMovements.from(door, player, shut, new Cell(0, 1, 0)).to(far).cost());
   }
 
-  /** {@code -no-open-door} must actually stop the mode opening doors. */
+  /** {@code -no-open-door} must actually stop the player opening doors. */
   @Test
   void aPlayerForbiddenFromOpeningDoorsCannotWorkAShutOne() {
-    DoorMode<CobblestonePlayer> cannotOpen = new DoorMode<>(false);
+    MinecraftMovementBehavior<CobblestonePlayer> cannotOpen =
+        MinecraftMovementBehavior.forPlayer(player, Set.of(MinecraftStepType.OPEN_DOOR));
     TestWorld world =
         TestWorld.builder("w")
             .floor(0, -1, -1, 3, 1, TestBlocks.solid())
             .set(1, 1, 0, TestBlocks.closedDoor(true))
             .build();
     assertFalse(
-        TestModes.from(cannotOpen, TestPlayer.walker(), world, new Cell(0, 1, 0))
-            .containsKey(new Cell(2, 1, 0)));
+        TestMovements.from(cannotOpen, player, world, new Cell(0, 1, 0))
+            .reaches(new Cell(2, 1, 0)));
   }
 
   /** …but an already-open door needs no opening, so the flag must not bar it. */
   @Test
   void aPlayerForbiddenFromOpeningDoorsStillWalksThroughAnOpenOne() {
-    DoorMode<CobblestonePlayer> cannotOpen = new DoorMode<>(false);
+    MinecraftMovementBehavior<CobblestonePlayer> cannotOpen =
+        MinecraftMovementBehavior.forPlayer(player, Set.of(MinecraftStepType.OPEN_DOOR));
     TestWorld world =
         TestWorld.builder("w")
             .floor(0, -1, -1, 3, 1, TestBlocks.solid())
             .set(1, 1, 0, TestBlocks.openDoor())
             .build();
     assertTrue(
-        TestModes.from(cannotOpen, TestPlayer.walker(), world, new Cell(0, 1, 0))
-            .containsKey(new Cell(2, 1, 0)));
+        TestMovements.from(cannotOpen, player, world, new Cell(0, 1, 0))
+            .reaches(new Cell(2, 1, 0)));
   }
 
   @Test
@@ -120,8 +125,7 @@ class DoorModeTest {
             .set(1, 1, 0, TestBlocks.closedDoor(false))
             .build();
     assertFalse(
-        TestModes.from(door, TestPlayer.walker(), world, new Cell(0, 1, 0))
-            .containsKey(new Cell(2, 1, 0)));
+        TestMovements.from(door, player, world, new Cell(0, 1, 0)).reaches(new Cell(2, 1, 0)));
   }
 
   @Test
@@ -133,8 +137,7 @@ class DoorModeTest {
             .set(1, 1, 0, TestBlocks.closedDoor(false))
             .build();
     assertTrue(
-        TestModes.from(door, TestPlayer.walker(), world, new Cell(0, 1, 0))
-            .containsKey(new Cell(2, 1, 0)));
+        TestMovements.from(door, player, world, new Cell(0, 1, 0)).reaches(new Cell(2, 1, 0)));
   }
 
   /**
@@ -149,7 +152,6 @@ class DoorModeTest {
             .set(1, 1, 0, TestBlocks.openTrapdoor())
             .build();
     assertFalse(
-        TestModes.from(door, TestPlayer.walker(), world, new Cell(0, 1, 0))
-            .containsKey(new Cell(2, 1, 0)));
+        TestMovements.from(door, player, world, new Cell(0, 1, 0)).reaches(new Cell(2, 1, 0)));
   }
 }

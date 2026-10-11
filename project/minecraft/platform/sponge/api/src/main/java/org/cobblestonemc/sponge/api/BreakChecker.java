@@ -14,9 +14,9 @@ import org.spongepowered.api.world.server.ServerLocation;
 
 /**
  * Decides whether Cobblestone may route a player through mining a given block. Returned from {@link
- * SearchModificationService#computeBreakChecker} and invoked for each block the mining mode
- * considers breaking. When several modifiers are registered, a block is breakable only if all of
- * them permit it.
+ * SearchModificationService#computeBreakChecker} and invoked for each block a mining step considers
+ * breaking. When several modifiers are registered, a block is breakable only if all of them permit
+ * it.
  *
  * <p>The block is supplied as a chunk-snapshot {@link BlockState}, not a live world block — the
  * search runs ahead of chunk loading. Answer with a {@link CompletableFuture} so a permission

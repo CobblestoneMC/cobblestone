@@ -20,7 +20,7 @@ import org.spongepowered.api.entity.living.player.server.ServerPlayer;
  * <ul>
  *   <li>{@link #computeTransitions} — teach Cobblestone travel routes pathfinding can't discover
  *       (command warps, teleports, minecart lines) as {@link Transition}s.
- *   <li>{@link #computeBreakChecker} — forbid the mining mode from breaking certain blocks.
+ *   <li>{@link #computeBreakChecker} — forbid mining from breaking certain blocks.
  *   <li>{@link #computePassChecker} — bar the player from entering certain cells entirely.
  * </ul>
  *

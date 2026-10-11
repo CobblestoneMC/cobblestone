@@ -25,8 +25,8 @@ import org.bukkit.entity.Player;
  * <ul>
  *   <li>{@link #computeTransitions} — teach Cobblestone travel routes pathfinding can't discover
  *       (command warps, teleports, minecart lines) as {@link Transition}s.
- *   <li>{@link #computeBreakChecker} — forbid the mining mode from breaking certain blocks (a
- *       protected region, or man-made block types on a griefing-sensitive server).
+ *   <li>{@link #computeBreakChecker} — forbid mining from breaking certain blocks (a protected
+ *       region, or man-made block types on a griefing-sensitive server).
  *   <li>{@link #computePassChecker} — bar the player from entering certain cells entirely (a
  *       donor-only or claimed area).
  * </ul>

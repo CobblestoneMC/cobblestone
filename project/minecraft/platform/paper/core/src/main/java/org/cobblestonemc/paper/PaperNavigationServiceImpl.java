@@ -34,7 +34,6 @@ import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.Heuristics;
-import org.cobblestonemc.ModesProvider;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.Restriction;
 import org.cobblestonemc.SingleDestination;
@@ -48,7 +47,7 @@ import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.WorldRegion;
-import org.cobblestonemc.minecraft.modes.MinecraftModes;
+import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 import org.cobblestonemc.minecraft.registry.OwnedRegistry;
 import org.cobblestonemc.paper.api.BoxWorldRegion;
 import org.cobblestonemc.paper.api.NavigationService;
@@ -185,16 +184,15 @@ public final class PaperNavigationServiceImpl
     BreakChecker<CobblestonePlayer> breakChecker = buildBreakChecker(modifiers, player);
     List<Restriction<CobblestonePlayer, MinecraftWorld>> restrictions =
         buildRestrictions(modifiers, player);
-    // Read the pearl count now, on the calling (server) thread; the provider closes over it and is
-    // invoked per leg on worker threads, where it must not touch the Bukkit player.
-    ModesProvider<CobblestonePlayer, MinecraftStepPayload, MinecraftWorld> modes =
-        MinecraftModes.providerFor(
+    // Built now, on the calling (server) thread: it reads the player's abilities and pearl count,
+    // and is then invoked on worker threads, where it must not touch the Bukkit player.
+    MinecraftMovementBehavior<CobblestonePlayer> behavior =
+        MinecraftMovementBehavior.forPlayer(
             agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
     // Per-player, not a shared constant: the bound has to reflect what this player can actually do,
-    // or Tier-1 prices every route as if they could fly. See MinecraftModes#cheapestCostPerBlock.
-    HeuristicStrategy heuristic =
-        Heuristics.runningAverage(
-            MinecraftModes.cheapestCostPerBlock(agent, settings.excludedModes()));
+    // or Tier-1 prices every route as if they could fly. See
+    // MinecraftMovementBehavior#cheapestCostPerBlock.
+    HeuristicStrategy heuristic = Heuristics.runningAverage(behavior.cheapestCostPerBlock());
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
         gatherTransitions(
@@ -207,7 +205,7 @@ public final class PaperNavigationServiceImpl
                         agent,
                         originPosition,
                         destination,
-                        modes,
+                        behavior,
                         gathered,
                         restrictions,
                         heuristic,
@@ -264,7 +262,7 @@ public final class PaperNavigationServiceImpl
       }
     }
     if (checkers.isEmpty()) {
-      return null; // no constraint: the mining mode attaches no restriction future at all
+      return null; // no constraint: mining attaches no restriction future at all
     }
     UUID playerId = player.getUniqueId();
     return (agent, cell, world, block) -> {
@@ -274,8 +272,9 @@ public final class PaperNavigationServiceImpl
         return CompletableFuture.completedFuture(true); // cannot evaluate; do not block mining
       }
       Location location = new Location(bukkitWorld, cell.x(), cell.y(), cell.z());
-      // Checkers are promised the block's real state, which the block a mode read cannot give them;
-      // see LazyBlockData. The chunk is a cache hit, since the mining mode has just read this
+      // Checkers are promised the block's real state, which the block a movement rule read cannot
+      // give them;
+      // see LazyBlockData. The chunk is a cache hit, since mining has just read this
       // block,
       // and whether it was snapshotted from memory or read off disk makes no difference here.
       return world

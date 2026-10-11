@@ -5,26 +5,29 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.minecraft.modes;
+package org.cobblestonemc.minecraft.movement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
-import java.util.Map;
+import java.util.Set;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.Movement;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.TestBlocks;
-import org.cobblestonemc.minecraft.TestModes;
+import org.cobblestonemc.minecraft.TestMovements;
+import org.cobblestonemc.minecraft.TestMovements.Moves;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.TestWorld;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.junit.jupiter.api.Test;
 
-class FallModeTest {
+class FallingTest {
 
-  private final FallMode<CobblestonePlayer> fall = new FallMode<>();
+  private final TestPlayer player = TestPlayer.walker();
+  private final MinecraftMovementBehavior<CobblestonePlayer> walker =
+      MinecraftMovementBehavior.forPlayer(player, Set.of());
 
   @Test
   void fallsOffAnEdgeAndCostsHealTimeForDamage() {
@@ -34,10 +37,9 @@ class FallModeTest {
             .set(0, 4, 0, TestBlocks.solid())
             .set(1, 0, 0, TestBlocks.solid())
             .build();
-    Map<Cell, Movement<MinecraftStepPayload>> moves =
-        TestModes.from(fall, TestPlayer.walker(), world, new Cell(0, 5, 0));
+    Movement<MinecraftStepPayload> landing =
+        TestMovements.from(walker, player, world, new Cell(0, 5, 0)).to(new Cell(1, 1, 0));
 
-    Movement<MinecraftStepPayload> landing = moves.get(new Cell(1, 1, 0));
     assertEquals(MinecraftStepType.FALL, landing.payload().stepType());
     double distance = 4;
     double expected =
@@ -50,15 +52,27 @@ class FallModeTest {
   }
 
   @Test
-  void oneBlockDropsAreLeftToWalkMode() {
-    // A single-block step-down (landing one below) should not be offered by FallMode.
+  void oneBlockDropsAreWalked() {
     TestWorld world =
         TestWorld.builder("w")
             .set(0, 4, 0, TestBlocks.solid())
             .set(1, 3, 0, TestBlocks.solid())
             .build();
-    Map<Cell, Movement<MinecraftStepPayload>> moves =
-        TestModes.from(fall, TestPlayer.walker(), world, new Cell(0, 5, 0));
-    assertFalse(moves.containsKey(new Cell(1, 4, 0)));
+    Moves moves = TestMovements.from(walker, player, world, new Cell(0, 5, 0));
+    assertFalse(moves.reaches(new Cell(1, 4, 0), MinecraftStepType.FALL));
+    assertEquals(MinecraftStepType.WALK, moves.to(new Cell(1, 4, 0)).payload().stepType());
+  }
+
+  @Test
+  void excludingFallsLeavesTheShaftUnused() {
+    TestWorld world =
+        TestWorld.builder("w")
+            .set(0, 4, 0, TestBlocks.solid())
+            .set(1, 0, 0, TestBlocks.solid())
+            .build();
+    MinecraftMovementBehavior<CobblestonePlayer> noFall =
+        MinecraftMovementBehavior.forPlayer(player, Set.of(MinecraftStepType.FALL));
+    assertFalse(
+        TestMovements.from(noFall, player, world, new Cell(0, 5, 0)).reaches(new Cell(1, 1, 0)));
   }
 }

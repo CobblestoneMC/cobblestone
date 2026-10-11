@@ -126,7 +126,7 @@ class ChunkProviderTest {
     FakePlatform platform = new FakePlatform();
     ChunkProvider cp = provider(platform, settings());
 
-    // Sitting on the western border of chunk [0, 0] and heading east: modes read a block or two
+    // Sitting on the western border of chunk [0, 0] and heading east: movements read a block or two
     // back, so the chunk just behind is still worth having.
     cp.block(new Cell(0, 64, 8), world, EAST).future().join();
     assertEquals(1, platform.fetchCount(-1, 0));
