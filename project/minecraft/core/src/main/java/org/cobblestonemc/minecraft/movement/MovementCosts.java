@@ -5,7 +5,7 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.minecraft.modes;
+package org.cobblestonemc.minecraft.movement;
 
 /**
  * Default per-step cost constants, in <b>seconds</b> (Cobblestone's universal cost unit). These are

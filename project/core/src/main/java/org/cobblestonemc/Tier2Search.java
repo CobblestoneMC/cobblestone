@@ -36,8 +36,8 @@ import org.jetbrains.annotations.Nullable;
  * A single-domain A* solve for one {@link VirtualPath}, run cooperatively so it never blocks a
  * worker thread.
  *
- * <p><b>Modes</b> may return a pending {@link FutureOr} (a chunk-load cache miss); the search parks
- * that expansion and resumes when the blocks arrive.
+ * <p><b>Expansions</b> may be pending on {@link FutureOr} (a chunk-load cache miss); the search
+ * parks that expansion and resumes when the blocks arrive.
  *
  * <p><b>Restrictions</b> (integration passability checks) are handled <i>optimistically</i>: a cell
  * whose verdict is not yet known is expanded through as if passable, and its check is fired in the
@@ -53,17 +53,15 @@ import org.jetbrains.annotations.Nullable;
  * pruning only the nodes with no route left. No global re-solve, no re-exploration.
  *
  * <p>All state mutation happens inside {@link #pump()}, which the {@code scheduled}/{@code
- * signalled} flags keep single-flight; verdict and mode-completion callbacks only enqueue/wake, so
+ * signalled} flags keep single-flight; verdict and I/O-completion callbacks only enqueue/wake, so
  * no locks are needed.
  *
- * @param <A> the agent type
  * @param <T> the payload type
  * @param <D> the domain type
  */
-final class Tier2Search<A extends Agent, T, D extends Domain> {
+final class Tier2Search<T, D extends Domain> {
 
   private final CobblestoneLogger logger;
-  private final A agent;
   private final D domain;
 
   /**
@@ -77,8 +75,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private final D readDomain;
 
   private final DomainRegion<D> target;
-  private final List<? extends Mode<A, T, D>> modes;
-  private final List<? extends Restriction<A, D>> restrictions;
+  private final MovementBehavior<T, D> behavior;
+  private final List<? extends Restriction<D>> restrictions;
   private final boolean hasRestrictions;
   private final SolveHeuristic heuristic;
   private final double heuristicWeight;
@@ -131,14 +129,14 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
    * arbitrarily.
    *
    * <p><b>It does not, on its own, make a solve reproducible.</b> If the order entries are
-   * <em>inserted</em> in varies — which it does whenever modes complete asynchronously, since
+   * <em>inserted</em> in varies — which it does whenever expansions complete asynchronously, since
    * expansion order then depends on which chunk read landed first — the sequence numbers vary with
    * it and so does the result. Reproducibility comes from running the solve on a deterministic
    * scheduler; this only removes one further source of drift underneath that.
    */
   private long sequence;
 
-  private PendingModes<T> pendingModes;
+  private PendingExpansion<T> pendingExpansion;
 
   /**
    * Nodes whose estimate was not available when they were offered.
@@ -168,7 +166,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   private final ConcurrentLinkedQueue<Verdict> mailbox = new ConcurrentLinkedQueue<>();
   private final ConcurrentLinkedQueue<EdgeRef> edgeMailbox = new ConcurrentLinkedQueue<>();
   private final AtomicInteger pendingChecks = new AtomicInteger();
-  // scheduled: a pump task is queued/running. signalled: new work arrived (mailbox add, mode or
+  // scheduled: a pump task is queued/running. signalled: new work arrived (mailbox add, I/O or
   // verdict completion) — the pump consumes it so no wakeup is ever lost.
   private final AtomicBoolean scheduled = new AtomicBoolean();
   private final AtomicBoolean signalled = new AtomicBoolean();
@@ -206,10 +204,9 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
 
   Tier2Search(
       CobblestoneLogger logger,
-      A agent,
       VirtualPath<T, D> virtualPath,
-      List<? extends Mode<A, T, D>> modes,
-      List<? extends Restriction<A, D>> restrictions,
+      MovementBehavior<T, D> behavior,
+      List<? extends Restriction<D>> restrictions,
       HeuristicStrategy heuristic,
       int maxCellsVisited,
       int runningAverageWidth,
@@ -223,13 +220,12 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
         new ScopedCobblestoneLogger(
             logger,
             "DomainLocal[" + virtualPath.fromCell() + " to " + virtualPath.targetRegion() + "]");
-    this.agent = agent;
     this.domain = virtualPath.domain();
     @SuppressWarnings("unchecked")
     D scoped = (D) virtualPath.domain().scopedForSolve();
     this.readDomain = scoped;
     this.target = virtualPath.targetRegion();
-    this.modes = modes;
+    this.behavior = behavior;
     this.restrictions = restrictions;
     this.hasRestrictions = !restrictions.isEmpty();
     this.heuristic = heuristic.newSolve(runningAverageWidth, this.target);
@@ -274,7 +270,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
    * parked.
    *
    * <p>The deadline is tested inside {@link #loop()}, which only runs when something calls {@link
-   * #wake()} — a mode's blocks arriving, or a restriction verdict landing. Every park therefore
+   * #wake()} — a cell's blocks arriving, or a restriction verdict landing. Every park therefore
    * depends on a callback that may never come: a chunk future that never completes, or an
    * integration that schedules its verdict onto a server thread and loses it. Without this timer
    * such a search waits forever rather than timing out, and the greedier the heuristic the likelier
@@ -291,7 +287,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     // open set — for the full budget after the search finished; on a busy server that is gigabytes
     // of finished searches waiting on their own timers. The logger and the result future are small
     // and reference nothing of the search, so they can be held outright.
-    WeakReference<Tier2Search<A, T, D>> self = new WeakReference<>(this);
+    WeakReference<Tier2Search<T, D>> self = new WeakReference<>(this);
     CompletableFuture<Tier2Result<T, D>> pending = result;
     CobblestoneLogger timerLogger = logger;
     BooleanSupplier abandoned = cancelled;
@@ -300,7 +296,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
           if (pending.isDone()) {
             return;
           }
-          Tier2Search<A, T, D> search = self.get();
+          Tier2Search<T, D> search = self.get();
           if (search != null) {
             // The normal path: wake it, and let the loop report the timeout with its stats, so
             // there is exactly one place a solve gives up and one line that says so.
@@ -490,13 +486,14 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       if (result.isDone()) {
         return;
       }
-      if (pendingModes != null) {
-        if (!pendingModes.ready()) {
-          return; // still waiting on block I/O; the mode future will wake us
+      if (pendingExpansion != null) {
+        var blocks = pendingExpansion.movements().future();
+        if (!blocks.isDone() || blocks.isCompletedExceptionally()) {
+          return; // still waiting on block I/O, or failed; the callback will wake us
         }
-        PendingModes<T> ready = pendingModes;
-        pendingModes = null;
-        relaxAll(ready.node(), unwrap(ready.results()));
+        PendingExpansion<T> ready = pendingExpansion;
+        pendingExpansion = null;
+        relaxAll(ready.node(), ready.movements().value());
         continue;
       }
       if (pendingGoal != null) {
@@ -552,7 +549,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       }
       // The cap counts cell-states reached, not expansions: it is a memory guard, and what a solve
       // holds is one Node per reached cell-state (each with its candidate parents and children),
-      // not one per expansion. A 26-neighbourhood mode reaches several cells per expansion, so a
+      // not one per expansion. One expansion can reach dozens of cells, so a
       // cap on expansions bounds the table only loosely — loosely enough to run out of heap first.
       if (nodes.size() > maxCellsVisited) {
         logger.debug("Visited cells ({}) > max ({}); {}", nodes.size(), maxCellsVisited, stats());
@@ -564,25 +561,14 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     }
   }
 
-  /** Expands one closed node, where {@code goal} is the target cell its modes aim at. */
+  /** Expands one closed node, where {@code goal} is the target cell its movements aim at. */
   private void expand(Node<T> node, Cell goal) {
-    List<FutureOr<Collection<Movement<T>>>> results = new ArrayList<>(modes.size());
-    boolean anyPending = false;
-    for (Mode<A, T, D> mode : modes) {
-      FutureOr<Collection<Movement<T>>> movements =
-          mode.step(agent, node.key.cell(), readDomain, node.key.state(), goal);
-      results.add(movements);
-      anyPending |= !movements.isImmediate();
-    }
-    if (anyPending) {
-      pendingModes = new PendingModes<>(node.key, results);
-      List<CompletableFuture<?>> pending = new ArrayList<>();
-      for (FutureOr<Collection<Movement<T>>> movements : results) {
-        if (!movements.isImmediate()) {
-          pending.add(movements.future());
-        }
-      }
-      CompletableFuture.allOf(pending.toArray(new CompletableFuture<?>[0]))
+    FutureOr<Collection<Movement<T>>> movements =
+        behavior.movements(node.key.cell(), readDomain, node.key.state(), goal);
+    if (!movements.isImmediate()) {
+      pendingExpansion = new PendingExpansion<>(node.key, movements);
+      movements
+          .future()
           .whenComplete(
               (ignored, error) -> {
                 if (error != null) {
@@ -592,13 +578,13 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
               });
       return;
     }
-    relaxAll(node.key, unwrap(results));
+    relaxAll(node.key, movements.value());
   }
 
-  private void relaxAll(CellState parentKey, List<Movement<T>> movements) {
+  private void relaxAll(CellState parentKey, @Nullable Collection<Movement<T>> movements) {
     Node<T> parent = nodes.get(parentKey);
-    if (parent == null) {
-      return; // parent was removed by a repair while its modes were pending; drop the expansion
+    if (parent == null || movements == null) {
+      return; // parent was removed by a repair while its movements were pending; drop them
     }
     for (Movement<T> movement : movements) {
       Cell cell = movement.cell();
@@ -613,9 +599,9 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
       CellState key = new CellState(cell, movement.state());
       Node<T> neighbor = getOrCreate(key);
       neighbor.putParent(parentKey, movement); // retained candidate parent
-      // A mode-scoped edge restriction (mining breakability, pearl ballistics) is checked lazily —
+      // A per-edge restriction is checked lazily —
       // when this node is popped, not here — so its supplier fires only for edges we commit to.
-      // Use the parent's current g: a repair may have raised it while these modes were pending.
+      // Use the parent's current g: a repair may have raised it while these were pending.
       double tentative = parent.cost + movement.cost();
       if (tentative < neighbor.cost) {
         // setBestParent first: it folds this edge into the neighbor's trail average, which is what
@@ -765,8 +751,8 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
   /** Combined verdict over all restrictions: impassable if any bars the cell. */
   private FutureOr<Boolean> impassable(Cell cell) {
     List<FutureOr<Boolean>> verdicts = new ArrayList<>(restrictions.size());
-    for (Restriction<A, D> restriction : restrictions) {
-      verdicts.add(restriction.impassable(agent, cell, readDomain));
+    for (Restriction<D> restriction : restrictions) {
+      verdicts.add(restriction.impassable(cell, readDomain));
     }
     return FutureOr.all(verdicts).map(list -> list.contains(Boolean.TRUE));
   }
@@ -803,7 +789,7 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     repairFrom(seeds);
   }
 
-  /** Drops one mode-scoped edge; if it was the child's best route, repairs the child's subtree. */
+  /** Drops one barred edge; if it was the child's best route, repairs the child's subtree. */
   private void removeEdge(CellState parentKey, CellState childKey) {
     Node<T> child = nodes.get(childKey);
     if (child == null || child.removeParent(parentKey) == null) {
@@ -990,17 +976,6 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
     }
     observer.solved(cells);
     result.complete(new Tier2Result.Solved<>(path, nodes.get(goal).cost));
-  }
-
-  private List<Movement<T>> unwrap(List<FutureOr<Collection<Movement<T>>>> results) {
-    List<Movement<T>> movements = new ArrayList<>();
-    for (FutureOr<Collection<Movement<T>>> futureOr : results) {
-      Collection<Movement<T>> value = futureOr.value();
-      if (value != null) {
-        movements.addAll(value);
-      }
-    }
-    return movements;
   }
 
   private List<RawStep<T, D>> reconstruct(CellState goal) {
@@ -1201,14 +1176,5 @@ final class Tier2Search<A extends Agent, T, D extends Domain> {
 
   private record EdgeRef(CellState parent, CellState child) {}
 
-  private record PendingModes<T>(CellState node, List<FutureOr<Collection<Movement<T>>>> results) {
-    boolean ready() {
-      for (FutureOr<Collection<Movement<T>>> movements : results) {
-        if (!movements.isImmediate() && !movements.future().isDone()) {
-          return false;
-        }
-      }
-      return true;
-    }
-  }
+  private record PendingExpansion<T>(CellState node, FutureOr<Collection<Movement<T>>> movements) {}
 }

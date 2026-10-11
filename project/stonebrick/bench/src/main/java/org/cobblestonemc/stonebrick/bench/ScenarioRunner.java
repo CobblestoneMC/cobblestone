@@ -19,7 +19,6 @@ import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.Heuristics;
-import org.cobblestonemc.ModesProvider;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.SingleDestination;
@@ -29,13 +28,12 @@ import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
-import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
-import org.cobblestonemc.minecraft.modes.MinecraftModes;
+import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 import org.cobblestonemc.stonebrick.format.CorpusLayout;
 import org.cobblestonemc.stonebrick.platform.Capture;
 import org.cobblestonemc.stonebrick.platform.DeterministicScheduler;
@@ -183,11 +181,7 @@ public final class ScenarioRunner {
     // with a null break checker meant every scenario ran as a player free to tunnel through
     // anything -- one point in the space, and not the representative one.
     Set<MinecraftStepType> excluded = loadout.excludedModes();
-    ModesProvider<CobblestonePlayer, MinecraftStepPayload, MinecraftWorld> modes =
-        MinecraftModes.providerFor(player, excluded, null, 0);
-    @SuppressWarnings("unchecked")
-    ModesProvider<StonebrickPlayer, MinecraftStepPayload, MinecraftWorld> cast =
-        (ModesProvider<StonebrickPlayer, MinecraftStepPayload, MinecraftWorld>) (Object) modes;
+    MinecraftMovementBehavior behavior = MinecraftMovementBehavior.forPlayer(player, excluded);
 
     Cell goal = scenario.destination();
     int radius = scenario.destinationRadius();
@@ -212,15 +206,14 @@ public final class ScenarioRunner {
         .navigate(
             logger,
             scheduler,
-            player,
             new Position<>(scenario.origin(), world),
             new SingleDestination<>(target),
-            cast,
+            behavior,
             List.of(),
             List.of(),
             heuristicFor(
                 scenario,
-                player,
+                behavior,
                 new MinecraftSearchSettings(settings, excluded, Set.of(), Set.of())),
             settings,
             observer);
@@ -237,11 +230,11 @@ public final class ScenarioRunner {
    * same factory Paper and Sponge use, so the bench measures the estimate a server would run.
    */
   private static HeuristicStrategy heuristicFor(
-      Scenario scenario, StonebrickPlayer player, MinecraftSearchSettings settings) {
+      Scenario scenario, MinecraftMovementBehavior behavior, MinecraftSearchSettings settings) {
     if (scenario.heuristic().production() == null) {
       return Heuristics.zero();
     }
-    return MinecraftHeuristics.forPlayer(player, settings);
+    return MinecraftHeuristics.forPlayer(behavior, settings);
   }
 
   /**

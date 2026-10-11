@@ -12,11 +12,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.cobblestonemc.Position;
 
-/**
- * A human player. Each platform implements this as a thin wrapper around its native player type (no
- * downcasting). The capability accessors here drive mode-list assembly and transition building.
- */
-public interface CobblestonePlayer extends MinecraftAgent {
+/** A human player, wrapping a platform's native player type. */
+public interface CobblestonePlayer {
 
   /**
    * Returns the player's unique id.

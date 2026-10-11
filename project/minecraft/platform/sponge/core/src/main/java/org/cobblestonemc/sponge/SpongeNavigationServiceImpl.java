@@ -24,7 +24,6 @@ import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.HeuristicStrategy;
-import org.cobblestonemc.ModesProvider;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.Restriction;
 import org.cobblestonemc.SearchObserver;
@@ -32,14 +31,13 @@ import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
-import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.WorldRegion;
-import org.cobblestonemc.minecraft.modes.MinecraftModes;
+import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 import org.cobblestonemc.minecraft.registry.OwnedRegistry;
 import org.cobblestonemc.sponge.api.BoxWorldRegion;
 import org.cobblestonemc.sponge.api.BreakChecker;
@@ -51,6 +49,7 @@ import org.cobblestonemc.sponge.api.Transition;
 import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockState;
+import org.spongepowered.api.data.value.Value;
 import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.item.ItemTypes;
@@ -216,23 +215,21 @@ public final class SpongeNavigationServiceImpl
       Destination<DomainRegion<MinecraftWorld>> destination,
       MinecraftSearchSettings settings) {
     logger.debug("Search triggered for player {} to destination {}", player.name(), destination);
-    CobblestonePlayer agent = new SpongePlayer(player);
-    ServerLocation origin = player.serverLocation();
+    ServerLocation origin = originOf(player);
     Position<MinecraftWorld> originPosition =
         new Position<>(SpongeConversions.cell(origin), wrap(origin.world()));
     // One snapshot of the registered modifiers drives all three influences on this search.
     Collection<SearchModificationService> modifiers = searchModifiers.map().values();
-    org.cobblestonemc.minecraft.BreakChecker<CobblestonePlayer> breakChecker =
-        buildBreakChecker(modifiers, player);
-    List<Restriction<CobblestonePlayer, MinecraftWorld>> restrictions =
-        buildRestrictions(modifiers, player);
-    // Read the pearl count now, on the server thread; the provider closes over it and is invoked
-    // per
-    // leg on worker threads, where it must not touch the Sponge player.
-    ModesProvider<CobblestonePlayer, MinecraftStepPayload, MinecraftWorld> modes =
-        MinecraftModes.providerFor(
-            agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
-    HeuristicStrategy heuristic = MinecraftHeuristics.forPlayer(agent, settings);
+    org.cobblestonemc.minecraft.BreakChecker breakChecker = buildBreakChecker(modifiers, player);
+    List<Restriction<MinecraftWorld>> restrictions = buildRestrictions(modifiers, player);
+    // Built on the server thread: it reads the Sponge player, which worker threads must not touch.
+    MinecraftMovementBehavior behavior =
+        MinecraftMovementBehavior.forPlayer(
+            new SpongePlayer(player),
+            settings.excludedModes(),
+            breakChecker,
+            countEnderPearls(player));
+    HeuristicStrategy heuristic = MinecraftHeuristics.forPlayer(behavior, settings);
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
         gatherTransitions(
@@ -242,10 +239,9 @@ public final class SpongeNavigationServiceImpl
                     core.navigate(
                         logger,
                         scheduler,
-                        agent,
                         originPosition,
                         destination,
-                        modes,
+                        behavior,
                         gathered,
                         restrictions,
                         heuristic,
@@ -292,7 +288,7 @@ public final class SpongeNavigationServiceImpl
   /**
    * Composes every modifier's break checker into one; a block is breakable only if all permit it.
    */
-  private org.cobblestonemc.minecraft.BreakChecker<CobblestonePlayer> buildBreakChecker(
+  private org.cobblestonemc.minecraft.BreakChecker buildBreakChecker(
       Collection<SearchModificationService> modifiers, ServerPlayer player) {
     List<BreakChecker> checkers = new ArrayList<>();
     for (SearchModificationService modifier : modifiers) {
@@ -302,10 +298,10 @@ public final class SpongeNavigationServiceImpl
       }
     }
     if (checkers.isEmpty()) {
-      return null; // no constraint: the mining mode attaches no restriction future at all
+      return null; // no constraint
     }
     UUID playerId = player.uniqueId();
-    return (agent, cell, world, block) -> {
+    return (cell, world, block) -> {
       Optional<ServerPlayer> online = Sponge.server().player(playerId);
       Optional<ServerWorld> serverWorld =
           Sponge.server().worldManager().world(ResourceKey.resolve(world.key()));
@@ -323,7 +319,7 @@ public final class SpongeNavigationServiceImpl
   }
 
   /** One composite passability restriction; a cell is impassable if any modifier bars entry. */
-  private List<Restriction<CobblestonePlayer, MinecraftWorld>> buildRestrictions(
+  private List<Restriction<MinecraftWorld>> buildRestrictions(
       Collection<SearchModificationService> modifiers, ServerPlayer player) {
     List<PassChecker> checkers = new ArrayList<>();
     for (SearchModificationService modifier : modifiers) {
@@ -336,8 +332,8 @@ public final class SpongeNavigationServiceImpl
       return List.of(); // no constraint: Tier-2 skips restriction filtering entirely
     }
     UUID playerId = player.uniqueId();
-    Restriction<CobblestonePlayer, MinecraftWorld> restriction =
-        (agent, cell, domain) -> {
+    Restriction<MinecraftWorld> restriction =
+        (cell, domain) -> {
           Optional<ServerPlayer> online = Sponge.server().player(playerId);
           Optional<ServerWorld> serverWorld =
               Sponge.server().worldManager().world(ResourceKey.resolve(domain.key()));
@@ -353,6 +349,24 @@ public final class SpongeNavigationServiceImpl
           return FutureOr.from(anyFalse(results));
         };
     return List.of(restriction);
+  }
+
+  /**
+   * Where a search for {@code player} starts. A player in a boat starts from the boat's block: the
+   * water or ice it floats on, which is one below the boat when it sits on top of it.
+   */
+  private static ServerLocation originOf(ServerPlayer player) {
+    Optional<Entity> vehicle = player.vehicle().map(Value::get);
+    if (vehicle.isEmpty() || !SpongePlayer.isBoat(vehicle.get().type())) {
+      return player.serverLocation();
+    }
+    ServerLocation at = vehicle.get().serverLocation();
+    ServerLocation below = at.sub(0, 1, 0);
+    if (!new SpongeBlock(at.block()).supportsBoat()
+        && new SpongeBlock(below.block()).supportsBoat()) {
+      return below;
+    }
+    return at;
   }
 
   /** Counts the ender pearls in the player's inventory (read on the server thread). */

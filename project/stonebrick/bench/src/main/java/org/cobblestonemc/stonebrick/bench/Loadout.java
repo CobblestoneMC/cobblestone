@@ -33,10 +33,10 @@ import org.yaml.snakeyaml.Yaml;
  * <p>Called a loadout rather than an agent because {@code agent} already names the thing being
  * navigated in the API, and what varies here is what it is carrying.
  *
- * <p><b>Capabilities, not mode lists.</b> Production derives its modes from the player through
- * {@code MinecraftModes#providerFor}; a bench that named modes directly would skip that derivation
- * and could not catch a bug in it. Exclusions are separate because production has them separately,
- * as an operator setting rather than a fact about the player.
+ * <p><b>Capabilities, not movement lists.</b> Production derives how a player moves from the player
+ * itself; a bench that named movements directly would skip that derivation and could not catch a
+ * bug in it. Exclusions are separate because production has them separately, as an operator setting
+ * rather than a fact about the player.
  */
 public record Loadout(
     String name,

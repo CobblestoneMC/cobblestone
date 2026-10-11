@@ -11,7 +11,7 @@ import org.cobblestonemc.api.TraversalKey;
 
 /**
  * The {@link TraversalKey}s used to record Minecraft-specific agent condition in a {@code
- * TraversalState} during a search. Absence of a key means the base (on-foot) state.
+ * TraversalState} during a search. Absence of a key means the base (dismounted) state.
  */
 public final class MinecraftKeys {
 

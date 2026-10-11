@@ -11,7 +11,7 @@ import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.Heuristics;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
-import org.cobblestonemc.minecraft.modes.MinecraftModes;
+import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 
 /**
  * Builds the estimate a player's search prices its remaining journey with.
@@ -28,19 +28,16 @@ public final class MinecraftHeuristics {
    * Builds the heuristic the settings select, for one player.
    *
    * <p>Per-player, not a shared constant: the bound has to reflect what this player can actually
-   * do, or Tier 1 prices every route as if they could fly. See {@link
-   * MinecraftModes#cheapestCostPerBlock}.
+   * do, or Tier 1 prices every route as if they could fly.
    *
-   * @param agent the navigating player
-   * @param settings the search settings, which select the heuristic and the excluded modes
+   * @param behavior how the player moves
+   * @param settings the search settings, which select the heuristic
    * @return the heuristic strategy
    */
   public static HeuristicStrategy forPlayer(
-      CobblestonePlayer agent, MinecraftSearchSettings settings) {
+      MinecraftMovementBehavior behavior, MinecraftSearchSettings settings) {
     return switch (settings.settings().heuristic()) {
-      case RUNNING_AVERAGE ->
-          Heuristics.runningAverage(
-              MinecraftModes.cheapestCostPerBlock(agent, settings.excludedModes()));
+      case RUNNING_AVERAGE -> Heuristics.runningAverage(behavior.cheapestCostPerBlock());
     };
   }
 }

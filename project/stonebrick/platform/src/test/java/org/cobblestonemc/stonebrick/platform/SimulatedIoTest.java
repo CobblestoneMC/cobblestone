@@ -19,7 +19,6 @@ import org.cobblestonemc.Cell;
 import org.cobblestonemc.CobblestoneApi;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.Heuristics;
-import org.cobblestonemc.ModesProvider;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.SingleDestination;
@@ -28,11 +27,10 @@ import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
-import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
-import org.cobblestonemc.minecraft.modes.MinecraftModes;
+import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -87,26 +85,20 @@ class SimulatedIoTest {
     StonebrickPlayer player = StonebrickPlayer.builder().build();
     ClosedOrder observer = new ClosedOrder();
 
-    ModesProvider<CobblestonePlayer, MinecraftStepPayload, MinecraftWorld> modes =
-        MinecraftModes.providerFor(player, java.util.Set.<MinecraftStepType>of(), null, 0);
-    @SuppressWarnings("unchecked")
-    ModesProvider<StonebrickPlayer, MinecraftStepPayload, MinecraftWorld> cast =
-        (ModesProvider<StonebrickPlayer, MinecraftStepPayload, MinecraftWorld>) (Object) modes;
+    MinecraftMovementBehavior behavior =
+        MinecraftMovementBehavior.forPlayer(player, java.util.Set.<MinecraftStepType>of());
 
     SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> handle =
         CobblestoneApi.load()
             .navigate(
                 new SilentLogger(),
                 scheduler,
-                player,
                 new Position<>(new Cell(8, 64, 8), world),
                 new SingleDestination<>(StonebrickSolve.at(world, new Cell(56, 64, 56))),
-                cast,
+                behavior,
                 List.of(),
                 List.of(),
-                Heuristics.runningAverage(
-                    MinecraftModes.cheapestCostPerBlock(
-                        player, java.util.Set.<MinecraftStepType>of())),
+                Heuristics.runningAverage(behavior.cheapestCostPerBlock()),
                 SearchSettings.builder().maxWallClockMillis(600_000).build(),
                 observer);
 

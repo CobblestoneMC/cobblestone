@@ -11,7 +11,6 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import org.cobblestonemc.Cell;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -21,9 +20,9 @@ import org.jetbrains.annotations.Nullable;
  * The agent a scenario navigates: a player whose capabilities are declared rather than read off a
  * live server.
  *
- * <p>Capabilities are what decide which modes a search is given, so they are the main axis a
- * scenario varies. Two scenarios over one capture — one with a boat, one without — are the cheapest
- * useful test in the whole corpus, because the terrain is already paid for.
+ * <p>Capabilities are what decide how a search may move, so they are the main axis a scenario
+ * varies. Two scenarios over one capture — one with a boat, one without — are the cheapest useful
+ * test in the whole corpus, because the terrain is already paid for.
  *
  * <p>Immutable, so one instance can serve the repeated runs of a benchmark iteration without any
  * chance of a solve leaving state behind for the next.
@@ -37,7 +36,6 @@ public final class StonebrickPlayer implements CobblestonePlayer {
   private final boolean hasBoat;
   private final boolean inBoat;
   private final @Nullable Position<MinecraftWorld> lastHorse;
-  private final Set<Cell> unbreakable;
 
   private StonebrickPlayer(Builder builder) {
     this.uuid = builder.uuid;
@@ -47,7 +45,6 @@ public final class StonebrickPlayer implements CobblestonePlayer {
     this.hasBoat = builder.hasBoat;
     this.inBoat = builder.inBoat;
     this.lastHorse = builder.lastHorse;
-    this.unbreakable = Set.copyOf(builder.unbreakable);
   }
 
   /**
@@ -100,11 +97,6 @@ public final class StonebrickPlayer implements CobblestonePlayer {
   }
 
   @Override
-  public boolean canBreak(Cell cell) {
-    return !unbreakable.contains(cell);
-  }
-
-  @Override
   public String toString() {
     return "StonebrickPlayer[fly=" + canFly + ", boat=" + hasBoat + "]";
   }
@@ -119,7 +111,6 @@ public final class StonebrickPlayer implements CobblestonePlayer {
     private boolean hasBoat;
     private boolean inBoat;
     private @Nullable Position<MinecraftWorld> lastHorse;
-    private Set<Cell> unbreakable = Set.of();
 
     private Builder() {}
 
@@ -198,21 +189,6 @@ public final class StonebrickPlayer implements CobblestonePlayer {
      */
     public Builder lastRiddenHorse(@Nullable Position<MinecraftWorld> value) {
       this.lastHorse = value;
-      return this;
-    }
-
-    /**
-     * Sets cells the player may not break, standing in for a protection plugin's verdict.
-     *
-     * <p>Synchronous, unlike the real thing. The asynchronous, arrives-later verdict that drives
-     * the search's rollback machinery is a {@code Restriction}, declared separately by a scenario,
-     * because it is the timing rather than the answer that makes that path worth benchmarking.
-     *
-     * @param cells the unbreakable cells
-     * @return this builder
-     */
-    public Builder unbreakable(Set<Cell> cells) {
-      this.unbreakable = cells;
       return this;
     }
 

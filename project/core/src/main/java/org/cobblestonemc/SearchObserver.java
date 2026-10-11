@@ -75,7 +75,7 @@ public interface SearchObserver {
   default void closed(Cell cell, double cost, double estimatedTotalCost) {}
 
   /**
-   * Called when the solve parks because a mode is waiting on blocks it does not have.
+   * Called when the solve parks waiting on blocks it does not have.
    *
    * <p>Paired with {@link #resumed()}. The split between active and parked time is most of what
    * distinguishes a search that is thinking too hard from one that is waiting too long.

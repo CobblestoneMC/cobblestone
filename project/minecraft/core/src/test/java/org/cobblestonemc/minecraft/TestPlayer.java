@@ -10,44 +10,34 @@ package org.cobblestonemc.minecraft;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
-import org.cobblestonemc.Cell;
 import org.cobblestonemc.Position;
 
-/** A configurable {@link CobblestonePlayer} for mode/assembly tests. */
+/** A configurable {@link CobblestonePlayer} for movement tests. */
 public final class TestPlayer implements CobblestonePlayer {
 
   private final boolean canFly;
   private final boolean canGlide;
   private final boolean hasBoat;
   private final boolean inBoat;
-  private final boolean canBreak;
 
-  private TestPlayer(
-      boolean canFly, boolean canGlide, boolean hasBoat, boolean inBoat, boolean canBreak) {
+  private TestPlayer(boolean canFly, boolean canGlide, boolean hasBoat, boolean inBoat) {
     this.canFly = canFly;
     this.canGlide = canGlide;
     this.hasBoat = hasBoat;
     this.inBoat = inBoat;
-    this.canBreak = canBreak;
   }
 
   public static TestPlayer walker() {
-    return new TestPlayer(false, false, false, false, true);
+    return new TestPlayer(false, false, false, false);
   }
 
   /** A player wearing an elytra: can glide, but cannot hover or gain height. */
   public static TestPlayer glider() {
-    return new TestPlayer(false, true, false, false, true);
+    return new TestPlayer(false, true, false, false);
   }
 
-  public static TestPlayer create(
-      boolean canFly, boolean hasBoat, boolean inBoat, boolean canBreak) {
-    return new TestPlayer(canFly, false, hasBoat, inBoat, canBreak);
-  }
-
-  @Override
-  public boolean canBreak(Cell cell) {
-    return canBreak;
+  public static TestPlayer create(boolean canFly, boolean hasBoat, boolean inBoat) {
+    return new TestPlayer(canFly, false, hasBoat, inBoat);
   }
 
   @Override

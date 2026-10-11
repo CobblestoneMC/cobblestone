@@ -32,12 +32,10 @@ import org.cobblestonemc.api.Step;
  * overshoot, and solves each edge to completion rather than pausing mid-solve — a simpler, still
  * terminating and still result-optimal realization of the design's recalc loop.
  *
- * @param <A> the agent type
  * @param <T> the payload type
  * @param <D> the domain type
  */
-final class SearchImpl<A extends Agent, T, D extends Domain>
-    implements SearchHandle<Position<D>, T> {
+final class SearchImpl<T, D extends Domain> implements SearchHandle<Position<D>, T> {
 
   // for logging
   private static final AtomicInteger SEARCH_ID_COUNTER = new AtomicInteger(0);
@@ -47,10 +45,9 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
   private final Scheduler scheduler;
   private final Executor executor;
   private final HeuristicStrategy heuristic;
-  private final A agent;
   private final Position<D> origin;
-  private final ModesProvider<A, T, D> modes;
-  private final List<? extends Restriction<A, D>> restrictions;
+  private final MovementBehavior<T, D> behavior;
+  private final List<? extends Restriction<D>> restrictions;
   private final SearchSettings settings;
   private final TimeSource time;
   private final SearchObserver observer;
@@ -63,7 +60,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
       new CompletableFuture<>();
 
   /** The solve currently running, so cancelling can wake it instead of leaving it parked. */
-  private volatile Tier2Search<A, T, D> activeSolve;
+  private volatile Tier2Search<T, D> activeSolve;
 
   private GraphPath<Tier1Node<T, D>, Tier1Edge<T, D>> graphPath;
   private boolean
@@ -73,31 +70,31 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
       CobblestoneLogger logger,
       Scheduler scheduler,
       HeuristicStrategy heuristic,
-      A agent,
       Position<D> origin,
       Destination<DomainRegion<D>> destination,
-      ModesProvider<A, T, D> modes,
+      MovementBehavior<T, D> behavior,
       List<? extends Transition<T, D>> transitions,
-      List<? extends Restriction<A, D>> restrictions,
+      List<? extends Restriction<D>> restrictions,
       SearchSettings settings,
       SearchObserver observer) {
     this.logger = new ScopedCobblestoneLogger(logger, "search[" + searchId + "]");
     this.scheduler = scheduler;
     this.executor = scheduler.asyncExecutor();
     this.heuristic = heuristic;
-    this.agent = agent;
     this.origin = origin;
-    this.modes = modes;
+    this.behavior = behavior;
     this.restrictions = List.copyOf(restrictions);
     this.settings = settings;
 
     this.time = scheduler.time();
     this.observer = observer;
     this.estimator = new Tier1Estimator(heuristic, settings.tier1UnsolvedPessimism());
-    this.tier1 = new Tier1Graph<>(origin, transitions, destination.regions(), this.estimator);
+    this.tier1 =
+        new Tier1Graph<>(
+            origin, behavior.initialState(), transitions, destination.regions(), this.estimator);
     this.deadlineMillis = this.time.millis() + settings.maxWallClockMillis();
 
-    this.logger.debug("Constructed for agent {} and destination {}", agent, destination);
+    this.logger.debug("Constructed for destination {}", destination);
   }
 
   void start() {
@@ -116,7 +113,7 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
       future.complete(new NavigationResult.Failure<>(FailureReason.CANCELLED));
       // A parked solve reads the cancellation only when something wakes it, and what it is parked
       // on may never arrive. Left alone it would hold its whole node table until its deadline.
-      Tier2Search<A, T, D> solve = activeSolve;
+      Tier2Search<T, D> solve = activeSolve;
       if (solve != null) {
         solve.abandon();
       }
@@ -175,12 +172,11 @@ final class SearchImpl<A extends Agent, T, D extends Domain>
           virtualPath.targetRegion(),
           virtualPath.cost(estimator),
           graphPath.dist());
-      Tier2Search<A, T, D> tier2 =
+      Tier2Search<T, D> tier2 =
           new Tier2Search<>(
               logger,
-              agent,
               edge.virtualPath(),
-              modes.modesFor(edge.virtualPath().targetRegion()),
+              behavior,
               restrictions,
               heuristic,
               settings.maxCellsVisited(),

@@ -15,7 +15,6 @@ import org.cobblestonemc.CobblestoneApi;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.HeuristicStrategy;
-import org.cobblestonemc.ModesProvider;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.Restriction;
 import org.cobblestonemc.SearchObserver;
@@ -28,7 +27,7 @@ import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
-import org.cobblestonemc.minecraft.modes.MinecraftModes;
+import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 
 /**
  * Runs one search over a capture, configured the way the plugin configures one.
@@ -113,37 +112,25 @@ public final class StonebrickSolve {
       DomainRegion<MinecraftWorld> target,
       SearchSettings settings,
       List<? extends Transition<MinecraftStepPayload, MinecraftWorld>> transitions,
-      List<? extends Restriction<StonebrickPlayer, MinecraftWorld>> restrictions) {
-    ModesProvider<
-            org.cobblestonemc.minecraft.CobblestonePlayer, MinecraftStepPayload, MinecraftWorld>
-        modes = MinecraftModes.providerFor(player, Set.<MinecraftStepType>of(), null, 0);
+      List<? extends Restriction<MinecraftWorld>> restrictions) {
+    MinecraftMovementBehavior behavior =
+        MinecraftMovementBehavior.forPlayer(player, Set.<MinecraftStepType>of());
     HeuristicStrategy heuristic =
         MinecraftHeuristics.forPlayer(
-            player, new MinecraftSearchSettings(settings, Set.of(), Set.of(), Set.of()));
+            behavior, new MinecraftSearchSettings(settings, Set.of(), Set.of(), Set.of()));
     return CobblestoneApi.load()
         .navigate(
             logger,
             scheduler,
-            player,
             origin,
             new SingleDestination<>(target),
-            castModes(modes),
+            behavior,
             transitions,
             restrictions,
             heuristic,
             settings,
             SearchObserver.none())
         .future();
-  }
-
-  @SuppressWarnings("unchecked")
-  private static ModesProvider<StonebrickPlayer, MinecraftStepPayload, MinecraftWorld> castModes(
-      ModesProvider<
-              org.cobblestonemc.minecraft.CobblestonePlayer, MinecraftStepPayload, MinecraftWorld>
-          modes) {
-    // A mode only ever reads its agent, so a provider built for the interface serves any
-    // implementation of it. The cast is what the platform façades do for the same reason.
-    return (ModesProvider<StonebrickPlayer, MinecraftStepPayload, MinecraftWorld>) (Object) modes;
   }
 
   /**
