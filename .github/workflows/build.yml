@@ -21,7 +21,7 @@ permissions:
 jobs:
   validate-wrapper:
     name: Validate Gradle wrapper
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -32,7 +32,7 @@ jobs:
   format:
     name: Format
     needs: validate-wrapper
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -48,7 +48,7 @@ jobs:
   build:
     name: Build
     needs: validate-wrapper
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
