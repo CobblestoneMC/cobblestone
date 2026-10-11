@@ -11,13 +11,14 @@ import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.cobblestonemc.plugin.LogoutCleanup;
 import org.cobblestonemc.plugin.hud.TripHud;
 import org.cobblestonemc.plugin.search.SearchRegistry;
 import org.cobblestonemc.plugin.trip.TripManager;
 
-/** Binds the Bukkit quit event to {@link LogoutCleanup}. */
+/** Loads a player's state on join and tears it down on quit. */
 final class CobblestoneListener implements Listener {
 
   private final TripManager<Entity, PaperTripAgent, Location> trips;
@@ -31,6 +32,11 @@ final class CobblestoneListener implements Listener {
     this.trips = trips;
     this.searches = searches;
     this.hud = hud;
+  }
+
+  @EventHandler
+  void onJoin(PlayerJoinEvent event) {
+    hud.load(event.getPlayer().getUniqueId());
   }
 
   @EventHandler

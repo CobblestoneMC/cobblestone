@@ -282,6 +282,14 @@ public final class CobblestoneSpongePlugin {
         "nav");
   }
 
+  /** Loads a joining player's state. */
+  @Listener
+  public void onJoin(ServerSideConnectionEvent.Join event) {
+    if (tripHud != null) {
+      tripHud.load(event.player().uniqueId());
+    }
+  }
+
   /** Tears down a departing player's state. */
   @Listener
   public void onDisconnect(ServerSideConnectionEvent.Disconnect event) {

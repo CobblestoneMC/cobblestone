@@ -173,6 +173,8 @@ class TripHudTest {
 
     // A fresh controller (as after a reconnect or restart) reads the stored choice back.
     TripHud<Object, TestTripAgent, Object> reloaded = newHud();
+    assertTrue(reloaded.isShown(player.uuid()), "the default applies until loaded");
+    reloaded.load(player.uuid());
     assertFalse(reloaded.isShown(player.uuid()));
     reloaded.refresh(player);
     assertEquals(1, displays.size(), "nothing reopened while hidden");
@@ -180,6 +182,26 @@ class TripHudTest {
     hud.setShown(player, true);
     assertEquals(2, displays.size());
     assertFalse(displays.getLast().closed);
+  }
+
+  @Test
+  void aChoiceMadeWhileLoadingIsNotOverwritten() {
+    preferences.upsert(new PlayerPreferences(player.uuid(), false));
+    scheduler.deferAsync = true;
+    hud.load(player.uuid());
+    hud.setShown(player, true);
+    scheduler.runDeferred();
+    assertTrue(hud.isShown(player.uuid()));
+  }
+
+  @Test
+  void aLoadFinishingAfterLogoutIsDropped() {
+    preferences.upsert(new PlayerPreferences(player.uuid(), false));
+    scheduler.deferAsync = true;
+    hud.load(player.uuid());
+    hud.forget(player.uuid());
+    scheduler.runDeferred();
+    assertTrue(hud.isShown(player.uuid()), "nothing cached for a departed player");
   }
 
   @Test
@@ -284,13 +306,21 @@ class TripHudTest {
   }
 
   /**
-   * Runs one-shot work immediately. Of the repeating tasks it keeps only the HUD's (period 20), so
-   * a test can fire its redraw; trip ticks (period 1) are not needed here.
+   * Runs one-shot work immediately, or async work later if {@code deferAsync} is set. Of the
+   * repeating tasks it keeps only the HUD's (period 20), so a test can fire its redraw; trip ticks
+   * (period 1) are not needed here.
    */
   private static final class TestScheduler implements MinecraftScheduler<Object> {
     Runnable hudTicker;
     long hudPeriod;
     Handle hudHandle;
+    boolean deferAsync;
+    final List<Runnable> deferred = new ArrayList<>();
+
+    void runDeferred() {
+      List.copyOf(deferred).forEach(Runnable::run);
+      deferred.clear();
+    }
 
     void runHudTicker() {
       hudTicker.run();
@@ -331,7 +361,11 @@ class TripHudTest {
 
     @Override
     public void runAsync(Runnable task) {
-      task.run();
+      if (deferAsync) {
+        deferred.add(task);
+      } else {
+        task.run();
+      }
     }
 
     @Override

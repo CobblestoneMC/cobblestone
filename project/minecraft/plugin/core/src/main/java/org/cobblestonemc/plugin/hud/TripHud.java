@@ -12,6 +12,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
@@ -55,6 +56,7 @@ public final class TripHud<E, A extends TripAgent<E>, L> {
 
   private final Map<UUID, Session> sessions = new ConcurrentHashMap<>();
   private final Map<UUID, Boolean> shown = new ConcurrentHashMap<>();
+  private final Set<UUID> loading = ConcurrentHashMap.newKeySet();
 
   /**
    * Creates a trip HUD.
@@ -97,13 +99,30 @@ public final class TripHud<E, A extends TripAgent<E>, L> {
   }
 
   /**
+   * Loads the player's stored choice in the background. Until it arrives, the default applies.
+   *
+   * @param player the player
+   */
+  public void load(UUID player) {
+    loading.add(player);
+    scheduler.runAsync(
+        () -> {
+          boolean show = read(player);
+          // Dropped if the player has since left or made a new choice.
+          if (loading.remove(player)) {
+            shown.put(player, show);
+          }
+        });
+  }
+
+  /**
    * Returns whether the player wants their HUD shown.
    *
    * @param player the player
    * @return {@code true} unless they have hidden it
    */
   public boolean isShown(UUID player) {
-    return shown.computeIfAbsent(player, this::load);
+    return shown.getOrDefault(player, PlayerPreferences.defaults(player).hud());
   }
 
   /**
@@ -114,12 +133,16 @@ public final class TripHud<E, A extends TripAgent<E>, L> {
    */
   public void setShown(A agent, boolean show) {
     UUID uuid = agent.uuid();
+    loading.remove(uuid);
     shown.put(uuid, show);
-    try {
-      preferences.upsert(new PlayerPreferences(uuid, show));
-    } catch (DataStoreException e) {
-      logger.warn("Could not store the HUD preference of {}: {}", uuid, e.getMessage());
-    }
+    scheduler.runAsync(
+        () -> {
+          try {
+            preferences.upsert(new PlayerPreferences(uuid, show));
+          } catch (DataStoreException e) {
+            logger.warn("Could not store the HUD preference of {}: {}", uuid, e.getMessage());
+          }
+        });
     refresh(agent);
   }
 
@@ -139,6 +162,7 @@ public final class TripHud<E, A extends TripAgent<E>, L> {
    */
   public void forget(UUID player) {
     close(player);
+    loading.remove(player);
     shown.remove(player);
   }
 
@@ -197,7 +221,7 @@ public final class TripHud<E, A extends TripAgent<E>, L> {
     }
   }
 
-  private boolean load(UUID player) {
+  private boolean read(UUID player) {
     try {
       return preferences.get(player).orElseGet(() -> PlayerPreferences.defaults(player)).hud();
     } catch (DataStoreException e) {

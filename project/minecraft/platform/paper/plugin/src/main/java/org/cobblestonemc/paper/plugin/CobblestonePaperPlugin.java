@@ -143,6 +143,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             agent -> ((Player) agent.entity()).locale(),
             logger);
     tripManager.onChange(tripHud::refresh);
+    getServer().getOnlinePlayers().forEach(player -> tripHud.load(player.getUniqueId()));
 
     // Discovered vanilla portals are surfaced to searches as an internal transition provider, and
     // learned from player teleports by the portal listener.
