@@ -24,9 +24,10 @@ import org.spongepowered.api.event.world.chunk.ChunkEvent;
 import org.spongepowered.api.world.server.ServerLocation;
 
 /**
- * Remembers the mount each player last rode, so they can navigate back to it ({@code /navigate
- * mount}). Mounts are horse-like animals ({@link HorseLike}: horses, donkeys, mules, llamas,
- * camels, …); pigs, striders and boats are left out on purpose.
+ * Remembers the tamed mounts each player rides, so they can navigate back to the latest ({@code
+ * /navigate mount}). An untamed one is not worth remembering: it will not be waiting where it was.
+ * Mounts are horse-like animals ({@link HorseLike}: horses, donkeys, mules, llamas, camels, …);
+ * pigs, striders and boats are left out on purpose.
  *
  * <p>The record is written when the player gets off, kept current when the mount's chunk saves its
  * entities (as it does on unload; while it is loaded, the destination follows the live entity), and
@@ -42,11 +43,13 @@ final class SpongeMountListener {
     this.scheduler = scheduler;
   }
 
-  /** Records the mount a player just got off. */
+  /** Records the tamed mount a player just got off. */
   @Listener(order = Order.POST)
   public void onDismount(RideEntityEvent.Dismount event) {
     Optional<ServerPlayer> rider = event.cause().first(ServerPlayer.class);
-    if (rider.isEmpty() || !(event.entity() instanceof HorseLike mount)) {
+    if (rider.isEmpty()
+        || !(event.entity() instanceof HorseLike mount)
+        || !mount.get(Keys.IS_TAMED).orElse(false)) {
       return;
     }
     ServerLocation location = mount.serverLocation();
@@ -57,7 +60,8 @@ final class SpongeMountListener {
             location.worldKey().asString(),
             location.blockX(),
             location.blockY(),
-            location.blockZ());
+            location.blockZ(),
+            System.currentTimeMillis());
     scheduler.runAsync(() -> mounts.upsert(record));
   }
 

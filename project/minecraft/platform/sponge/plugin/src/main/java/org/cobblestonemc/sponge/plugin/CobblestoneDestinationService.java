@@ -35,9 +35,16 @@ import org.cobblestonemc.plugin.data.LocationDao;
 import org.cobblestonemc.plugin.data.MountDao;
 import org.cobblestonemc.plugin.data.MountLocation;
 import org.cobblestonemc.plugin.destination.DestinationDetails;
+import org.cobblestonemc.plugin.destination.LazyMinecraftDestination;
 import org.cobblestonemc.plugin.destination.SimpleMinecraftDestination;
 import org.cobblestonemc.plugin.destination.SimplePlatformDestinationTree;
 import org.cobblestonemc.plugin.destination.TemplateDestination;
+import org.cobblestonemc.plugin.message.CobblestoneMessages;
+import org.cobblestonemc.plugin.message.Message0;
+import org.cobblestonemc.plugin.message.Message1;
+import org.cobblestonemc.plugin.message.Message3;
+import org.cobblestonemc.plugin.message.Messages;
+import org.cobblestonemc.sponge.SpongeTerrain;
 import org.cobblestonemc.sponge.api.SingleCellWorldRegion;
 import org.cobblestonemc.sponge.api.SurfaceWorldRegion;
 import org.cobblestonemc.sponge.api.WholeWorldRegion;
@@ -49,14 +56,14 @@ import org.spongepowered.api.data.Keys;
 import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.util.RespawnLocation;
+import org.spongepowered.api.util.blockray.RayTrace;
+import org.spongepowered.api.util.blockray.RayTraceResult;
+import org.spongepowered.api.world.LocatableBlock;
 import org.spongepowered.api.world.server.ServerLocation;
 import org.spongepowered.api.world.server.ServerWorld;
+import org.spongepowered.math.vector.Vector3d;
 import org.spongepowered.math.vector.Vector3i;
 
-/**
- * Surfaces online players, loaded worlds, stored locations, and the player's own places (death,
- * respawn point, last mount, named pets) and coordinates as navigable destinations.
- */
 public final class CobblestoneDestinationService implements DestinationService {
 
   public static final String PLAYER_TREE_KEY = "player";
@@ -65,19 +72,24 @@ public final class CobblestoneDestinationService implements DestinationService {
   public static final String GLOBAL_TREE_KEY = "global";
   public static final String PRIVATE_TREE_KEY = "private";
   public static final String PET_TREE_KEY = "pet";
+  public static final String COORDINATES_TREE_KEY = "coordinates";
   public static final String DEATH_KEY = "death";
   public static final String SURFACE_KEY = "surface";
-  public static final String COORDINATES_KEY = "coordinates";
-  public static final String COORDINATE_SURFACE_KEY = "coordinate-surface";
+  public static final String TARGET_KEY = "target";
+  public static final String BLOCK_KEY = "block";
   public static final String SPAWN_KEY = "spawn";
   public static final String RESPAWN_KEY = "respawn";
   public static final String MOUNT_KEY = "mount";
+
+  /** How far away, in blocks, the block a player is looking at may be for {@code target}. */
+  static final int TARGET_RANGE = 256;
 
   private final LocationDao locations;
   private final DeathLocationDao deaths;
   private final MountDao mounts;
   private final SpongePetListener pets;
   private final BooleanSupplier trackDeaths;
+  private final Messages messages;
   private final ExpiringCache<UUID, List<Pet>> petsByOwner = new ExpiringCache<>();
 
   public CobblestoneDestinationService(
@@ -85,25 +97,29 @@ public final class CobblestoneDestinationService implements DestinationService {
       DeathLocationDao deaths,
       MountDao mounts,
       SpongePetListener pets,
-      BooleanSupplier trackDeaths) {
+      BooleanSupplier trackDeaths,
+      Messages messages) {
     this.locations = locations;
     this.deaths = deaths;
     this.mounts = mounts;
     this.pets = pets;
     this.trackDeaths = trackDeaths;
+    this.messages = messages;
   }
 
   @Override
   public PlatformDestinationTree<ServerWorld, Vector3i> provide(ServerPlayer player) {
     Map<String, Supplier<MinecraftDestination<ServerWorld, Vector3i>>> leaves =
         new LinkedHashMap<>();
-    deathLeaf(player).ifPresent(leaf -> leaves.put(DEATH_KEY, leaf));
+    // With death tracking off there is never a death to go back to, so the key is not offered.
+    if (trackDeaths.getAsBoolean()) {
+      leaves.put(DEATH_KEY, () -> death(player));
+    }
     leaves.put(SURFACE_KEY, () -> surface(player));
-    leaves.put(COORDINATES_KEY, () -> coordinates(player));
-    leaves.put(COORDINATE_SURFACE_KEY, () -> coordinateSurface(player));
+    leaves.put(TARGET_KEY, () -> target(player));
     leaves.put(SPAWN_KEY, () -> spawn(player));
-    respawnLeaf(player).ifPresent(leaf -> leaves.put(RESPAWN_KEY, leaf));
-    mountLeaf(player).ifPresent(leaf -> leaves.put(MOUNT_KEY, leaf));
+    leaves.put(RESPAWN_KEY, () -> respawn(player));
+    leaves.put(MOUNT_KEY, () -> mount(player));
     return new SimplePlatformDestinationTree<>(
         false,
         Map.of(
@@ -114,21 +130,23 @@ public final class CobblestoneDestinationService implements DestinationService {
             LOCATION_TREE_KEY,
             () -> provideLocationDestinationTree(player),
             PET_TREE_KEY,
-            () -> providePetDestinationTree(player)),
+            () -> providePetDestinationTree(player),
+            COORDINATES_TREE_KEY,
+            () -> provideCoordinatesDestinationTree(player)),
         leaves);
   }
 
-  /**
-   * The player's last death, as a single {@code cobblestone death} leaf. Absent entirely when death
-   * tracking is off or the player has not died since it was turned on, so {@code /navigate death}
-   * reports an unknown destination rather than a route that cannot exist.
-   */
-  private Optional<Supplier<MinecraftDestination<ServerWorld, Vector3i>>> deathLeaf(
-      ServerPlayer player) {
-    if (!trackDeaths.getAsBoolean()) {
-      return Optional.empty();
-    }
-    return deaths.get(player.uniqueId()).map(death -> () -> toDestination(death));
+  /** The player's last death; invalid if none is on record. */
+  private MinecraftDestination<ServerWorld, Vector3i> death(ServerPlayer player) {
+    return lazy(
+        DEATH_KEY,
+        () ->
+            deaths
+                .get(player.uniqueId())
+                .map(CobblestoneDestinationService::toDestination)
+                .orElseGet(
+                    () ->
+                        invalid(DEATH_KEY, render(player, CobblestoneMessages.NAVIGATE_NO_DEATH))));
   }
 
   private static MinecraftDestination<ServerWorld, Vector3i> toDestination(DeathLocation death) {
@@ -146,15 +164,84 @@ public final class CobblestoneDestinationService implements DestinationService {
         .withDetail(DestinationDetails.coordinates(death.x(), death.y(), death.z(), death.world()));
   }
 
-  /** Anywhere open to the sky, in the player's current world. */
-  private static MinecraftDestination<ServerWorld, Vector3i> surface(ServerPlayer player) {
-    WorldRegion<ServerWorld, Vector3i> region = SurfaceWorldRegion.anywhere(player.world());
-    return new SimpleMinecraftDestination<>(
-        () -> List.of(region), Component.text(SURFACE_KEY), List.of());
+  /**
+   * Anywhere open to the sky, in the player's current world; invalid if the player is already out
+   * in the open.
+   */
+  private MinecraftDestination<ServerWorld, Vector3i> surface(ServerPlayer player) {
+    return lazy(
+        SURFACE_KEY,
+        () -> {
+          ServerLocation at = player.serverLocation();
+          ServerWorld world = at.world();
+          if (SpongeTerrain.isOpenToSky(world, at.blockX(), at.blockY(), at.blockZ())) {
+            return invalid(
+                SURFACE_KEY, render(player, CobblestoneMessages.NAVIGATE_ALREADY_ON_SURFACE));
+          }
+          WorldRegion<ServerWorld, Vector3i> region = SurfaceWorldRegion.anywhere(world);
+          return new SimpleMinecraftDestination<>(
+              () -> List.of(region), Component.text(SURFACE_KEY), List.of());
+        });
   }
 
-  /** {@code coordinates <x> <y> <z> [world]}: one block, in the player's world unless named. */
-  private static MinecraftDestination<ServerWorld, Vector3i> coordinates(ServerPlayer player) {
+  /**
+   * Where the player is looking: the open space in front of the block their crosshair is on, or the
+   * ground beneath it if that space is in mid-air (the side of a wall, say). Water stops the look
+   * like any block, so looking out to sea means its surface (unless the player is underwater);
+   * plants and other passable blocks are looked through. The look never reaches into an unloaded
+   * chunk. Invalid if no block is within {@link #TARGET_RANGE}.
+   */
+  private MinecraftDestination<ServerWorld, Vector3i> target(ServerPlayer player) {
+    return lazy(
+        TARGET_KEY,
+        () -> {
+          ServerWorld world = player.world();
+          Vector3d eye = player.get(Keys.EYE_POSITION).orElseGet(player::position);
+          // From underwater, look through the water rather than at it.
+          boolean underwater =
+              !world.block(eye.floorX(), eye.floorY(), eye.floorZ()).fluidState().isEmpty();
+          Optional<RayTraceResult<LocatableBlock>> hit =
+              RayTrace.block()
+                  .world(world)
+                  .sourceEyePosition(player)
+                  .direction(player)
+                  .limit(TARGET_RANGE)
+                  .continueWhileLocation(
+                      location -> world.isChunkLoadedAtBlock(location.blockPosition(), false))
+                  .select(
+                      block ->
+                          !SpongeTerrain.isPassable(block.blockState())
+                              && !(underwater && !block.blockState().fluidState().isEmpty()))
+                  .execute();
+          if (hit.isEmpty()) {
+            return invalid(
+                TARGET_KEY, render(player, CobblestoneMessages.NAVIGATE_NO_TARGET, TARGET_RANGE));
+          }
+          // The hit is on the face the look came through; just short of it, back towards the eye,
+          // is the open block in front of that face.
+          Vector3d at = hit.get().hitPosition();
+          Vector3d front = at.add(eye.sub(at).normalize().mul(0.01));
+          int y = SpongeTerrain.landingY(world, front.floorX(), front.floorY(), front.floorZ());
+          return atBlock(ServerLocation.of(world, front.floorX(), y, front.floorZ()), TARGET_KEY);
+        });
+  }
+
+  /**
+   * {@code coordinates block <x> <y> <z> [world]} and {@code coordinates surface <x> <z> [world]}.
+   * Strict, so {@code coordinates} must be typed: {@code surface} alone means the nearest open sky,
+   * and a bare {@code block} would mean nothing.
+   */
+  private PlatformDestinationTree<ServerWorld, Vector3i> provideCoordinatesDestinationTree(
+      ServerPlayer player) {
+    Map<String, Supplier<MinecraftDestination<ServerWorld, Vector3i>>> leaves =
+        new LinkedHashMap<>();
+    leaves.put(BLOCK_KEY, () -> coordinateBlock(player));
+    leaves.put(SURFACE_KEY, () -> coordinateSurface(player));
+    return new SimplePlatformDestinationTree<>(true, Map.of(), leaves);
+  }
+
+  /** One block, in the player's world unless named; invalid above or below the world. */
+  private MinecraftDestination<ServerWorld, Vector3i> coordinateBlock(ServerPlayer player) {
     DestinationOption<Integer> x =
         DestinationOption.integer("x", () -> player.serverLocation().blockX());
     DestinationOption<Integer> y =
@@ -163,18 +250,28 @@ public final class CobblestoneDestinationService implements DestinationService {
         DestinationOption.integer("z", () -> player.serverLocation().blockZ());
     DestinationOption<ServerWorld> world = worldOption();
     return new TemplateDestination<>(
-        Component.text(COORDINATES_KEY),
+        Component.text(BLOCK_KEY),
         List.of(),
         List.of(x, y, z, world),
         values -> {
           ServerWorld target = values.find(world).orElseGet(player::world);
-          ServerLocation location =
-              ServerLocation.of(target, values.get(x), values.get(y), values.get(z));
-          return atBlock(location, COORDINATES_KEY);
+          int blockY = values.get(y);
+          if (blockY < target.min().y() || blockY > target.max().y()) {
+            return invalid(
+                BLOCK_KEY,
+                render(
+                    player,
+                    CobblestoneMessages.NAVIGATE_OUTSIDE_WORLD,
+                    target.min().y(),
+                    target.max().y(),
+                    target.key().asString()));
+          }
+          return atBlock(
+              ServerLocation.of(target, values.get(x), blockY, values.get(z)), BLOCK_KEY);
         });
   }
 
-  /** {@code coordinate-surface <x> <z> [world]}: wherever that column is open to the sky. */
+  /** Wherever the column at x, z is open to the sky, in the player's world unless named. */
   private static MinecraftDestination<ServerWorld, Vector3i> coordinateSurface(
       ServerPlayer player) {
     DestinationOption<Integer> x =
@@ -183,7 +280,7 @@ public final class CobblestoneDestinationService implements DestinationService {
         DestinationOption.integer("z", () -> player.serverLocation().blockZ());
     DestinationOption<ServerWorld> world = worldOption();
     return new TemplateDestination<>(
-        Component.text(COORDINATE_SURFACE_KEY),
+        Component.text(SURFACE_KEY),
         List.of(),
         List.of(x, z, world),
         values -> {
@@ -191,7 +288,7 @@ public final class CobblestoneDestinationService implements DestinationService {
           WorldRegion<ServerWorld, Vector3i> region =
               SurfaceWorldRegion.column(target, values.get(x), values.get(z));
           return new SimpleMinecraftDestination<>(
-              () -> List.of(region), Component.text(COORDINATE_SURFACE_KEY), List.of());
+              () -> List.of(region), Component.text(SURFACE_KEY), List.of());
         });
   }
 
@@ -210,45 +307,58 @@ public final class CobblestoneDestinationService implements DestinationService {
 
   /**
    * Where the player will respawn — their bed, a charged respawn anchor, or wherever a plugin or
-   * {@code /spawnpoint} set it. Not validated, so an obstructed bed still shows here. Absent if the
+   * {@code /spawnpoint} set it. Not validated, so an obstructed bed still counts. Invalid if the
    * player has none, or its world is not loaded.
    */
-  private static Optional<Supplier<MinecraftDestination<ServerWorld, Vector3i>>> respawnLeaf(
-      ServerPlayer player) {
-    return player
-        .get(Keys.RESPAWN_LOCATIONS)
-        .flatMap(respawns -> respawns.values().stream().findFirst())
-        .flatMap(RespawnLocation::asLocation)
-        .map(location -> () -> atBlock(location, RESPAWN_KEY));
+  private MinecraftDestination<ServerWorld, Vector3i> respawn(ServerPlayer player) {
+    return lazy(
+        RESPAWN_KEY,
+        () ->
+            player
+                .get(Keys.RESPAWN_LOCATIONS)
+                .flatMap(respawns -> respawns.values().stream().findFirst())
+                .flatMap(RespawnLocation::asLocation)
+                .map(location -> atBlock(location, RESPAWN_KEY))
+                .orElseGet(
+                    () ->
+                        invalid(
+                            RESPAWN_KEY, render(player, CobblestoneMessages.NAVIGATE_NO_RESPAWN))));
   }
 
   /**
-   * The mount the player last rode: the live entity while it is loaded, and otherwise where it was
-   * last seen. Absent if the player has not ridden one since mount tracking began.
+   * The mount the player last rode: followed live while it is loaded, and otherwise where it was
+   * last seen. A trip to it ends if it dies. Invalid if the player has not ridden one since mount
+   * tracking began, or it has died since.
    */
-  private Optional<Supplier<MinecraftDestination<ServerWorld, Vector3i>>> mountLeaf(
-      ServerPlayer player) {
-    return mounts
-        .get(player.uniqueId())
-        .map(
-            mount ->
-                () -> {
-                  Destination<WorldRegion<ServerWorld, Vector3i>> destination =
-                      () ->
-                          mountLocation(mount)
-                              .<List<WorldRegion<ServerWorld, Vector3i>>>map(
-                                  location -> List.of(SingleCellWorldRegion.of(location)))
-                              .orElseGet(List::of);
-                  return new SimpleMinecraftDestination<>(
-                      destination, Component.text(MOUNT_KEY), List.of());
-                });
+  private MinecraftDestination<ServerWorld, Vector3i> mount(ServerPlayer player) {
+    return lazy(
+        MOUNT_KEY,
+        () ->
+            mounts
+                .get(player.uniqueId())
+                .map(CobblestoneDestinationService::toDestination)
+                .orElseGet(
+                    () ->
+                        invalid(MOUNT_KEY, render(player, CobblestoneMessages.NAVIGATE_NO_MOUNT))));
   }
 
-  private static Optional<ServerLocation> mountLocation(MountLocation mount) {
-    Optional<ServerLocation> live = entity(mount.mount()).map(Entity::serverLocation);
-    if (live.isPresent()) {
-      return live;
-    }
+  private static MinecraftDestination<ServerWorld, Vector3i> toDestination(MountLocation mount) {
+    // Follows the mount while it is loaded, so live trips track it; otherwise heads to where it
+    // was last seen.
+    SpongeTrackedEntity tracked = new SpongeTrackedEntity(mount.mount());
+    Destination<WorldRegion<ServerWorld, Vector3i>> destination =
+        () ->
+            tracked
+                .location()
+                .or(() -> recorded(mount))
+                .<List<WorldRegion<ServerWorld, Vector3i>>>map(
+                    location -> List.of(SingleCellWorldRegion.of(location)))
+                .orElseGet(List::of);
+    return new SimpleMinecraftDestination<>(destination, Component.text(MOUNT_KEY), List.of(), true)
+        .withExistence(tracked::alive);
+  }
+
+  private static Optional<ServerLocation> recorded(MountLocation mount) {
     return world(mount.world())
         .map(world -> ServerLocation.of(world, mount.x(), mount.y(), mount.z()));
   }
@@ -265,6 +375,33 @@ public final class CobblestoneDestinationService implements DestinationService {
                 location.blockY(),
                 location.blockZ(),
                 location.worldKey().asString()));
+  }
+
+  /**
+   * A destination worked out only when the command runs, on the main thread; see {@link
+   * LazyMinecraftDestination}.
+   */
+  private static MinecraftDestination<ServerWorld, Vector3i> lazy(
+      String name, Supplier<MinecraftDestination<ServerWorld, Vector3i>> factory) {
+    return new LazyMinecraftDestination<>(Component.text(name), List.of(), factory);
+  }
+
+  private static MinecraftDestination<ServerWorld, Vector3i> invalid(
+      String name, Component reason) {
+    return SimpleMinecraftDestination.invalid(Component.text(name), List.of(), reason);
+  }
+
+  private Component render(ServerPlayer player, Message0 message) {
+    return messages.render(player.locale(), message);
+  }
+
+  private Component render(ServerPlayer player, Message1 message, Object arg) {
+    return messages.render(player.locale(), message, arg);
+  }
+
+  private Component render(
+      ServerPlayer player, Message3 message, Object arg1, Object arg2, Object arg3) {
+    return messages.render(player.locale(), message, arg1, arg2, arg3);
   }
 
   /** An optional trailing world, by namespaced key ({@code minecraft:} may be left off). */
@@ -287,16 +424,6 @@ public final class CobblestoneDestinationService implements DestinationService {
 
   private static Optional<ServerWorld> world(String key) {
     return Sponge.server().worldManager().world(ResourceKey.resolve(key));
-  }
-
-  private static Optional<Entity> entity(UUID uuid) {
-    for (ServerWorld world : Sponge.server().worldManager().worlds()) {
-      Optional<Entity> entity = world.entity(uuid);
-      if (entity.isPresent() && !entity.get().isRemoved()) {
-        return entity;
-      }
-    }
-    return Optional.empty();
   }
 
   /**
@@ -324,15 +451,18 @@ public final class CobblestoneDestinationService implements DestinationService {
       leaves.put(
           key,
           () -> {
-            // Re-resolves the pet on each query, so live trips follow it.
+            // Follows the pet, so live trips track it, and ends the trip if it dies.
+            SpongeTrackedEntity tracked = new SpongeTrackedEntity(uuid);
             Destination<WorldRegion<ServerWorld, Vector3i>> destination =
                 () ->
-                    entity(uuid)
+                    tracked
+                        .location()
                         .<List<WorldRegion<ServerWorld, Vector3i>>>map(
-                            target -> List.of(SingleCellWorldRegion.of(target.serverLocation())))
+                            location -> List.of(SingleCellWorldRegion.of(location)))
                         .orElseGet(List::of);
             return new SimpleMinecraftDestination<>(
-                destination, Component.text(displayName), List.of(), true);
+                    destination, Component.text(displayName), List.of(), true)
+                .withExistence(tracked::alive);
           });
     }
     return new SimplePlatformDestinationTree<>(false, Map.of(), leaves);
@@ -392,8 +522,10 @@ public final class CobblestoneDestinationService implements DestinationService {
                               List.of(SingleCellWorldRegion.of(serverPlayer.serverLocation())))
                       .orElseGet(List::of);
                 };
+            // Ends the trip if they log off.
             return new SimpleMinecraftDestination<>(
-                destination, Component.text(name), List.of(), true);
+                    destination, Component.text(name), List.of(), true)
+                .withExistence(() -> Sponge.server().player(uuid).isPresent());
           });
     }
     return new SimplePlatformDestinationTree<>(false, Map.of(), leaves);

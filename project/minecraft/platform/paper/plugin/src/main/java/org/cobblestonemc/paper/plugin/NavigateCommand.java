@@ -47,6 +47,7 @@ import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.cobblestonemc.plugin.api.NavigatorSettings;
 import org.cobblestonemc.plugin.api.PlatformDestinationTree;
 import org.cobblestonemc.plugin.api.TripOutcome;
+import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.command.FlagParser;
 import org.cobblestonemc.plugin.command.NavigationFlags;
 import org.cobblestonemc.plugin.destination.DestinationDetails;
@@ -205,6 +206,11 @@ final class NavigateCommand {
       return Command.SINGLE_SUCCESS;
     }
 
+    if (destination.validity() instanceof Validity.Invalid(Component reason)) {
+      player.sendMessage(reason);
+      return Command.SINGLE_SUCCESS;
+    }
+
     TripLabel tripLabel = TripLabel.address(address);
     Component hover = DestinationDetails.hover(address, destination);
     boolean live =
@@ -333,7 +339,8 @@ final class NavigateCommand {
                               gate,
                               searchSettings),
                           guideSearch(player, flags, platformApi),
-                          live)
+                          live,
+                          destination::exists)
                       .whenComplete(
                           (outcome, tripError) -> {
                             if (tripError != null || outcome instanceof TripOutcome.Failed) {

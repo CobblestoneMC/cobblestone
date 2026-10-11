@@ -98,4 +98,32 @@ public interface MinecraftDestination<W, V> {
   default Optional<Component> detail() {
     return Optional.empty();
   }
+
+  /**
+   * Returns whether this destination can be navigated to right now, checked once the command has
+   * resolved it and before any search starts. An {@linkplain Validity#invalid invalid} destination
+   * is reported to the player with its reason. Valid by default.
+   *
+   * <p>Called on the thread that owns the player (on Folia, their region), so it may read the world
+   * around them. Tab-completion never calls it.
+   *
+   * @return the validity
+   */
+  default Validity validity() {
+    return Validity.valid();
+  }
+
+  /**
+   * Returns whether this destination's target still exists, for a target that can stop existing — a
+   * pet or mount that dies. A trip polls it about once a second and ends quietly once it returns
+   * {@code false}. Merely being out of reach (unloaded, say) is not ceasing to exist. Always {@code
+   * true} by default.
+   *
+   * <p>Called on the thread that owns the travelling player, so it must be cheap.
+   *
+   * @return {@code false} once the target is gone for good
+   */
+  default boolean exists() {
+    return true;
+  }
 }

@@ -124,7 +124,7 @@ public final class CobblestoneMessages {
 
   /**
    * Shown when a destination's options are missing or extra ({@code {0}} = how to type it, e.g.
-   * {@code cobblestone coordinates <x> <y> <z> [world]}).
+   * {@code cobblestone coordinates block <x> <y> <z> [world]}).
    */
   public static final Message1 NAVIGATE_DESTINATION_USAGE =
       Message1.error("command.navigate.destination_usage");
@@ -135,6 +135,32 @@ public final class CobblestoneMessages {
    */
   public static final Message2 NAVIGATE_OPTION_INVALID =
       Message2.error("command.navigate.option_invalid");
+
+  /** Shown for {@code /navigate surface} when the player is already open to the sky. */
+  public static final Message0 NAVIGATE_ALREADY_ON_SURFACE =
+      Message0.error("command.navigate.already_on_surface");
+
+  /** Shown for {@code /navigate death} when no death of the player's is on record. */
+  public static final Message0 NAVIGATE_NO_DEATH = Message0.error("command.navigate.no_death");
+
+  /** Shown for {@code /navigate mount} when the player has not ridden one, or it has died. */
+  public static final Message0 NAVIGATE_NO_MOUNT = Message0.error("command.navigate.no_mount");
+
+  /** Shown for {@code /navigate respawn} when the player has no bed, anchor or spawn point. */
+  public static final Message0 NAVIGATE_NO_RESPAWN = Message0.error("command.navigate.no_respawn");
+
+  /**
+   * Shown for {@code /navigate target} when the player is not looking at a block in range ({@code
+   * {0}} = the range, in blocks).
+   */
+  public static final Message1 NAVIGATE_NO_TARGET = Message1.error("command.navigate.no_target");
+
+  /**
+   * Shown for coordinates above or below the world ({@code {0}} = the lowest y, {@code {1}} = the
+   * highest, {@code {2}} = the world).
+   */
+  public static final Message3 NAVIGATE_OUTSIDE_WORLD =
+      Message3.error("command.navigate.outside_world");
 
   /** Shown when the destination is ambiguous ({@code {0}} = the candidate paths). */
   public static final Message1 NAVIGATE_DESTINATION_AMBIGUOUS =

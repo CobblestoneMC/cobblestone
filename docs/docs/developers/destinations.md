@@ -216,9 +216,9 @@ public record NpcDestination(NPC npc) implements MinecraftDestination<World, Vec
 ### Options
 
 A destination may take values typed after its name, such as the coordinates in
-`/nav coordinates 100 64 -200`. Override `options()` to declare them, in the order they are typed,
-and `configure(OptionValues)` to build the real destination from what was typed. The destination
-returned by `configure` is the one searched.
+`/nav coordinates block 100 64 -200`. Override `options()` to declare them, in the order they
+are typed, and `configure(OptionValues)` to build the real destination from what was typed. The
+destination returned by `configure` is the one searched.
 
 ```java
 public final class OutpostDestination implements MinecraftDestination<World, Vector3i> {
@@ -261,6 +261,34 @@ Override `detail()` to add a line to the hover text of `Searching for a route...
 that follows if no route is found. The address is always shown; the detail goes beneath it.
 Cobblestone's own destinations use it for the coordinates of fixed places, such as `death`, so a
 player can find the place by hand.
+
+### Validity
+
+Override `validity()` when a destination can exist but not be navigated to right now. Return
+`Validity.invalid(reason)` and the player is shown `reason` as is, instead of a search starting.
+The destination is still offered in tab completion, so the player learns why rather than finding
+nothing there. Cobblestone's own destinations use it for `surface` when the player is already in
+the open, and for `death` when no death is on record.
+
+```java
+@Override
+public Validity validity() {
+  return town.isOpen()
+      ? Validity.valid()
+      : Validity.invalid(Component.text("The town is closed.", NamedTextColor.RED));
+}
+```
+
+`validity()` is called on the thread that owns the player (their region, on Folia), once the
+command has picked the destination. Tab completion never calls it, so it may read the world.
+
+### Existence
+
+Override `exists()` for a target that can stop existing partway through a trip, such as an
+animal that dies. A trip polls it about once a second and ends quietly once it returns `false`.
+Being out of reach, for example unloaded, is not the same as not existing. It is called on the
+travelling player's thread, so keep it cheap. Cobblestone ends trips to pets and mounts that die,
+and to players who log off.
 
 ## Permissions
 

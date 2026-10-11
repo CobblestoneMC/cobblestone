@@ -18,8 +18,8 @@ import org.cobblestonemc.plugin.api.OptionValues;
 
 /**
  * A {@link MinecraftDestination} that takes {@linkplain DestinationOption options} and only becomes
- * a real destination once they are applied — e.g. {@code coordinates <x> <y> <z> [world]}. Its own
- * {@link #destination()} is empty; the command searches what {@link #configure} returns.
+ * a real destination once they are applied — e.g. {@code coordinates block <x> <y> <z> [world]}.
+ * Its own {@link #destination()} is empty; the command searches what {@link #configure} returns.
  *
  * @param displayName the human-facing name
  * @param permissions the permission nodes required to use it (all of them); empty for unrestricted

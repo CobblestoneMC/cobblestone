@@ -48,7 +48,7 @@ The trail renders only the next segment of the route, brightest at the point to 
   entering a portal, or running a command. Cobblestone highlights the location and sends a
   message. Command prompts, such as `Run /warp market.`, can be clicked.
 - **Ending.** A trip ends on arrival, on `/stone cancel`, or on disconnect. Death does not end a
-  trip.
+  trip. A trip to a pet or mount ends if it dies, and a trip to a player ends if they log off.
 
 ## Destinations
 
@@ -69,7 +69,8 @@ plugins installed on the server.
 /nav death
 ```
 
-Your most recent death location. Admins may disable this destination.
+Your most recent death location. Admins may disable this destination. If you have not died since it
+was enabled, you are told so.
 
 ### Respawn point
 
@@ -77,8 +78,8 @@ Your most recent death location. Admins may disable this destination.
 /nav respawn
 ```
 
-Where you will respawn: your bed, a charged respawn anchor, or a point set by `/spawnpoint`. Not
-offered if you have none.
+Where you will respawn: your bed, a charged respawn anchor, or a point set by `/spawnpoint`. If you
+have none, you are told so.
 
 ### World spawn
 
@@ -94,18 +95,30 @@ offered if you have none.
 ```
 
 The nearest place open to the sky. The route heads upward, so it is the quickest way out of a cave
-or a mine. Water, leaves and glass count as a roof.
+or a mine. Water, leaves and glass count as a roof. If you are already open to the sky, you are
+told so instead.
+
+### Target
+
+```
+/nav target
+```
+
+The block you are looking at, up to 256 blocks away: the open space in front of it, or the ground
+below that if it is the side of a wall. Water counts as something to look at, unless you are
+underwater; grass and flowers are looked through.
 
 ### Coordinates
 
 ```
-/nav coordinates 100 64 -200                  # a block in this world
-/nav coordinates 100 64 -200 world_nether     # a block in another world
-/nav coordinate-surface 100 -200              # the open-sky spot at x=100, z=-200
+/nav coordinates block 100 64 -200                 # a block in this world
+/nav coordinates block 100 64 -200 world_nether    # a block in another world
+/nav coordinates surface 100 -200                  # the open-sky spot at x=100, z=-200
 ```
 
 Whole numbers only. The world is optional and defaults to the one you are in. Tab completion offers
-your own coordinates.
+your own coordinates. The word `coordinates` is always required, so `/nav surface` still means the
+nearest open sky.
 
 ### Mount
 
@@ -113,9 +126,9 @@ your own coordinates.
 /nav mount
 ```
 
-The horse, donkey, mule, llama or camel you last rode. Cobblestone follows it while it is loaded,
-and otherwise heads to where it was last seen. Not offered if you have not ridden one, or it has
-died.
+The tamed horse, donkey, mule, llama or camel you last rode. The route is recomputed periodically
+as it moves while it is loaded, and otherwise heads to where it was last seen. If it dies, the trip
+ends, and `/nav mount` then leads to the mount you rode before it.
 
 ### Pets
 
@@ -124,7 +137,8 @@ died.
 ```
 
 Your named, tamed animals that are currently loaded. Pets that share a name are numbered by when
-they were tamed: `Rex`, `Rex-2`, … The route is recomputed periodically as the pet moves.
+they were tamed: `Rex`, `Rex-2`, … The route is recomputed periodically as the pet moves, and the
+trip ends if the pet dies.
 
 ### Players
 
@@ -132,7 +146,8 @@ they were tamed: `Rex`, `Rex-2`, … The route is recomputed periodically as the
 /nav player Steve
 ```
 
-Online players only. The route is recomputed periodically as the target moves.
+Online players only. The route is recomputed periodically as the target moves, and the trip ends
+if they log off.
 
 ### Worlds
 

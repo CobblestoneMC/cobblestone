@@ -127,7 +127,7 @@ public final class DestinationResolver {
       implements Resolution<W, V> {}
 
   /**
-   * How to type a destination with options, e.g. {@code coordinates <x> <y> <z> [world]}.
+   * How to type a destination with options, e.g. {@code coordinates block <x> <y> <z> [world]}.
    *
    * @param address the destination's address
    * @param options its options

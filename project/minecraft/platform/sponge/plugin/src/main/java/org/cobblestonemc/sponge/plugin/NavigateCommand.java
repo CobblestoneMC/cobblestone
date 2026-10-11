@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
@@ -34,6 +35,7 @@ import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.cobblestonemc.plugin.api.NavigatorSettings;
 import org.cobblestonemc.plugin.api.PlatformDestinationTree;
 import org.cobblestonemc.plugin.api.TripOutcome;
+import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.command.FlagParser;
 import org.cobblestonemc.plugin.command.NavigationFlags;
 import org.cobblestonemc.plugin.destination.DestinationDetails;
@@ -218,6 +220,10 @@ final class NavigateCommand {
           String.join(" ", parsed.destination()));
       return;
     }
+    if (destination.validity() instanceof Validity.Invalid(Component reason)) {
+      player.sendMessage(reason);
+      return;
+    }
 
     boolean live =
         switch (flags.liveness()) {
@@ -231,6 +237,7 @@ final class NavigateCommand {
         TripLabel.address(address),
         DestinationDetails.hover(address, destination),
         destination.destination(),
+        destination::exists,
         flags,
         live,
         navigationService,
@@ -249,6 +256,7 @@ final class NavigateCommand {
       TripLabel tripLabel,
       Component hover,
       Destination<WorldRegion<ServerWorld, Vector3i>> destination,
+      BooleanSupplier targetExists,
       NavigationFlags flags,
       boolean live,
       SpongeNavigationServiceImpl navigationService,
@@ -312,7 +320,8 @@ final class NavigateCommand {
                             gate,
                             searchSettings),
                         guideSearch(player, flags, navigationService),
-                        live)
+                        live,
+                        targetExists)
                     .whenComplete(
                         (outcome, tripError) ->
                             reportTrip(

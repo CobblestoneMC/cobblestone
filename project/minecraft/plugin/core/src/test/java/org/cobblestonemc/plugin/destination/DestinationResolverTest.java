@@ -390,6 +390,29 @@ class DestinationResolverTest {
   }
 
   @Test
+  void aStrictLevelKeepsATemplateApartFromALeafOfTheSameName() {
+    // "surface" is the nearest open sky; "coordinates surface <x> <z>" is one column's.
+    var roots =
+        roots(
+            node("cobblestone")
+                .leaf("surface")
+                .sub(node("coordinates").strict().template("surface").template("block")));
+
+    Resolved<String, Integer> nearest =
+        assertInstanceOf(Resolved.class, resolve(roots, List.of("surface")));
+    assertEquals(List.of("cobblestone", "surface"), nearest.address());
+
+    Resolved<String, Integer> column =
+        assertInstanceOf(
+            Resolved.class, resolve(roots, List.of("coordinates", "surface", "1", "2", "3")));
+    assertEquals(List.of("cobblestone", "coordinates", "surface"), column.address());
+
+    assertInstanceOf(NotFound.class, resolve(roots, List.of("block", "1", "2", "3")));
+    assertInstanceOf(
+        Resolved.class, resolve(roots, List.of("coordinates", "block", "1", "2", "3")));
+  }
+
+  @Test
   void reportsOptionsThatDoNotFit() {
     var roots = roots(node("cobblestone").template("coordinates"));
 

@@ -100,6 +100,9 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
         .getServicesManager()
         .register(IntegrationRegistrar.class, integrationRegistry, this, ServicePriority.Normal);
 
+    Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
+    Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), logger);
+
     // Locations are surfaced to searches like any third-party provider — via the same registration
     // helper an integration would use.
     integrationRegistry.registerDestinations(
@@ -108,7 +111,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             dataStore.locations(),
             dataStore.deaths(),
             dataStore.mounts(),
-            () -> config.get(keys.deathsTrack)));
+            () -> config.get(keys.deathsTrack),
+            messages));
     // Each player's last death is recorded so they can navigate back to it.
     getServer()
         .getPluginManager()
@@ -121,9 +125,6 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
         .getPluginManager()
         .registerEvents(new MountListener(dataStore.mounts(), platformApi.scheduler()), this);
     getServer().getPluginManager().registerEvents(new PetListener(), this);
-
-    Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
-    Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), logger);
 
     // Trips tick on the platform scheduler (Folia-safe region tasks); the default trail navigator
     // is

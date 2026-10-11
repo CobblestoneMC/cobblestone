@@ -195,7 +195,8 @@ public final class CobblestoneSpongePlugin {
             dataStore.deaths(),
             dataStore.mounts(),
             petListener,
-            () -> config.get(keys.deathsTrack)));
+            () -> config.get(keys.deathsTrack),
+            messages));
     // Each player's last death is recorded so they can navigate back to it.
     Sponge.eventManager()
         .registerListeners(

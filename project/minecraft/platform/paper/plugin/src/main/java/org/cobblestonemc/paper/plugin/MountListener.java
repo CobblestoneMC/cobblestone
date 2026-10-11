@@ -23,9 +23,10 @@ import org.cobblestonemc.plugin.data.MountDao;
 import org.cobblestonemc.plugin.data.MountLocation;
 
 /**
- * Remembers the mount each player last rode, so they can navigate back to it ({@code /navigate
- * mount}). Mounts are horse-like animals ({@link AbstractHorse}: horses, donkeys, mules, llamas,
- * camels, …); pigs, striders and boats are left out on purpose.
+ * Remembers the tamed mounts each player rides, so they can navigate back to the latest ({@code
+ * /navigate mount}). An untamed one is not worth remembering: it will not be waiting where it was.
+ * Mounts are horse-like animals ({@link AbstractHorse}: horses, donkeys, mules, llamas, camels, …);
+ * pigs, striders and boats are left out on purpose.
  *
  * <p>The record is written when the player gets off, kept current when the mount's chunk unloads
  * (while it is loaded, the destination follows the live entity), and dropped when the mount dies.
@@ -44,7 +45,8 @@ final class MountListener implements Listener {
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   public void onDismount(EntityDismountEvent event) {
     if (!(event.getEntity() instanceof Player player)
-        || !(event.getDismounted() instanceof AbstractHorse mount)) {
+        || !(event.getDismounted() instanceof AbstractHorse mount)
+        || !mount.isTamed()) {
       return;
     }
     Location location = mount.getLocation();
@@ -58,7 +60,8 @@ final class MountListener implements Listener {
             location.getWorld().getKey().asString(),
             location.getBlockX(),
             location.getBlockY(),
-            location.getBlockZ());
+            location.getBlockZ(),
+            System.currentTimeMillis());
     scheduler.runAsync(() -> mounts.upsert(record));
   }
 
