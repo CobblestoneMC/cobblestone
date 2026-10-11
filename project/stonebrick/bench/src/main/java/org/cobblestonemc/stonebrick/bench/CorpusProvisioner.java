@@ -23,6 +23,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -81,7 +82,7 @@ public final class CorpusProvisioner {
   }
 
   /** What the corpus is generated from. */
-  record Corpus(long seed, String minecraftVersion, Integer paperBuild) {}
+  record Corpus(long seed, String minecraftVersion, Integer paperBuild, String paperSha256) {}
 
   /**
    * Captures whatever the manifest asks for and the corpus does not already hold.
@@ -122,8 +123,8 @@ public final class CorpusProvisioner {
     } catch (IOException first) {
       // A world left half-written by an interrupted boot cannot be recovered from, and the error it
       // produces ("Overworld settings missing") says nothing about what to do about it. The world
-      // is
-      // only ever a cache of terrain the seed already determines, so discarding it and trying once
+      // is only ever a cache of terrain the seed already determines, so discarding it and trying
+      // once
       // more costs generation time and nothing else.
       if (!Files.isDirectory(workDir.resolve("world"))) {
         throw first;
@@ -216,10 +217,12 @@ public final class CorpusProvisioner {
     try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
       Map<String, Object> root = new Yaml().load(reader);
       Object build = root.get("paperBuild");
+      Object sha256 = root.get("paperSha256");
       return new Corpus(
           ((Number) root.get("seed")).longValue(),
           String.valueOf(root.get("minecraftVersion")),
-          build instanceof Number number ? number.intValue() : null);
+          build instanceof Number number ? number.intValue() : null,
+          sha256 == null ? null : sha256.toString().strip().toLowerCase(Locale.ROOT));
     } catch (RuntimeException e) {
       throw new IOException(file + ": " + e.getMessage(), e);
     }
@@ -251,12 +254,29 @@ public final class CorpusProvisioner {
    * back</b>. Terrain is only reproducible within a build, so leaving it floating would mean the
    * corpus quietly changed the next time Paper published — the pin is as much the corpus's identity
    * as the seed is.
+   *
+   * <p>The jar's checksum is pinned beside the build, and the download is checked against the pin
+   * rather than against what the API reports today. A checksum fetched alongside the download only
+   * proves the download arrived intact; a committed one also proves it is the jar the corpus was
+   * made with, so a changed or compromised release is refused instead of run.
    */
   private Path paperJar(Corpus corpus) throws IOException, InterruptedException {
     PaperBuild build = resolveBuild(corpus);
-    if (corpus.paperBuild() == null) {
-      pinBuild(build.id());
-      System.out.println("Pinned Paper build " + build.id() + " in corpus.yml.");
+    if (corpus.paperSha256() != null && !corpus.paperSha256().equals(build.sha256())) {
+      throw new IOException(
+          "Paper build "
+              + build.id()
+              + " now reports sha256 "
+              + build.sha256()
+              + ", but corpus.yml pins "
+              + corpus.paperSha256()
+              + ". Refusing to run it. If Paper republished the build deliberately, update"
+              + " paperSha256 in corpus.yml by hand.");
+    }
+    if (corpus.paperBuild() == null || corpus.paperSha256() == null) {
+      pin(build);
+      System.out.println(
+          "Pinned Paper build " + build.id() + " (sha256 " + build.sha256() + ") in corpus.yml.");
     }
     Path jar = workDir.resolve("cache").resolve(build.name());
     if (Files.isRegularFile(jar) && sha256(jar).equals(build.sha256())) {
@@ -359,13 +379,16 @@ public final class CorpusProvisioner {
                 + corpus.minecraftVersion());
   }
 
-  private void pinBuild(int build) throws IOException {
+  private void pin(PaperBuild build) throws IOException {
     Path file = corpusRoot.resolve("corpus.yml");
     String text = Files.readString(file, StandardCharsets.UTF_8);
-    if (text.contains("paperBuild:")) {
-      text = text.replaceAll("(?m)^paperBuild:.*$", "paperBuild: " + build);
+    // Quoted, so that YAML never reads a checksum that happens to be all digits as a number.
+    String pins = "paperBuild: " + build.id() + "\npaperSha256: \"" + build.sha256() + "\"";
+    String unpinned = text.replaceAll("(?m)^paperSha256:.*\\R?", "");
+    if (unpinned.matches("(?s)(.*\\n)?paperBuild:.*")) {
+      text = unpinned.replaceFirst("(?m)^paperBuild:.*$", pins);
     } else {
-      text = text.stripTrailing() + "\npaperBuild: " + build + "\n";
+      text = unpinned.stripTrailing() + "\n" + pins + "\n";
     }
     Files.writeString(file, text, StandardCharsets.UTF_8);
   }

@@ -56,7 +56,8 @@ class SearchIntegrationTest {
                 transitions,
                 List.of(),
                 Heuristics.zero(),
-                SearchSettings.defaults())
+                SearchSettings.defaults(),
+                SearchObserver.none())
             .future()
             .join();
 
@@ -90,7 +91,8 @@ class SearchIntegrationTest {
                 List.of(portal),
                 List.of(),
                 Heuristics.zero(),
-                SearchSettings.defaults())
+                SearchSettings.defaults(),
+                SearchObserver.none())
             .future()
             .join();
 
@@ -121,7 +123,8 @@ class SearchIntegrationTest {
                 noTransitions,
                 List.of(),
                 Heuristics.zero(),
-                SearchSettings.defaults())
+                SearchSettings.defaults(),
+                SearchObserver.none())
             .future()
             .join();
 

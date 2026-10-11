@@ -36,6 +36,7 @@ import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.ModesProvider;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.Restriction;
+import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
@@ -207,7 +208,8 @@ public final class PaperNavigationServiceImpl
                         gathered,
                         restrictions,
                         heuristic,
-                        settings.settings()));
+                        settings.settings(),
+                        SearchObserver.none()));
     return new PaperSearchHandle(handleFuture);
   }
 

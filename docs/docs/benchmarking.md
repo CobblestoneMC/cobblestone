@@ -32,9 +32,9 @@ cd project
 ./gradlew captureCorpus -PacceptMinecraftEula=true
 ```
 
-This downloads the Paper build pinned in `corpus.yml`, verifies its checksum, generates the seeded
-world, and captures what each scenario needs. It only captures what is missing, so it is safe to
-re-run. The flag records that you accept the
+This downloads the Paper build pinned in `corpus.yml`, checks it against the checksum pinned
+there, generates the seeded world, and captures what each scenario needs. It only captures what is
+missing, so it is safe to re-run. The flag records that you accept the
 [Minecraft EULA](https://www.minecraft.net/en-us/eula); nothing starts without it.
 
 Captures of the same seed differ in small decorations, so your numbers will not match a teammate's

@@ -18,6 +18,7 @@ import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.ModesProvider;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.Restriction;
+import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.Transition;
 import org.cobblestonemc.api.NavigationResult;
@@ -130,7 +131,8 @@ public final class StonebrickSolve {
             transitions,
             restrictions,
             heuristic,
-            settings)
+            settings,
+            SearchObserver.none())
         .future();
   }
 
