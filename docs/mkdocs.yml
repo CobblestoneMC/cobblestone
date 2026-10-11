@@ -109,6 +109,8 @@ nav:
       - Trips: developers/trips.md
       - Searching: developers/searching.md
       - Search modification: developers/search-modification.md
-  - Contributing: contributing.md
+  - Contributing:
+      - contributing.md
+      - Benchmarking: benchmarking.md
   - Download: https://modrinth.com/plugin/cobblestoneplugin
   - Stats: https://bstats.org/plugin/bukkit/Cobblestone/33624

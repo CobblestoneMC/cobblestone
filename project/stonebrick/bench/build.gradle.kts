@@ -41,9 +41,23 @@ tasks.register<JavaExec>("captureCorpus") {
     mainClass = "org.cobblestonemc.stonebrick.bench.CorpusProvisioner"
     classpath = sourceSets["main"].runtimeClasspath
 
-    // Modern Paper needs a newer Java than this build compiles with, so the toolchain resolves one
-    // rather than trusting whatever `java` happens to be on PATH.
+    // Modern Paper needs a newer Java than this build compiles with, so the toolchain finds one
+    // rather than trusting whatever `java` happens to be on PATH. It only *finds* one: nothing here
+    // downloads a JDK on the developer's behalf (see gradle.properties), so a machine without Java
+    // 25 gets told to install it.
     val serverJava = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
+    fun serverJavaPath(): String =
+        try {
+            serverJava.get().executablePath.asFile.absolutePath
+        } catch (e: Exception) {
+            // Not chained: Gradle would print the toolchain error in place of this one.
+            throw GradleException(
+                "captureCorpus runs a Paper server, which needs a Java 25 JDK. Install one (for " +
+                    "example from https://adoptium.net), then run again. If Gradle still cannot " +
+                    "find it, pass -Porg.gradle.java.installations.paths=<path to the JDK>. (" +
+                    e.message + ")",
+            )
+        }
 
     val corpusRoot = layout.projectDirectory.dir("../data")
     val workDir = layout.buildDirectory.dir("corpus-server")
@@ -58,7 +72,7 @@ tasks.register<JavaExec>("captureCorpus") {
                 workDir.get().asFile.absolutePath,
                 copierJar.get().asFile.absolutePath,
                 (project.findProperty("acceptMinecraftEula") ?: "false").toString(),
-                serverJava.get().executablePath.asFile.absolutePath,
+                serverJavaPath(),
             )
         },
     )
