@@ -13,9 +13,9 @@ import net.kyori.adventure.text.Component;
 
 /**
  * What {@linkplain DestinationLeaf#build building} a leaf produced: the destination, or why there
- * is none to navigate to right now — e.g. {@code death} for a player with no recorded death. An
- * invalid leaf is still offered in tab-completion; picking it shows the player its reason instead
- * of starting a search.
+ * is none to navigate to right now — e.g. {@code surface} while the player is already out in the
+ * open, or {@code death} for a player with no recorded death. An invalid leaf is still offered in
+ * tab-completion; picking it shows the player its reason instead of starting a search.
  *
  * @param <D> the destination type
  */
