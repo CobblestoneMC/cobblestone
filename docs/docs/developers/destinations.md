@@ -265,7 +265,20 @@ tree.leaf(
 - If the words after the name do not fit, the player is shown the usage, such as
   `/navigate outpost <outpost>`.
 
-#### Existence
+#### Validity
+
+When `build` returns `Validity.invalid(reason)`, the player is shown `reason` as is, instead of a
+search starting. The leaf is still offered in tab completion, so the player learns why rather than
+finding nothing there. Cobblestone's own destinations use it for `surface` when the player is already in the open, `death` when no death is on record, and `respawn` when the player has none.
+
+### Hover detail
+
+Override `detail()` to add a line to the hover text of `Searching for a route...` and of the error
+that follows if no route is found. The address is always shown; the detail goes beneath it.
+Cobblestone's own destinations use it for the coordinates of fixed places, such as `death`, so a
+player can find the place by hand.
+
+### Existence
 
 Override `exists()` for a target that can stop existing partway through a trip, such as an
 animal that dies. A trip polls it about once a second and ends quietly once it returns `false`.
