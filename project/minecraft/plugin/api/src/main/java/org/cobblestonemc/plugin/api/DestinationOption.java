@@ -14,13 +14,13 @@ import java.util.function.IntSupplier;
 
 /**
  * One argument a destination takes after its key — e.g. the {@code x}, {@code y} and {@code z} of
- * {@code /navigate coordinates 100 64 -200}. A {@link MinecraftDestination} lists its options in
- * {@link MinecraftDestination#options()}; the command parses one token per option, in order, and
- * hands the values to {@link MinecraftDestination#configure(OptionValues)}.
+ * {@code /navigate coordinates block 100 64 -200}. A {@link DestinationLeaf} lists its options in
+ * {@link DestinationLeaf#options()}; the command parses one token per option, in order, and hands
+ * the values to {@link DestinationLeaf#build(OptionValues)}.
  *
  * <p>Options are never part of a destination's address: they always follow its key, and are never
  * promoted past it. So the address (and the {@code cobblestone.navigate.<address>} permission) of
- * {@code coordinates 100 64 -200} is just {@code coordinates}.
+ * {@code coordinates block 100 64 -200} is just {@code coordinates block}.
  *
  * @param <T> the type a token parses to
  */
@@ -35,7 +35,7 @@ public interface DestinationOption<T> {
 
   /**
    * Returns whether the option must be given. Required options must all come before optional ones
-   * in {@link MinecraftDestination#options()}, since tokens are matched to options in order.
+   * in {@link DestinationLeaf#options()}, since tokens are matched to options in order.
    *
    * @return {@code true} if required
    */

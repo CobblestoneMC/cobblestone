@@ -24,9 +24,9 @@ import org.spongepowered.math.vector.Vector3i;
  * WorldRegion<ServerWorld, Vector3i>} generics. The region supplier is re-evaluated each search, so
  * a moving target (a home, a town's claims) stays current.
  *
- * <p>Navigability is gated by Cobblestone's {@code cobblestone.navigate.*} permission; a
- * destination's own {@link MinecraftDestination#permissions()} is reserved for genuine hard
- * requirements, so these default to none.
+ * <p>Navigability is gated by Cobblestone's {@code cobblestone.navigate.*} permission. A leaf's own
+ * {@link org.cobblestonemc.plugin.api.DestinationLeaf#permissions() permissions} are reserved for
+ * genuine hard requirements.
  */
 public final class Destination {
 
@@ -66,13 +66,12 @@ public final class Destination {
    */
   public static MinecraftDestination<ServerWorld, Vector3i> regions(
       Supplier<List<WorldRegion<ServerWorld, Vector3i>>> regions, Component name) {
-    return new Impl(regions::get, name, List.of(), false);
+    return new Impl(regions::get, name, false);
   }
 
   private record Impl(
       org.cobblestonemc.api.Destination<WorldRegion<ServerWorld, Vector3i>> destination,
       Component displayName,
-      List<String> permissions,
       boolean mobile)
       implements MinecraftDestination<ServerWorld, Vector3i> {
 

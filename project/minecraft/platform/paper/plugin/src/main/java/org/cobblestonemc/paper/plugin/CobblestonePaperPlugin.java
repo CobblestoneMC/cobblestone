@@ -85,7 +85,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                 config.get(keys.chunksPrefetchDistance),
                 config.get(keys.chunksFetchAttempts),
                 config.get(keys.chunksPolicy)));
-    PaperIntegrationRegistry integrationRegistry = new PaperIntegrationRegistry();
+    PaperIntegrationRegistry integrationRegistry =
+        new PaperIntegrationRegistry(platformApi.regions());
     getServer()
         .getServicesManager()
         .register(NavigationService.class, this.platformApi, this, ServicePriority.Normal);
@@ -103,15 +104,16 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
     Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), logger);
 
-    // Locations are surfaced to searches like any third-party provider — via the same registration
-    // helper an integration would use.
-    integrationRegistry.registerDestinations(
+    // Cobblestone's own destinations sit under its key like an integration's, but are written in
+    // its own terms rather than adapted from the integration API.
+    integrationRegistry.registerProvider(
         this,
         new CobblestoneDestinationSource(
             dataStore.locations(),
             dataStore.deaths(),
             dataStore.mounts(),
             platformApi.scheduler(),
+            platformApi.regions(),
             () -> config.get(keys.deathsTrack),
             messages));
     // Each player's last death is recorded so they can navigate back to it.

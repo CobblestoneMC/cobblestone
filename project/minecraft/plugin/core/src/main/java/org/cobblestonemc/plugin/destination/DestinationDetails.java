@@ -32,13 +32,13 @@ public final class DestinationDetails {
 
   /**
    * The hover text for command feedback about a destination: its address, and beneath it the
-   * destination's own {@linkplain MinecraftDestination#detail() detail}, if it has any.
+   * destination's own {@linkplain NavigationTarget#detail() detail}, if it has any.
    *
    * @param address the destination's canonical address
    * @param destination the destination
    * @return the hover text
    */
-  public static Component hover(List<String> address, MinecraftDestination<?, ?> destination) {
+  public static Component hover(List<String> address, NavigationTarget destination) {
     Component hover = Component.text(String.join(" ", address));
     return destination
         .detail()

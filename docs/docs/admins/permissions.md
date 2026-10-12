@@ -110,7 +110,7 @@ Integrations offer a teleport as a route step only when the player may run the c
 ### Provider permissions
 
 A provider may attach additional required permissions to a destination
-(`MinecraftDestination#permissions`). The player must hold all of them. Cobblestone's own
+(`DestinationLeaf#permissions`). The player must hold all of them. Cobblestone's own
 destinations declare none.
 
 ## Navigator nodes

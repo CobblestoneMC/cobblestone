@@ -14,9 +14,10 @@ import java.util.function.Supplier;
  * A lazily-evaluated tree of navigation targets. Sub-trees and leaves are keyed by unique strings
  * (upper-case allowed, no special characters; spaces are allowed but discouraged).
  *
- * <p>Children are exposed as {@link Supplier}s so that huge sets — every town, every player home —
+ * <p>Sub-trees are exposed as {@link Supplier}s so that huge sets — every town, every player home —
  * are not materialized until the node is actually visited during command traversal or
- * tab-completion.
+ * tab-completion. Leaves only describe themselves until they are {@linkplain DestinationLeaf#build
+ * built}, which happens once a player has picked one.
  *
  * @param <W> the platform world type
  * @param <V> the platform block-position type
@@ -39,9 +40,9 @@ public interface PlatformDestinationTree<W, V> {
   Map<String, Supplier<? extends PlatformDestinationTree<W, V>>> subTrees();
 
   /**
-   * Returns the leaf destinations at this node, keyed by their key, each behind a supplier.
+   * Returns the leaves at this node, keyed by their key.
    *
-   * @return the destinations
+   * @return the leaves
    */
-  Map<String, Supplier<MinecraftDestination<W, V>>> destinations();
+  Map<String, DestinationLeaf<MinecraftDestination<W, V>>> destinations();
 }

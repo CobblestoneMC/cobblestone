@@ -8,6 +8,7 @@
 package org.cobblestonemc.minecraft;
 
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.concurrent.ConcurrentHashMap;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.DomainRegion;
@@ -28,18 +29,22 @@ import org.jetbrains.annotations.Nullable;
  * <p>Water and leaves are not passable, so they count as a roof: a player at the bottom of the
  * ocean or under a canopy is not yet at the surface.
  *
- * <p>The region reads chunks through its world; a solve binds it to its own scoped view with {@link
- * #scopedForSolve}, so it reads the chunks the solve already holds. Each column's roof is computed
- * once per region and remembered.
+ * <p><b>It never waits for a chunk.</b> It reads only through the view a solve binds it to with
+ * {@link #scopedForSolve}, and only chunks that view already holds — which, for the cells a search
+ * expands, it always does. A column whose chunk is not in hand is simply not known yet: none of its
+ * cells count as open, and the nearest boundary falls back to a guess that reads nothing (see
+ * {@link #nearestBoundaryCell}). Unbound, as it is before a solve starts, it knows nothing. Each
+ * column's roof is computed once per bound region and remembered.
  */
 public final class SurfaceRegion implements DomainRegion<MinecraftWorld> {
 
   private final MinecraftWorld world;
-  private final MinecraftWorld readWorld;
+  private final @Nullable MinecraftWorld readWorld;
   private final @Nullable Column column;
   private final Map<Long, Integer> roofs = new ConcurrentHashMap<>();
 
-  private SurfaceRegion(MinecraftWorld world, MinecraftWorld readWorld, @Nullable Column column) {
+  private SurfaceRegion(
+      MinecraftWorld world, @Nullable MinecraftWorld readWorld, @Nullable Column column) {
     this.world = world;
     this.readWorld = readWorld;
     this.column = column;
@@ -52,7 +57,7 @@ public final class SurfaceRegion implements DomainRegion<MinecraftWorld> {
    * @return the region
    */
   public static SurfaceRegion anywhere(MinecraftWorld world) {
-    return new SurfaceRegion(world, world, null);
+    return new SurfaceRegion(world, null, null);
   }
 
   /**
@@ -64,7 +69,7 @@ public final class SurfaceRegion implements DomainRegion<MinecraftWorld> {
    * @return the region
    */
   public static SurfaceRegion column(MinecraftWorld world, int x, int z) {
-    return new SurfaceRegion(world, world, new Column(x, z));
+    return new SurfaceRegion(world, null, new Column(x, z));
   }
 
   @Override
@@ -77,18 +82,27 @@ public final class SurfaceRegion implements DomainRegion<MinecraftWorld> {
     if (column != null && (cell.x() != column.x() || cell.z() != column.z())) {
       return false;
     }
-    return cell.y() >= roof(cell.x(), cell.z());
+    OptionalInt roof = roof(cell.x(), cell.z());
+    return roof.isPresent() && cell.y() > roof.getAsInt();
   }
 
+  /**
+   * The open cell just above the roof of {@code from}'s column — or of the region's own column,
+   * once {@code from} is in it. From outside a single-column region, it is the column itself at
+   * {@code from}'s height: that steers the search across to it without reading a chunk that may be
+   * far away, and the roof takes over once the search arrives. Where the roof is not known yet,
+   * {@code from} itself, which claims nothing about the terrain.
+   */
   @Override
   public Cell nearestBoundaryCell(Cell from) {
-    int x = column == null ? from.x() : column.x();
-    int z = column == null ? from.z() : column.z();
-    int roof = roof(x, z);
-    if (from.x() == x && from.z() == z && from.y() >= roof) {
-      return from; // already out in the open
+    if (column != null && (from.x() != column.x() || from.z() != column.z())) {
+      return new Cell(column.x(), from.y(), column.z());
     }
-    return new Cell(x, roof + 1, z);
+    OptionalInt roof = roof(from.x(), from.z());
+    if (roof.isEmpty() || from.y() > roof.getAsInt()) {
+      return from; // already out in the open, or no way to tell yet
+    }
+    return new Cell(from.x(), roof.getAsInt() + 1, from.z());
   }
 
   @Override
@@ -98,39 +112,40 @@ public final class SurfaceRegion implements DomainRegion<MinecraftWorld> {
 
   /**
    * The y of the highest non-passable block in the column, or one below the world floor if there is
-   * none. A cell is open to the sky exactly when it is at or above this.
+   * none — a cell is open to the sky exactly when it is above this — or empty if the column's chunk
+   * is not in hand.
    */
-  private int roof(int x, int z) {
+  private OptionalInt roof(int x, int z) {
     long key = ((long) x << 32) | (z & 0xFFFFFFFFL);
     Integer known = roofs.get(key);
     if (known != null) {
-      return known;
+      return OptionalInt.of(known);
     }
-    // Not computeIfAbsent: the scan may wait on a chunk fetch, which must not hold a map bin.
-    int roof = scan(x, z);
+    MinecraftChunk chunk = chunkInHand(x, z);
+    if (chunk == null) {
+      return OptionalInt.empty();
+    }
+    int roof = scan(chunk, x & 15, z & 15);
     roofs.put(key, roof);
-    return roof;
+    return OptionalInt.of(roof);
   }
 
-  private int scan(int x, int z) {
+  private @Nullable MinecraftChunk chunkInHand(int x, int z) {
+    if (readWorld == null) {
+      return null;
+    }
     Cell probe = new Cell(x, world.maxY(), z);
-    MinecraftChunk chunk = await(readWorld.chunkAt(probe, probe));
-    int localX = x & 15;
-    int localZ = z & 15;
+    FutureOr<MinecraftChunk> chunk = readWorld.chunkAt(probe, probe);
+    return chunk.isImmediate() ? chunk.value() : null;
+  }
+
+  private int scan(MinecraftChunk chunk, int localX, int localZ) {
     for (int y = world.maxY(); y >= world.minY(); y--) {
       if (!chunk.block(localX, y, localZ).isPassable()) {
         return y;
       }
     }
     return world.minY() - 1;
-  }
-
-  /**
-   * The chunk, waiting for it if it is not already in hand. Within a solve the column being asked
-   * about is one the search has just expanded, so its chunk is cached and this does not wait.
-   */
-  private static MinecraftChunk await(FutureOr<MinecraftChunk> chunk) {
-    return chunk.isImmediate() ? chunk.value() : chunk.toFuture().join();
   }
 
   @Override

@@ -29,7 +29,6 @@ import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.HoverEvent;
 import org.bukkit.Location;
-import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.CobblestoneLogger;
@@ -43,16 +42,18 @@ import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.paper.PaperNavigationServiceImpl;
 import org.cobblestonemc.paper.plugin.api.NavigatorFactory;
 import org.cobblestonemc.plugin.Permissions;
-import org.cobblestonemc.plugin.api.MinecraftDestination;
+import org.cobblestonemc.plugin.api.DestinationLeaf;
 import org.cobblestonemc.plugin.api.NavigatorSettings;
-import org.cobblestonemc.plugin.api.PlatformDestinationTree;
+import org.cobblestonemc.plugin.api.OptionValues;
 import org.cobblestonemc.plugin.api.TripOutcome;
 import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.command.FlagParser;
 import org.cobblestonemc.plugin.command.NavigationFlags;
 import org.cobblestonemc.plugin.destination.DestinationDetails;
+import org.cobblestonemc.plugin.destination.DestinationNode;
 import org.cobblestonemc.plugin.destination.DestinationResolver;
 import org.cobblestonemc.plugin.destination.NavigationPermissions;
+import org.cobblestonemc.plugin.destination.NavigationTarget;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Message0;
 import org.cobblestonemc.plugin.message.Messages;
@@ -62,7 +63,6 @@ import org.cobblestonemc.plugin.trip.GuideSearch;
 import org.cobblestonemc.plugin.trip.LiveSearch;
 import org.cobblestonemc.plugin.trip.Trip;
 import org.cobblestonemc.plugin.trip.TripLabel;
-import org.joml.Vector3i;
 
 /**
  * The {@code /navigate} (alias {@code /nav}) user command: parse flags, resolve the destination
@@ -174,14 +174,14 @@ final class NavigateCommand {
       return Command.SINGLE_SUCCESS;
     }
 
-    DestinationResolver.Resolution<World, Vector3i> resolution =
+    DestinationResolver.Resolution<NavigationTarget> resolution =
         DestinationResolver.resolve(
             destinationRoots(integrations, player),
             parsed.destination(),
             player::hasPermission,
             canNavigate(player));
     if (resolution
-        instanceof DestinationResolver.Ambiguous<World, Vector3i>(List<List<String>> addresses)) {
+        instanceof DestinationResolver.Ambiguous<NavigationTarget>(List<List<String>> addresses)) {
       messages.send(
           player,
           locale,
@@ -189,14 +189,15 @@ final class NavigateCommand {
           formatAddresses(addresses));
       return Command.SINGLE_SUCCESS;
     }
-    if (resolution instanceof DestinationResolver.InvalidOptions<World, Vector3i> invalid) {
+    if (resolution instanceof DestinationResolver.InvalidOptions<NavigationTarget> invalid) {
       sendUsage(player, locale, messages, invalid);
       return Command.SINGLE_SUCCESS;
     }
     if (!(resolution
         instanceof
-        DestinationResolver.Resolved<World, Vector3i>(
-            MinecraftDestination<World, Vector3i> destination,
+        DestinationResolver.Resolved<NavigationTarget>(
+            DestinationLeaf<NavigationTarget> leaf,
+            OptionValues values,
             List<String> address))) {
       messages.send(
           player,
@@ -206,9 +207,14 @@ final class NavigateCommand {
       return Command.SINGLE_SUCCESS;
     }
 
-    if (destination.validity() instanceof Validity.Invalid(Component reason)) {
-      player.sendMessage(reason);
-      return Command.SINGLE_SUCCESS;
+    // Built only now, on the player's own thread, which may read the world around them.
+    NavigationTarget destination;
+    switch (leaf.build(values)) {
+      case Validity.Invalid<NavigationTarget>(Component reason) -> {
+        player.sendMessage(reason);
+        return Command.SINGLE_SUCCESS;
+      }
+      case Validity.Valid<NavigationTarget>(NavigationTarget valid) -> destination = valid;
     }
 
     TripLabel tripLabel = TripLabel.address(address);
@@ -217,7 +223,7 @@ final class NavigateCommand {
         switch (flags.liveness()) {
           case LIVE -> true;
           case NO_LIVE -> false;
-          case DEFAULT -> destination.isMobile();
+          case DEFAULT -> destination.mobile();
         };
     startSearch(
         player,
@@ -242,7 +248,7 @@ final class NavigateCommand {
       Locale locale,
       TripLabel tripLabel,
       Component hover,
-      MinecraftDestination<World, Vector3i> destination,
+      NavigationTarget destination,
       NavigationFlags flags,
       boolean live,
       PaperNavigationServiceImpl platformApi,
@@ -393,7 +399,7 @@ final class NavigateCommand {
    */
   private static LiveSearch<Location> liveSearch(
       Player player,
-      MinecraftDestination<World, Vector3i> destination,
+      NavigationTarget destination,
       NavigationFlags flags,
       PaperNavigationServiceImpl platformApi,
       SearchRegistry<Location> searches,
@@ -493,13 +499,13 @@ final class NavigateCommand {
     return !player.isPermissionSet(node) || player.hasPermission(node);
   }
 
-  private static Map<String, PlatformDestinationTree<World, Vector3i>> destinationRoots(
+  private static Map<String, DestinationNode<NavigationTarget>> destinationRoots(
       PaperIntegrationRegistry integrations, Player player) {
-    Map<String, PlatformDestinationTree<World, Vector3i>> roots = new TreeMap<>();
+    Map<String, DestinationNode<NavigationTarget>> roots = new TreeMap<>();
     for (var provider : integrations.destinationProviders().entrySet()) {
-      PlatformDestinationTree<World, Vector3i> root = provider.getValue().provide(player);
+      DestinationNode<NavigationTarget> root = provider.getValue().provide(player);
       // An empty root would be offered as a token that leads nowhere — drop it instead.
-      if (root == null || (root.subTrees().isEmpty() && root.destinations().isEmpty())) {
+      if (root == null || (root.subTrees().isEmpty() && root.leaves().isEmpty())) {
         continue;
       }
       roots.put(provider.getKey(), root);
@@ -543,7 +549,7 @@ final class NavigateCommand {
       Player player,
       Locale locale,
       Messages messages,
-      DestinationResolver.InvalidOptions<World, Vector3i> invalid) {
+      DestinationResolver.InvalidOptions<NavigationTarget> invalid) {
     String usage = DestinationResolver.usage(invalid.address(), invalid.options());
     if (invalid.invalidToken() == null) {
       messages.send(player, locale, CobblestoneMessages.NAVIGATE_DESTINATION_USAGE, usage);

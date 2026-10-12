@@ -200,11 +200,6 @@ public record NpcDestination(NPC npc) implements MinecraftDestination<World, Vec
   }
 
   @Override
-  public List<String> permissions() {
-    return List.of();
-  }
-
-  @Override
   public boolean isMobile() {
     return true;  // trips to it default to -live
   }
@@ -213,38 +208,53 @@ public record NpcDestination(NPC npc) implements MinecraftDestination<World, Vec
 
 `isMobile()` sets the default for live trips. Players may override it with `-live` or `-no-live`.
 
-### Options
+### Leaves
 
-A destination may take values typed after its name, such as the coordinates in
-`/nav coordinates block 100 64 -200`. Override `options()` to declare them, in the order they
-are typed, and `configure(OptionValues)` to build the real destination from what was typed. The
-destination returned by `configure` is the one searched.
+`leaf(key, () -> destination)` is the common case: a leaf with no options or permissions that is
+always valid. For anything more, pass a `DestinationLeaf`. A leaf describes itself (its
+permissions and options) and builds its destination only once a player picks it:
+
+- Tab completion reads every leaf's description on each keystroke, possibly off the server
+  thread, so the description must be cheap and must not read the world.
+- `build(OptionValues)` runs once, when the command runs, on the thread that owns the player
+  (their region, on Folia). It may read the world around them. It returns a `Validity`: the
+  destination, or the reason there is nothing to navigate to right now.
 
 ```java
-public final class OutpostDestination implements MinecraftDestination<World, Vector3i> {
-  private final DestinationOption<Outpost> outpost;
+// Always valid, nothing typed after the key; the same as leaf(key, () -> ...).
+DestinationLeaf.of(() -> Destination.at(market, "Market"));
 
-  public OutpostDestination(Town town) {
-    this.outpost =
-        DestinationOption.required(
-            "outpost",
-            partial -> town.outposts().stream().map(Outpost::name).toList(),
-            token -> Optional.ofNullable(town.outpost(token)));
-  }
+// May be invalid.
+DestinationLeaf.validated(
+    () -> town.isOpen()
+        ? Validity.valid(Destination.at(town.spawn(), town.name()))
+        : Validity.invalid(Component.text("The town is closed.", NamedTextColor.RED)));
 
-  @Override
-  public List<DestinationOption<?>> options() {
-    return List.of(outpost);
-  }
+// Takes options, and requires a permission.
+new DestinationLeaf.Simple<>(List.of("towns.outposts"), List.of(outpost), values -> ...);
+```
 
-  @Override
-  public MinecraftDestination<World, Vector3i> configure(OptionValues values) {
-    Outpost chosen = values.get(outpost);
-    return Destination.at(chosen.spawn(), chosen.name());
-  }
+#### Options
 
-  // destination(), displayName() and permissions() as usual; destination() is never searched.
-}
+A leaf may take values typed after its key, such as the coordinates in
+`/nav coordinates block 100 64 -200`. Declare them in the order they are typed, and build the
+destination from what was typed:
+
+```java
+DestinationOption<Outpost> outpost =
+    DestinationOption.required(
+        "outpost",
+        partial -> town.outposts().stream().map(Outpost::name).toList(),
+        token -> Optional.ofNullable(town.outpost(token)));
+
+tree.leaf(
+    "outpost",
+    DestinationLeaf.withOptions(
+        List.of(outpost),
+        values -> {
+          Outpost chosen = values.get(outpost);
+          return Validity.valid(Destination.at(chosen.spawn(), chosen.name()));
+        }));
 ```
 
 - Each option reads one word. `DestinationOption.integer(name, hint)` reads a whole number and
@@ -255,34 +265,7 @@ public final class OutpostDestination implements MinecraftDestination<World, Vec
 - If the words after the name do not fit, the player is shown the usage, such as
   `/navigate outpost <outpost>`.
 
-### Hover detail
-
-Override `detail()` to add a line to the hover text of `Searching for a route...` and of the error
-that follows if no route is found. The address is always shown; the detail goes beneath it.
-Cobblestone's own destinations use it for the coordinates of fixed places, such as `death`, so a
-player can find the place by hand.
-
-### Validity
-
-Override `validity()` when a destination can exist but not be navigated to right now. Return
-`Validity.invalid(reason)` and the player is shown `reason` as is, instead of a search starting.
-The destination is still offered in tab completion, so the player learns why rather than finding
-nothing there. Cobblestone's own destinations use it for `surface` when the player is already in
-the open, and for `death` when no death is on record.
-
-```java
-@Override
-public Validity validity() {
-  return town.isOpen()
-      ? Validity.valid()
-      : Validity.invalid(Component.text("The town is closed.", NamedTextColor.RED));
-}
-```
-
-`validity()` is called on the thread that owns the player (their region, on Folia), once the
-command has picked the destination. Tab completion never calls it, so it may read the world.
-
-### Existence
+#### Existence
 
 Override `exists()` for a target that can stop existing partway through a trip, such as an
 animal that dies. A trip polls it about once a second and ends quietly once it returns `false`.
@@ -294,8 +277,8 @@ and to players who log off.
 
 - **Destination node**: `cobblestone.navigate.<address>`. Generated automatically, default allow,
   and managed by server admins.
-- **`permissions()`**: Additional required permissions, all of which the player must hold. Use for
-  access control only. Cobblestone's own destinations declare none.
+- **A leaf's `permissions()`**: Additional required permissions, all of which the player must
+  hold. Use for access control only. Cobblestone's own destinations declare none.
 
 ## Addressing
 

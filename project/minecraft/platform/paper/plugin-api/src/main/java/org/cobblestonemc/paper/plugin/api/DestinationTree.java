@@ -11,8 +11,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 import org.bukkit.World;
+import org.cobblestonemc.plugin.api.DestinationLeaf;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.cobblestonemc.plugin.api.PlatformDestinationTree;
+import org.cobblestonemc.plugin.api.Validity;
 import org.joml.Vector3i;
 
 /**
@@ -25,16 +27,17 @@ import org.joml.Vector3i;
  *     .leaf("resident", Destination.at(spawn, "resident"));
  * }</pre>
  *
- * <p>Children are held behind {@link Supplier}s, so huge sets (every town, every home) are not
- * materialized until a node is actually visited. A key may be both a {@code leaf} and a {@code
- * subtree} — Cobblestone treats "the node itself" as the leaf and "under the node" as the subtree.
+ * <p>Sub-trees are held behind {@link Supplier}s, so huge sets (every town, every home) are not
+ * materialized until a node is actually visited, and a leaf's destination is built only once a
+ * player picks it. A key may be both a {@code leaf} and a {@code subtree} — Cobblestone treats "the
+ * node itself" as the leaf and "under the node" as the subtree.
  */
 public final class DestinationTree {
 
   private boolean strict;
   private final Map<String, Supplier<? extends PlatformDestinationTree<World, Vector3i>>> subTrees =
       new LinkedHashMap<>();
-  private final Map<String, Supplier<MinecraftDestination<World, Vector3i>>> destinations =
+  private final Map<String, DestinationLeaf<MinecraftDestination<World, Vector3i>>> destinations =
       new LinkedHashMap<>();
 
   private DestinationTree() {}
@@ -59,16 +62,29 @@ public final class DestinationTree {
   }
 
   /**
-   * Adds a leaf destination, built on demand.
+   * Adds a leaf, described by {@code leaf} and built once a player picks it — for a leaf with
+   * permissions or options, or one that may be {@linkplain Validity#invalid invalid}.
    *
    * @param key the leaf's key
-   * @param destination supplies the destination when the leaf is visited
+   * @param leaf the leaf
+   * @return this builder
+   */
+  public DestinationTree leaf(
+      String key, DestinationLeaf<MinecraftDestination<World, Vector3i>> leaf) {
+    destinations.put(key, leaf);
+    return this;
+  }
+
+  /**
+   * Adds a leaf destination, built once a player picks it.
+   *
+   * @param key the leaf's key
+   * @param destination supplies the destination when the leaf is picked
    * @return this builder
    */
   public DestinationTree leaf(
       String key, Supplier<MinecraftDestination<World, Vector3i>> destination) {
-    destinations.put(key, destination);
-    return this;
+    return leaf(key, DestinationLeaf.of(destination));
   }
 
   /**
@@ -118,6 +134,6 @@ public final class DestinationTree {
   private record Node(
       boolean strict,
       Map<String, Supplier<? extends PlatformDestinationTree<World, Vector3i>>> subTrees,
-      Map<String, Supplier<MinecraftDestination<World, Vector3i>>> destinations)
+      Map<String, DestinationLeaf<MinecraftDestination<World, Vector3i>>> destinations)
       implements PlatformDestinationTree<World, Vector3i> {}
 }
