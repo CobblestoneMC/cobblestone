@@ -122,6 +122,23 @@ public final class CobblestoneMessages {
   public static final Message1 NAVIGATE_DESTINATION_NOT_FOUND =
       Message1.error("command.navigate.destination_not_found");
 
+  /**
+   * Shown when a destination's options are missing or extra ({@code {0}} = how to type it, e.g.
+   * {@code cobblestone coordinates block <x> <y> <z> [world]}).
+   */
+  public static final Message1 NAVIGATE_DESTINATION_USAGE =
+      Message1.error("command.navigate.destination_usage");
+
+  /**
+   * Shown when one of a destination's options does not parse ({@code {0}} = the token, {@code {1}}
+   * = how to type the destination).
+   */
+  public static final Message2 NAVIGATE_OPTION_INVALID =
+      Message2.error("command.navigate.option_invalid");
+
+  /** Shown for {@code /navigate death} when no death of the player's is on record. */
+  public static final Message0 NAVIGATE_NO_DEATH = Message0.error("command.navigate.no_death");
+
   /** Shown when the destination is ambiguous ({@code {0}} = the candidate paths). */
   public static final Message1 NAVIGATE_DESTINATION_AMBIGUOUS =
       Message1.error("command.navigate.destination_ambiguous");

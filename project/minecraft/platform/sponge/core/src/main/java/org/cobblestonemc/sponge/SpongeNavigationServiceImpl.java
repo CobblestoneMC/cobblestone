@@ -36,7 +36,6 @@ import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
-import org.cobblestonemc.minecraft.api.WorldRegion;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 import org.cobblestonemc.minecraft.registry.OwnedRegistry;
 import org.cobblestonemc.sponge.api.BoxWorldRegion;
@@ -57,7 +56,6 @@ import org.spongepowered.api.item.inventory.ItemStack;
 import org.spongepowered.api.item.inventory.Slot;
 import org.spongepowered.api.world.server.ServerLocation;
 import org.spongepowered.api.world.server.ServerWorld;
-import org.spongepowered.math.vector.Vector3i;
 import org.spongepowered.plugin.PluginContainer;
 
 /**
@@ -76,6 +74,7 @@ public final class SpongeNavigationServiceImpl
   private final SpongePlatformApi platform;
   private final ChunkProviderSettings chunkSettings;
   private final CobblestoneApi core;
+  private final SpongeRegions regions = new SpongeRegions(this);
 
   private final Map<String, MinecraftWorld> worldCache = new ConcurrentHashMap<>();
   private final OwnedRegistry<SearchModificationService> searchModifiers = new OwnedRegistry<>();
@@ -140,27 +139,32 @@ public final class SpongeNavigationServiceImpl
   }
 
   /**
-   * Begins a search toward a plugin-provided {@link Destination} (e.g. a resolved location), which
-   * may span several regions/endpoints. Used by the {@code /navigate} command; not on the public
-   * native façade because it speaks Sponge's {@link WorldRegion} type.
+   * Begins a search toward a {@link Destination} the {@code /navigate} command resolved, which may
+   * span several regions/endpoints. Not on the public native façade, because it speaks the search's
+   * own region type: make those with {@link #regions()}.
+   *
+   * <p>The destination's regions are read once, here, on the calling thread.
    *
    * @param player the navigating player
-   * @param destination the goal, as one or more world regions
+   * @param destination the goal, as one or more regions
    * @param settings the search limits and knobs
    * @return a handle to the in-flight search, yielding native-located steps
    */
   public SearchHandle<ServerLocation, MinecraftStepPayload> navigatePlayerToDestination(
       ServerPlayer player,
-      Destination<WorldRegion<ServerWorld, Vector3i>> destination,
+      Destination<DomainRegion<MinecraftWorld>> destination,
       MinecraftSearchSettings settings) {
-    List<DomainRegion<MinecraftWorld>> regions = new ArrayList<>();
-    for (WorldRegion<ServerWorld, Vector3i> region : destination.regions()) {
-      if (region.world() == null) {
-        continue; // world unloaded or target gone; skip rather than NPE
-      }
-      regions.add(SpongeConversions.region(region, this));
-    }
+    List<DomainRegion<MinecraftWorld>> regions = List.copyOf(destination.regions());
     return search(player, () -> regions, settings);
+  }
+
+  /**
+   * Returns the factory for the regions {@link #navigatePlayerToDestination} takes.
+   *
+   * @return the region factory
+   */
+  public SpongeRegions regions() {
+    return regions;
   }
 
   /**

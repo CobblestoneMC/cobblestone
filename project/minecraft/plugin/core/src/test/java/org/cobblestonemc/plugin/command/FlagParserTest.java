@@ -8,6 +8,7 @@
 package org.cobblestonemc.plugin.command;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -122,5 +123,18 @@ class FlagParserTest {
     List<String> tokens = List.of("-live", "mco", "-no-mode", "mine", "warp", "spawn");
     Parsed parsed = parsed(tokens.toArray(new String[0]));
     assertEquals(parsed.destination(), FlagParser.destinationTokens(tokens));
+  }
+
+  @Test
+  void negativeNumbersAreDestinationTokensNotFlags() {
+    Parsed parsed = parsed("coordinates", "-100", "64", "-200", "-live");
+    assertEquals(List.of("coordinates", "-100", "64", "-200"), parsed.destination());
+    assertEquals(Liveness.LIVE, parsed.flags().liveness());
+    assertEquals(
+        List.of("coordinates", "-100", "-2"),
+        FlagParser.destinationTokens(List.of("coordinates", "-100", "-2")));
+    assertTrue(FlagParser.isFlag("-live"));
+    assertTrue(FlagParser.isFlag("-"));
+    assertFalse(FlagParser.isFlag("-12"));
   }
 }

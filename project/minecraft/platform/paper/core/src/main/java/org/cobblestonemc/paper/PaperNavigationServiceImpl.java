@@ -47,7 +47,6 @@ import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
-import org.cobblestonemc.minecraft.api.WorldRegion;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 import org.cobblestonemc.minecraft.registry.OwnedRegistry;
 import org.cobblestonemc.paper.api.BoxWorldRegion;
@@ -56,7 +55,6 @@ import org.cobblestonemc.paper.api.PassChecker;
 import org.cobblestonemc.paper.api.SearchModificationRegistrar;
 import org.cobblestonemc.paper.api.SearchModificationService;
 import org.cobblestonemc.paper.api.Transition;
-import org.joml.Vector3i;
 
 public final class PaperNavigationServiceImpl
     implements NavigationService, SearchModificationRegistrar, WorldWrapper {
@@ -66,6 +64,7 @@ public final class PaperNavigationServiceImpl
   private final PaperPlatformApi platform;
   private final ChunkProviderSettings chunkSettings;
   private final CobblestoneApi core;
+  private final PaperRegions regions = new PaperRegions(this);
   private final Map<String, MinecraftWorld> worldCache = new ConcurrentHashMap<>();
   private final OwnedRegistry<SearchModificationService> searchModifiers = new OwnedRegistry<>();
 
@@ -102,27 +101,32 @@ public final class PaperNavigationServiceImpl
   }
 
   /**
-   * Begins a search toward a plugin-provided {@link Destination} (e.g. a resolved location), which
-   * may span several regions/endpoints. Used by the {@code /navigate} command; not on the public
-   * native façade because it speaks Paper's {@link WorldRegion} type.
+   * Begins a search toward a {@link Destination} the {@code /navigate} command resolved, which may
+   * span several regions/endpoints. Not on the public native façade, because it speaks the search's
+   * own region type: make those with {@link #regions()}.
+   *
+   * <p>The destination's regions are read once, here, on the calling thread.
    *
    * @param player the navigating player
-   * @param destination the goal, as one or more world regions
+   * @param destination the goal, as one or more regions
    * @param settings the search limits and knobs
    * @return a handle to the in-flight search, yielding native-located steps
    */
   public SearchHandle<Location, MinecraftStepPayload> navigatePlayerToDestination(
       Player player,
-      Destination<WorldRegion<World, Vector3i>> destination,
+      Destination<DomainRegion<MinecraftWorld>> destination,
       MinecraftSearchSettings settings) {
-    List<DomainRegion<MinecraftWorld>> regions = new ArrayList<>();
-    for (WorldRegion<World, Vector3i> region : destination.regions()) {
-      if (region.world() == null) {
-        continue; // world unloaded or target gone; skip rather than NPE
-      }
-      regions.add(PaperConversions.region(region, this));
-    }
+    List<DomainRegion<MinecraftWorld>> regions = List.copyOf(destination.regions());
     return search(player, () -> regions, settings);
+  }
+
+  /**
+   * Returns the factory for the regions {@link #navigatePlayerToDestination} takes.
+   *
+   * @return the region factory
+   */
+  public PaperRegions regions() {
+    return regions;
   }
 
   /**

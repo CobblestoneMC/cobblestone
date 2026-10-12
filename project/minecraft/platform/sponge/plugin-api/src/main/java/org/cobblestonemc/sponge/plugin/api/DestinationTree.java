@@ -10,8 +10,10 @@ package org.cobblestonemc.sponge.plugin.api;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
+import org.cobblestonemc.plugin.api.DestinationLeaf;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.cobblestonemc.plugin.api.PlatformDestinationTree;
+import org.cobblestonemc.plugin.api.Validity;
 import org.spongepowered.api.world.server.ServerWorld;
 import org.spongepowered.math.vector.Vector3i;
 
@@ -19,16 +21,17 @@ import org.spongepowered.math.vector.Vector3i;
  * A fluent builder for a {@link PlatformDestinationTree} node — so an integration writes its {@code
  * /navigate} structure as structure, not nested {@code Map<String, Supplier<…>>} plumbing.
  *
- * <p>Children are held behind {@link Supplier}s, so huge sets (every town, every home) are not
- * materialized until a node is actually visited. A key may be both a {@code leaf} and a {@code
- * subtree} — Cobblestone treats "the node itself" as the leaf and "under the node" as the subtree.
+ * <p>Sub-trees are held behind {@link Supplier}s, so huge sets (every town, every home) are not
+ * materialized until a node is actually visited, and a leaf's destination is built only once a
+ * player picks it. A key may be both a {@code leaf} and a {@code subtree} — Cobblestone treats "the
+ * node itself" as the leaf and "under the node" as the subtree.
  */
 public final class DestinationTree {
 
   private boolean strict;
-  private final Map<String, Supplier<PlatformDestinationTree<ServerWorld, Vector3i>>> subTrees =
-      new LinkedHashMap<>();
-  private final Map<String, Supplier<MinecraftDestination<ServerWorld, Vector3i>>> destinations =
+  private final Map<String, Supplier<? extends PlatformDestinationTree<ServerWorld, Vector3i>>>
+      subTrees = new LinkedHashMap<>();
+  private final Map<String, DestinationLeaf<MinecraftDestination<ServerWorld, Vector3i>>> leaves =
       new LinkedHashMap<>();
 
   private DestinationTree() {}
@@ -43,25 +46,6 @@ public final class DestinationTree {
   }
 
   /**
-   * A new, mutable, insertion-ordered map of sub-trees, for assembling a node by hand.
-   *
-   * @return an empty sub-tree map
-   */
-  public static Map<String, Supplier<PlatformDestinationTree<ServerWorld, Vector3i>>>
-      emptySubTrees() {
-    return new LinkedHashMap<>();
-  }
-
-  /**
-   * A new, mutable, insertion-ordered map of leaves, for assembling a node by hand.
-   *
-   * @return an empty leaf map
-   */
-  public static Map<String, Supplier<MinecraftDestination<ServerWorld, Vector3i>>> emptyLeaves() {
-    return new LinkedHashMap<>();
-  }
-
-  /**
    * Marks this level strict — it may never be omitted in commands (no name-promotion).
    *
    * @return this builder
@@ -72,16 +56,29 @@ public final class DestinationTree {
   }
 
   /**
-   * Adds a leaf destination, built on demand.
+   * Adds a leaf, described by {@code leaf} and built once a player picks it — for a leaf with
+   * permissions or options, or one that may be {@linkplain Validity#invalid invalid}.
    *
    * @param key the leaf's key
-   * @param destination supplies the destination when the leaf is visited
+   * @param leaf the leaf
+   * @return this builder
+   */
+  public DestinationTree leaf(
+      String key, DestinationLeaf<MinecraftDestination<ServerWorld, Vector3i>> leaf) {
+    leaves.put(key, leaf);
+    return this;
+  }
+
+  /**
+   * Adds a leaf destination, built once a player picks it.
+   *
+   * @param key the leaf's key
+   * @param destination supplies the destination when the leaf is picked
    * @return this builder
    */
   public DestinationTree leaf(
       String key, Supplier<MinecraftDestination<ServerWorld, Vector3i>> destination) {
-    destinations.put(key, destination);
-    return this;
+    return leaf(key, DestinationLeaf.of(destination));
   }
 
   /**
@@ -103,7 +100,7 @@ public final class DestinationTree {
    * @return this builder
    */
   public DestinationTree subtree(
-      String key, Supplier<PlatformDestinationTree<ServerWorld, Vector3i>> tree) {
+      String key, Supplier<? extends PlatformDestinationTree<ServerWorld, Vector3i>> tree) {
     subTrees.put(key, tree);
     return this;
   }
@@ -125,12 +122,12 @@ public final class DestinationTree {
    * @return the tree node
    */
   public PlatformDestinationTree<ServerWorld, Vector3i> build() {
-    return new Node(strict, Map.copyOf(subTrees), Map.copyOf(destinations));
+    return new Node(strict, Map.copyOf(subTrees), Map.copyOf(leaves));
   }
 
   private record Node(
       boolean strict,
       Map<String, Supplier<? extends PlatformDestinationTree<ServerWorld, Vector3i>>> subTrees,
-      Map<String, Supplier<MinecraftDestination<ServerWorld, Vector3i>>> destinations)
+      Map<String, DestinationLeaf<MinecraftDestination<ServerWorld, Vector3i>>> leaves)
       implements PlatformDestinationTree<ServerWorld, Vector3i> {}
 }
