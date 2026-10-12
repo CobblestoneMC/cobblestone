@@ -81,8 +81,8 @@ class TrailLabelManagerTest {
             }
           });
 
-  private TripManager<Object, TestTripAgent, Object> trips;
-  private TrailLabelManager<Object, TestTripAgent, Object> labels;
+  private TripManager<Object, TestTripAgent, Vec3> trips;
+  private TrailLabelManager<Object, TestTripAgent, Vec3> labels;
 
   @BeforeEach
   void setUp() {
@@ -94,13 +94,13 @@ class TrailLabelManagerTest {
   }
 
   /** Starts a trip along a trail through {@code ahead}, and draws the player's labels. */
-  private Trip<Object, TestTripAgent, Object> start(TripLabel label, Vec3 ahead) {
-    Trip<Object, TestTripAgent, Object> trip = start(label, new AheadNavigator(ahead));
+  private Trip<Object, TestTripAgent, Vec3> start(TripLabel label, Vec3 ahead) {
+    Trip<Object, TestTripAgent, Vec3> trip = start(label, new AheadNavigator(ahead));
     scheduler.tick();
     return trip;
   }
 
-  private Trip<Object, TestTripAgent, Object> start(TripLabel label, AheadNavigator navigator) {
+  private Trip<Object, TestTripAgent, Vec3> start(TripLabel label, AheadNavigator navigator) {
     return trips.start(player, navigator, label, null, null, false, 0L).orElseThrow();
   }
 
@@ -180,7 +180,7 @@ class TrailLabelManagerTest {
     FakeHologram player = platform.only();
     assertEquals("Steve", plain(player.text));
 
-    Trip<Object, TestTripAgent, Object> town =
+    Trip<Object, TestTripAgent, Vec3> town =
         start(address("towny", "town", "Steve"), new Vec3(0.5, 0.9, 3.0));
     assertEquals("player Steve", plain(player.text));
 
@@ -239,7 +239,7 @@ class TrailLabelManagerTest {
   @Test
   void hittingTheLabelCancelsItsTrip() {
     start(address("essentials", "player", "Steve"), AHEAD);
-    Trip<Object, TestTripAgent, Object> town = start(address("towny", "town", "Steve"), AHEAD);
+    Trip<Object, TestTripAgent, Vec3> town = start(address("towny", "town", "Steve"), AHEAD);
 
     platform.spawned.get(1).onHit.run();
 
@@ -257,7 +257,7 @@ class TrailLabelManagerTest {
 
   @Test
   void removedWithTheLastTrip() {
-    Trip<Object, TestTripAgent, Object> trip = start(address("player", "Steve"), AHEAD);
+    Trip<Object, TestTripAgent, Vec3> trip = start(address("player", "Steve"), AHEAD);
     trips.stop(trip);
     assertTrue(platform.only().removed);
     assertTrue(scheduler.handle.cancelled);
@@ -295,7 +295,7 @@ class TrailLabelManagerTest {
   }
 
   /** A player at the origin over a flat floor, looking wherever the test says. */
-  private static final class FakePlatform implements HologramPlatform<TestTripAgent, Object> {
+  private static final class FakePlatform implements HologramPlatform<TestTripAgent, Vec3> {
     final List<FakeHologram> spawned = new ArrayList<>();
     TrailSmoother.BlockProbe probe = (x, y, z) -> y < 0 ? TrailBlock.SOLID : TrailBlock.OPEN;
     Vec3 look;
@@ -327,8 +327,8 @@ class TrailLabelManagerTest {
     }
 
     @Override
-    public Vec3 point(Object location) {
-      return (Vec3) location;
+    public Vec3 point(Vec3 location) {
+      return location;
     }
 
     FakeHologram only() {
@@ -388,7 +388,7 @@ class TrailLabelManagerTest {
   }
 
   /** A navigator that never completes. */
-  private static class PlainNavigator implements Navigator<Object> {
+  private static class PlainNavigator implements Navigator<Vec3> {
     @Override
     public void start() {}
 
@@ -396,7 +396,7 @@ class TrailLabelManagerTest {
     public void tick() {}
 
     @Override
-    public void update(Path<Object, MinecraftStepPayload> newPath) {}
+    public void update(Path<Vec3, MinecraftStepPayload> newPath) {}
 
     @Override
     public void stop() {}
