@@ -46,6 +46,21 @@ public interface DomainRegion<D extends Domain> {
    */
   Cell nearestBoundaryCell(Cell from);
 
+  /**
+   * Returns this region bound to one solve's view of its domain ({@link Domain#scopedForSolve()}).
+   *
+   * <p>Most regions are pure geometry and return themselves, which is the default. The hook is for
+   * a region whose extent depends on what is in the world (e.g. "anywhere open to the sky"): it
+   * reads blocks through {@code readDomain}, so it shares the chunks the solve has already fetched
+   * rather than fetching them a second time.
+   *
+   * @param readDomain the solve's scoped view of {@link #domain()}
+   * @return a region equivalent to this one, reading through {@code readDomain}
+   */
+  default DomainRegion<D> scopedForSolve(D readDomain) {
+    return this;
+  }
+
   record Impl<D extends Domain>(
       D domain,
       Function<Cell, Boolean> containsFunc,

@@ -11,6 +11,7 @@ import java.util.Optional;
 import org.cobblestonemc.CellRegion;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.SurfaceRegion;
 import org.cobblestonemc.minecraft.api.WorldRegion;
 import org.spongepowered.api.world.server.ServerLocation;
 import org.spongepowered.api.world.server.ServerWorld;
@@ -18,7 +19,7 @@ import org.spongepowered.math.vector.Vector3i;
 
 /**
  * Makes the regions a search navigates to, from Sponge's types: an integration's {@link
- * WorldRegion} converted, or one of Cobblestone's own.
+ * WorldRegion} converted, or one of Cobblestone's own, which a {@link WorldRegion} cannot express.
  */
 public final class SpongeRegions {
 
@@ -48,5 +49,27 @@ public final class SpongeRegions {
    */
   public DomainRegion<MinecraftWorld> block(ServerLocation location) {
     return new CellRegion<>(SpongeConversions.cell(location), worlds.wrap(location.world()));
+  }
+
+  /**
+   * Everywhere in a world that is open to the sky; see {@link SurfaceRegion}.
+   *
+   * @param world the world
+   * @return the region
+   */
+  public DomainRegion<MinecraftWorld> surface(ServerWorld world) {
+    return SurfaceRegion.anywhere(worlds.wrap(world));
+  }
+
+  /**
+   * Wherever one column of a world is open to the sky; see {@link SurfaceRegion}.
+   *
+   * @param world the world
+   * @param x the column's block x-coordinate
+   * @param z the column's block z-coordinate
+   * @return the region
+   */
+  public DomainRegion<MinecraftWorld> surface(ServerWorld world, int x, int z) {
+    return SurfaceRegion.column(worlds.wrap(world), x, z);
   }
 }

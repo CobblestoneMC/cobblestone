@@ -136,6 +136,10 @@ public final class CobblestoneMessages {
   public static final Message2 NAVIGATE_OPTION_INVALID =
       Message2.error("command.navigate.option_invalid");
 
+  /** Shown for {@code /navigate surface} when the player is already open to the sky. */
+  public static final Message0 NAVIGATE_ALREADY_ON_SURFACE =
+      Message0.error("command.navigate.already_on_surface");
+
   /** Shown for {@code /navigate death} when no death of the player's is on record. */
   public static final Message0 NAVIGATE_NO_DEATH = Message0.error("command.navigate.no_death");
 

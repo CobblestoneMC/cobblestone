@@ -32,6 +32,26 @@ public final class PaperTerrain {
   }
 
   /**
+   * Returns whether the block at the given position is open to the sky: nothing but passable blocks
+   * above it, all the way to the top of the world, as the {@code surface} destinations mean it.
+   * Water and leaves count as a roof.
+   *
+   * @param world the world
+   * @param x the block x-coordinate
+   * @param y the block y-coordinate
+   * @param z the block z-coordinate
+   * @return {@code true} if every block above it is passable
+   */
+  public static boolean isOpenToSky(World world, int x, int y, int z) {
+    for (int above = world.getMaxHeight() - 1; above > y; above--) {
+      if (!isPassable(world.getBlockData(x, above, z))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
    * Returns where a body at the given position would come to rest by falling straight down: the
    * first y at or below it that has something other than a passable block beneath. If nothing does
    * all the way to the bottom of the world, {@code y} itself.

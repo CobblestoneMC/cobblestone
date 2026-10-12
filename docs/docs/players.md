@@ -88,6 +88,16 @@ have none, you are told so.
 /nav spawn world_nether            # another world's spawn
 ```
 
+### Surface
+
+```
+/nav surface
+```
+
+The nearest place open to the sky. The route heads upward, so it is the quickest way out of a cave
+or a mine. Water, leaves and glass count as a roof. If you are already open to the sky, you are
+told so instead.
+
 ### Target
 
 ```
@@ -103,10 +113,12 @@ underwater; grass and flowers are looked through.
 ```
 /nav coordinates block 100 64 -200                 # a block in this world
 /nav coordinates block 100 64 -200 world_nether    # a block in another world
+/nav coordinates surface 100 -200                  # the open-sky spot at x=100, z=-200
 ```
 
 Whole numbers only. The world is optional and defaults to the one you are in. Tab completion offers
-your own coordinates. The word `coordinates` is always required.
+your own coordinates. The word `coordinates` is always required, so `/nav surface` still means the
+nearest open sky.
 
 ### Players
 

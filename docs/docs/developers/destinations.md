@@ -265,7 +265,7 @@ tree.leaf(
 
 When `build` returns `Validity.invalid(reason)`, the player is shown `reason` as is, instead of a
 search starting. The leaf is still offered in tab completion, so the player learns why rather than
-finding nothing there. Cobblestone's own destinations use it for `death` when no death is on record, `respawn` when the player has none, and `target` when they are not looking at a block in range.
+finding nothing there. Cobblestone's own destinations use it for `surface` when the player is already in the open, `death` when no death is on record, and `respawn` when the player has none.
 
 ### Hover detail
 

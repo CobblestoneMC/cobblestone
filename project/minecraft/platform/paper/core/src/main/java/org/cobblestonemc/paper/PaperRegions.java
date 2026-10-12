@@ -13,12 +13,13 @@ import org.bukkit.World;
 import org.cobblestonemc.CellRegion;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.SurfaceRegion;
 import org.cobblestonemc.minecraft.api.WorldRegion;
 import org.joml.Vector3i;
 
 /**
  * Makes the regions a search navigates to, from Paper's types: an integration's {@link WorldRegion}
- * converted, or one of Cobblestone's own.
+ * converted, or one of Cobblestone's own, which a {@link WorldRegion} cannot express.
  */
 public final class PaperRegions {
 
@@ -51,5 +52,27 @@ public final class PaperRegions {
     return world == null
         ? Optional.empty()
         : Optional.of(new CellRegion<>(PaperConversions.cell(location), worlds.wrap(world)));
+  }
+
+  /**
+   * Everywhere in a world that is open to the sky; see {@link SurfaceRegion}.
+   *
+   * @param world the world
+   * @return the region
+   */
+  public DomainRegion<MinecraftWorld> surface(World world) {
+    return SurfaceRegion.anywhere(worlds.wrap(world));
+  }
+
+  /**
+   * Wherever one column of a world is open to the sky; see {@link SurfaceRegion}.
+   *
+   * @param world the world
+   * @param x the column's block x-coordinate
+   * @param z the column's block z-coordinate
+   * @return the region
+   */
+  public DomainRegion<MinecraftWorld> surface(World world, int x, int z) {
+    return SurfaceRegion.column(worlds.wrap(world), x, z);
   }
 }

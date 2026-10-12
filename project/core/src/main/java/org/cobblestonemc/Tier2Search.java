@@ -224,7 +224,7 @@ final class Tier2Search<T, D extends Domain> {
     @SuppressWarnings("unchecked")
     D scoped = (D) virtualPath.domain().scopedForSolve();
     this.readDomain = scoped;
-    this.target = virtualPath.targetRegion();
+    this.target = virtualPath.targetRegion().scopedForSolve(scoped);
     this.behavior = behavior;
     this.restrictions = restrictions;
     this.hasRestrictions = !restrictions.isEmpty();
