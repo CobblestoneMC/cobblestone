@@ -14,14 +14,13 @@ import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
-import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
-import org.bukkit.util.RayTraceResult;
+import org.bukkit.util.Vector;
 import org.cobblestonemc.paper.PaperRegions;
 import org.cobblestonemc.paper.PaperTerrain;
 import org.cobblestonemc.paper.api.WholeWorldRegion;
@@ -110,24 +109,84 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
    * Where the player is looking: the open space in front of the block their crosshair is on, or the
    * ground beneath it if that space is in mid-air (the side of a wall, say). Water stops the look
    * like any block, so looking out to sea means its surface (unless the player is underwater);
-   * plants and other blocks without a collision shape are looked through. Invalid if no block is
-   * within {@link #TARGET_RANGE}.
+   * plants and other passable blocks are looked through. The look never reaches into an unloaded
+   * chunk, nor (on Folia) one another region owns. Invalid if no block is within {@link
+   * #TARGET_RANGE}.
    */
   private Validity<NavigationTarget> target(Player player) {
     Location eye = player.getEyeLocation();
     World world = eye.getWorld();
     // From underwater, look through the water rather than at it.
-    FluidCollisionMode fluids =
-        eye.getBlock().isLiquid() ? FluidCollisionMode.NEVER : FluidCollisionMode.ALWAYS;
-    RayTraceResult hit = world.rayTraceBlocks(eye, eye.getDirection(), TARGET_RANGE, fluids, true);
-    Block block = hit == null ? null : hit.getHitBlock();
-    if (block == null) {
+    boolean underwater = eye.getBlock().isLiquid();
+    int[] front = openBlockBefore(world, eye.toVector(), eye.getDirection(), underwater);
+    if (front == null) {
       return Validity.invalid(render(player, CobblestoneMessages.NAVIGATE_NO_TARGET, TARGET_RANGE));
     }
-    BlockFace face = hit.getHitBlockFace();
-    Block front = block.getRelative(face == null ? BlockFace.UP : face);
-    int y = PaperTerrain.landingY(world, front.getX(), front.getY(), front.getZ());
-    return Validity.valid(atBlock(TARGET_KEY, new Location(world, front.getX(), y, front.getZ())));
+    int y = PaperTerrain.landingY(world, front[0], front[1], front[2]);
+    return Validity.valid(atBlock(TARGET_KEY, new Location(world, front[0], y, front[2])));
+  }
+
+  /**
+   * Walks a look block by block, in the order it passes through them, and returns the block just
+   * before the first one that stops it ({@code {x, y, z}}), or {@code null} if nothing does within
+   * {@link #TARGET_RANGE}. Bukkit's own ray trace would load every chunk on the way, so this stops
+   * instead at the first chunk that is not loaded or (on Folia) not this region's to read.
+   */
+  private static int[] openBlockBefore(
+      World world, Vector from, Vector direction, boolean underwater) {
+    int x = from.getBlockX();
+    int y = from.getBlockY();
+    int z = from.getBlockZ();
+    int stepX = (int) Math.signum(direction.getX());
+    int stepY = (int) Math.signum(direction.getY());
+    int stepZ = (int) Math.signum(direction.getZ());
+    // How far along the look each axis's next block boundary is, and the distance between them.
+    double deltaX = stepX == 0 ? Double.POSITIVE_INFINITY : Math.abs(1 / direction.getX());
+    double deltaY = stepY == 0 ? Double.POSITIVE_INFINITY : Math.abs(1 / direction.getY());
+    double deltaZ = stepZ == 0 ? Double.POSITIVE_INFINITY : Math.abs(1 / direction.getZ());
+    double nextX = boundary(from.getX(), x, stepX) * deltaX;
+    double nextY = boundary(from.getY(), y, stepY) * deltaY;
+    double nextZ = boundary(from.getZ(), z, stepZ) * deltaZ;
+    int[] last = {x, y, z};
+    double travelled = 0;
+    while (travelled <= TARGET_RANGE) {
+      if (y >= world.getMinHeight() && y < world.getMaxHeight()) {
+        if (!Bukkit.isOwnedByCurrentRegion(world, x >> 4, z >> 4)
+            || !world.isChunkLoaded(x >> 4, z >> 4)) {
+          return null;
+        }
+        if (stopsLook(world.getBlockData(x, y, z), underwater)) {
+          return last;
+        }
+      }
+      last = new int[] {x, y, z};
+      if (nextX <= nextY && nextX <= nextZ) {
+        x += stepX;
+        travelled = nextX;
+        nextX += deltaX;
+      } else if (nextY <= nextZ) {
+        y += stepY;
+        travelled = nextY;
+        nextY += deltaY;
+      } else {
+        z += stepZ;
+        travelled = nextZ;
+        nextZ += deltaZ;
+      }
+    }
+    return null;
+  }
+
+  /** How far, in blocks along one axis, {@code position} is from its block's next boundary. */
+  private static double boundary(double position, int block, int step) {
+    return step > 0 ? block + 1 - position : position - block;
+  }
+
+  /** Whether a block stops a look: anything not passable, but not water or lava from within. */
+  private static boolean stopsLook(BlockData data, boolean underwater) {
+    Material material = data.getMaterial();
+    return !PaperTerrain.isPassable(data)
+        && !(underwater && (material == Material.WATER || material == Material.LAVA));
   }
 
   /**
@@ -143,9 +202,12 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
 
   /** One block, in the player's world unless named; invalid above or below the world. */
   private DestinationLeaf<NavigationTarget> coordinateBlock(Player player) {
-    DestinationOption<Integer> x = DestinationOption.integer("x", () -> blockX(player));
-    DestinationOption<Integer> y = DestinationOption.integer("y", () -> blockY(player));
-    DestinationOption<Integer> z = DestinationOption.integer("z", () -> blockZ(player));
+    DestinationOption<Integer> x =
+        DestinationOption.integer("x", () -> player.getLocation().getBlockX());
+    DestinationOption<Integer> y =
+        DestinationOption.integer("y", () -> player.getLocation().getBlockY());
+    DestinationOption<Integer> z =
+        DestinationOption.integer("z", () -> player.getLocation().getBlockZ());
     DestinationOption<World> world = worldOption();
     return DestinationLeaf.withOptions(
         List.of(x, y, z, world),
@@ -329,17 +391,5 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
           NamespacedKey key = NamespacedKey.fromString(token.toLowerCase(Locale.ROOT));
           return Optional.ofNullable(key == null ? null : Bukkit.getWorld(key));
         });
-  }
-
-  private static int blockX(Player player) {
-    return player.getLocation().getBlockX();
-  }
-
-  private static int blockY(Player player) {
-    return player.getLocation().getBlockY();
-  }
-
-  private static int blockZ(Player player) {
-    return player.getLocation().getBlockZ();
   }
 }

@@ -12,9 +12,8 @@ import org.spongepowered.api.world.server.ServerWorld;
 
 /**
  * Reads of the terrain around a player by the same rules the search uses, for destinations that
- * look at the world before searching: what is {@linkplain #isPassable passable}, what is
- * {@linkplain #isOpenToSky open to the sky}, and where a body would {@linkplain #landingY land}.
- * Each reads blocks, so call it on the main thread.
+ * look at the world before searching: what is {@linkplain #isPassable passable}, and where a body
+ * would {@linkplain #landingY land}. Each reads blocks, so call it on the main thread.
  */
 public final class SpongeTerrain {
 
