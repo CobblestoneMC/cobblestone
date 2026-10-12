@@ -5,13 +5,12 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.plugin.hud;
+package org.cobblestonemc.plugin.trip;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.IntStream;
-import org.cobblestonemc.plugin.trip.TripLabel;
 
 /**
  * Shortens trip labels to the least text that still tells a player's trips apart. An address label
@@ -19,12 +18,12 @@ import org.cobblestonemc.plugin.trip.TripLabel;
  * {@code private home} beside a trip to {@code location global home}. Labels without an address are
  * shown as given.
  */
-public final class HudLabels {
+public final class TripLabels {
 
   /** Candidates double with each key, so longer addresses are shown in full. */
   private static final int MAX_SHORTENED_KEYS = 12;
 
-  private HudLabels() {}
+  private TripLabels() {}
 
   /**
    * Shortens each label against all the others.

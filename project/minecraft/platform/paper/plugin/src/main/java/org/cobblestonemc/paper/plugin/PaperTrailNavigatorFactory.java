@@ -10,6 +10,7 @@ package org.cobblestonemc.paper.plugin;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.BooleanSupplier;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
@@ -22,6 +23,7 @@ import org.cobblestonemc.plugin.api.Navigator;
 import org.cobblestonemc.plugin.api.NavigatorSettings;
 import org.cobblestonemc.plugin.config.ConfigKeys;
 import org.cobblestonemc.plugin.config.ConfigManager;
+import org.cobblestonemc.plugin.hologram.TrailLabels;
 import org.cobblestonemc.plugin.message.Messages;
 
 /**
@@ -35,6 +37,7 @@ public final class PaperTrailNavigatorFactory implements NavigatorFactory {
   private final ConfigManager config;
   private final ConfigKeys keys;
   private final Messages messages;
+  private final TrailLabels<Location> labels;
 
   /**
    * Creates the factory.
@@ -42,11 +45,14 @@ public final class PaperTrailNavigatorFactory implements NavigatorFactory {
    * @param config the config manager (read live for trail appearance)
    * @param keys the registered config keys
    * @param messages the message renderer (for action prompts)
+   * @param labels where trips' labels float over their trails
    */
-  public PaperTrailNavigatorFactory(ConfigManager config, ConfigKeys keys, Messages messages) {
+  public PaperTrailNavigatorFactory(
+      ConfigManager config, ConfigKeys keys, Messages messages, TrailLabels<Location> labels) {
     this.config = config;
     this.keys = keys;
     this.messages = messages;
+    this.labels = labels;
   }
 
   @Override
@@ -65,6 +71,12 @@ public final class PaperTrailNavigatorFactory implements NavigatorFactory {
         settings
             .get(TrailNavigatorSettings.COLORS)
             .orElseGet(() -> parseColors(config.get(keys.trailColors)));
+    // An explicit choice holds for the trip; otherwise the config is followed live.
+    BooleanSupplier showLabel =
+        settings
+            .get(TrailNavigatorSettings.SHOW_LABEL)
+            .<BooleanSupplier>map(show -> () -> show)
+            .orElse(() -> config.get(keys.tripsHolograms));
     return new PaperTrailNavigator(
         player,
         path,
@@ -74,7 +86,9 @@ public final class PaperTrailNavigatorFactory implements NavigatorFactory {
         colors,
         config.get(keys.trailDensity),
         config.get(keys.tripsRecalculateDistance),
-        messages);
+        messages,
+        labels,
+        showLabel);
   }
 
   /** Parses Bukkit {@code Particle} names, skipping unknown ones. */

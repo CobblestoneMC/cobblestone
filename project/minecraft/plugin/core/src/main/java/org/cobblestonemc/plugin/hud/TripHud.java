@@ -30,6 +30,7 @@ import org.cobblestonemc.plugin.message.CobblestoneColors;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.trip.Trip;
 import org.cobblestonemc.plugin.trip.TripAgent;
+import org.cobblestonemc.plugin.trip.TripLabels;
 import org.cobblestonemc.plugin.trip.TripManager;
 
 /**
@@ -185,7 +186,7 @@ public final class TripHud<E, A extends TripAgent<E>, L> {
     Locale locale = locales.apply(agent);
     Component title =
         Component.text(messages.raw(locale, "hud.title"), null, TextDecoration.UNDERLINED);
-    List<String> labels = HudLabels.shorten(active.stream().map(Trip::label).toList());
+    List<String> labels = TripLabels.shorten(active.stream().map(Trip::label).toList());
     List<Component> lines = new ArrayList<>(active.size());
     for (int i = 0; i < active.size(); i++) {
       lines.add(
