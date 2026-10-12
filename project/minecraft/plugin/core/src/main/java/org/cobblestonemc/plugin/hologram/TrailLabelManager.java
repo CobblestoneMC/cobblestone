@@ -16,6 +16,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.ScheduledTaskHandle;
 import org.cobblestonemc.plugin.api.Navigator;
@@ -65,6 +67,23 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
 
   /** Labels follow the player every other tick. */
   static final long PERIOD_TICKS = 2L;
+
+  /**
+   * A label whose spot is briefly lost (e.g. for the tick between a new guide arriving and being
+   * drawn) stays where it is for this many updates before it is removed, so it doesn't blink.
+   */
+  static final int GRACE_UPDATES = 5;
+
+  /** A label's text turns dark once the light where it floats reaches this level... */
+  static final int DARK_TEXT_LIGHT = 12;
+
+  /** ...and light again once it falls to this one. */
+  static final int LIGHT_TEXT_LIGHT = 9;
+
+  /** The text color in the dark, and against a bright sky. */
+  static final TextColor LIGHT_TEXT = CobblestoneColors.SECONDARY;
+
+  static final TextColor DARK_TEXT = NamedTextColor.BLACK;
 
   /** A label moved less than this stays where it is. */
   private static final double MOVE_EPSILON_SQUARED = 0.02 * 0.02;
@@ -134,9 +153,8 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
   }
 
   private void render(UUID player) {
-    List<Trip<E, A, L>> active = new ArrayList<>(trips.trips(player));
-    active.sort(Comparator.comparingInt(Trip::id));
-    List<String> labels = TripLabels.shorten(active.stream().map(Trip::label).toList());
+    List<Trip<E, A, L>> active = sorted(trips.trips(player));
+    List<String> labels = labels(active);
     synchronized (this) {
       Session<E, A, L> session = sessions.get(player);
       if (session != null) {
@@ -167,8 +185,14 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
               .labelPoint(DISTANCE)
               .map(platform::point)
               .flatMap(point -> HologramPlacement.place(gaze.get().eye(), point, taken, probe));
-      spot.ifPresent(taken::add);
       Shown current = shown.get(navigator);
+      if (spot.isEmpty() && current != null && current.missed() < GRACE_UPDATES) {
+        spot = Optional.of(current.at()); // keep it there for now
+        current = current.missing();
+      } else if (current != null) {
+        current = current.found();
+      }
+      spot.ifPresent(taken::add);
       if (spot.isEmpty() || !inView(gaze.get(), spot.get(), current != null)) {
         if (current != null) {
           current.hologram().remove();
@@ -176,7 +200,8 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
         }
         continue;
       }
-      Component text = Component.text(labels.get(i), CobblestoneColors.SECONDARY);
+      boolean dark = dark(platform.light(session.agent(), spot.get()), current);
+      Component text = Component.text(labels.get(i), dark ? DARK_TEXT : LIGHT_TEXT);
       Shown updated = show(session.agent(), trip, current, spot.get(), text);
       if (updated == null) {
         shown.remove(navigator);
@@ -184,6 +209,12 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
         shown.put(navigator, updated);
       }
     }
+  }
+
+  /** Whether a label's text should be dark at {@code light}, keeping its color near the edge. */
+  private static boolean dark(int light, Shown current) {
+    boolean wasDark = current != null && DARK_TEXT.equals(current.text().color());
+    return wasDark ? light > LIGHT_TEXT_LIGHT : light >= DARK_TEXT_LIGHT;
   }
 
   /** Whether the player looks at {@code spot}, with more slack once the label is {@code shown}. */
@@ -201,26 +232,38 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
         if (!text.equals(current.text())) {
           current.hologram().text(text);
         }
-        return new Shown(current.hologram(), moved ? at : current.at(), text);
+        return new Shown(current.hologram(), moved ? at : current.at(), text, current.missed());
       }
       current.hologram().remove(); // it can't follow from here; place a fresh one
     }
     return platform
         .spawn(agent, at, text, () -> cancel(agent, trip))
-        .map(hologram -> new Shown(hologram, at, text))
+        .map(hologram -> new Shown(hologram, at, text, 0))
         .orElse(null);
   }
 
   private void cancel(A agent, Trip<E, A, L> trip) {
-    if (!trips.trips(agent.uuid()).contains(trip)) {
+    List<Trip<E, A, L>> active = sorted(trips.trips(agent.uuid()));
+    int index = active.indexOf(trip);
+    if (index < 0) {
       return; // already over
     }
+    String label = labels(active).get(index); // as the label read
     trips.stop(trip); // detaches its navigator, which removes the label
-    messages.send(
-        agent.audience(),
-        agent.locale(),
-        CobblestoneMessages.HOLOGRAM_CANCELED,
-        trip.destination());
+    messages.send(agent.audience(), agent.locale(), CobblestoneMessages.HOLOGRAM_CANCELED, label);
+  }
+
+  /** The player's trips in the order they started. */
+  private static <E, A extends TripAgent<E>, L> List<Trip<E, A, L>> sorted(
+      List<Trip<E, A, L>> active) {
+    List<Trip<E, A, L>> sorted = new ArrayList<>(active);
+    sorted.sort(Comparator.comparingInt(Trip::id));
+    return sorted;
+  }
+
+  /** Each trip's label, as short as it can be while telling the trips apart. */
+  private static List<String> labels(List<? extends Trip<?, ?, ?>> active) {
+    return TripLabels.shorten(active.stream().map(Trip::label).toList());
   }
 
   private static <E, A extends TripAgent<E>, L> Optional<Trip<E, A, L>> tripOf(
@@ -240,5 +283,15 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
     }
   }
 
-  private record Shown(Hologram hologram, Vec3 at, Component text) {}
+  /** A label on screen, and for how many updates in a row its spot has been lost. */
+  private record Shown(Hologram hologram, Vec3 at, Component text, int missed) {
+
+    Shown missing() {
+      return new Shown(hologram, at, text, missed + 1);
+    }
+
+    Shown found() {
+      return missed == 0 ? this : new Shown(hologram, at, text, 0);
+    }
+  }
 }

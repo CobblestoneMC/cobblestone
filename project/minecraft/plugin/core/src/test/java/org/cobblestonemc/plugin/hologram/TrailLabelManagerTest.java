@@ -225,8 +225,51 @@ class TrailLabelManagerTest {
     start(address("player", "Steve"), navigator);
     scheduler.tick();
     navigator.ahead = Optional.empty();
+    for (int i = 0; i < TrailLabelManager.GRACE_UPDATES; i++) {
+      scheduler.tick();
+      assertFalse(platform.only().removed, "kept a moment, in case it comes back");
+    }
     scheduler.tick();
     assertTrue(platform.only().removed);
+  }
+
+  @Test
+  void aBrieflyLostSpotDoesNotBlink() {
+    AheadNavigator navigator = new AheadNavigator(AHEAD);
+    start(address("player", "Steve"), navigator);
+    scheduler.tick();
+    FakeHologram label = platform.only();
+
+    for (int round = 0; round < 3; round++) {
+      navigator.ahead = Optional.empty(); // e.g. a new guide not drawn yet
+      scheduler.tick();
+      navigator.ahead = Optional.of(AHEAD);
+      scheduler.tick();
+    }
+    assertFalse(label.removed);
+    assertEquals(1, platform.spawned.size(), "never respawned");
+    assertEquals(OVER, label.at);
+  }
+
+  @Test
+  void textIsDarkInBrightLight() {
+    platform.light = TrailLabelManager.DARK_TEXT_LIGHT;
+    start(address("player", "Steve"), AHEAD);
+    FakeHologram label = platform.only();
+    assertEquals(TrailLabelManager.DARK_TEXT, label.text.color());
+
+    platform.light = TrailLabelManager.LIGHT_TEXT_LIGHT + 1; // dimmer, but not by much
+    scheduler.tick();
+    assertEquals(TrailLabelManager.DARK_TEXT, label.text.color());
+
+    platform.light = TrailLabelManager.LIGHT_TEXT_LIGHT;
+    scheduler.tick();
+    assertEquals(TrailLabelManager.LIGHT_TEXT, label.text.color());
+
+    platform.light = TrailLabelManager.DARK_TEXT_LIGHT - 1; // brighter, but not by much
+    scheduler.tick();
+    assertEquals(TrailLabelManager.LIGHT_TEXT, label.text.color());
+    assertEquals(1, platform.spawned.size(), "recolored, not replaced");
   }
 
   @Test
@@ -248,7 +291,7 @@ class TrailLabelManagerTest {
     assertTrue(platform.spawned.get(1).removed);
     assertFalse(platform.spawned.get(0).removed);
     assertEquals(
-        List.of("Canceled your trip to towny town Steve."),
+        List.of("Canceled your trip to town Steve."),
         sent.stream().map(TrailLabelManagerTest::plain).toList());
 
     platform.spawned.get(1).onHit.run(); // a second hit before it is gone does nothing
@@ -298,6 +341,7 @@ class TrailLabelManagerTest {
   private static final class FakePlatform implements HologramPlatform<TestTripAgent, Vec3> {
     final List<FakeHologram> spawned = new ArrayList<>();
     TrailSmoother.BlockProbe probe = (x, y, z) -> y < 0 ? TrailBlock.SOLID : TrailBlock.OPEN;
+    int light;
     Vec3 look;
 
     void lookAt(Vec3 target) {
@@ -324,6 +368,11 @@ class TrailLabelManagerTest {
       look =
           new Vec3(
               Math.cos(yaw) * Math.cos(pitch), Math.sin(pitch), Math.sin(yaw) * Math.cos(pitch));
+    }
+
+    @Override
+    public int light(TestTripAgent agent, Vec3 at) {
+      return light;
     }
 
     @Override
