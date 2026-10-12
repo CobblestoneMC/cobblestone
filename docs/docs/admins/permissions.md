@@ -42,6 +42,9 @@ Each destination has a canonical address, which maps to a node under `cobbleston
 | `towny town riverwood home` | `cobblestone.navigate.towny.town.riverwood.home` |
 | `citizens npc Blacksmith` | `cobblestone.navigate.citizens.npc.Blacksmith` |
 
+Values typed after a destination are not part of its address, so they never change which node
+is checked.
+
 The first segment is the lower-cased name of the owning plugin. Integrations register under the
 plugin they integrate with (`towny`, `citizens`, `essentials`, `betonquest`, …), not under the
 name of the companion plugin.
@@ -98,7 +101,7 @@ Integrations offer a teleport as a route step only when the player may run the c
 ### Provider permissions
 
 A provider may attach additional required permissions to a destination
-(`MinecraftDestination#permissions`). The player must hold all of them. Cobblestone's own
+(`DestinationLeaf#permissions`). The player must hold all of them. Cobblestone's own
 destinations declare none.
 
 ## Navigator nodes

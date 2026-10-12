@@ -11,9 +11,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
 import org.cobblestonemc.minecraft.registry.OwnedRegistry;
+import org.cobblestonemc.plugin.destination.DestinationProvider;
+import org.cobblestonemc.plugin.destination.PlatformTrees;
+import org.cobblestonemc.sponge.SpongeRegions;
 import org.cobblestonemc.sponge.plugin.api.DestinationService;
 import org.cobblestonemc.sponge.plugin.api.IntegrationRegistrar;
 import org.cobblestonemc.sponge.plugin.api.NavigatorFactory;
+import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.plugin.PluginContainer;
 
 /**
@@ -26,7 +30,9 @@ public final class SpongeIntegrationRegistry implements IntegrationRegistrar {
 
   private record NavigatorEntry(String owner, NavigatorFactory factory) {}
 
-  private final OwnedRegistry<DestinationService> destinations = new OwnedRegistry<>();
+  private final OwnedRegistry<DestinationProvider<ServerPlayer>> destinations =
+      new OwnedRegistry<>();
+  private final SpongeRegions regions;
 
   /**
    * Navigators are keyed by their own id, not by owner: a plugin may offer several, and {@code
@@ -36,8 +42,36 @@ public final class SpongeIntegrationRegistry implements IntegrationRegistrar {
   private final ConcurrentSkipListMap<String, NavigatorEntry> navigators =
       new ConcurrentSkipListMap<>();
 
+  /**
+   * Creates an empty registry.
+   *
+   * @param regions converts the regions in integrations' trees into the search's
+   */
+  SpongeIntegrationRegistry(SpongeRegions regions) {
+    this.regions = regions;
+  }
+
+  /**
+   * Registers an integration's destinations, which join the {@code /navigate} tree {@linkplain
+   * PlatformTrees#adapt in Cobblestone's own terms}.
+   */
   @Override
   public void registerDestinations(PluginContainer owner, DestinationService provider) {
+    registerProvider(
+        owner,
+        player -> {
+          var tree = provider.provide(player);
+          return tree == null ? null : PlatformTrees.adapt(tree, regions::of);
+        });
+  }
+
+  /**
+   * Registers destinations already written in Cobblestone's own terms — its built-in ones.
+   *
+   * @param owner the registering plugin, whose key roots them, as for an integration
+   * @param provider the destinations
+   */
+  void registerProvider(PluginContainer owner, DestinationProvider<ServerPlayer> provider) {
     destinations.register(owner.metadata().id(), provider);
   }
 
@@ -51,7 +85,7 @@ public final class SpongeIntegrationRegistry implements IntegrationRegistrar {
    * player-visible — it roots that plugin's {@code /navigate} branch — but Sponge already requires
    * plugin ids to be lower-case, so unlike Paper there is nothing to fold here.
    */
-  Map<String, DestinationService> destinationProviders() {
+  Map<String, DestinationProvider<ServerPlayer>> destinationProviders() {
     return destinations.map();
   }
 

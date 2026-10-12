@@ -162,14 +162,14 @@ public final class CobblestoneSpongePlugin {
 
     // The plugin-layer: the trip service (search-then-guide) and the integration registry,
     // published
-    // through CobblestonePluginAPI. Locations and the trail navigator are registered like any
-    // integration.
+    // through CobblestonePluginAPI. Cobblestone's destinations and trail navigator are registered
+    // under its own id, like an integration's.
     Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
     this.messages =
         new Messages(defaultLocale, config.get(keys.messagesShowPrefix), cobblestoneLogger);
     this.tripManager =
         new TripManager<>(navigationService.scheduler(), config.get(keys.tripsMaxActivePerPlayer));
-    this.integrationRegistry = new SpongeIntegrationRegistry();
+    this.integrationRegistry = new SpongeIntegrationRegistry(navigationService.regions());
     // Each trail floats its trip's name over itself while the player stands still; hitting it
     // cancels the trip. SpongeAPI can't show an entity to one player only, so everyone nearby sees
     // these labels.
@@ -195,10 +195,16 @@ public final class CobblestoneSpongePlugin {
             agent -> new SpongeHudDisplay(agent.player()),
             cobblestoneLogger);
     tripManager.onChange(tripHud::refresh);
-    integrationRegistry.registerDestinations(
+    // Cobblestone's own destinations sit under its id like an integration's, but are written in its
+    // own terms rather than adapted from the integration API.
+    integrationRegistry.registerProvider(
         container,
-        new CobblestoneDestinationService(
-            dataStore.locations(), dataStore.deaths(), () -> config.get(keys.deathsTrack)));
+        new BuiltInDestinations(
+            dataStore.locations(),
+            dataStore.deaths(),
+            navigationService.regions(),
+            () -> config.get(keys.deathsTrack),
+            messages));
     // Each player's last death is recorded so they can navigate back to it.
     Sponge.eventManager()
         .registerListeners(

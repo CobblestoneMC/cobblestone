@@ -21,8 +21,10 @@ java {
 
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
-    // -Xlint everything except the noisy processing warning; keep warnings visible without failing yet.
-    options.compilerArgs.addAll(listOf("-Xlint:all", "-Xlint:-processing"))
+    // -Xlint everything except the noisy processing warning, and fail the build on any warning, so
+    // one (an unchecked conversion, a raw type) cannot slip through CI. Silence a warning that is
+    // genuinely fine with @SuppressWarnings at the narrowest scope, and say why.
+    options.compilerArgs.addAll(listOf("-Xlint:all", "-Xlint:-processing", "-Werror"))
 }
 
 // Most modules use the project MIT header; a module may override it (e.g. a GPL integration that

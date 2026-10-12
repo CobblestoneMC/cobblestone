@@ -32,7 +32,10 @@ Navigate back to it from anywhere:
 ```
 
 Cobblestone reports `Searching for a route...`, then `Success!` once a route is found. Hover over
-the message to see the search time and estimated travel time. The trip ends automatically when you
+`Success!` to see the search time and estimated travel time. Hover over `Searching for a route...`,
+or over the error if no route is found, to see the destination's address. For a fixed place, such
+as a saved location or your death location, the coordinates are shown too, so you can still find
+your way there by hand. The trip ends automatically when you
 arrive within two blocks of the destination.
 
 ## The trail
@@ -45,7 +48,7 @@ The trail renders only the next segment of the route, brightest at the point to 
   entering a portal, or running a command. Cobblestone highlights the location and sends a
   message. Command prompts, such as `Run /warp market.`, can be clicked.
 - **Ending.** A trip ends on arrival, on `/stone cancel`, or on disconnect. Death does not end a
-  trip.
+  trip. A trip to a player ends if they log off.
 
 ## Destinations
 
@@ -66,7 +69,8 @@ plugins installed on the server.
 /nav death
 ```
 
-Your most recent death location. Admins may disable this destination.
+Your most recent death location. Admins may disable this destination. If you have not died since it
+was enabled, you are told so.
 
 ### Players
 
@@ -74,7 +78,8 @@ Your most recent death location. Admins may disable this destination.
 /nav player Steve
 ```
 
-Online players only. The route is recomputed periodically as the target moves.
+Online players only. The route is recomputed periodically as the target moves, and the trip ends
+if they log off.
 
 ### Worlds
 
@@ -109,8 +114,9 @@ may be omitted as long as the remainder identifies exactly one destination:
 /nav home
 ```
 
-The final word is always required. Some levels, such as town and NPC names, are marked strict by
-their provider and are also required.
+The destination's own name is always required. Some levels, such as town and NPC names, are marked
+strict by their provider and are also required. A destination that takes values takes them after its
+name; they are never part of the address.
 
 If the input matches more than one destination, the candidates are listed:
 
@@ -197,6 +203,8 @@ can cancel your trips with them.
 | `The search took too long and was stopped.` | The search reached its time limit. |
 | `No destination matches ...` | No destination has that name. |
 | `That destination is ambiguous; be more specific: ...` | Add a word from the full address. |
+| `Usage: /navigate ...` | The destination takes values; type them as shown. |
+| `... is not valid there. Usage: /navigate ...` | One of the values could not be read. |
 | `You already have too many active trips; cancel one first.` | Cancel a trip with `/stone cancel`. |
 | `You don't have permission to do that.` | The destination or navigator is restricted. |
 
