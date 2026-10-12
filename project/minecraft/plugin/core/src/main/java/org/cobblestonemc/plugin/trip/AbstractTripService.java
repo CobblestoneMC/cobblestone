@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.api.FailureReason;
@@ -188,6 +189,34 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
       LiveSearch<L> liveSearch,
       GuideSearch<L> guideSearch,
       boolean live) {
+    return start(player, path, label, settings, liveSearch, guideSearch, live, null);
+  }
+
+  /**
+   * As {@link #start(Object, Path, TripLabel, NavigatorSettings, LiveSearch, GuideSearch,
+   * boolean)}, for a target that may stop existing partway — a pet or mount that dies — which ends
+   * the trip.
+   *
+   * @param player the player to guide
+   * @param path the route to follow (its first step's world/region owns the trip)
+   * @param label the destination label (for the trip listing and same-destination replacement)
+   * @param settings which navigator to display with, and its per-trip overrides
+   * @param liveSearch the re-search behavior, or {@code null} to disable re-searching
+   * @param guideSearch the short-range off-trail guide search, or {@code null}
+   * @param live whether to also re-search periodically
+   * @param targetExists polled about once a second on the trip's thread; the trip ends once it
+   *     returns {@code false}. {@code null} for a target that cannot vanish
+   * @return the outcome, completed once the trip is (or is not) started on the region thread
+   */
+  public CompletableFuture<TripOutcome> start(
+      P player,
+      Path<L, MinecraftStepPayload> path,
+      TripLabel label,
+      NavigatorSettings settings,
+      LiveSearch<L> liveSearch,
+      GuideSearch<L> guideSearch,
+      boolean live,
+      BooleanSupplier targetExists) {
     CompletableFuture<TripOutcome> outcome = new CompletableFuture<>();
     L origin = path.steps().isEmpty() ? null : path.steps().getFirst().position();
     Position<MinecraftWorld> originPosition = origin == null ? null : position(origin);
@@ -215,7 +244,8 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
                       liveSearch,
                       guideSearch,
                       live,
-                      liveIntervalMillis);
+                      liveIntervalMillis,
+                      targetExists);
               outcome.complete(
                   trip.map(
                           started ->

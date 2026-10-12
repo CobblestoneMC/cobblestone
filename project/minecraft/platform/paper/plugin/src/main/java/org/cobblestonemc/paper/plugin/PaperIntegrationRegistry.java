@@ -11,11 +11,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.cobblestonemc.minecraft.registry.OwnedRegistry;
+import org.cobblestonemc.paper.PaperRegions;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
 import org.cobblestonemc.paper.plugin.api.IntegrationRegistrar;
 import org.cobblestonemc.paper.plugin.api.NavigatorFactory;
+import org.cobblestonemc.plugin.destination.DestinationProvider;
+import org.cobblestonemc.plugin.destination.PlatformTrees;
 
 /**
  * Cobblestone's own store of the destinations and navigators integrations register (via {@link
@@ -27,7 +31,8 @@ public final class PaperIntegrationRegistry implements IntegrationRegistrar {
 
   private record NavigatorEntry(String owner, NavigatorFactory factory) {}
 
-  private final OwnedRegistry<DestinationService> destinations = new OwnedRegistry<>();
+  private final OwnedRegistry<DestinationProvider<Player>> destinations = new OwnedRegistry<>();
+  private final PaperRegions regions;
 
   /**
    * Navigators are keyed by their own id, not by owner: a plugin may offer several, and {@code
@@ -37,8 +42,36 @@ public final class PaperIntegrationRegistry implements IntegrationRegistrar {
   private final ConcurrentSkipListMap<String, NavigatorEntry> navigators =
       new ConcurrentSkipListMap<>();
 
+  /**
+   * Creates an empty registry.
+   *
+   * @param regions converts the regions in integrations' trees into the search's
+   */
+  PaperIntegrationRegistry(PaperRegions regions) {
+    this.regions = regions;
+  }
+
+  /**
+   * Registers an integration's destinations, which join the {@code /navigate} tree {@linkplain
+   * PlatformTrees#adapt in Cobblestone's own terms}.
+   */
   @Override
   public void registerDestinations(Plugin owner, DestinationService provider) {
+    registerProvider(
+        owner,
+        player -> {
+          var tree = provider.provide(player);
+          return tree == null ? null : PlatformTrees.adapt(tree, regions::of);
+        });
+  }
+
+  /**
+   * Registers destinations already written in Cobblestone's own terms — its built-in ones.
+   *
+   * @param owner the registering plugin, whose key roots them, as for an integration
+   * @param provider the destinations
+   */
+  void registerProvider(Plugin owner, DestinationProvider<Player> provider) {
     destinations.register(key(owner), provider);
   }
 
@@ -58,7 +91,7 @@ public final class PaperIntegrationRegistry implements IntegrationRegistrar {
   }
 
   /** The registered destination providers, keyed by the plugin that registered each one. */
-  Map<String, DestinationService> destinationProviders() {
+  Map<String, DestinationProvider<Player>> destinationProviders() {
     return destinations.map();
   }
 

@@ -17,6 +17,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
@@ -175,6 +177,43 @@ class TripManagerTest {
     manager.stopAll(player.uuid());
     assertEquals(6, changes.size());
     assertTrue(changes.stream().allMatch(player::equals));
+  }
+
+  @Test
+  void tripEndsOnceItsTargetStopsExisting() {
+    RecordingScheduler scheduler = new RecordingScheduler();
+    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 3);
+    TestTripAgent player = new TestTripAgent(UUID.randomUUID());
+    FakeNavigator navigator = new FakeNavigator();
+    AtomicBoolean exists = new AtomicBoolean(true);
+    AtomicInteger checks = new AtomicInteger();
+
+    manager.start(
+        player,
+        navigator,
+        TripLabel.of("pet"),
+        null,
+        null,
+        false,
+        0L,
+        () -> {
+          checks.incrementAndGet();
+          return exists.get();
+        });
+    for (int i = 0; i < 2 * Trip.EXISTENCE_CHECK_TICKS; i++) {
+      scheduler.tickAll();
+    }
+    assertEquals(2, checks.get(), "checked about once a second, not every tick");
+    assertEquals(1, manager.trips(player.uuid()).size());
+    assertFalse(navigator.stopped);
+
+    exists.set(false); // the pet died
+    for (int i = 0; i < Trip.EXISTENCE_CHECK_TICKS; i++) {
+      scheduler.tickAll();
+    }
+    assertTrue(navigator.stopped);
+    assertTrue(manager.trips(player.uuid()).isEmpty());
+    assertTrue(scheduler.handle.cancelled);
   }
 
   /** A navigator that reports complete after a set number of ticks. */

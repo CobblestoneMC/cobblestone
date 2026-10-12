@@ -85,7 +85,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                 config.get(keys.chunksPrefetchDistance),
                 config.get(keys.chunksFetchAttempts),
                 config.get(keys.chunksPolicy)));
-    PaperIntegrationRegistry integrationRegistry = new PaperIntegrationRegistry();
+    PaperIntegrationRegistry integrationRegistry =
+        new PaperIntegrationRegistry(platformApi.regions());
     getServer()
         .getServicesManager()
         .register(NavigationService.class, this.platformApi, this, ServicePriority.Normal);
@@ -100,12 +101,19 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
         .getServicesManager()
         .register(IntegrationRegistrar.class, integrationRegistry, this, ServicePriority.Normal);
 
-    // Locations are surfaced to searches like any third-party provider — via the same registration
-    // helper an integration would use.
-    integrationRegistry.registerDestinations(
+    Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
+    Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), logger);
+
+    // Cobblestone's own destinations sit under its key like an integration's, but are written in
+    // its own terms rather than adapted from the integration API.
+    integrationRegistry.registerProvider(
         this,
-        new CobblestoneDestinationSource(
-            dataStore.locations(), dataStore.deaths(), () -> config.get(keys.deathsTrack)));
+        new BuiltInDestinations(
+            dataStore.locations(),
+            dataStore.deaths(),
+            platformApi.regions(),
+            () -> config.get(keys.deathsTrack),
+            messages));
     // Each player's last death is recorded so they can navigate back to it.
     getServer()
         .getPluginManager()
@@ -113,9 +121,6 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             new DeathListener(
                 dataStore.deaths(), platformApi.scheduler(), () -> config.get(keys.deathsTrack)),
             this);
-
-    Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
-    Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), logger);
 
     // Trips tick on the platform scheduler (Folia-safe region tasks); the default trail navigator
     // is

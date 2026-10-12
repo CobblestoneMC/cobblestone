@@ -147,7 +147,7 @@ Rules:
 === "Paper"
 
     ```java
-    // A single block.
+    // A single block. Its coordinates are shown on hover.
     Destination.at(location, "Market");
 
     // Anywhere in one region.
@@ -163,7 +163,7 @@ Rules:
 === "Sponge"
 
     ```java
-    // A single block.
+    // A single block. Its coordinates are shown on hover.
     Destination.at(location, Component.text("Market"));
 
     // Anywhere in one region.
@@ -182,43 +182,111 @@ unavailable, such as when its world is unloaded.
 
 ### Moving targets
 
-Implement `MinecraftDestination` directly to override `isMobile()`:
+`Destination.builder` takes the same regions as `Destination.regions`, plus three settings:
 
 ```java
-public record NpcDestination(NPC npc) implements MinecraftDestination<World, Vector3i> {
-  @Override
-  public org.cobblestonemc.api.Destination<WorldRegion<World, Vector3i>> destination() {
-    // Re-resolved on every query, so a live trip follows the NPC.
-    return () -> npc.isSpawned()
-        ? List.of(SingleCellWorldRegion.of(npc.getEntity().getLocation()))
-        : List.of();
-  }
-
-  @Override
-  public Component displayName() {
-    return Component.text(npc.getName());
-  }
-
-  @Override
-  public List<String> permissions() {
-    return List.of();
-  }
-
-  @Override
-  public boolean isMobile() {
-    return true;  // trips to it default to -live
-  }
-}
+Destination.builder(
+        npc.getName(),
+        // Re-read on every search, so a live trip follows the NPC.
+        () -> npc.isSpawned()
+            ? List.of(SingleCellWorldRegion.of(npc.getEntity().getLocation()))
+            : List.of())
+    .mobile()                                  // trips to it default to -live
+    .existence(() -> CitizensAPI.getNPCRegistry().getById(npc.getId()) != null)
+    .detail(Component.text("Wanders the market"))
+    .build();
 ```
 
-`isMobile()` sets the default for live trips. Players may override it with `-live` or `-no-live`.
+- `mobile()` sets the default for live trips. Players may override it with `-live` or `-no-live`.
+- `detail(...)` and `existence(...)` are described under [Hover detail](#hover-detail) and
+  [Existence](#existence).
+
+You may also implement `MinecraftDestination` yourself; `isMobile()`, `detail()` and `exists()`
+are its defaults to override.
+
+### Leaves
+
+`leaf(key, () -> destination)` is the common case: a leaf with no options or permissions that is
+always valid. For anything more, pass a `DestinationLeaf`. A leaf describes itself (its
+permissions and options) and builds its destination only once a player picks it:
+
+- Tab completion reads every leaf's description on each keystroke, possibly off the server
+  thread, so the description must be cheap and must not read the world.
+- `build(OptionValues)` runs once, when the command runs, on the thread that owns the player
+  (their region, on Folia). It may read the world around them. It returns a `Validity`: the
+  destination, or the reason there is nothing to navigate to right now.
+
+```java
+// Always valid, nothing typed after the key; the same as leaf(key, () -> ...).
+DestinationLeaf.of(() -> Destination.at(market, "Market"));
+
+// May be invalid.
+DestinationLeaf.ofValidity(
+    () -> town.isOpen()
+        ? Validity.valid(Destination.at(town.spawn(), town.name()))
+        : Validity.invalid(Component.text("The town is closed.", NamedTextColor.RED)));
+
+// Requires a permission.
+DestinationLeaf.of(() -> Destination.at(vault, "Vault")).withPermissions("towns.vault");
+```
+
+#### Options
+
+A leaf may take values typed after its key, such as the coordinates in
+`/nav coordinates block 100 64 -200`. Declare them in the order they are typed, and build the
+destination from what was typed:
+
+```java
+DestinationOption<Outpost> outpost =
+    DestinationOption.required(
+        "outpost",
+        partial -> town.outposts().stream().map(Outpost::name).toList(),
+        token -> Optional.ofNullable(town.outpost(token)));
+
+tree.leaf(
+    "outpost",
+    DestinationLeaf.withOptions(
+        List.of(outpost),
+        values -> {
+          Outpost chosen = values.get(outpost);
+          return Validity.valid(Destination.at(chosen.spawn(), chosen.name()));
+        }));
+```
+
+- Each option reads one word. `DestinationOption.integer(name, hint)` reads a whole number and
+  suggests `hint`; `required(…)` and `optional(…)` take any suggestion and parsing logic.
+- Required options come first. Optional ones may be left off from the end.
+- Options are never part of the address, so they never affect the destination's permission node
+  and are never promoted past its name.
+- If the words after the name do not fit, the player is shown the usage, such as
+  `/navigate outpost <outpost>`.
+
+#### Validity
+
+When `build` returns `Validity.invalid(reason)`, the player is shown `reason` as is, instead of a
+search starting. The leaf is still offered in tab completion, so the player learns why rather than
+finding nothing there. Cobblestone's own destinations use it for `death` when no death is on record.
+
+### Hover detail
+
+Set `detail(...)` on the builder to add a line to the hover text of `Searching for a route...` and of the error
+that follows if no route is found. The address is always shown; the detail goes beneath it.
+Cobblestone's own destinations use it for the coordinates of fixed places, such as `death`, so a
+player can find the place by hand. `Destination.at` adds a block's coordinates for you.
+
+### Existence
+
+Set `existence(...)` on the builder for a target that can stop existing partway through a trip, such as an
+animal that dies. A trip polls it about once a second and ends quietly once it returns `false`.
+Being out of reach, for example unloaded, is not the same as not existing. It is called on the
+travelling player's thread, so keep it cheap. Cobblestone ends trips to players who log off.
 
 ## Permissions
 
 - **Destination node**: `cobblestone.navigate.<address>`. Generated automatically, default allow,
   and managed by server admins.
-- **`permissions()`**: Additional required permissions, all of which the player must hold. Use for
-  access control only. Cobblestone's own destinations declare none.
+- **A leaf's `permissions()`**: Additional required permissions, all of which the player must
+  hold. Use for access control only. Cobblestone's own destinations declare none.
 
 ## Addressing
 
