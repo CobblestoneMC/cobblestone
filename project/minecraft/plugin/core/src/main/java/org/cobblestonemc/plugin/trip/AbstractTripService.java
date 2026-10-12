@@ -194,8 +194,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
 
   /**
    * As {@link #start(Object, Path, TripLabel, NavigatorSettings, LiveSearch, GuideSearch,
-   * boolean)}, for a target that may stop existing partway — a pet or mount that dies — which ends
-   * the trip.
+   * boolean)}, for a target that may stop existing partway, which ends the trip.
    *
    * @param player the player to guide
    * @param path the route to follow (its first step's world/region owns the trip)
