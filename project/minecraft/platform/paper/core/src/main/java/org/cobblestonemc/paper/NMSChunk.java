@@ -88,7 +88,9 @@ final class NMSChunk extends PaperChunk {
     Codec<PalettedContainer<BlockState>> codec =
         level.palettedContainerFactory().blockStatesContainerCodec();
     int minSectionY = level.getMinSectionY();
-    PalettedContainer<BlockState>[] sections = new PalettedContainer[level.getSectionsCount()];
+    @SuppressWarnings("unchecked") // Java has no generic array creation; nothing else goes in it.
+    PalettedContainer<BlockState>[] sections =
+        (PalettedContainer<BlockState>[]) new PalettedContainer<?>[level.getSectionsCount()];
 
     ListTag sectionTags = tag.getListOrEmpty("sections");
     for (int i = 0; i < sectionTags.size(); i++) {
