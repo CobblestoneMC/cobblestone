@@ -20,7 +20,7 @@ import org.cobblestonemc.plugin.navigator.Vec3;
 final class HologramPlacement {
 
   /** How far above the trail (which runs at body height) the label floats, in blocks. */
-  static final double HEIGHT = 1.5;
+  static final double HEIGHT = 1.0;
 
   /** The vertical gap between two labels stacked over the same spot. */
   static final double LINE_SPACING = 0.3;

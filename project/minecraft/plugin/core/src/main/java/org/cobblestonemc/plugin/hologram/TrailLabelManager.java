@@ -48,7 +48,7 @@ import org.cobblestonemc.plugin.trip.TripManager;
 public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements TrailLabels<L> {
 
   /** How far from the player, in a straight line, a label floats over their trail. */
-  static final double DISTANCE = 3.25;
+  static final double DISTANCE = 4.5;
 
   /** How long the player must stay in one block before their labels appear: one second. */
   static final int STILL_TICKS = 20;

@@ -239,7 +239,7 @@ class TrailLabelManagerTest {
 
   @Test
   void notShownOutOfSight() {
-    platform.probe = (x, y, z) -> x == 2 && y >= 2 ? TrailBlock.SOLID : TrailBlock.OPEN;
+    platform.probe = (x, y, z) -> x == 2 && y >= 1 ? TrailBlock.SOLID : TrailBlock.OPEN;
     start(address("player", "Steve"), AHEAD);
     assertTrue(platform.spawned.isEmpty());
   }

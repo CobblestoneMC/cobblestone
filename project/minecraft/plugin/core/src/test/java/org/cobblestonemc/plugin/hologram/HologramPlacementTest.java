@@ -36,7 +36,7 @@ class HologramPlacementTest {
 
   @Test
   void movesUpOutOfASolidBlock() {
-    TrailSmoother.BlockProbe probe = solidAt(FLOOR, 3, 2, 0);
+    TrailSmoother.BlockProbe probe = solidAt(FLOOR, 3, 1, 0);
     assertEquals(
         Optional.of(OVER.plus(new Vec3(0, 1, 0))),
         HologramPlacement.place(EYE, TRAIL, List.of(), probe));
@@ -44,9 +44,9 @@ class HologramPlacementTest {
 
   @Test
   void movesAsideUnderALowCeiling() {
-    // A ceiling at y = 2 over the far side of the trail; only the block nearer the player is open.
+    // A ceiling at y = 1 over the far side of the trail; only the block nearer the player is open.
     TrailSmoother.BlockProbe probe =
-        (x, y, z) -> y < 0 || (y >= 2 && x >= 3) ? TrailBlock.SOLID : TrailBlock.OPEN;
+        (x, y, z) -> y < 0 || (y >= 1 && x >= 3) ? TrailBlock.SOLID : TrailBlock.OPEN;
     assertEquals(
         Optional.of(OVER.plus(new Vec3(-1, 0, 0))),
         HologramPlacement.place(EYE, TRAIL, List.of(), probe));
@@ -63,7 +63,7 @@ class HologramPlacementTest {
   void nothingWhenEverySpotIsOutOfSight() {
     // A wall between the player and the trail from head height up.
     TrailSmoother.BlockProbe probe =
-        (x, y, z) -> y < 0 || (x == 2 && y >= 2) ? TrailBlock.SOLID : TrailBlock.OPEN;
+        (x, y, z) -> y < 0 || (x == 2 && y >= 1) ? TrailBlock.SOLID : TrailBlock.OPEN;
     assertEquals(Optional.empty(), HologramPlacement.place(EYE, TRAIL, List.of(), probe));
   }
 
