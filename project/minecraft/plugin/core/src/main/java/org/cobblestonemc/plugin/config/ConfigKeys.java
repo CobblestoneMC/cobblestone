@@ -258,7 +258,7 @@ public final class ConfigKeys {
             .comment(
                 """
                 Whether to float a label naming each trip over its trail, a few blocks ahead of the
-                player. It shows only while they look at it, and hitting it cancels the trip.""")
+                player. It shows only while they stand still, and hitting it cancels the trip.""")
             .mutable()
             .register();
 

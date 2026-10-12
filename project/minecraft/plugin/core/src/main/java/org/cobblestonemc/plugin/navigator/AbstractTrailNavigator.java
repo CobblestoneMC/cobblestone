@@ -118,13 +118,13 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
       Locale locale,
       TrailLabels<L> labels,
       BooleanSupplier showLabel) {
-    this.labels = labels;
-    this.showLabel = showLabel;
     this.bufferCells = bufferCells;
     this.density = Math.max(0.0, density);
     this.recalcDistance = recalcDistance;
     this.messages = messages;
     this.locale = locale;
+    this.labels = labels;
+    this.showLabel = showLabel;
   }
 
   // --- platform hooks -------------------------------------------------------

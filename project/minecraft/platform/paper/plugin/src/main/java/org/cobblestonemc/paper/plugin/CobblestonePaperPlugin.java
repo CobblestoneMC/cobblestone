@@ -124,7 +124,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     // registered as a service so it is discovered like any third-party navigator.
     this.tripManager =
         new TripManager<>(platformApi.scheduler(), config.get(keys.tripsMaxActivePerPlayer));
-    // Each trail floats its trip's name over itself while the player looks there; hitting it
+    // Each trail floats its trip's name over itself while the player stands still; hitting it
     // cancels the trip.
     this.holograms = new PaperHolograms(this);
     getServer().getPluginManager().registerEvents(holograms, this);

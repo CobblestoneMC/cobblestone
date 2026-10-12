@@ -185,8 +185,8 @@ each trip appears over its trail (or the guide back to it), named the same way a
 one trip to a player named Steve it reads `Steve`; add a trip to a town also named Steve and they
 read `player Steve` and `town Steve`. A label only appears where you can see it, and the labels go
 away as soon as you move, so they stay out of your way while you follow the trail. **Hit a label to
-cancel that trip.** On Sponge servers, other
-players nearby can see your labels too, but only you can cancel your trips with them.
+cancel that trip.** On Sponge servers, other players nearby can see your labels too, but only you
+can cancel your trips with them.
 
 ## Errors
 
