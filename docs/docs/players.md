@@ -48,7 +48,7 @@ The trail renders only the next segment of the route, brightest at the point to 
   entering a portal, or running a command. Cobblestone highlights the location and sends a
   message. Command prompts, such as `Run /warp market.`, can be clicked.
 - **Ending.** A trip ends on arrival, on `/stone cancel`, or on disconnect. Death does not end a
-  trip. A trip to a player ends if they log off.
+  trip. A trip to a mount ends if it dies, and a trip to a player ends if they log off.
 
 ## Destinations
 
@@ -119,6 +119,16 @@ underwater; grass and flowers are looked through.
 Whole numbers only. The world is optional and defaults to the one you are in. Tab completion offers
 your own coordinates. The word `coordinates` is always required, so `/nav surface` still means the
 nearest open sky.
+
+### Mount
+
+```
+/nav mount
+```
+
+The tamed horse, donkey, mule, llama or camel you last rode. The route is recomputed periodically
+as it moves while it is loaded, and otherwise heads to where it was last seen. If it dies, the trip
+ends, and `/nav mount` then leads to the mount you rode before it.
 
 ### Players
 

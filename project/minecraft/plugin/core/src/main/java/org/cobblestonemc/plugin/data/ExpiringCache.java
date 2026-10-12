@@ -84,4 +84,9 @@ final class ExpiringCache<K, V> {
   void invalidate(K key) {
     entries.remove(key);
   }
+
+  /** Drops every key — for a write whose affected keys are not known. */
+  void invalidateAll() {
+    entries.clear();
+  }
 }

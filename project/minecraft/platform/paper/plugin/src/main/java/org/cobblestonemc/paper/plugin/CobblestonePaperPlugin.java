@@ -111,6 +111,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
         new BuiltInDestinations(
             dataStore.locations(),
             dataStore.deaths(),
+            dataStore.mounts(),
+            platformApi.scheduler(),
             platformApi.regions(),
             () -> config.get(keys.deathsTrack),
             messages));
@@ -121,6 +123,10 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             new DeathListener(
                 dataStore.deaths(), platformApi.scheduler(), () -> config.get(keys.deathsTrack)),
             this);
+    // So is their last mount.
+    getServer()
+        .getPluginManager()
+        .registerEvents(new MountListener(dataStore.mounts(), platformApi.scheduler()), this);
 
     // Trips tick on the platform scheduler (Folia-safe region tasks); the default trail navigator
     // is

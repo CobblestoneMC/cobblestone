@@ -21,6 +21,8 @@ import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.data.DeathLocationDao;
 import org.cobblestonemc.plugin.data.Location;
 import org.cobblestonemc.plugin.data.LocationDao;
+import org.cobblestonemc.plugin.data.MountDao;
+import org.cobblestonemc.plugin.data.MountLocation;
 import org.cobblestonemc.plugin.destination.DestinationDetails;
 import org.cobblestonemc.plugin.destination.DestinationNode;
 import org.cobblestonemc.plugin.destination.DestinationProvider;
@@ -65,12 +67,14 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
   public static final String BLOCK_KEY = "block";
   public static final String SPAWN_KEY = "spawn";
   public static final String RESPAWN_KEY = "respawn";
+  public static final String MOUNT_KEY = "mount";
 
   /** How far away, in blocks, the block a player is looking at may be for {@code target}. */
   static final int TARGET_RANGE = 256;
 
   private final LocationDao locations;
   private final DeathLocationDao deaths;
+  private final MountDao mounts;
   private final SpongeRegions regions;
   private final BooleanSupplier trackDeaths;
   private final Messages messages;
@@ -78,11 +82,13 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
   public BuiltInDestinations(
       LocationDao locations,
       DeathLocationDao deaths,
+      MountDao mounts,
       SpongeRegions regions,
       BooleanSupplier trackDeaths,
       Messages messages) {
     this.locations = locations;
     this.deaths = deaths;
+    this.mounts = mounts;
     this.regions = regions;
     this.trackDeaths = trackDeaths;
     this.messages = messages;
@@ -99,6 +105,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
         .leaf(TARGET_KEY, DestinationLeaf.ofValidity(() -> target(player)))
         .leaf(SPAWN_KEY, spawn(player))
         .leaf(RESPAWN_KEY, DestinationLeaf.ofValidity(() -> respawn(player)))
+        .leaf(MOUNT_KEY, DestinationLeaf.ofValidity(() -> mount(player)))
         .subtree(PLAYER_TREE_KEY, () -> players(player))
         .subtree(WORLD_TREE_KEY, () -> worlds(player))
         .subtree(LOCATION_TREE_KEY, () -> locations(player))
@@ -253,6 +260,42 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
         .map(location -> atBlock(RESPAWN_KEY, location))
         .map(Validity::valid)
         .orElseGet(() -> invalid(player, CobblestoneMessages.NAVIGATE_NO_RESPAWN));
+  }
+
+  /**
+   * The mount the player last rode: followed live while it is loaded, and otherwise where it was
+   * last seen. A trip to it ends if it dies. Invalid if the player has not ridden one since mount
+   * tracking began, or it has died since.
+   */
+  private Validity<NavigationTarget> mount(ServerPlayer player) {
+    return mounts
+        .get(player.uniqueId())
+        .map(this::mount)
+        .map(Validity::valid)
+        .orElseGet(() -> invalid(player, CobblestoneMessages.NAVIGATE_NO_MOUNT));
+  }
+
+  private NavigationTarget mount(MountLocation mount) {
+    // Follows the mount while it is loaded, so live trips track it; otherwise heads to where it
+    // was last seen.
+    SpongeTrackedEntity tracked = new SpongeTrackedEntity(mount.mount());
+    return NavigationTarget.builder(
+            MOUNT_KEY,
+            () ->
+                tracked
+                    .location()
+                    .or(
+                        () ->
+                            world(mount.world())
+                                .map(
+                                    world ->
+                                        ServerLocation.of(world, mount.x(), mount.y(), mount.z())))
+                    .map(regions::block)
+                    .stream()
+                    .toList())
+        .mobile()
+        .existence(tracked::alive)
+        .build();
   }
 
   private DestinationNode<NavigationTarget> players(ServerPlayer player) {

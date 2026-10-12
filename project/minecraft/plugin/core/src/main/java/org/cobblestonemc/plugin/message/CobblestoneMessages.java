@@ -143,6 +143,9 @@ public final class CobblestoneMessages {
   /** Shown for {@code /navigate death} when no death of the player's is on record. */
   public static final Message0 NAVIGATE_NO_DEATH = Message0.error("command.navigate.no_death");
 
+  /** Shown for {@code /navigate mount} when the player has not ridden one, or it has died. */
+  public static final Message0 NAVIGATE_NO_MOUNT = Message0.error("command.navigate.no_mount");
+
   /** Shown for {@code /navigate respawn} when the player has no bed, anchor or spawn point. */
   public static final Message0 NAVIGATE_NO_RESPAWN = Message0.error("command.navigate.no_respawn");
 

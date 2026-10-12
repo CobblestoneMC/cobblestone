@@ -41,6 +41,13 @@ public interface DataStore {
   DeathLocationDao deaths();
 
   /**
+   * Returns the mount DAO (the mount each player last rode).
+   *
+   * @return the mount DAO
+   */
+  MountDao mounts();
+
+  /**
    * Returns the portal-transition DAO (end portals: region → point).
    *
    * @return the portal-transition DAO

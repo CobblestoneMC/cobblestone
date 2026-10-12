@@ -190,6 +190,7 @@ public final class CobblestoneSpongePlugin {
         new BuiltInDestinations(
             dataStore.locations(),
             dataStore.deaths(),
+            dataStore.mounts(),
             navigationService.regions(),
             () -> config.get(keys.deathsTrack),
             messages));
@@ -201,6 +202,10 @@ public final class CobblestoneSpongePlugin {
                 dataStore.deaths(),
                 navigationService.scheduler(),
                 () -> config.get(keys.deathsTrack)));
+    // So is their last mount.
+    Sponge.eventManager()
+        .registerListeners(
+            container, new SpongeMountListener(dataStore.mounts(), navigationService.scheduler()));
 
     // Keep the chunk cache honest: a block changing evicts the snapshot it belongs to.
 

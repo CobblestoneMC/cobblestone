@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -300,6 +301,108 @@ class DataStoreContractTest {
       assertEquals(400, found.z());
     } finally {
       second.close();
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("backends")
+  void newestMountIsTheOneFound(Backend backend, @TempDir Path dir) {
+    DataStore store = opened(backend, dir);
+    try {
+      UUID player = UUID.randomUUID();
+      UUID horse = UUID.randomUUID();
+      UUID camel = UUID.randomUUID();
+      assertTrue(store.mounts().get(player).isEmpty(), "a player who never rode has no record");
+
+      store.mounts().upsert(new MountLocation(player, horse, "minecraft:overworld", 1, 64, 2, 100));
+      assertEquals(horse, store.mounts().get(player).orElseThrow().mount());
+
+      store.mounts().upsert(new MountLocation(player, camel, "minecraft:overworld", 5, 70, 6, 200));
+      MountLocation found = store.mounts().get(player).orElseThrow();
+      assertEquals(camel, found.mount(), "the newest mount wins");
+      assertEquals(5, found.x());
+      assertEquals(200, found.riddenAt());
+
+      // Riding the horse again makes it the newest, replacing its old record rather than adding
+      // one.
+      store.mounts().upsert(new MountLocation(player, horse, "minecraft:overworld", 9, 65, 9, 300));
+      found = store.mounts().get(player).orElseThrow();
+      assertEquals(horse, found.mount());
+      assertEquals(9, found.x());
+    } finally {
+      store.close();
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("backends")
+  void whenTheNewestMountDiesTheOneBeforeItIsFound(Backend backend, @TempDir Path dir) {
+    DataStore store = opened(backend, dir);
+    try {
+      UUID player = UUID.randomUUID();
+      UUID horse = UUID.randomUUID();
+      UUID camel = UUID.randomUUID();
+      store.mounts().upsert(new MountLocation(player, horse, "minecraft:overworld", 1, 64, 2, 100));
+      store.mounts().upsert(new MountLocation(player, camel, "minecraft:overworld", 5, 70, 6, 200));
+
+      store.mounts().remove(camel);
+      assertEquals(horse, store.mounts().get(player).orElseThrow().mount());
+
+      store.mounts().remove(horse);
+      assertTrue(store.mounts().get(player).isEmpty());
+    } finally {
+      store.close();
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("backends")
+  void onlyTheMostRecentFewMountsAreKept(Backend backend, @TempDir Path dir) {
+    DataStore store = opened(backend, dir);
+    try {
+      UUID player = UUID.randomUUID();
+      List<UUID> ridden = new ArrayList<>();
+      for (int i = 0; i < 7; i++) {
+        UUID mount = UUID.randomUUID();
+        ridden.add(mount);
+        store.mounts().upsert(new MountLocation(player, mount, "minecraft:overworld", i, 64, 0, i));
+      }
+      // Kill them newest first: the five newest are remembered, the two oldest are not.
+      for (int i = 6; i >= 2; i--) {
+        assertEquals(ridden.get(i), store.mounts().get(player).orElseThrow().mount());
+        store.mounts().remove(ridden.get(i));
+      }
+      assertTrue(store.mounts().get(player).isEmpty(), "the oldest two were forgotten");
+    } finally {
+      store.close();
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("backends")
+  void mountMovesAndRemovalsApplyToEveryRider(Backend backend, @TempDir Path dir) {
+    DataStore store = opened(backend, dir);
+    try {
+      UUID ann = UUID.randomUUID();
+      UUID bob = UUID.randomUUID();
+      UUID horse = UUID.randomUUID();
+      store.mounts().upsert(new MountLocation(ann, horse, "minecraft:overworld", 0, 64, 0, 1));
+      store.mounts().upsert(new MountLocation(bob, horse, "minecraft:overworld", 0, 64, 0, 2));
+
+      store.mounts().move(horse, "minecraft:the_nether", -8, 40, 12);
+      for (UUID rider : List.of(ann, bob)) {
+        MountLocation found = store.mounts().get(rider).orElseThrow();
+        assertEquals("minecraft:the_nether", found.world());
+        assertEquals(-8, found.x());
+        assertEquals(40, found.y());
+        assertEquals(12, found.z());
+      }
+
+      store.mounts().remove(horse);
+      assertTrue(store.mounts().get(ann).isEmpty());
+      assertTrue(store.mounts().get(bob).isEmpty());
+    } finally {
+      store.close();
     }
   }
 

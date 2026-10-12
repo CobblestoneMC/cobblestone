@@ -44,6 +44,7 @@ Each destination has a canonical address, which maps to a node under `cobbleston
 | `cobblestone target` | `cobblestone.navigate.cobblestone.target` |
 | `cobblestone coordinates block` | `cobblestone.navigate.cobblestone.coordinates.block` |
 | `cobblestone coordinates surface` | `cobblestone.navigate.cobblestone.coordinates.surface` |
+| `cobblestone mount` | `cobblestone.navigate.cobblestone.mount` |
 | `cobblestone player Steve` | `cobblestone.navigate.cobblestone.player.Steve` |
 | `towny town riverwood home` | `cobblestone.navigate.towny.town.riverwood.home` |
 | `citizens npc Blacksmith` | `cobblestone.navigate.citizens.npc.Blacksmith` |
