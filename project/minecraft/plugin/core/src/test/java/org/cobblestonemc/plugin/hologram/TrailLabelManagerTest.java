@@ -20,6 +20,7 @@ import java.util.concurrent.ExecutorService;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.api.Path;
@@ -28,7 +29,6 @@ import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.ScheduledTaskHandle;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.plugin.api.Navigator;
-import org.cobblestonemc.plugin.message.CobblestoneColors;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.navigator.TrailBlock;
 import org.cobblestonemc.plugin.navigator.TrailSmoother;
@@ -115,7 +115,7 @@ class TrailLabelManagerTest {
     FakeHologram label = platform.only();
     assertEquals(OVER, label.at);
     assertEquals("Steve", plain(label.text));
-    assertEquals(CobblestoneColors.SECONDARY, label.text.color());
+    assertEquals(NamedTextColor.WHITE, label.text.color());
     assertEquals(TrailLabelManager.PERIOD_TICKS, scheduler.period, "follows the player");
   }
 
@@ -252,27 +252,6 @@ class TrailLabelManagerTest {
   }
 
   @Test
-  void textIsDarkInBrightLight() {
-    platform.light = TrailLabelManager.DARK_TEXT_LIGHT;
-    start(address("player", "Steve"), AHEAD);
-    FakeHologram label = platform.only();
-    assertEquals(TrailLabelManager.DARK_TEXT, label.text.color());
-
-    platform.light = TrailLabelManager.LIGHT_TEXT_LIGHT + 1; // dimmer, but not by much
-    scheduler.tick();
-    assertEquals(TrailLabelManager.DARK_TEXT, label.text.color());
-
-    platform.light = TrailLabelManager.LIGHT_TEXT_LIGHT;
-    scheduler.tick();
-    assertEquals(TrailLabelManager.LIGHT_TEXT, label.text.color());
-
-    platform.light = TrailLabelManager.DARK_TEXT_LIGHT - 1; // brighter, but not by much
-    scheduler.tick();
-    assertEquals(TrailLabelManager.LIGHT_TEXT, label.text.color());
-    assertEquals(1, platform.spawned.size(), "recolored, not replaced");
-  }
-
-  @Test
   void notShownOutOfSight() {
     platform.probe = (x, y, z) -> x == 2 && y >= 2 ? TrailBlock.SOLID : TrailBlock.OPEN;
     start(address("player", "Steve"), AHEAD);
@@ -341,7 +320,6 @@ class TrailLabelManagerTest {
   private static final class FakePlatform implements HologramPlatform<TestTripAgent, Vec3> {
     final List<FakeHologram> spawned = new ArrayList<>();
     TrailSmoother.BlockProbe probe = (x, y, z) -> y < 0 ? TrailBlock.SOLID : TrailBlock.OPEN;
-    int light;
     Vec3 look;
 
     void lookAt(Vec3 target) {
@@ -368,11 +346,6 @@ class TrailLabelManagerTest {
       look =
           new Vec3(
               Math.cos(yaw) * Math.cos(pitch), Math.sin(pitch), Math.sin(yaw) * Math.cos(pitch));
-    }
-
-    @Override
-    public int light(TestTripAgent agent, Vec3 at) {
-      return light;
     }
 
     @Override

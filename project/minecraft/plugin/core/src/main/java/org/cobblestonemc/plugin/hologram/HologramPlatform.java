@@ -45,16 +45,6 @@ public interface HologramPlatform<A, L> {
   TrailSmoother.BlockProbe probe(A agent);
 
   /**
-   * Returns how lit a point in the player's world looks: the brighter of its block light and its
-   * sky light as dimmed by the time of day, from 0 to 15.
-   *
-   * @param agent the player
-   * @param at the point
-   * @return its light level, or 0 if it can't be read from this thread
-   */
-  int light(A agent, Vec3 at);
-
-  /**
    * Places a label in the player's world, shown only to them.
    *
    * @param agent the player

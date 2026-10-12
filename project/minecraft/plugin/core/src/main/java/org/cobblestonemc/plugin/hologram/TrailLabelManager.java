@@ -17,11 +17,9 @@ import java.util.Optional;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextColor;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.ScheduledTaskHandle;
 import org.cobblestonemc.plugin.api.Navigator;
-import org.cobblestonemc.plugin.message.CobblestoneColors;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.navigator.TrailSmoother;
@@ -73,17 +71,6 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
    * drawn) stays where it is for this many updates before it is removed, so it doesn't blink.
    */
   static final int GRACE_UPDATES = 5;
-
-  /** A label's text turns dark once the light where it floats reaches this level... */
-  static final int DARK_TEXT_LIGHT = 12;
-
-  /** ...and light again once it falls to this one. */
-  static final int LIGHT_TEXT_LIGHT = 9;
-
-  /** The text color in the dark, and against a bright sky. */
-  static final TextColor LIGHT_TEXT = CobblestoneColors.SECONDARY;
-
-  static final TextColor DARK_TEXT = NamedTextColor.BLACK;
 
   /** A label moved less than this stays where it is. */
   private static final double MOVE_EPSILON_SQUARED = 0.02 * 0.02;
@@ -200,8 +187,8 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
         }
         continue;
       }
-      boolean dark = dark(platform.light(session.agent(), spot.get()), current);
-      Component text = Component.text(labels.get(i), dark ? DARK_TEXT : LIGHT_TEXT);
+      // White, like the name over a player.
+      Component text = Component.text(labels.get(i), NamedTextColor.WHITE);
       Shown updated = show(session.agent(), trip, current, spot.get(), text);
       if (updated == null) {
         shown.remove(navigator);
@@ -209,12 +196,6 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
         shown.put(navigator, updated);
       }
     }
-  }
-
-  /** Whether a label's text should be dark at {@code light}, keeping its color near the edge. */
-  private static boolean dark(int light, Shown current) {
-    boolean wasDark = current != null && DARK_TEXT.equals(current.text().color());
-    return wasDark ? light > LIGHT_TEXT_LIGHT : light >= DARK_TEXT_LIGHT;
   }
 
   /** Whether the player looks at {@code spot}, with more slack once the label is {@code shown}. */

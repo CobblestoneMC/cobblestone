@@ -9,7 +9,6 @@ package org.cobblestonemc.paper.plugin;
 
 import java.util.Optional;
 import net.kyori.adventure.text.Component;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -53,19 +52,6 @@ final class PaperHologramPlatform implements HologramPlatform<PaperTripAgent, Lo
   @Override
   public TrailSmoother.BlockProbe probe(PaperTripAgent agent) {
     return new PaperWorldProbe(agent.player().getWorld());
-  }
-
-  @Override
-  public int light(PaperTripAgent agent, Vec3 at) {
-    World world = agent.player().getWorld();
-    int x = (int) Math.floor(at.x());
-    int z = (int) Math.floor(at.z());
-    if (!world.isChunkLoaded(x >> 4, z >> 4)
-        || !Bukkit.isOwnedByCurrentRegion(world, x >> 4, z >> 4)) {
-      return 0;
-    }
-    // Already dimmed by the time of day and the weather.
-    return world.getBlockAt(x, (int) Math.floor(at.y()), z).getLightLevel();
   }
 
   @Override
