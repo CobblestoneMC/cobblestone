@@ -11,9 +11,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import net.kyori.adventure.text.Component;
-import org.cobblestonemc.plugin.hologram.Gaze;
 import org.cobblestonemc.plugin.hologram.Hologram;
 import org.cobblestonemc.plugin.hologram.HologramPlatform;
+import org.cobblestonemc.plugin.hologram.PlayerPosition;
 import org.cobblestonemc.plugin.navigator.TrailSmoother;
 import org.cobblestonemc.plugin.navigator.Vec3;
 import org.cobblestonemc.sponge.hologram.SpongeHologram;
@@ -37,11 +37,6 @@ final class SpongeHologramPlatform implements HologramPlatform<SpongeTripAgent, 
   private static Hologram wrap(SpongeHologram label) {
     return new Hologram() {
       @Override
-      public boolean move(Vec3 at) {
-        return label.move(vector(at));
-      }
-
-      @Override
       public void text(Component text) {
         label.text(text);
       }
@@ -63,20 +58,17 @@ final class SpongeHologramPlatform implements HologramPlatform<SpongeTripAgent, 
   }
 
   @Override
-  public Optional<Gaze> gaze(SpongeTripAgent agent) {
+  public Optional<PlayerPosition> position(SpongeTripAgent agent) {
     ServerPlayer player = agent.player();
     if (!player.isOnline()) {
       return Optional.empty();
     }
-    Vector3d eye = player.eyePosition().get();
-    // Minecraft's look vector, from the head's pitch (x) and yaw (y) in degrees.
-    Vector3d rotation = player.headRotation().get();
-    double pitch = Math.toRadians(rotation.x());
-    double yaw = Math.toRadians(rotation.y());
-    Vec3 look =
-        new Vec3(
-            -Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
-    return Optional.of(new Gaze(new Vec3(eye.x(), eye.y(), eye.z()), look));
+    return Optional.of(
+        new PlayerPosition(point(player.position()), point(player.eyePosition().get())));
+  }
+
+  private static Vec3 point(Vector3d vector) {
+    return new Vec3(vector.x(), vector.y(), vector.z());
   }
 
   @Override

@@ -38,9 +38,8 @@ import org.bukkit.plugin.Plugin;
  * sits below its name and would overlap a label stacked above it). Attacks on and right-clicks of
  * either are cancelled.
  *
- * <p>Folia: a label is spawned, moved and removed only from the thread owning its region. A label
- * that would leave that region refuses to {@link PaperHologram#move}, and its removal is handed to
- * its entities' own schedulers.
+ * <p>Folia: a label is spawned and changed only from the thread owning its region, and its removal
+ * from any other thread is handed to its entities' own schedulers.
  */
 public final class PaperHolograms implements Listener {
 
@@ -181,19 +180,6 @@ public final class PaperHolograms implements Listener {
 
     Runnable onHit() {
       return onHit;
-    }
-
-    @Override
-    public boolean move(Location target) {
-      if (removed
-          || !Bukkit.isOwnedByCurrentRegion(stand)
-          || !Bukkit.isOwnedByCurrentRegion(hitbox)
-          || !Bukkit.isOwnedByCurrentRegion(target)) {
-        return false;
-      }
-      stand.teleport(nameAt(target));
-      hitbox.teleport(hitboxAt(target));
-      return true;
     }
 
     @Override

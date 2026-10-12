@@ -8,22 +8,12 @@
 package org.cobblestonemc.plugin.hologram;
 
 import net.kyori.adventure.text.Component;
-import org.cobblestonemc.plugin.navigator.Vec3;
 
 /**
  * One floating label as placed by the platform, seen only by its player. Not reused after {@link
  * #remove()}.
  */
 public interface Hologram {
-
-  /**
-   * Moves the label so its text is centered on {@code at}.
-   *
-   * @param at the new center, in the player's world
-   * @return {@code false} if it can't be moved there from this thread; it should then be removed
-   *     and spawned again
-   */
-  boolean move(Vec3 at);
 
   /**
    * Replaces the label's text.

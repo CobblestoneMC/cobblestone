@@ -29,12 +29,12 @@ public interface HologramPlatform<A, L> {
   Vec3 point(L location);
 
   /**
-   * Returns where the player is looking, if they are online.
+   * Returns where the player is, if they are online.
    *
    * @param agent the player
-   * @return their gaze
+   * @return their position
    */
-  Optional<Gaze> gaze(A agent);
+  Optional<PlayerPosition> position(A agent);
 
   /**
    * Returns a reader of the blocks in the player's world for this tick, which never loads a chunk.

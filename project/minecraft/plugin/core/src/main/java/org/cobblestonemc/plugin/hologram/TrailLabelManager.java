@@ -22,7 +22,6 @@ import org.cobblestonemc.minecraft.ScheduledTaskHandle;
 import org.cobblestonemc.plugin.api.Navigator;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Messages;
-import org.cobblestonemc.plugin.navigator.TrailSmoother;
 import org.cobblestonemc.plugin.navigator.Vec3;
 import org.cobblestonemc.plugin.trip.Trip;
 import org.cobblestonemc.plugin.trip.TripAgent;
@@ -35,12 +34,12 @@ import org.cobblestonemc.plugin.trip.TripManager;
  * the same name, {@code player Steve} and {@code town Steve}; labels over the same spot are
  * stacked.
  *
- * <p>A label goes over the point its navigator gives, {@link #DISTANCE} blocks from the player, in
- * an open block they can see (see {@link HologramPlacement}); if there is none, it isn't shown. It
- * appears when the player looks at it, within a window wider than it is tall, and disappears once
- * they look a little further away, so it isn't in front of them while they watch the trail itself.
- * A player's labels are updated every {@link #PERIOD_TICKS} ticks while any of their trails is
- * attached.
+ * <p>Labels show only while the player stands still: once they have stayed in one block for {@link
+ * #STILL_TICKS}, each trail's label appears over the point its navigator gives, {@link #DISTANCE}
+ * blocks from them, in an open block they can see (see {@link HologramPlacement}); a trail with no
+ * such spot yet gets its label as soon as it has one. Labels stay where they appeared, and all go
+ * away as soon as the player leaves the block. Someone following a trail knows where it goes; one
+ * who stops may not.
  *
  * @param <E> the native entity type
  * @param <A> the trip-agent type wrapping a player
@@ -51,29 +50,11 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
   /** How far from the player, in a straight line, a label floats over their trail. */
   static final double DISTANCE = 3.25;
 
-  /** A label appears once the player looks within this many degrees of it, to either side... */
-  static final double SHOW_YAW_DEGREES = 20;
+  /** How long the player must stay in one block before their labels appear: one second. */
+  static final int STILL_TICKS = 20;
 
-  /** ...and this many above or below. */
-  static final double SHOW_PITCH_DEGREES = 12;
-
-  /** It disappears once they look further than this to either side... */
-  static final double HIDE_YAW_DEGREES = 32;
-
-  /** ...or above or below. */
-  static final double HIDE_PITCH_DEGREES = 19;
-
-  /** Labels follow the player every other tick. */
+  /** How often a player's labels are updated while any of their trails is attached. */
   static final long PERIOD_TICKS = 2L;
-
-  /**
-   * A label whose spot is briefly lost (e.g. for the tick between a new guide arriving and being
-   * drawn) stays where it is for this many updates before it is removed, so it doesn't blink.
-   */
-  static final int GRACE_UPDATES = 5;
-
-  /** A label moved less than this stays where it is. */
-  private static final double MOVE_EPSILON_SQUARED = 0.02 * 0.02;
 
   private final TripManager<E, A, L> trips;
   private final MinecraftScheduler<E> scheduler;
@@ -90,7 +71,7 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
    * @param trips the trips whose trails are labelled, for each label's name and for cancelling
    * @param scheduler the entity scheduler
    * @param messages the message renderer
-   * @param platform places labels and reads the player's view
+   * @param platform places labels and reads where the player is
    */
   public TrailLabelManager(
       TripManager<E, A, L> trips,
@@ -118,7 +99,7 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
         session = new Session<>(agent, ticker);
         sessions.put(player, session);
       }
-      session.sources().put(navigator, source);
+      session.sources.put(navigator, source);
     }
   }
 
@@ -128,13 +109,13 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
     if (session == null) {
       return;
     }
-    session.sources().remove(navigator);
-    Shown shown = session.shown().remove(navigator);
+    session.sources.remove(navigator);
+    Shown shown = session.shown.remove(navigator);
     if (shown != null) {
       shown.hologram().remove();
     }
-    if (session.sources().isEmpty()) {
-      session.ticker().cancel();
+    if (session.sources.isEmpty()) {
+      session.ticker.cancel();
       sessions.remove(player);
     }
   }
@@ -151,76 +132,61 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
   }
 
   private void render(Session<E, A, L> session, List<Trip<E, A, L>> active, List<String> labels) {
-    Map<Navigator<L>, Shown> shown = session.shown();
-    Optional<Gaze> gaze = platform.gaze(session.agent());
-    if (gaze.isEmpty()) {
-      shown.values().forEach(label -> label.hologram().remove());
-      shown.clear();
+    Optional<PlayerPosition> position = platform.position(session.agent);
+    if (position.isEmpty()
+        || session.position == null
+        || !position.get().sameBlock(session.position)) {
+      // Moving (or gone): no labels, and the wait starts over.
+      session.position = position.orElse(null);
+      session.stillTicks = 0;
+      session.clear();
       return;
     }
-    TrailSmoother.BlockProbe probe = platform.probe(session.agent());
-    List<Vec3> taken = new ArrayList<>();
+    if (session.stillTicks < STILL_TICKS) {
+      session.stillTicks += (int) PERIOD_TICKS;
+      if (session.stillTicks < STILL_TICKS) {
+        return;
+      }
+    }
+    Vec3 eye = position.get().eye();
+    Map<Navigator<L>, Shown> shown = session.shown;
+    List<Vec3> taken = new ArrayList<>(shown.values().stream().map(Shown::at).toList());
     for (int i = 0; i < active.size(); i++) {
       Trip<E, A, L> trip = active.get(i);
       Navigator<L> navigator = trip.navigator();
-      Source<L> source = session.sources().get(navigator);
+      Source<L> source = session.sources.get(navigator);
       if (source == null) {
         continue; // not a labelled trail
+      }
+      // White, like the name over a player.
+      Component text = Component.text(labels.get(i), NamedTextColor.WHITE);
+      Shown current = shown.get(navigator);
+      if (current != null) {
+        if (!text.equals(current.text())) {
+          current.hologram().text(text); // another trip started or ended
+          shown.put(navigator, new Shown(current.hologram(), current.at(), text));
+        }
+        continue;
       }
       Optional<Vec3> spot =
           source
               .labelPoint(DISTANCE)
               .map(platform::point)
-              .flatMap(point -> HologramPlacement.place(gaze.get().eye(), point, taken, probe));
-      Shown current = shown.get(navigator);
-      if (spot.isEmpty() && current != null && current.missed() < GRACE_UPDATES) {
-        spot = Optional.of(current.at()); // keep it there for now
-        current = current.missing();
-      } else if (current != null) {
-        current = current.found();
+              .flatMap(
+                  point ->
+                      HologramPlacement.place(eye, point, taken, platform.probe(session.agent)));
+      if (spot.isEmpty()) {
+        continue; // nowhere to put it yet; try again next time
       }
-      spot.ifPresent(taken::add);
-      if (spot.isEmpty() || !inView(gaze.get(), spot.get(), current != null)) {
-        if (current != null) {
-          current.hologram().remove();
-          shown.remove(navigator);
-        }
-        continue;
-      }
-      // White, like the name over a player.
-      Component text = Component.text(labels.get(i), NamedTextColor.WHITE);
-      Shown updated = show(session.agent(), trip, current, spot.get(), text);
-      if (updated == null) {
-        shown.remove(navigator);
-      } else {
-        shown.put(navigator, updated);
-      }
+      A agent = session.agent;
+      platform
+          .spawn(agent, spot.get(), text, () -> cancel(agent, trip))
+          .ifPresent(
+              hologram -> {
+                shown.put(navigator, new Shown(hologram, spot.get(), text));
+                taken.add(spot.get());
+              });
     }
-  }
-
-  /** Whether the player looks at {@code spot}, with more slack once the label is {@code shown}. */
-  private static boolean inView(Gaze gaze, Vec3 spot, boolean shown) {
-    return shown
-        ? HologramPlacement.inView(gaze, spot, HIDE_YAW_DEGREES, HIDE_PITCH_DEGREES)
-        : HologramPlacement.inView(gaze, spot, SHOW_YAW_DEGREES, SHOW_PITCH_DEGREES);
-  }
-
-  /** Shows, moves, or relabels the trip's label; {@code null} if it can't be shown here. */
-  private Shown show(A agent, Trip<E, A, L> trip, Shown current, Vec3 at, Component text) {
-    if (current != null) {
-      boolean moved = at.minus(current.at()).lengthSquared() > MOVE_EPSILON_SQUARED;
-      if (!moved || current.hologram().move(at)) {
-        if (!text.equals(current.text())) {
-          current.hologram().text(text);
-        }
-        return new Shown(current.hologram(), moved ? at : current.at(), text, current.missed());
-      }
-      current.hologram().remove(); // it can't follow from here; place a fresh one
-    }
-    return platform
-        .spawn(agent, at, text, () -> cancel(agent, trip))
-        .map(hologram -> new Shown(hologram, at, text, 0))
-        .orElse(null);
   }
 
   private void cancel(A agent, Trip<E, A, L> trip) {
@@ -252,27 +218,26 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
     return active.stream().filter(trip -> trip.navigator() == navigator).findFirst();
   }
 
-  /** One player's attached trails and their labels, in attach order. */
-  private record Session<E, A extends TripAgent<E>, L>(
-      A agent,
-      ScheduledTaskHandle ticker,
-      Map<Navigator<L>, Source<L>> sources,
-      Map<Navigator<L>, Shown> shown) {
+  /** One player's attached trails, their labels, and how long the player has stood still. */
+  private static final class Session<E, A extends TripAgent<E>, L> {
+
+    final A agent;
+    final ScheduledTaskHandle ticker;
+    final Map<Navigator<L>, Source<L>> sources = new LinkedHashMap<>(); // in attach order
+    final Map<Navigator<L>, Shown> shown = new HashMap<>();
+    PlayerPosition position; // where the player was at the last update, or null
+    int stillTicks; // how long they have been in that block
 
     Session(A agent, ScheduledTaskHandle ticker) {
-      this(agent, ticker, new LinkedHashMap<>(), new HashMap<>());
+      this.agent = agent;
+      this.ticker = ticker;
+    }
+
+    void clear() {
+      shown.values().forEach(label -> label.hologram().remove());
+      shown.clear();
     }
   }
 
-  /** A label on screen, and for how many updates in a row its spot has been lost. */
-  private record Shown(Hologram hologram, Vec3 at, Component text, int missed) {
-
-    Shown missing() {
-      return new Shown(hologram, at, text, missed + 1);
-    }
-
-    Shown found() {
-      return missed == 0 ? this : new Shown(hologram, at, text, 0);
-    }
-  }
+  private record Shown(Hologram hologram, Vec3 at, Component text) {}
 }

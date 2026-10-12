@@ -181,7 +181,7 @@ public final class SpongeHolograms {
     private final ArmorStand stand;
     private final Runnable onHit;
     private Entity hitbox;
-    private Vector3d at;
+    private final Vector3d at;
     private boolean removed;
 
     Label(
@@ -197,15 +197,6 @@ public final class SpongeHolograms {
       this.hitbox = hitbox;
       this.at = at;
       this.onHit = onHit;
-    }
-
-    @Override
-    public boolean move(Vector3d at) {
-      if (removed || stand.isRemoved() || hitbox.isRemoved()) {
-        return false;
-      }
-      this.at = at;
-      return stand.setPosition(nameAt(at)) && hitbox.setPosition(hitboxAt(at));
     }
 
     @Override

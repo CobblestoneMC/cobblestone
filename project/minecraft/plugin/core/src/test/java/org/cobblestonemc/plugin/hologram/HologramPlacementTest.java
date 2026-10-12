@@ -91,39 +91,6 @@ class HologramPlacementTest {
         "a block beside the line");
   }
 
-  @Test
-  void theViewIsAnEllipseWiderThanItIsTall() {
-    Gaze ahead = new Gaze(EYE, new Vec3(1, 0, 0));
-    assertTrue(HologramPlacement.inView(ahead, new Vec3(4.5, 1.62, 0.5), 20, 10));
-    assertTrue(HologramPlacement.inView(ahead, sideways(18), 20, 10), "18 degrees to the side");
-    assertFalse(HologramPlacement.inView(ahead, sideways(22), 20, 10), "22 degrees to the side");
-    assertTrue(HologramPlacement.inView(ahead, up(9), 20, 10), "9 degrees up");
-    assertFalse(HologramPlacement.inView(ahead, up(12), 20, 10), "12 degrees up");
-    assertFalse(
-        HologramPlacement.inView(ahead, new Vec3(-3.5, 1.62, 0.5), 20, 10), "behind the player");
-  }
-
-  @Test
-  void theViewWrapsAroundTheYawSeam() {
-    // Looking just one side of due west, at a target just the other side.
-    double just = Math.toRadians(5);
-    Gaze west = new Gaze(EYE, new Vec3(-Math.cos(just), 0, Math.sin(just)));
-    Vec3 target = EYE.plus(new Vec3(-Math.cos(just), 0, -Math.sin(just)).times(3));
-    assertTrue(HologramPlacement.inView(west, target, 20, 10));
-  }
-
-  /** A point 3 blocks from the eyes, {@code degrees} to the side of due east. */
-  private static Vec3 sideways(double degrees) {
-    double angle = Math.toRadians(degrees);
-    return EYE.plus(new Vec3(Math.cos(angle), 0, Math.sin(angle)).times(3));
-  }
-
-  /** A point 3 blocks from the eyes, {@code degrees} above due east. */
-  private static Vec3 up(double degrees) {
-    double angle = Math.toRadians(degrees);
-    return EYE.plus(new Vec3(Math.cos(angle), Math.sin(angle), 0).times(3));
-  }
-
   private static TrailSmoother.BlockProbe solidAt(
       TrailSmoother.BlockProbe base, int sx, int sy, int sz) {
     return (x, y, z) -> x == sx && y == sy && z == sz ? TrailBlock.SOLID : base.at(x, y, z);

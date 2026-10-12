@@ -144,47 +144,6 @@ final class HologramPlacement {
     return step > 0 ? block + 1 - coordinate : coordinate - block;
   }
 
-  /**
-   * Whether {@code target} is within an elliptical window around where the player looks: up to
-   * {@code yawDegrees} to either side and {@code pitchDegrees} above or below.
-   *
-   * @param gaze the player's gaze
-   * @param target the point
-   * @param yawDegrees the window's horizontal half-width
-   * @param pitchDegrees the window's vertical half-height
-   * @return whether the player is looking at it
-   */
-  static boolean inView(Gaze gaze, Vec3 target, double yawDegrees, double pitchDegrees) {
-    Vec3 toTarget = target.minus(gaze.eye());
-    if (toTarget.lengthSquared() == 0.0) {
-      return true;
-    }
-    double yaw = angleBetween(yaw(gaze.look()), yaw(toTarget));
-    double pitch = pitch(gaze.look()) - pitch(toTarget);
-    double x = yaw / Math.toRadians(yawDegrees);
-    double y = pitch / Math.toRadians(pitchDegrees);
-    return x * x + y * y <= 1.0;
-  }
-
-  private static double yaw(Vec3 direction) {
-    return Math.atan2(direction.z(), direction.x());
-  }
-
-  private static double pitch(Vec3 direction) {
-    return Math.atan2(direction.y(), Math.hypot(direction.x(), direction.z()));
-  }
-
-  /** The signed difference between two angles, in {@code [-pi, pi]}. */
-  private static double angleBetween(double a, double b) {
-    double difference = (b - a) % (2 * Math.PI);
-    if (difference > Math.PI) {
-      difference -= 2 * Math.PI;
-    } else if (difference < -Math.PI) {
-      difference += 2 * Math.PI;
-    }
-    return difference;
-  }
-
   private static int floor(double value) {
     return (int) Math.floor(value);
   }

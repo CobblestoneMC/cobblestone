@@ -180,12 +180,12 @@ caves - 48s
 Each trip is named by the shortest part of its address that tells it apart from your other trips.
 `/stone hud` with no argument switches it on or off; your choice is remembered.
 
-To tell several trails apart, look just above a trail (or the guide back to it), a few blocks
-ahead of you: the name of
-its trip appears there, named the same way as in the HUD. With one trip to a player named Steve it
-reads `Steve`; add a trip to a town also named Steve and they read `player Steve` and `town Steve`.
-The label only appears where you can see it, and hides again when you look away, so it stays out of
-your view while you follow the trail. **Hit a label to cancel that trip.** On Sponge servers, other
+To tell several trails apart, stand still for a second: a few blocks ahead of you, the name of
+each trip appears over its trail (or the guide back to it), named the same way as in the HUD. With
+one trip to a player named Steve it reads `Steve`; add a trip to a town also named Steve and they
+read `player Steve` and `town Steve`. A label only appears where you can see it, and the labels go
+away as soon as you move, so they stay out of your way while you follow the trail. **Hit a label to
+cancel that trip.** On Sponge servers, other
 players nearby can see your labels too, but only you can cancel your trips with them.
 
 ## Errors

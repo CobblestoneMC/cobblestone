@@ -110,8 +110,8 @@ values fall back to the server configuration.
     tripService.navigate(player, objective, settings, "Lost Lantern");
     ```
 
-`showLabel` decides whether the trip's name floats over its trail while the player looks just
-above it (where hitting it cancels the trip). Unset, it follows the server's `trips.holograms`
+`showLabel` decides whether the trip's name floats over its trail while the player stands still
+(where hitting it cancels the trip). Unset, it follows the server's `trips.holograms`
 config.
 
 To use another navigator, build settings for its id:

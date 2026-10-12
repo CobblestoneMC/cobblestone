@@ -8,19 +8,9 @@
 package org.cobblestonemc.paper.hologram;
 
 import net.kyori.adventure.text.Component;
-import org.bukkit.Location;
 
 /** One label placed by {@link PaperHolograms}. Not reused after {@link #remove()}. */
 public interface PaperHologram {
-
-  /**
-   * Moves the label so its text is centered on {@code at}, in the same world.
-   *
-   * @param at the new center
-   * @return {@code false} if it can't be moved there from this thread (Folia); it should then be
-   *     removed and spawned again
-   */
-  boolean move(Location at);
 
   /**
    * Replaces the label's text.

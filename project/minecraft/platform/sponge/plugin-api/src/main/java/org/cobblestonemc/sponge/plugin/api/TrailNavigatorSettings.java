@@ -37,8 +37,8 @@ public final class TrailNavigatorSettings {
       new NavigatorSettingKey<>("trail.colors");
 
   /**
-   * Whether the trip's name floats over the trail while the player looks just above it, where
-   * hitting it cancels the trip. Unset follows the server's {@code trips.holograms} config.
+   * Whether the trip's name floats over the trail while the player stands still, where hitting it
+   * cancels the trip. Unset follows the server's {@code trips.holograms} config.
    */
   public static final NavigatorSettingKey<Boolean> SHOW_LABEL =
       new NavigatorSettingKey<>("trail.show_label");
@@ -95,8 +95,8 @@ public final class TrailNavigatorSettings {
     }
 
     /**
-     * Sets whether the trip's name floats over the trail while the player looks just above it,
-     * where hitting it cancels the trip. Unset follows the server's {@code trips.holograms} config.
+     * Sets whether the trip's name floats over the trail while the player stands still, where
+     * hitting it cancels the trip. Unset follows the server's {@code trips.holograms} config.
      *
      * @param show whether to show it
      * @return this builder

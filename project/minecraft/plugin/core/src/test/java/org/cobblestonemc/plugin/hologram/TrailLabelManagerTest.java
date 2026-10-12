@@ -40,10 +40,7 @@ import org.cobblestonemc.plugin.trip.TripManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/**
- * When {@link TrailLabelManager} shows, moves and removes a player's trail labels, and what they
- * say.
- */
+/** When {@link TrailLabelManager} shows and removes a player's trail labels, and what they say. */
 class TrailLabelManagerTest {
 
   private static final CobblestoneLogger LOGGER =
@@ -64,7 +61,7 @@ class TrailLabelManagerTest {
         public void error(String message, Throwable throwable, Object... args) {}
       };
 
-  private static final Vec3 EYE = new Vec3(0.5, 1.62, 0.5);
+  private static final Vec3 FEET = new Vec3(0.5, 0.0, 0.5);
   private static final Vec3 AHEAD = new Vec3(3.0, 0.9, 0.5);
   private static final Vec3 OVER = AHEAD.plus(new Vec3(0, HologramPlacement.HEIGHT, 0));
 
@@ -90,13 +87,12 @@ class TrailLabelManagerTest {
     labels =
         new TrailLabelManager<>(
             trips, scheduler, new Messages(Locale.ENGLISH, false, LOGGER), platform);
-    platform.lookAt(OVER);
   }
 
-  /** Starts a trip along a trail through {@code ahead}, and draws the player's labels. */
+  /** Starts a trip along a trail through {@code ahead}, and stands still until labels show. */
   private Trip<Object, TestTripAgent, Vec3> start(TripLabel label, Vec3 ahead) {
     Trip<Object, TestTripAgent, Vec3> trip = start(label, new AheadNavigator(ahead));
-    scheduler.tick();
+    standStill();
     return trip;
   }
 
@@ -104,60 +100,111 @@ class TrailLabelManagerTest {
     return trips.start(player, navigator, label, null, null, false, 0L).orElseThrow();
   }
 
+  /** Updates the labels as often as a player arriving in a block must wait for them. */
+  private void standStill() {
+    for (int i = 0; i <= updatesToShow(); i++) {
+      scheduler.tick();
+    }
+  }
+
+  /** How many updates after the one a player arrives in a block on that their labels appear. */
+  private static int updatesToShow() {
+    return (int) (TrailLabelManager.STILL_TICKS / TrailLabelManager.PERIOD_TICKS);
+  }
+
   private static TripLabel address(String... keys) {
     return TripLabel.address(List.of(keys));
   }
 
   @Test
-  void showsTheTripsNameOverTheTrailWhileThePlayerLooksThere() {
-    start(address("essentials", "player", "Steve"), AHEAD);
+  void appearsOnceThePlayerHasStoodStillForASecond() {
+    start(address("essentials", "player", "Steve"), new AheadNavigator(AHEAD));
+    scheduler.tick(); // arrives
+    for (int i = 1; i < updatesToShow(); i++) {
+      scheduler.tick();
+      assertTrue(platform.spawned.isEmpty(), "not yet, after " + i + " updates");
+    }
+    scheduler.tick();
 
     FakeHologram label = platform.only();
     assertEquals(OVER, label.at);
     assertEquals("Steve", plain(label.text));
-    assertEquals(NamedTextColor.WHITE, label.text.color());
-    assertEquals(TrailLabelManager.PERIOD_TICKS, scheduler.period, "follows the player");
+    assertEquals(NamedTextColor.WHITE, label.text.color(), "like the name over a player");
+    assertEquals(20, updatesToShow() * TrailLabelManager.PERIOD_TICKS, "a second");
   }
 
   @Test
-  void hiddenWhileThePlayerLooksAlongTheTrail() {
-    platform.lookAt(AHEAD);
+  void goesAwayWhileThePlayerMovesAndComesBackWhenTheyStop() {
     start(address("player", "Steve"), AHEAD);
-    assertTrue(platform.spawned.isEmpty());
-  }
+    FakeHologram first = platform.only();
 
-  @Test
-  void appearsAndDisappearsWithSomeSlack() {
-    platform.lookAt(AHEAD);
-    start(address("player", "Steve"), AHEAD);
-    assertTrue(platform.spawned.isEmpty());
-
-    platform.lookAt(OVER);
+    platform.feet = FEET.plus(new Vec3(1, 0, 0));
     scheduler.tick();
+    assertTrue(first.removed);
+
+    platform.feet = FEET.plus(new Vec3(2, 0, 0));
+    for (int i = 0; i < updatesToShow(); i++) {
+      scheduler.tick();
+    }
+    assertEquals(1, platform.spawned.size(), "the wait starts over in each new block");
+    scheduler.tick();
+    assertEquals(2, platform.spawned.size());
+    assertFalse(platform.spawned.getLast().removed);
+  }
+
+  @Test
+  void jumpingCountsAsMoving() {
+    start(address("player", "Steve"), AHEAD);
+    platform.feet = FEET.plus(new Vec3(0, 1.1, 0));
+    scheduler.tick();
+    assertTrue(platform.only().removed);
+  }
+
+  @Test
+  void movingWithinTheBlockDoesNotCount() {
+    AheadNavigator navigator = new AheadNavigator(AHEAD);
+    start(address("player", "Steve"), navigator);
+    standStill();
     FakeHologram label = platform.only();
 
-    platform.lookDegreesAbove(OVER, 15); // past where it appears, short of where it disappears
+    platform.feet = FEET.plus(new Vec3(0.2, 0, -0.2));
+    navigator.ahead = Optional.of(AHEAD.plus(new Vec3(0.2, 0, 0)));
     scheduler.tick();
     assertFalse(label.removed);
-
-    platform.lookDegreesAbove(OVER, 22);
-    scheduler.tick();
-    assertTrue(label.removed);
+    assertEquals(OVER, label.at, "stays where it appeared");
   }
 
   @Test
-  void theWindowIsWiderThanItIsTall() {
-    platform.lookDegreesAside(OVER, 18);
+  void appearsAsSoonAsTheTrailHasASpot() {
+    AheadNavigator navigator = new AheadNavigator(AHEAD);
+    navigator.ahead = Optional.empty(); // e.g. off the trail, before the guide back is found
+    start(address("player", "Steve"), navigator);
+    standStill();
+    assertTrue(platform.spawned.isEmpty());
+
+    navigator.ahead = Optional.of(AHEAD);
+    scheduler.tick();
+    assertEquals(OVER, platform.only().at);
+  }
+
+  @Test
+  void staysWhileTheTrailIsBrieflyGone() {
+    AheadNavigator navigator = new AheadNavigator(AHEAD);
+    start(address("player", "Steve"), navigator);
+    standStill();
+    navigator.ahead = Optional.empty(); // e.g. a new guide not drawn yet
+    scheduler.tick();
+    navigator.ahead = Optional.of(AHEAD);
+    scheduler.tick();
+    assertFalse(platform.only().removed, "no blink");
+  }
+
+  @Test
+  void goneWhileThePlayerIsOffline() {
     start(address("player", "Steve"), AHEAD);
-    FakeHologram label = platform.only();
-
-    platform.lookDegreesAside(OVER, 28);
+    platform.online = false;
     scheduler.tick();
-    assertFalse(label.removed);
-
-    platform.lookDegreesAside(OVER, 35);
-    scheduler.tick();
-    assertTrue(label.removed);
+    assertTrue(platform.only().removed);
   }
 
   @Test
@@ -191,67 +238,6 @@ class TrailLabelManagerTest {
   }
 
   @Test
-  void followsTheTrail() {
-    AheadNavigator navigator = new AheadNavigator(AHEAD);
-    start(address("player", "Steve"), navigator);
-    scheduler.tick();
-    FakeHologram label = platform.only();
-
-    navigator.ahead = Optional.of(AHEAD.plus(new Vec3(0, 0, 0.5)));
-    platform.lookAt(label.at.plus(new Vec3(0, 0, 0.5)));
-    scheduler.tick();
-    assertEquals(OVER.plus(new Vec3(0, 0, 0.5)), label.at);
-    assertEquals(1, platform.spawned.size(), "moved, not replaced");
-  }
-
-  @Test
-  void respawnedWhenItCannotMove() {
-    AheadNavigator navigator = new AheadNavigator(AHEAD);
-    start(address("player", "Steve"), navigator);
-    scheduler.tick();
-    FakeHologram label = platform.only();
-    label.movable = false;
-
-    navigator.ahead = Optional.of(AHEAD.plus(new Vec3(0, 0, 0.5)));
-    scheduler.tick();
-    assertTrue(label.removed);
-    assertEquals(2, platform.spawned.size());
-    assertEquals(OVER.plus(new Vec3(0, 0, 0.5)), platform.spawned.getLast().at);
-  }
-
-  @Test
-  void removedWhenTheTrailAheadIsGone() {
-    AheadNavigator navigator = new AheadNavigator(AHEAD);
-    start(address("player", "Steve"), navigator);
-    scheduler.tick();
-    navigator.ahead = Optional.empty();
-    for (int i = 0; i < TrailLabelManager.GRACE_UPDATES; i++) {
-      scheduler.tick();
-      assertFalse(platform.only().removed, "kept a moment, in case it comes back");
-    }
-    scheduler.tick();
-    assertTrue(platform.only().removed);
-  }
-
-  @Test
-  void aBrieflyLostSpotDoesNotBlink() {
-    AheadNavigator navigator = new AheadNavigator(AHEAD);
-    start(address("player", "Steve"), navigator);
-    scheduler.tick();
-    FakeHologram label = platform.only();
-
-    for (int round = 0; round < 3; round++) {
-      navigator.ahead = Optional.empty(); // e.g. a new guide not drawn yet
-      scheduler.tick();
-      navigator.ahead = Optional.of(AHEAD);
-      scheduler.tick();
-    }
-    assertFalse(label.removed);
-    assertEquals(1, platform.spawned.size(), "never respawned");
-    assertEquals(OVER, label.at);
-  }
-
-  @Test
   void notShownOutOfSight() {
     platform.probe = (x, y, z) -> x == 2 && y >= 2 ? TrailBlock.SOLID : TrailBlock.OPEN;
     start(address("player", "Steve"), AHEAD);
@@ -271,7 +257,8 @@ class TrailLabelManagerTest {
     assertFalse(platform.spawned.get(0).removed);
     assertEquals(
         List.of("Canceled your trip to town Steve."),
-        sent.stream().map(TrailLabelManagerTest::plain).toList());
+        sent.stream().map(TrailLabelManagerTest::plain).toList(),
+        "named as the label was");
 
     platform.spawned.get(1).onHit.run(); // a second hit before it is gone does nothing
     assertEquals(1, sent.size());
@@ -316,42 +303,12 @@ class TrailLabelManagerTest {
     return out.toString();
   }
 
-  /** A player at the origin over a flat floor, looking wherever the test says. */
+  /** A player standing over a flat floor, wherever the test puts them. */
   private static final class FakePlatform implements HologramPlatform<TestTripAgent, Vec3> {
     final List<FakeHologram> spawned = new ArrayList<>();
     TrailSmoother.BlockProbe probe = (x, y, z) -> y < 0 ? TrailBlock.SOLID : TrailBlock.OPEN;
-    Vec3 look;
-
-    void lookAt(Vec3 target) {
-      look = target.minus(EYE).unit();
-    }
-
-    /** Looks toward {@code target}, tilted up by {@code degrees}. */
-    void lookDegreesAbove(Vec3 target, double degrees) {
-      Vec3 toward = target.minus(EYE);
-      double horizontal = Math.hypot(toward.x(), toward.z());
-      double pitch = Math.atan2(toward.y(), horizontal) + Math.toRadians(degrees);
-      look =
-          new Vec3(
-              toward.x() / horizontal * Math.cos(pitch),
-              Math.sin(pitch),
-              toward.z() / horizontal * Math.cos(pitch));
-    }
-
-    /** Looks level with {@code target}, turned {@code degrees} to its side. */
-    void lookDegreesAside(Vec3 target, double degrees) {
-      Vec3 toward = target.minus(EYE);
-      double pitch = Math.atan2(toward.y(), Math.hypot(toward.x(), toward.z()));
-      double yaw = Math.atan2(toward.z(), toward.x()) + Math.toRadians(degrees);
-      look =
-          new Vec3(
-              Math.cos(yaw) * Math.cos(pitch), Math.sin(pitch), Math.sin(yaw) * Math.cos(pitch));
-    }
-
-    @Override
-    public Vec3 point(Vec3 location) {
-      return location;
-    }
+    Vec3 feet = FEET;
+    boolean online = true;
 
     FakeHologram only() {
       assertEquals(1, spawned.size());
@@ -359,8 +316,15 @@ class TrailLabelManagerTest {
     }
 
     @Override
-    public Optional<Gaze> gaze(TestTripAgent agent) {
-      return Optional.of(new Gaze(EYE, look));
+    public Vec3 point(Vec3 location) {
+      return location;
+    }
+
+    @Override
+    public Optional<PlayerPosition> position(TestTripAgent agent) {
+      return online
+          ? Optional.of(new PlayerPosition(feet, feet.plus(new Vec3(0, 1.62, 0))))
+          : Optional.empty();
     }
 
     @Override
@@ -377,25 +341,15 @@ class TrailLabelManagerTest {
   }
 
   private static final class FakeHologram implements Hologram {
-    Vec3 at;
-    Component text;
+    final Vec3 at;
     final Runnable onHit;
+    Component text;
     boolean removed;
-    boolean movable = true;
 
     FakeHologram(Vec3 at, Component text, Runnable onHit) {
       this.at = at;
       this.text = text;
       this.onHit = onHit;
-    }
-
-    @Override
-    public boolean move(Vec3 at) {
-      if (!movable) {
-        return false;
-      }
-      this.at = at;
-      return true;
     }
 
     @Override
@@ -456,7 +410,6 @@ class TrailLabelManagerTest {
   /** Runs one-shot work immediately and keeps the labels' repeating task for the test to fire. */
   private static final class TestScheduler implements MinecraftScheduler<Object> {
     Runnable ticker;
-    long period;
     Handle handle;
 
     void tick() {
@@ -474,7 +427,6 @@ class TrailLabelManagerTest {
       Handle created = new Handle();
       if (periodTicks != 1L) { // trip ticks (period 1) are not needed here
         ticker = task;
-        period = periodTicks;
         handle = created;
       }
       return created;

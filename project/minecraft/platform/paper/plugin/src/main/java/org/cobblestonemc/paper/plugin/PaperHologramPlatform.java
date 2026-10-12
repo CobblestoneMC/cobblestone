@@ -12,12 +12,11 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
-import org.bukkit.util.Vector;
 import org.cobblestonemc.paper.hologram.PaperHologram;
 import org.cobblestonemc.paper.hologram.PaperHolograms;
-import org.cobblestonemc.plugin.hologram.Gaze;
 import org.cobblestonemc.plugin.hologram.Hologram;
 import org.cobblestonemc.plugin.hologram.HologramPlatform;
+import org.cobblestonemc.plugin.hologram.PlayerPosition;
 import org.cobblestonemc.plugin.navigator.TrailSmoother;
 import org.cobblestonemc.plugin.navigator.Vec3;
 
@@ -36,17 +35,13 @@ final class PaperHologramPlatform implements HologramPlatform<PaperTripAgent, Lo
   }
 
   @Override
-  public Optional<Gaze> gaze(PaperTripAgent agent) {
+  public Optional<PlayerPosition> position(PaperTripAgent agent) {
     Player player = agent.player();
     if (!player.isOnline()) {
       return Optional.empty();
     }
-    Location eye = player.getEyeLocation();
-    Vector look = eye.getDirection();
     return Optional.of(
-        new Gaze(
-            new Vec3(eye.getX(), eye.getY(), eye.getZ()),
-            new Vec3(look.getX(), look.getY(), look.getZ())));
+        new PlayerPosition(point(player.getLocation()), point(player.getEyeLocation())));
   }
 
   @Override
@@ -60,16 +55,11 @@ final class PaperHologramPlatform implements HologramPlatform<PaperTripAgent, Lo
     World world = player.getWorld();
     return holograms
         .spawn(player, location(world, at), text, onHit)
-        .map(label -> wrap(world, label));
+        .map(PaperHologramPlatform::wrap);
   }
 
-  private static Hologram wrap(World world, PaperHologram label) {
+  private static Hologram wrap(PaperHologram label) {
     return new Hologram() {
-      @Override
-      public boolean move(Vec3 at) {
-        return label.move(location(world, at));
-      }
-
       @Override
       public void text(Component text) {
         label.text(text);
