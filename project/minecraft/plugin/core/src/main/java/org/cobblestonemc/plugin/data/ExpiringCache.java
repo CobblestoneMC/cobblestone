@@ -13,10 +13,12 @@ import java.util.function.LongSupplier;
 
 /**
  * A tiny read-through cache whose entries go stale after {@link #TTL_NANOS one second}, used by the
- * caching DAOs to keep tab-completion off the database. Sized for the "hundreds of players typing
- * at once" case rather than for long-lived state: an entry is a snapshot of one player's rows, and
- * a write to that player's data {@linkplain #invalidate invalidates} it immediately, so the TTL
- * only bounds staleness caused by something outside this process.
+ * caching DAOs to keep tab-completion off the database, and by destination providers to keep it off
+ * other expensive lookups (such as scanning every loaded entity for a player's pets). Sized for the
+ * "hundreds of players typing at once" case rather than for long-lived state: an entry is a
+ * snapshot of one player's rows, and a write to that player's data {@linkplain #invalidate
+ * invalidates} it immediately, so the TTL only bounds staleness caused by something outside this
+ * process.
  *
  * <p>Safe to call from any thread. Two threads missing on the same key may both load it; that is
  * cheaper than locking, and the loser simply overwrites with an equally fresh value.
@@ -24,7 +26,7 @@ import java.util.function.LongSupplier;
  * @param <K> the key type
  * @param <V> the cached value type
  */
-final class ExpiringCache<K, V> {
+public final class ExpiringCache<K, V> {
 
   /** How long a loaded value may be served before it is re-read. */
   static final long TTL_NANOS = 1_000_000_000L;
@@ -42,7 +44,7 @@ final class ExpiringCache<K, V> {
   private final LongSupplier clock;
 
   /** Creates a cache on the system's monotonic clock. */
-  ExpiringCache() {
+  public ExpiringCache() {
     this(System::nanoTime);
   }
 
@@ -62,7 +64,7 @@ final class ExpiringCache<K, V> {
    * @param loader reads the value from the underlying store
    * @return the cached or freshly loaded value
    */
-  V get(K key, Function<K, V> loader) {
+  public V get(K key, Function<K, V> loader) {
     long now = clock.getAsLong();
     Entry<V> entry = entries.get(key);
     if (entry != null && now - entry.loadedAt() < TTL_NANOS) {
@@ -81,12 +83,12 @@ final class ExpiringCache<K, V> {
    *
    * @param key the key to drop
    */
-  void invalidate(K key) {
+  public void invalidate(K key) {
     entries.remove(key);
   }
 
   /** Drops every key — for a write whose affected keys are not known. */
-  void invalidateAll() {
+  public void invalidateAll() {
     entries.clear();
   }
 }

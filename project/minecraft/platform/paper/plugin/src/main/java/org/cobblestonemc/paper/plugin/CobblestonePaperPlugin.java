@@ -123,10 +123,11 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             new DeathListener(
                 dataStore.deaths(), platformApi.scheduler(), () -> config.get(keys.deathsTrack)),
             this);
-    // So is their last mount.
+    // So are their last mount, and when each of their pets was tamed (to number same-named pets).
     getServer()
         .getPluginManager()
         .registerEvents(new MountListener(dataStore.mounts(), platformApi.scheduler()), this);
+    getServer().getPluginManager().registerEvents(new PetListener(), this);
 
     // Trips tick on the platform scheduler (Folia-safe region tasks); the default trail navigator
     // is

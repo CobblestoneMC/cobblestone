@@ -48,7 +48,7 @@ The trail renders only the next segment of the route, brightest at the point to 
   entering a portal, or running a command. Cobblestone highlights the location and sends a
   message. Command prompts, such as `Run /warp market.`, can be clicked.
 - **Ending.** A trip ends on arrival, on `/stone cancel`, or on disconnect. Death does not end a
-  trip. A trip to a mount ends if it dies, and a trip to a player ends if they log off.
+  trip. A trip to a pet or mount ends if it dies, and a trip to a player ends if they log off.
 
 ## Destinations
 
@@ -129,6 +129,16 @@ nearest open sky.
 The tamed horse, donkey, mule, llama or camel you last rode. The route is recomputed periodically
 as it moves while it is loaded, and otherwise heads to where it was last seen. If it dies, the trip
 ends, and `/nav mount` then leads to the mount you rode before it.
+
+### Pets
+
+```
+/nav pet Rex
+```
+
+Your named, tamed animals that are currently loaded. Pets that share a name are numbered by when
+they were tamed: `Rex`, `Rex-2`, … The route is recomputed periodically as the pet moves, and the
+trip ends if the pet dies.
 
 ### Players
 

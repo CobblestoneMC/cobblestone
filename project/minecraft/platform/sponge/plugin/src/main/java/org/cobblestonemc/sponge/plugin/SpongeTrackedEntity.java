@@ -16,7 +16,7 @@ import org.spongepowered.api.world.server.ServerLocation;
 import org.spongepowered.api.world.server.ServerWorld;
 
 /**
- * An entity a destination follows — a mount — read safely from any thread.
+ * An entity a destination follows — a pet or a mount — read safely from any thread.
  *
  * <p>Entities may only be looked up on the main thread, but a live trip's re-search asks for the
  * destination's location off it. So the entity is looked up only when on the main thread — when the

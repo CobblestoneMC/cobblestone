@@ -16,7 +16,7 @@ import org.bukkit.entity.LivingEntity;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 
 /**
- * An entity a destination follows — a mount — read safely from any thread.
+ * An entity a destination follows — a pet or a mount — read safely from any thread.
  *
  * <p>Entities may only be looked up on a server thread, and (on Folia) only read by the region that
  * owns them, but a live trip's re-search asks for the destination's location from a search thread.

@@ -279,8 +279,8 @@ player can find the place by hand. `Destination.at` adds a block's coordinates f
 Set `existence(...)` on the builder for a target that can stop existing partway through a trip, such as an
 animal that dies. A trip polls it about once a second and ends quietly once it returns `false`.
 Being out of reach, for example unloaded, is not the same as not existing. It is called on the
-travelling player's thread, so keep it cheap. Cobblestone ends trips to mounts that die, and to
-players who log off.
+travelling player's thread, so keep it cheap. Cobblestone ends trips to pets and mounts that die,
+and to players who log off.
 
 ## Permissions
 
