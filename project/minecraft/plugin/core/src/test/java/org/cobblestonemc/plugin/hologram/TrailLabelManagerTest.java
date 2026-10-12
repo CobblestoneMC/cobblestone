@@ -71,7 +71,15 @@ class TrailLabelManagerTest {
   private final TestScheduler scheduler = new TestScheduler();
   private final FakePlatform platform = new FakePlatform();
   private final List<Component> sent = new ArrayList<>();
-  private final TestTripAgent player = new TestTripAgent(UUID.randomUUID());
+  private final TestTripAgent player =
+      new TestTripAgent(
+          UUID.randomUUID(),
+          new Audience() {
+            @Override
+            public void sendMessage(Component message) {
+              sent.add(message);
+            }
+          });
 
   private TripManager<Object, TestTripAgent, Object> trips;
   private TrailLabelManager<Object, TestTripAgent, Object> labels;
@@ -79,21 +87,9 @@ class TrailLabelManagerTest {
   @BeforeEach
   void setUp() {
     trips = new TripManager<>(scheduler, 5);
-    Audience audience =
-        new Audience() {
-          @Override
-          public void sendMessage(Component message) {
-            sent.add(message);
-          }
-        };
     labels =
         new TrailLabelManager<>(
-            trips,
-            scheduler,
-            new Messages(Locale.ENGLISH, false, LOGGER),
-            platform,
-            agent -> audience,
-            agent -> Locale.ENGLISH);
+            trips, scheduler, new Messages(Locale.ENGLISH, false, LOGGER), platform);
     platform.lookAt(OVER);
   }
 

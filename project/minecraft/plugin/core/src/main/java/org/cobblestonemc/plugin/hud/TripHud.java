@@ -52,7 +52,6 @@ public final class TripHud<E, A extends TripAgent<E>, L> {
   private final PlayerPreferencesDao preferences;
   private final BooleanSupplier enabled;
   private final Function<A, HudDisplay> displays;
-  private final Function<A, Locale> locales;
   private final CobblestoneLogger logger;
 
   private final Map<UUID, Session> sessions = new ConcurrentHashMap<>();
@@ -68,7 +67,6 @@ public final class TripHud<E, A extends TripAgent<E>, L> {
    * @param preferences each player's stored choice
    * @param enabled whether the server has the HUD turned on
    * @param displays opens a player's HUD
-   * @param locales a player's locale
    * @param logger the logger
    */
   public TripHud(
@@ -78,7 +76,6 @@ public final class TripHud<E, A extends TripAgent<E>, L> {
       PlayerPreferencesDao preferences,
       BooleanSupplier enabled,
       Function<A, HudDisplay> displays,
-      Function<A, Locale> locales,
       CobblestoneLogger logger) {
     this.trips = trips;
     this.scheduler = scheduler;
@@ -86,7 +83,6 @@ public final class TripHud<E, A extends TripAgent<E>, L> {
     this.preferences = preferences;
     this.enabled = enabled;
     this.displays = displays;
-    this.locales = locales;
     this.logger = logger;
   }
 
@@ -183,7 +179,7 @@ public final class TripHud<E, A extends TripAgent<E>, L> {
     if (active.size() > MAX_LINES) {
       active = active.subList(0, MAX_LINES);
     }
-    Locale locale = locales.apply(agent);
+    Locale locale = agent.locale();
     Component title =
         Component.text(messages.raw(locale, "hud.title"), null, TextDecoration.UNDERLINED);
     List<String> labels = TripLabels.shorten(active.stream().map(Trip::label).toList());

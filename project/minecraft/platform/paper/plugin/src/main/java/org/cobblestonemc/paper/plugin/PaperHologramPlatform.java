@@ -37,7 +37,7 @@ final class PaperHologramPlatform implements HologramPlatform<PaperTripAgent, Lo
 
   @Override
   public Optional<Gaze> gaze(PaperTripAgent agent) {
-    Player player = (Player) agent.entity();
+    Player player = agent.player();
     if (!player.isOnline()) {
       return Optional.empty();
     }
@@ -51,12 +51,12 @@ final class PaperHologramPlatform implements HologramPlatform<PaperTripAgent, Lo
 
   @Override
   public TrailSmoother.BlockProbe probe(PaperTripAgent agent) {
-    return new PaperWorldProbe(agent.entity().getWorld());
+    return new PaperWorldProbe(agent.player().getWorld());
   }
 
   @Override
   public Optional<Hologram> spawn(PaperTripAgent agent, Vec3 at, Component text, Runnable onHit) {
-    Player player = (Player) agent.entity();
+    Player player = agent.player();
     World world = player.getWorld();
     return holograms
         .spawn(player, location(world, at), text, onHit)

@@ -16,7 +16,6 @@ import java.util.function.Supplier;
 import net.kyori.adventure.key.Key;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.Player;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.cobblestonemc.api.SearchSettings;
@@ -131,12 +130,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     getServer().getPluginManager().registerEvents(holograms, this);
     TrailLabelManager<Entity, PaperTripAgent, Location> trailLabels =
         new TrailLabelManager<>(
-            tripManager,
-            platformApi.scheduler(),
-            messages,
-            new PaperHologramPlatform(holograms),
-            agent -> (Player) agent.entity(),
-            agent -> ((Player) agent.entity()).locale());
+            tripManager, platformApi.scheduler(), messages, new PaperHologramPlatform(holograms));
     integrationRegistry.registerNavigator(
         this,
         TrailNavigatorSettings.NAVIGATOR_ID,
@@ -154,8 +148,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             messages,
             dataStore.playerPreferences(),
             () -> !folia && config.get(keys.tripsHud),
-            agent -> new PaperHudDisplay((Player) agent.entity()),
-            agent -> ((Player) agent.entity()).locale(),
+            agent -> new PaperHudDisplay(agent.player()),
             logger);
     tripManager.onChange(tripHud::refresh);
     getServer().getOnlinePlayers().forEach(player -> tripHud.load(player.getUniqueId()));

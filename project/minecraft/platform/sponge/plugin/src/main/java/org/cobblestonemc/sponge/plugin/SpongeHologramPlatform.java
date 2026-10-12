@@ -64,7 +64,7 @@ final class SpongeHologramPlatform implements HologramPlatform<SpongeTripAgent, 
 
   @Override
   public Optional<Gaze> gaze(SpongeTripAgent agent) {
-    ServerPlayer player = (ServerPlayer) agent.entity();
+    ServerPlayer player = agent.player();
     if (!player.isOnline()) {
       return Optional.empty();
     }
@@ -81,12 +81,12 @@ final class SpongeHologramPlatform implements HologramPlatform<SpongeTripAgent, 
 
   @Override
   public TrailSmoother.BlockProbe probe(SpongeTripAgent agent) {
-    return new SpongeWorldProbe(((ServerPlayer) agent.entity()).world(), solidByState);
+    return new SpongeWorldProbe(agent.player().world(), solidByState);
   }
 
   @Override
   public Optional<Hologram> spawn(SpongeTripAgent agent, Vec3 at, Component text, Runnable onHit) {
-    ServerPlayer player = (ServerPlayer) agent.entity();
+    ServerPlayer player = agent.player();
     return holograms
         .spawn(player, player.world(), vector(at), text, onHit)
         .map(SpongeHologramPlatform::wrap);

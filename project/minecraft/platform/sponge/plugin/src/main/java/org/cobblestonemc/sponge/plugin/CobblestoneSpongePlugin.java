@@ -38,7 +38,6 @@ import org.spongepowered.api.Sponge;
 import org.spongepowered.api.command.Command;
 import org.spongepowered.api.config.ConfigDir;
 import org.spongepowered.api.entity.Entity;
-import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.lifecycle.ConstructPluginEvent;
 import org.spongepowered.api.event.lifecycle.RegisterCommandEvent;
@@ -181,9 +180,7 @@ public final class CobblestoneSpongePlugin {
             tripManager,
             navigationService.scheduler(),
             messages,
-            new SpongeHologramPlatform(holograms),
-            agent -> (ServerPlayer) agent.entity(),
-            agent -> ((ServerPlayer) agent.entity()).locale());
+            new SpongeHologramPlatform(holograms));
     integrationRegistry.registerNavigator(
         container,
         TrailNavigatorSettings.NAVIGATOR_ID,
@@ -195,8 +192,7 @@ public final class CobblestoneSpongePlugin {
             messages,
             dataStore.playerPreferences(),
             () -> config.get(keys.tripsHud),
-            agent -> new SpongeHudDisplay((ServerPlayer) agent.entity()),
-            agent -> ((ServerPlayer) agent.entity()).locale(),
+            agent -> new SpongeHudDisplay(agent.player()),
             cobblestoneLogger);
     tripManager.onChange(tripHud::refresh);
     integrationRegistry.registerDestinations(

@@ -12,12 +12,9 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Function;
-import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.ScheduledTaskHandle;
@@ -76,8 +73,6 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
   private final MinecraftScheduler<E> scheduler;
   private final Messages messages;
   private final HologramPlatform<A, L> platform;
-  private final Function<A, Audience> audiences;
-  private final Function<A, Locale> locales;
 
   // Guarded by this. Never held while calling into the trip manager, which calls in here under its
   // own lock (a trip stopping detaches its navigator).
@@ -90,22 +85,16 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
    * @param scheduler the entity scheduler
    * @param messages the message renderer
    * @param platform places labels and reads the player's view
-   * @param audiences a player as an audience, for the cancellation message
-   * @param locales a player's locale
    */
   public TrailLabelManager(
       TripManager<E, A, L> trips,
       MinecraftScheduler<E> scheduler,
       Messages messages,
-      HologramPlatform<A, L> platform,
-      Function<A, Audience> audiences,
-      Function<A, Locale> locales) {
+      HologramPlatform<A, L> platform) {
     this.trips = trips;
     this.scheduler = scheduler;
     this.messages = messages;
     this.platform = platform;
-    this.audiences = audiences;
-    this.locales = locales;
   }
 
   @Override
@@ -228,8 +217,8 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
     }
     trips.stop(trip); // detaches its navigator, which removes the label
     messages.send(
-        audiences.apply(agent),
-        locales.apply(agent),
+        agent.audience(),
+        agent.locale(),
         CobblestoneMessages.HOLOGRAM_CANCELED,
         trip.destination());
   }
