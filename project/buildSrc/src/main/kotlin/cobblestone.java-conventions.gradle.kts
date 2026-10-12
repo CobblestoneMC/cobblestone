@@ -24,7 +24,10 @@ tasks.withType<JavaCompile>().configureEach {
     // -Xlint everything except the noisy processing warning, and fail the build on any warning, so
     // one (an unchecked conversion, a raw type) cannot slip through CI. Silence a warning that is
     // genuinely fine with @SuppressWarnings at the narrowest scope, and say why.
-    options.compilerArgs.addAll(listOf("-Xlint:all", "-Xlint:-processing", "-Werror"))
+    // -Xdoclint checks doc comments too (a {@link} to nothing, a @param that names no parameter),
+    // since `build` never runs the javadoc tool. Missing docs are not flagged.
+    options.compilerArgs.addAll(
+        listOf("-Xlint:all", "-Xlint:-processing", "-Xdoclint:all,-missing", "-Werror"))
 }
 
 // Most modules use the project MIT header; a module may override it (e.g. a GPL integration that
