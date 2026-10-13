@@ -113,7 +113,8 @@ final class Sweep {
             String breakdown = runner.lastRegionBreakdown();
             System.out.printf(
                 Locale.ROOT,
-                "point %s %s w=%.2f %s cost=%.3f expanded=%d columns=%d ms=%d%s%n",
+                "point %s %s w=%.2f %s cost=%.3f expanded=%d columns=%d ms=%d ioMs=%d reads=%d"
+                    + " regionReads=%d coldReads=%d%s%n",
                 point.scenario(),
                 heuristic,
                 weight,
@@ -122,6 +123,11 @@ final class Sweep {
                 point.nodes(),
                 point.columns(),
                 result.realMillis(),
+                // Time parked on the modelled disk: the virtual clock only moves for that.
+                result.virtualMillis(),
+                result.chunkReads(),
+                result.profileChunkReads(),
+                result.coldChunkReads(),
                 breakdown == null ? "" : " " + breakdown);
           }
         }
