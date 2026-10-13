@@ -20,7 +20,9 @@ import org.cobblestonemc.FutureOr;
  */
 public final class TestWorld implements MinecraftWorld {
 
-  /** Reads any {@link TestWorld}'s own blocks. */
+  /**
+   * Reads any {@link TestWorld}'s own blocks. Only for {@link TestWorld}s; any other world fails.
+   */
   public static final ChunkSource CHUNKS =
       (cell, world, destination) -> FutureOr.of(((TestWorld) world).chunk(cell));
 

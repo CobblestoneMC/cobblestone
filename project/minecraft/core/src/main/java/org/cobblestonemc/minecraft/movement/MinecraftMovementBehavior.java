@@ -70,7 +70,9 @@ public final class MinecraftMovementBehavior
    * Builds the behavior for {@code player}, minus any excluded step types (e.g. {@code -no-fly}).
    * The player's capabilities are read here, once, so call this on a thread allowed to read them.
    *
-   * @param chunks where the search reads blocks from: its own, so build one behavior per search
+   * @param chunks where the search reads blocks from: its own, so build one behavior per search.
+   *     The behavior holds it, and with it every cached chunk, for as long as the behavior is
+   *     reachable, so do not keep the behavior, or a handle to its search, past the search
    * @param player the player being navigated
    * @param excluded step types to leave out
    * @param breakChecker the injected breakability check for mining, or {@code null} if no

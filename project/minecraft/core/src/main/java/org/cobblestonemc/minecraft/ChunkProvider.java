@@ -33,9 +33,10 @@ import org.jetbrains.annotations.Nullable;
  * created with it and dropped when it ends. A search solves its legs one at a time, so they share
  * it without competing; snapshots are keyed by world, so legs in different worlds can too.
  *
- * <p>That also settles freshness by not having the problem: a cached snapshot can only be as old as
- * the search holding it, which is seconds. A block broken mid-solve may be missed, and is not worth
- * a lock on every read to catch.
+ * <p>That also bounds freshness: a cached snapshot can only be as old as the search holding it,
+ * which is at most its wall-clock limit ({@code SearchSettings#maxWallClockMillis()}). Since every
+ * leg reads through the same cache, a block broken while an earlier leg was being solved may be
+ * missed by a later one. That is not worth a lock on every read to catch.
  *
  * <p><b>Failures.</b> A fetch that fails reads as {@link MinecraftChunk.Unknown} — a wall — to
  * whoever was waiting on it. A {@linkplain ChunkFetch.Failed#permanent() permanent} failure is
@@ -43,7 +44,9 @@ import org.jetbrains.annotations.Nullable;
  * ChunkFetch.Failed#transientFailure() transient} failure is not, at first: the next request for
  * that chunk fetches it again. After {@link ChunkProviderSettings#maxFetchAttempts()} of them the
  * provider stops asking and caches the wall, so that a solve pressed against a chunk that keeps
- * failing routes around it rather than re-reading it for every cell of its frontier.
+ * failing routes around it rather than re-reading it for every cell of its frontier. The wall
+ * stands for the rest of the search: later legs, and a leg tried again after a re-plan, see it too
+ * without asking again.
  *
  * <p>It is internally synchronized — a fetch completes on whatever thread the platform finished its
  * IO on, and the solve reads from its worker — but the lock is uncontended in the ordinary case,
