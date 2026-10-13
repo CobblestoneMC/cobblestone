@@ -10,12 +10,14 @@ package org.cobblestonemc.sponge.plugin;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.BooleanSupplier;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.plugin.api.Navigator;
 import org.cobblestonemc.plugin.api.NavigatorSettings;
 import org.cobblestonemc.plugin.config.ConfigKeys;
 import org.cobblestonemc.plugin.config.ConfigManager;
+import org.cobblestonemc.plugin.hologram.TrailLabels;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.sponge.plugin.api.NavigatorFactory;
 import org.cobblestonemc.sponge.plugin.api.TrailNavigatorSettings;
@@ -38,6 +40,7 @@ public final class SpongeTrailNavigatorFactory implements NavigatorFactory {
   private final ConfigManager config;
   private final ConfigKeys keys;
   private final Messages messages;
+  private final TrailLabels<ServerLocation> labels;
 
   /**
    * Creates the factory.
@@ -45,11 +48,17 @@ public final class SpongeTrailNavigatorFactory implements NavigatorFactory {
    * @param config the config manager (read live for trail appearance)
    * @param keys the registered config keys
    * @param messages the message renderer (for action prompts)
+   * @param labels where trips' labels float over their trails
    */
-  public SpongeTrailNavigatorFactory(ConfigManager config, ConfigKeys keys, Messages messages) {
+  public SpongeTrailNavigatorFactory(
+      ConfigManager config,
+      ConfigKeys keys,
+      Messages messages,
+      TrailLabels<ServerLocation> labels) {
     this.config = config;
     this.keys = keys;
     this.messages = messages;
+    this.labels = labels;
   }
 
   @Override
@@ -69,6 +78,12 @@ public final class SpongeTrailNavigatorFactory implements NavigatorFactory {
         settings
             .get(TrailNavigatorSettings.COLORS)
             .orElseGet(() -> parseColors(config.get(keys.trailColors)));
+    // An explicit choice holds for the trip; otherwise the config is followed live.
+    BooleanSupplier showLabel =
+        settings
+            .get(TrailNavigatorSettings.SHOW_LABEL)
+            .<BooleanSupplier>map(show -> () -> show)
+            .orElse(() -> config.get(keys.tripsHolograms));
     return new SpongeTrailNavigator(
         player,
         path,
@@ -78,7 +93,9 @@ public final class SpongeTrailNavigatorFactory implements NavigatorFactory {
         colors,
         config.get(keys.trailDensity),
         config.get(keys.tripsRecalculateDistance),
-        messages);
+        messages,
+        labels,
+        showLabel);
   }
 
   /** Resolves vanilla particle ids ({@code minecraft:<name>}), skipping unknown ones. */

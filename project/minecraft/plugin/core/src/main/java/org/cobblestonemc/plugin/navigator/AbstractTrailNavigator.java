@@ -14,7 +14,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.BooleanSupplier;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -25,6 +27,7 @@ import org.cobblestonemc.minecraft.api.MinecraftInstruction;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.cobblestonemc.plugin.api.Navigator;
+import org.cobblestonemc.plugin.hologram.TrailLabels;
 import org.cobblestonemc.plugin.message.CobblestoneColors;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Messages;
@@ -75,6 +78,8 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   private final int recalcDistance;
   private final Messages messages;
   private final Locale locale;
+  private final TrailLabels<L> labels;
+  private final BooleanSupplier showLabel;
 
   private List<Step<L, MinecraftStepPayload>> steps;
   private String originWorld;
@@ -94,16 +99,38 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   // record last prompted instruction so we don't repeat ourselves on a recalculation
   private MinecraftInstruction lastPromptedInstruction;
 
+  /**
+   * Creates the navigator; call {@link #setPath} once the subclass is set up.
+   *
+   * @param bufferCells how many steps ahead are drawn
+   * @param density particles per block
+   * @param recalcDistance how far the player may stray before the route is recalculated; 0 never
+   * @param messages the message renderer, for action prompts
+   * @param locale the player's locale
+   * @param labels where the trip's label floats over the trail
+   * @param showLabel whether to show that label (read whenever it is placed)
+   */
   protected AbstractTrailNavigator(
-      int bufferCells, double density, int recalcDistance, Messages messages, Locale locale) {
+      int bufferCells,
+      double density,
+      int recalcDistance,
+      Messages messages,
+      Locale locale,
+      TrailLabels<L> labels,
+      BooleanSupplier showLabel) {
     this.bufferCells = bufferCells;
     this.density = Math.max(0.0, density);
     this.recalcDistance = recalcDistance;
     this.messages = messages;
     this.locale = locale;
+    this.labels = labels;
+    this.showLabel = showLabel;
   }
 
   // --- platform hooks -------------------------------------------------------
+
+  /** The guided player's id. */
+  protected abstract UUID playerId();
 
   /** Whether the guided player is still connected. */
   protected abstract boolean playerOnline();
@@ -116,6 +143,9 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
 
   /** The block-centerd render point (raised toward body height) for a step location. */
   protected abstract Vec3 renderPoint(L location);
+
+  /** A location in the player's world at {@code point} (only queried while online). */
+  protected abstract L location(Vec3 point);
 
   /** The key of a step location's world, or {@code null} if unresolved. */
   protected abstract String worldKey(L location);
@@ -165,7 +195,8 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
 
   @Override
   public void start() {
-    // Nothing to set up; the first tick renders the trail.
+    // The first tick renders the trail.
+    labels.attach(playerId(), this, this::labelPoint);
   }
 
   @Override
@@ -259,7 +290,8 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
 
   @Override
   public void stop() {
-    // Particles are transient (per-tick), so there is nothing to clear.
+    // Particles are transient (per-tick); only the label needs clearing.
+    labels.detach(playerId(), this);
   }
 
   @Override
@@ -312,6 +344,90 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
       }
     }
     return total;
+  }
+
+  /**
+   * The first point on the route the player is shown (the trail, or the guide back to it) that is
+   * {@code distance} blocks from them in a straight line: where the trip's label goes. Empty while
+   * labels are off, the player is off the trail with no guide yet, or the route ahead leaves their
+   * world, isn't drawn there, or reaches an action step or its end sooner.
+   */
+  Optional<L> labelPoint(double distance) {
+    if (!showLabel.getAsBoolean() || complete || steps.isEmpty() || !playerOnline()) {
+      return Optional.empty();
+    }
+    Vec3 playerVec = playerPoint();
+    String playerWorld = playerWorldKey();
+    if (!sameWorld(playerWorld, worldKey(steps.get(foremost).position()))) {
+      return Optional.empty();
+    }
+    // Walk the route the player is shown from where they are: along the trail if they are on it,
+    // otherwise along the guide back to it and then on along the trail.
+    double radiusSquared = distance * distance;
+    Vec3 from = projectedTarget(playerVec);
+    if (playerVec.minus(from).lengthSquared() > CALC_GUIDE_THRESHOLD_SQUARED) {
+      Guide<L> guide = this.guide;
+      if (guide == null || !sameWorld(playerWorld, guide.world())) {
+        return Optional.empty(); // off the trail, and no guide drawn yet
+      }
+      SmoothedTrail path = guide.trail();
+      path.drawFrom(playerVec); // the guide is drawn from wherever the player now is
+      from = playerVec;
+      for (int i = 0; i < guide.steps().size(); i++) {
+        if (guide.steps().get(i).payload().stepType().isAction() || !path.segmentDrawable(i)) {
+          return Optional.empty();
+        }
+        Vec3 to = path.node(i + 1);
+        if (to.minus(playerVec).lengthSquared() >= radiusSquared) {
+          return Optional.of(location(exitPoint(from, to, playerVec, distance)));
+        }
+        from = to;
+      }
+      // The guide ends at the current step's destination; carry on along the trail from there.
+      from = trail.node(foremost + 1);
+      return trailPoint(foremost + 1, from, playerVec, playerWorld, distance);
+    }
+    return trailPoint(foremost, from, playerVec, playerWorld, distance);
+  }
+
+  /**
+   * The first point on the trail from {@code from} (on segment {@code first}) at {@code distance}
+   * from the player, within the drawn buffer.
+   */
+  private Optional<L> trailPoint(
+      int first, Vec3 from, Vec3 playerVec, String playerWorld, double distance) {
+    int end = Math.min(steps.size(), foremost + bufferCells);
+    for (int i = first; i < end; i++) {
+      var step = steps.get(i);
+      if (!sameWorld(playerWorld, worldKey(step.position()))
+          || step.payload().stepType().isAction()
+          || !trail.segmentDrawable(i)) {
+        return Optional.empty();
+      }
+      Vec3 to = trail.node(i + 1);
+      if (to.minus(playerVec).lengthSquared() >= distance * distance) {
+        return Optional.of(location(exitPoint(from, to, playerVec, distance)));
+      }
+      from = to;
+    }
+    return Optional.empty();
+  }
+
+  /**
+   * Where the segment from {@code from} to {@code to} leaves the sphere of {@code radius} around
+   * {@code center}, given that {@code to} is outside it; {@code from} itself if it is too.
+   */
+  private static Vec3 exitPoint(Vec3 from, Vec3 to, Vec3 center, double radius) {
+    Vec3 segment = to.minus(from);
+    Vec3 offset = from.minus(center);
+    double a = segment.lengthSquared();
+    double b = 2 * offset.dot(segment);
+    double c = offset.lengthSquared() - radius * radius;
+    if (a == 0.0 || c >= 0.0) {
+      return from;
+    }
+    double t = (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a);
+    return from.plus(segment.times(Math.clamp(t, 0.0, 1.0)));
   }
 
   private boolean reachedGoal(Vec3 playerVec, String playerWorld) {

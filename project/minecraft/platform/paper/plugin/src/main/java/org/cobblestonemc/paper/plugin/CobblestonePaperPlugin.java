@@ -16,7 +16,6 @@ import java.util.function.Supplier;
 import net.kyori.adventure.key.Key;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.Player;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.cobblestonemc.api.SearchSettings;
@@ -24,6 +23,7 @@ import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.paper.PaperNavigationServiceImpl;
 import org.cobblestonemc.paper.api.NavigationService;
 import org.cobblestonemc.paper.api.SearchModificationRegistrar;
+import org.cobblestonemc.paper.hologram.PaperHolograms;
 import org.cobblestonemc.paper.plugin.api.IntegrationRegistrar;
 import org.cobblestonemc.paper.plugin.api.TrailNavigatorSettings;
 import org.cobblestonemc.paper.plugin.api.TripService;
@@ -32,6 +32,7 @@ import org.cobblestonemc.plugin.config.ConfigManager;
 import org.cobblestonemc.plugin.data.DataStore;
 import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.DataStores;
+import org.cobblestonemc.plugin.hologram.TrailLabelManager;
 import org.cobblestonemc.plugin.hud.TripHud;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchGate;
@@ -52,6 +53,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
   private DataStore dataStore;
   private TripManager<Entity, PaperTripAgent, Location> tripManager;
   private TripHud<Entity, PaperTripAgent, Location> tripHud;
+  private PaperHolograms holograms;
   private PaperMetrics metrics;
   private final SearchRegistry<Location> searchRegistry = new SearchRegistry<>();
 
@@ -127,10 +129,17 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     // registered as a service so it is discovered like any third-party navigator.
     this.tripManager =
         new TripManager<>(platformApi.scheduler(), config.get(keys.tripsMaxActivePerPlayer));
+    // Each trail floats its trip's name over itself while the player stands still; hitting it
+    // cancels the trip.
+    this.holograms = new PaperHolograms(this);
+    getServer().getPluginManager().registerEvents(holograms, this);
+    TrailLabelManager<Entity, PaperTripAgent, Location> trailLabels =
+        new TrailLabelManager<>(
+            tripManager, platformApi.scheduler(), messages, new PaperHologramPlatform(holograms));
     integrationRegistry.registerNavigator(
         this,
         TrailNavigatorSettings.NAVIGATOR_ID,
-        new PaperTrailNavigatorFactory(config, keys, messages));
+        new PaperTrailNavigatorFactory(config, keys, messages, trailLabels));
 
     // Folia has no scoreboard API.
     boolean folia = isFolia();
@@ -144,8 +153,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             messages,
             dataStore.playerPreferences(),
             () -> !folia && config.get(keys.tripsHud),
-            agent -> new PaperHudDisplay((Player) agent.entity()),
-            agent -> ((Player) agent.entity()).locale(),
+            agent -> new PaperHudDisplay(agent.player()),
             logger);
     tripManager.onChange(tripHud::refresh);
     getServer().getOnlinePlayers().forEach(player -> tripHud.load(player.getUniqueId()));
@@ -273,7 +281,10 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
       tripHud.closeAll();
     }
     if (tripManager != null) {
-      tripManager.stopEverything();
+      tripManager.stopEverything(); // also clears the trails' labels
+    }
+    if (holograms != null) {
+      holograms.removeAll();
     }
     if (platformApi != null) {
       // Cancels in-flight searches and stops the search worker pool.

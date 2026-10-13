@@ -92,7 +92,6 @@ class TripHudTest {
           displays.add(display);
           return display;
         },
-        agent -> Locale.ENGLISH,
         LOGGER);
   }
 
