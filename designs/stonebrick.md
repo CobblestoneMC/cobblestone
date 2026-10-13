@@ -343,7 +343,7 @@ Scope note: the copier emits traits only for blockstates that actually appear in
 | Type | Notes |
 |---|---|
 | `StonebrickPlatformApi implements PlatformApi<FakeEntity>` | resolves worlds by key from loaded captures, hands fetches to `SimulatedChunkIo`. |
-| `StonebrickWorld implements MinecraftWorld` | mirrors `PaperWorld` exactly: owns a `ChunkProvider`, `scopedForSolve()` returns a copy with a fresh provider, equality by key. This is important — the per-solve chunk cache behavior is part of what you are benchmarking. |
+| `StonebrickWorld implements MinecraftWorld` | mirrors `PaperWorld` exactly: key, height bounds and environment, equality by key. Blocks are read through a `ChunkProvider` created per search, as on Paper. This is important — the per-search chunk cache behavior is part of what you are benchmarking. |
 | `StonebrickChunk implements MinecraftChunk` | decoded section arrays + global palette; `block()` is an array index into a shared `StonebrickBlock[]`, allocating nothing. |
 | `StonebrickBlock implements MinecraftBlock` | one immutable instance per palette entry, all methods reading `traitBits`. |
 | `StonebrickPlayer implements CobblestonePlayer` | capability flags straight from the scenario JSON. |
