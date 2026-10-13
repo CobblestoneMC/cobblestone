@@ -14,8 +14,8 @@ package org.cobblestonemc.minecraft;
  * @param maxCachedChunks LRU capacity, in chunk snapshots, <b>per solve</b>
  * @param prefetchDistance how far ahead of a served block, in blocks along the line towards the
  *     destination, chunks are prefetched; {@code 0} disables read-ahead entirely
- * @param maxFetchAttempts how many transient failures a chunk may have in one solve before the
- *     solve stops asking for it and treats it as a wall; see {@link ChunkFetch.Failed}
+ * @param maxFetchAttempts how many transient failures a chunk may have in one search before the
+ *     search stops asking for it and treats it as a wall; see {@link ChunkFetch.Failed}
  * @param loadPolicy how aggressively to materialize missing chunks
  */
 public record ChunkProviderSettings(
@@ -42,7 +42,7 @@ public record ChunkProviderSettings(
   public static final int DEFAULT_PREFETCH_DISTANCE = 16;
 
   /**
-   * Default number of transient failures a chunk may have in one solve before it is given up on.
+   * Default number of transient failures a chunk may have in one search before it is given up on.
    *
    * <p>Enough to ride out a read that collided with a save or a load that lost a race, and few
    * enough that a chunk which keeps failing costs a solve a handful of reads rather than one per

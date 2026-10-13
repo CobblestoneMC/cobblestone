@@ -29,7 +29,7 @@ class WalkingTest {
 
   private final TestPlayer player = TestPlayer.walker();
   private final MinecraftMovementBehavior walker =
-      MinecraftMovementBehavior.forPlayer(player, Set.of());
+      MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of());
 
   @Test
   void flatMovesInAllEightDirectionsAndNothingElse() {

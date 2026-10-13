@@ -41,7 +41,9 @@ import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.minecraft.BreakChecker;
+import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
+import org.cobblestonemc.minecraft.ChunkSource;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -185,11 +187,15 @@ public final class PaperNavigationServiceImpl
         new Position<>(PaperConversions.cell(origin), wrap(origin.getWorld()));
     // One snapshot of the registered modifiers drives all three influences on this search.
     Collection<SearchModificationService> modifiers = searchModifiers.map().values();
-    BreakChecker breakChecker = buildBreakChecker(modifiers, player);
+    // The search's own chunk cache, shared by everything in it that reads blocks and dropped with
+    // it; see ChunkProvider.
+    ChunkProvider chunks = new ChunkProvider(platform, chunkSettings);
+    BreakChecker breakChecker = buildBreakChecker(modifiers, player, chunks);
     List<Restriction<MinecraftWorld>> restrictions = buildRestrictions(modifiers, player);
     // Built on the server thread: it reads the Bukkit player, which worker threads must not touch.
     MinecraftMovementBehavior behavior =
         MinecraftMovementBehavior.forPlayer(
+            chunks,
             new PaperPlayer(player),
             settings.excludedModes(),
             breakChecker,
@@ -255,7 +261,7 @@ public final class PaperNavigationServiceImpl
    * Composes every modifier's break checker into one; a block is breakable only if all permit it.
    */
   private BreakChecker buildBreakChecker(
-      Collection<SearchModificationService> modifiers, Player player) {
+      Collection<SearchModificationService> modifiers, Player player, ChunkSource chunks) {
     List<org.cobblestonemc.paper.api.BreakChecker> checkers = new ArrayList<>();
     for (SearchModificationService modifier : modifiers) {
       org.cobblestonemc.paper.api.BreakChecker checker = modifier.computeBreakChecker(player);
@@ -275,8 +281,8 @@ public final class PaperNavigationServiceImpl
       }
       Location location = new Location(bukkitWorld, cell.x(), cell.y(), cell.z());
       // Checkers are promised the block's real state; see LazyBlockData.
-      return world
-          .chunkAt(cell, cell)
+      return chunks
+          .chunk(cell, world, cell)
           .toFuture()
           .thenCompose(
               chunk -> {
@@ -398,7 +404,6 @@ public final class PaperNavigationServiceImpl
 
   @Override
   public MinecraftWorld wrap(World world) {
-    return worldCache.computeIfAbsent(
-        world.getKey().asString(), key -> new PaperWorld(world, platform, chunkSettings));
+    return worldCache.computeIfAbsent(world.getKey().asString(), key -> new PaperWorld(world));
   }
 }

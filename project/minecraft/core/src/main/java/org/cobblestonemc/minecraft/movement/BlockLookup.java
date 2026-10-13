@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
+import org.cobblestonemc.minecraft.ChunkSource;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.UnknownBlock;
@@ -32,23 +33,31 @@ final class BlockLookup {
 
   /** Fetches the given cells around {@code from}. Every cell must lie within the view box. */
   static FutureOr<BlockView> fetch(
-      MinecraftWorld world, Cell from, Collection<Cell> cells, Cell destination) {
+      ChunkSource chunks,
+      MinecraftWorld world,
+      Cell from,
+      Collection<Cell> cells,
+      Cell destination) {
     BlockView view = BlockView.around(from, VIEW_XZ_RADIUS, VIEW_DY_LOW, VIEW_DY_HIGH);
-    return fill(world, view, cells, destination);
+    return fill(chunks, world, view, cells, destination);
   }
 
   /** Fetches cells outside the view box into a view of their own. */
   static FutureOr<BlockView> fetchApart(
-      MinecraftWorld world, Collection<Cell> cells, Cell destination) {
+      ChunkSource chunks, MinecraftWorld world, Collection<Cell> cells, Cell destination) {
     if (cells.isEmpty()) {
       return FutureOr.of(BlockView.empty());
     }
-    return fill(world, BlockView.bounding(cells), cells, destination);
+    return fill(chunks, world, BlockView.bounding(cells), cells, destination);
   }
 
   /** Resolves each distinct chunk the cells fall in and writes their blocks into the view. */
   private static FutureOr<BlockView> fill(
-      MinecraftWorld world, BlockView view, Collection<Cell> cells, Cell destination) {
+      ChunkSource chunks,
+      MinecraftWorld world,
+      BlockView view,
+      Collection<Cell> cells,
+      Cell destination) {
     if (cells.isEmpty()) {
       return FutureOr.of(view);
     }
@@ -59,7 +68,7 @@ final class BlockLookup {
 
     List<CompletableFuture<Void>> pending = null;
     for (List<Cell> inChunk : byChunk.values()) {
-      FutureOr<MinecraftChunk> chunk = world.chunkAt(inChunk.get(0), destination);
+      FutureOr<MinecraftChunk> chunk = chunks.chunk(inChunk.get(0), world, destination);
       if (chunk.isImmediate()) {
         readInto(view, chunk.value(), inChunk, world);
       } else {
