@@ -111,6 +111,21 @@ were never built.
   under weight 2 commits early. Boarding a boat (1 s) is not priced, and the boat runs expand more
   nodes than the others.
 
+### Tuning sweeps (2026-10-13), after the uniform-section and Manhattan-detour build change
+- **Weight**, scale 0.85, on the 55 runs every weight solved: 1.5 expands 2,754 nodes for +0.2%
+  and solves 55/58; 1.75 expands 1,365 for +1.8%, 58/58; 2.0 expands 952 for +3.0%, 58/58. An
+  earlier full grid (1.0–3.0, before the build change) put 1.0 at 27/58 solved and 3.0 at +13.1%.
+  The default stays 2.0. Scale and weight multiply, so sweep them as one product.
+- **Detour ratio** (`-Dregions.detour`), w=2.0: 1.25 → 715 nodes, +1.9%; 1.5 → 730, +1.4%;
+  2.0 → 743, +1.5%; 3.0 → 758, +1.5%. Flat: once the cap measures Manhattan against Manhattan
+  it hardly bites. It stays 1.5.
+- **Where the time goes**, whole sweep at w=2.0: graph building 31 s of 53 s, search 14 s,
+  reading columns and joining seams the rest. Graphs average 21 MB per run; the largest was
+  142 MB, a flyer on `cave-to-surface`.
+- **Region census:** on `along-river` about two-thirds of solid regions touch at most two others
+  (tree leaves and logs isolated in the air). In `cave-lateral`, 5,000 of 16,500 regions are
+  climbables, mostly cave vines and lichen breaking up the floor. Both are cheap targets.
+
 ## Other measured facts worth keeping
 - A seed doesn't reproduce blocks: re-captures differ in decorations. Baselines are tied to the
   capture they measured (`capturedAt` stamp).

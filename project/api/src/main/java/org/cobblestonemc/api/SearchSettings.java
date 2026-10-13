@@ -43,11 +43,18 @@ public final class SearchSettings {
   /**
    * Default A* heuristic weight (1.0 = admissible/optimal; &gt;1 = faster, weighted A*).
    *
-   * <p>2.0 rather than 1.5, measured under {@link #DEFAULT_HEURISTIC}: for a survival player over
-   * 22 routes it solves 18 rather than 15 and expands under half the nodes (geometric mean 4,009
-   * against 9,241), for paths +5.4% over the best found against +1.6%. The coarse estimate sits
-   * well below the true cost underground, so a lower weight leaves the search under-informed there
-   * and it runs out of cells instead.
+   * <p>Measured under {@link #DEFAULT_HEURISTIC} over 58 runs, scored on the 55 every weight solved
+   * (nodes as a geometric mean, paths against the best any weight found):
+   *
+   * <pre>
+   *   1.5    2,754 nodes   +0.2%   55 of 58 solved
+   *   1.75   1,365 nodes   +1.8%   58 of 58
+   *   2.0      952 nodes   +3.0%   58 of 58
+   * </pre>
+   *
+   * <p>2.0 for now: below 1.75 the search starts running out of cells, and between the two the
+   * choice is a trade of about 40% more nodes for paths about 1% cheaper. The region estimate is
+   * itself scaled by 0.85, so the weight and that scale multiply.
    */
   public static final double DEFAULT_HEURISTIC_WEIGHT = 2.0;
 
