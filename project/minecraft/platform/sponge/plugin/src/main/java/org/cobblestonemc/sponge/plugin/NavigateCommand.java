@@ -21,14 +21,13 @@ import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.HoverEvent;
 import org.cobblestonemc.CobblestoneLogger;
-import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.FailureReason;
 import org.cobblestonemc.api.NavigationResult;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.api.SearchSettings;
-import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.plugin.Permissions;
@@ -275,7 +274,7 @@ final class NavigateCommand {
       Locale locale,
       TripLabel tripLabel,
       Component hover,
-      Destination<DomainRegion<MinecraftWorld>> destination,
+      Destination<RegionFactory> destination,
       BooleanSupplier targetExists,
       NavigationFlags flags,
       boolean live,
@@ -376,7 +375,7 @@ final class NavigateCommand {
 
   private static LiveSearch<ServerLocation> liveSearch(
       ServerPlayer player,
-      Destination<DomainRegion<MinecraftWorld>> destination,
+      Destination<RegionFactory> destination,
       NavigationFlags flags,
       SpongeNavigationServiceImpl navigationService,
       SearchRegistry<ServerLocation> searches,

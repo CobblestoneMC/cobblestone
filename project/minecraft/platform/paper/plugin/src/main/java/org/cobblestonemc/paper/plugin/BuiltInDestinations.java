@@ -118,8 +118,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
     if (PaperTerrain.isOpenToSky(world, at.getBlockX(), at.getBlockY(), at.getBlockZ())) {
       return invalid(player, CobblestoneMessages.NAVIGATE_ALREADY_ON_SURFACE);
     }
-    return Validity.valid(
-        NavigationTarget.builder(SURFACE_KEY, () -> List.of(regions.surface(world))).build());
+    return Validity.valid(NavigationTarget.builder(SURFACE_KEY, regions.surface(world)).build());
   }
 
   /**
@@ -283,8 +282,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
             return invalid(player, CobblestoneMessages.NAVIGATE_UNGENERATED);
           }
           return Validity.valid(
-              NavigationTarget.builder(
-                      SURFACE_KEY, () -> List.of(regions.surface(target, columnX, columnZ)))
+              NavigationTarget.builder(SURFACE_KEY, regions.surface(target, columnX, columnZ))
                   .build());
         });
   }

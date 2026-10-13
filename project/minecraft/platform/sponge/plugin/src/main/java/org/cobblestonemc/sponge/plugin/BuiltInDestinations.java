@@ -130,8 +130,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
     if (SpongeTerrain.isOpenToSky(world, at.blockX(), at.blockY(), at.blockZ())) {
       return invalid(player, CobblestoneMessages.NAVIGATE_ALREADY_ON_SURFACE);
     }
-    return Validity.valid(
-        NavigationTarget.builder(SURFACE_KEY, () -> List.of(regions.surface(world))).build());
+    return Validity.valid(NavigationTarget.builder(SURFACE_KEY, regions.surface(world)).build());
   }
 
   /**
@@ -239,8 +238,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
             return invalid(player, CobblestoneMessages.NAVIGATE_UNGENERATED);
           }
           return Validity.valid(
-              NavigationTarget.builder(
-                      SURFACE_KEY, () -> List.of(regions.surface(target, columnX, columnZ)))
+              NavigationTarget.builder(SURFACE_KEY, regions.surface(target, columnX, columnZ))
                   .build());
         });
   }
