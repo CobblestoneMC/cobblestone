@@ -96,11 +96,11 @@ class RegionSearchTest {
   }
 
   private static Set<Medium> walker() {
-    return CoarseCost.survival();
+    return RegionCost.survival();
   }
 
   private static Set<Medium> walkerWithoutPickaxe() {
-    Set<Medium> mediums = EnumSet.copyOf(CoarseCost.survival());
+    Set<Medium> mediums = EnumSet.copyOf(RegionCost.survival());
     mediums.remove(Medium.MINEABLE);
     return mediums;
   }
@@ -169,7 +169,7 @@ class RegionSearchTest {
     // With no pickaxe there is no way back up at all; the graph prices the face as rock at the
     // fallback rate, so at least a couple of blocks of it.
     assertTrue(
-        up > down + 1.5 * CoarseCost.FALLBACK_COST_PER_BLOCK,
+        up > down + 1.5 * RegionCost.FALLBACK_COST_PER_BLOCK,
         "and climbing back is not: " + up + " vs " + down);
   }
 
@@ -185,7 +185,7 @@ class RegionSearchTest {
         };
     Cell goal = new Cell(300, GROUND, 4);
     Cell from = new Cell(0, GROUND, 4);
-    Set<Medium> boater = EnumSet.copyOf(CoarseCost.survival());
+    Set<Medium> boater = EnumSet.copyOf(RegionCost.survival());
     boater.add(Medium.BOATABLE);
 
     double boat = search(river, boater, goal, from).costToGoal(from);

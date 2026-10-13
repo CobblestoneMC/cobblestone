@@ -15,8 +15,6 @@ import java.util.Locale;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.SearchObserver;
-import org.cobblestonemc.minecraft.lod.CoarseCost;
-import org.cobblestonemc.minecraft.lod.CoarseSearch;
 import org.cobblestonemc.minecraft.lod.RegionCost;
 import org.cobblestonemc.minecraft.lod.RegionGraph;
 import org.cobblestonemc.minecraft.lod.RegionSearch;
@@ -24,18 +22,15 @@ import org.cobblestonemc.stonebrick.format.CorpusLayout;
 import org.cobblestonemc.stonebrick.platform.Capture;
 
 /**
- * Checks that a coarse estimate is a bound on the cost it claims to estimate.
+ * Checks the region estimate against the cost it claims to estimate.
  *
- * <p><b>Why this is not {@code bench h3}.</b> That report compares the estimate against {@code
- * total - spent}, where the spend is the path's total cost divided evenly over its steps. That is a
- * straight line from the total down to zero, not the real remaining cost: a route that walks, then
- * swims, then mines has steps differing several-fold, so the comparison mostly confirms that two
- * numbers both fall along a path. It cannot see an inadmissible estimate at all.
+ * <p>The ground truth is measured. For each sampled cell the route is solved again from that cell
+ * with no heuristic at all — Dijkstra, weight 1 — which returns the genuine optimal cost to the
+ * destination. That is expensive, which is why this samples rather than sweeps, and it is the only
+ * number worth comparing an estimate against.
  *
- * <p>Here the ground truth is measured. For each sampled cell the route is solved again from that
- * cell with no heuristic at all — Dijkstra, weight 1 — which returns the genuine optimal cost to
- * the destination. That is expensive, which is why this samples rather than sweeps, and it is the
- * only number worth comparing an estimate against.
+ * <p>The estimate is the unscaled one, the region search's own answer: the scale production puts on
+ * it is a tuning choice made against this measurement, not part of what is measured.
  *
  * <p>What matters in the output is the <b>over</b> column: estimates above the true cost. A* is
  * only guaranteed to return an optimal path when the estimate never exceeds what remains, and while
@@ -56,10 +51,14 @@ final class Verify {
    */
   static final double FAR = 64.0;
 
-  /** The far samples' ratios, keyed by "blend diagonal", for aggregating across routes. */
-  static final java.util.Map<String, List<Double>> FAR_RATIOS = new java.util.LinkedHashMap<>();
+  /** Every route's far samples' ratios, for the aggregate at the end. */
+  static final List<Double> FAR_RATIOS = new ArrayList<>();
 
-  /** One sampled cell: what the coarse layer said, and what the route actually costs from there. */
+  /** Dijkstra expands everything, so it needs far more room than a normal solve. */
+  private static final Scenario.SearchLimits DIJKSTRA_LIMITS =
+      new Scenario.SearchLimits(1.0, 4_000_000, 600_000);
+
+  /** One sampled cell: what the region layer said, and what the route actually costs from there. */
   private record Sample(Cell cell, double estimate, double optimal, String outcome) {
 
     boolean measured() {
@@ -83,7 +82,7 @@ final class Verify {
   }
 
   /**
-   * Samples cells along a scenario's path and reports how the coarse estimate compares.
+   * Samples cells along a scenario's path and reports how the region estimate compares.
    *
    * @param corpusRoot the corpus
    * @param scenario the route
@@ -92,10 +91,6 @@ final class Verify {
    * @param logger where the searches log
    * @throws IOException if the capture cannot be read
    */
-  /** Dijkstra expands everything, so it needs far more room than a normal solve. */
-  private static final Scenario.SearchLimits DIJKSTRA_LIMITS =
-      new Scenario.SearchLimits(1.0, 4_000_000, 600_000);
-
   static void run(
       Path corpusRoot, Scenario scenario, Loadout loadout, int samples, CobblestoneLogger logger)
       throws IOException {
@@ -104,7 +99,7 @@ final class Verify {
     List<Cell> path = new ArrayList<>();
     RunResult found =
         runner.run(
-            scenario.withHeuristic(Scenario.Heuristic.COARSE),
+            scenario.withHeuristic(Scenario.Heuristic.REGIONS),
             loadout,
             new SearchObserver() {
               @Override
@@ -140,12 +135,6 @@ final class Verify {
     }
 
     Capture capture = Capture.load(CorpusLayout.at(corpusRoot).capture(scenario.capture()).root());
-    CoarseSearch coarse =
-        new CoarseSearch(
-            new DirectProfiles(capture, scenario.world()),
-            CoarseCost.forMediums(loadout.mediums()),
-            scenario.destination());
-
     // Focused on the route's start, as the heuristic's own search is.
     RegionSearch regions =
         new RegionSearch(
@@ -154,26 +143,17 @@ final class Verify {
                     capture,
                     scenario.world(),
                     capture.minY(scenario.world()),
-                    capture.maxY(scenario.world()))),
+                    capture.maxY(scenario.world())),
+                ScenarioRunner.REGION_DETOUR),
             RegionCost.forMediums(loadout.mediums()),
             scenario.destination(),
             path.get(0));
-    List<Double> regionEstimates = new ArrayList<>();
 
     System.out.printf(Locale.ROOT, "%n%s@%s%n", scenario.id(), loadout.name());
     System.out.printf(
-        Locale.ROOT,
-        "  %-22s %10s %10s %10s %8s %8s%n",
-        "cell",
-        "coarse",
-        "regions",
-        "optimal",
-        "ratio",
-        "regions");
+        Locale.ROOT, "  %-22s %10s %10s %8s%n", "cell", "estimate", "optimal", "ratio");
 
     List<Sample> measured = new ArrayList<>();
-    List<Cell> cells = new ArrayList<>();
-    List<Double> optimums = new ArrayList<>();
     for (int i = 0; i < samples; i++) {
       Cell cell = path.get((int) ((long) i * (path.size() - 1) / Math.max(1, samples - 1)));
       // Dijkstra from here: no estimate, no weight, so what comes back is the real thing.
@@ -183,123 +163,51 @@ final class Verify {
                   .withOrigin(cell)
                   .withHeuristic(Scenario.Heuristic.ZERO)
                   .withHeuristicWeight(1.0)
-                  // Dijkstra expands everything, so it needs far more room than a normal solve.
-                  // This is a diagnostic run offline, not something a budget applies to.
+                  // A diagnostic run offline, not something a budget applies to.
                   .withLimits(DIJKSTRA_LIMITS),
               loadout,
               SearchObserver.none());
-      double estimate = coarse.costToGoal(cell, Long.MAX_VALUE);
-      double regionEstimate = regions.costToGoal(cell);
-      Sample sample = new Sample(cell, estimate, truth.pathCost(), truth.outcome());
+      Sample sample = new Sample(cell, regions.costToGoal(cell), truth.pathCost(), truth.outcome());
       measured.add(sample);
-      if (sample.informative()) {
-        cells.add(cell);
-        optimums.add(truth.pathCost());
-        regionEstimates.add(regionEstimate);
-      }
       System.out.printf(
           Locale.ROOT,
-          "  %-22s %10.2f %10.2f %10s %8s %8s%n",
+          "  %-22s %10.2f %10s %8s%n",
           cell.x() + "," + cell.y() + "," + cell.z(),
-          estimate,
-          regionEstimate,
+          sample.estimate(),
           sample.measured()
               ? String.format(Locale.ROOT, "%.2f", sample.optimal())
               : truth.outcome(),
-          sample.informative() ? String.format(Locale.ROOT, "%.3f", sample.ratio()) : "-",
-          sample.informative()
-              ? String.format(Locale.ROOT, "%.3f", regionEstimate / sample.optimal())
-              : "-");
+          sample.informative() ? String.format(Locale.ROOT, "%.3f", sample.ratio()) : "-");
     }
     summarise(measured);
-    // Only the far samples go on to the blend comparison and the aggregate: they are the ones the
-    // band is about.
-    List<Cell> far = new ArrayList<>();
-    List<Double> farOptimums = new ArrayList<>();
-    for (int i = 0; i < cells.size(); i++) {
-      if (cells.get(i).distance(scenario.destination()) >= FAR) {
-        far.add(cells.get(i));
-        farOptimums.add(optimums.get(i));
+    // Only the far samples count against the band: they are the ones the weight's floor is about.
+    List<Double> far = new ArrayList<>();
+    for (Sample sample : measured) {
+      if (sample.informative() && sample.cell().distance(scenario.destination()) >= FAR) {
+        far.add(sample.ratio());
       }
     }
-    sweepFallback(scenario, loadout, capture, far, farOptimums);
-    List<Double> regionRatios = new ArrayList<>();
-    for (int i = 0; i < cells.size(); i++) {
-      if (cells.get(i).distance(scenario.destination()) >= FAR) {
-        regionRatios.add(regionEstimates.get(i) / optimums.get(i));
-      }
-    }
-    if (!regionRatios.isEmpty()) {
-      FAR_RATIOS.computeIfAbsent("REGIONS -", k -> new ArrayList<>()).addAll(regionRatios);
-      System.out.println("  " + band("REGIONS", "-", regionRatios));
+    if (!far.isEmpty()) {
+      FAR_RATIOS.addAll(far);
+      System.out.println(header(far.size() + " samples beyond " + (int) FAR + " blocks"));
+      System.out.println("  " + band(far));
     }
   }
 
-  /**
-   * Re-prices the same cells at a range of fallback rates.
-   *
-   * <p>Free, relative to what it is worth: the costly half of this report is the Dijkstra per
-   * sample, and that answer does not depend on the fallback at all. So the optimums are measured
-   * once and every candidate rate is scored against them.
-   *
-   * <p>The rate is what a crossing costs where no medium the agent has reaches -- {@link
-   * CoarseCost} calls it the tuning risk in the whole layer, and it is the first suspect for a
-   * systematically high estimate, since every partly-covered section pays it on the uncovered
-   * share.
-   */
-  private static void sweepFallback(
-      Scenario scenario,
-      Loadout loadout,
-      Capture capture,
-      List<Cell> cells,
-      List<Double> optimums) {
-    if (cells.isEmpty()) {
-      return;
-    }
-    System.out.printf(
+  private static String header(String note) {
+    return String.format(
         Locale.ROOT,
-        "  %-10s %-10s %8s %8s %8s %8s %8s   (%d samples beyond %.0f blocks)%n",
-        "blend",
-        "diagonal",
+        "  %8s %8s %8s %8s %8s   (%s)",
         "mean",
         "worst",
         ">=0.67",
         ">=0.5",
         "over",
-        cells.size(),
-        FAR);
-    for (CoarseCost.Blend rule : CoarseCost.Blend.values()) {
-      for (CoarseCost.Diagonal corner : CoarseCost.Diagonal.values()) {
-        report(scenario, loadout, capture, cells, optimums, rule, corner);
-      }
-    }
-  }
-
-  private static void report(
-      Scenario scenario,
-      Loadout loadout,
-      Capture capture,
-      List<Cell> cells,
-      List<Double> optimums,
-      CoarseCost.Blend rule,
-      CoarseCost.Diagonal corner) {
-    {
-      CoarseSearch coarse =
-          new CoarseSearch(
-              new DirectProfiles(capture, scenario.world()),
-              CoarseCost.forMediums(loadout.mediums()).withBlend(rule).withDiagonal(corner),
-              scenario.destination());
-      List<Double> ratios = new ArrayList<>();
-      for (int i = 0; i < cells.size(); i++) {
-        ratios.add(coarse.costToGoal(cells.get(i), Long.MAX_VALUE) / optimums.get(i));
-      }
-      FAR_RATIOS.computeIfAbsent(rule + " " + corner, k -> new ArrayList<>()).addAll(ratios);
-      System.out.println("  " + band(rule + "", corner + "", ratios));
-    }
+        note);
   }
 
   /** One row of the band table: where the ratios sit against the floors two weights set. */
-  static String band(String rule, String corner, List<Double> ratios) {
+  static String band(List<Double> ratios) {
     double sum = 0;
     double worst = 0;
     int floor67 = 0;
@@ -315,9 +223,7 @@ final class Verify {
     int n = Math.max(1, ratios.size());
     return String.format(
         Locale.ROOT,
-        "%-10s %-10s %8.3f %8.3f %7.0f%% %7.0f%% %7.0f%%",
-        rule,
-        corner,
+        "%8.3f %8.3f %7.0f%% %7.0f%% %7.0f%%",
         sum / n,
         worst,
         100.0 * floor67 / n,
@@ -325,7 +231,7 @@ final class Verify {
         100.0 * over / n);
   }
 
-  /** Prints the band table across every route verified, one row per blend. */
+  /** Prints the band across every route verified. */
   static void aggregate() {
     if (FAR_RATIOS.isEmpty()) {
       return;
@@ -334,21 +240,8 @@ final class Verify {
         Locale.ROOT,
         "%nAcross every route, samples beyond %.0f blocks (the band: >= 1/weight, <= 1)%n",
         FAR);
-    System.out.printf(
-        Locale.ROOT,
-        "  %-10s %-10s %8s %8s %8s %8s %8s%n",
-        "blend",
-        "diagonal",
-        "mean",
-        "worst",
-        ">=0.67",
-        ">=0.5",
-        "over");
-    FAR_RATIOS.forEach(
-        (key, ratios) -> {
-          String[] parts = key.split(" ");
-          System.out.println("  " + band(parts[0], parts[1], ratios) + "   n=" + ratios.size());
-        });
+    System.out.println(header("n=" + FAR_RATIOS.size()));
+    System.out.println("  " + band(FAR_RATIOS));
   }
 
   private static void summarise(List<Sample> samples) {

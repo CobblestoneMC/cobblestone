@@ -6,15 +6,16 @@ design as written, and where the build departed from it the commit history says 
 **Built**
 - `stonebrick-format`, `stonebrick-copier`, `stonebrick-platform`, `stonebrick-bench` (§1–§8).
   `bench` commands: `run`, `accept`, `list`, `sweep` (heuristic × weight grid), `verify`
-  (estimates against a Dijkstra optimum), `h3`, `profile`.
+  (estimates against a Dijkstra optimum). `h3` and `profile` went with the section profiles.
 - Core seams: `TimeSource`, `SearchObserver` (the §8.3 `Tier2Observer`, renamed), the
   insertion-order tie-break, and `SolveHeuristic#prepare` so the fine search parks on an estimate
   whose chunks are not resident.
 - The corpus is generated from a seed (`./gradlew captureCorpus`), scenarios are run under every
   agent loadout in `agents.yml`, and the capture region grows to a fixpoint from `needed-chunks.yml`.
-- Tier 2 at L0 only: `SectionProfile`, `SectionProfiler`, `CoarseCost`, a backward 26-connected
-  `CoarseSearch`, and `CoarseHeuristic`, wired into Paper and Sponge as the default
-  (`search.algorithm.heuristic: COARSE`).
+- Tier 2 at L0 only: first as section profiles (`SectionProfile`, `CoarseSearch`,
+  `CoarseHeuristic`), since replaced by a region graph (`RegionGraph`, `RegionSearch`,
+  `RegionHeuristic`), wired into Paper and Sponge as the default
+  (`search.algorithm.heuristic: REGIONS`). See `coarse-profile-ideas.md`.
 
 **Not built**
 - The visualizer (§9), and the deletion of `:core-test` and `:playground` (§1.1).

@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.minecraft.lod;
 
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
@@ -23,6 +24,16 @@ import org.cobblestonemc.minecraft.api.MinecraftStepType;
  * search settle a portal before a cheaper route to it had been seen.
  */
 public final class RegionCost {
+
+  /**
+   * What a block costs where the agent has no way through but the graph needs a price: rock, for an
+   * agent that cannot dig.
+   *
+   * <p>Twice the nominal mining rate. Finite on purpose: infinity would turn a gap in the graph
+   * into a fence, and the estimate has to be able to be wrong without making a solvable route
+   * unreachable.
+   */
+  public static final double FALLBACK_COST_PER_BLOCK = 2 * Medium.MINEABLE.baseCostPerBlock();
 
   /** {@code MovementCosts.WALK}, which a mining step pays on top of breaking. */
   private static final double MINE_WALK = 0.20;
@@ -84,31 +95,76 @@ public final class RegionCost {
    * @return the cost model
    */
   public static RegionCost forMediums(Set<Medium> available, Map<Medium, Double> costs) {
-    return new RegionCost(available, costs, CoarseCost.FALLBACK_COST_PER_BLOCK);
+    return new RegionCost(available, costs, FALLBACK_COST_PER_BLOCK);
   }
 
   /**
    * Returns the cost model for a player, given the modes an operator has excluded.
-   *
-   * <p>Through {@link CoarseCost#mediumsFor}, so the two coarse layers cannot disagree about what a
-   * player can do.
    *
    * @param player the navigating player
    * @param excluded the step types an operator has turned off
    * @return the cost model
    */
   public static RegionCost forPlayer(CobblestonePlayer player, Set<MinecraftStepType> excluded) {
-    return forMediums(CoarseCost.mediumsFor(player, excluded));
+    return forMediums(mediumsFor(player, excluded));
+  }
+
+  /**
+   * Returns the mediums a player can use, given what an operator has excluded.
+   *
+   * <p>The one place a {@link CobblestonePlayer} becomes mediums, so the estimate and the fine
+   * search cannot disagree about what a player is able to do. A medium the exclusions forbid is
+   * dropped: leaving it in prices routes the search is not allowed to take, and the estimate then
+   * steers toward paths it can never find. Public so the benchmark derives its agents here too.
+   *
+   * @param player the navigating player
+   * @param excluded the step types an operator has turned off
+   * @return the mediums
+   */
+  public static Set<Medium> mediumsFor(CobblestonePlayer player, Set<MinecraftStepType> excluded) {
+    EnumSet<Medium> mediums = EnumSet.copyOf(survival());
+    if (excluded.contains(MinecraftStepType.MINE)) {
+      mediums.remove(Medium.MINEABLE);
+    }
+    if (excluded.contains(MinecraftStepType.SWIM)) {
+      mediums.remove(Medium.SWIMMABLE);
+    }
+    if (excluded.contains(MinecraftStepType.WALK)) {
+      // Soul sand is walked on, so it goes with walking.
+      mediums.remove(Medium.WALKABLE);
+      mediums.remove(Medium.SOUL_SAND);
+    }
+    if (excluded.contains(MinecraftStepType.CLIMB)) {
+      mediums.remove(Medium.CLIMBABLE);
+    }
+    if (!excluded.contains(MinecraftStepType.FLY) && (player.canFly() || player.canGlide())) {
+      mediums.add(Medium.FLYABLE);
+    }
+    if (!excluded.contains(MinecraftStepType.BOAT)
+        && (player.hasBoatInInventory() || player.isInBoat())) {
+      mediums.add(Medium.BOATABLE);
+    }
+    return mediums;
+  }
+
+  /**
+   * Returns the mediums a plain survival player has: everything but flight and boats.
+   *
+   * @return the default medium set
+   */
+  public static Set<Medium> survival() {
+    return EnumSet.of(
+        Medium.WALKABLE, Medium.SOUL_SAND, Medium.SWIMMABLE, Medium.CLIMBABLE, Medium.MINEABLE);
   }
 
   /**
    * Returns whether this agent can be inside a region of the given class.
    *
    * <p>{@link RegionClass#SOLID} always: an agent that cannot dig is still priced through rock, at
-   * {@link CoarseCost#FALLBACK_COST_PER_BLOCK}. That keeps the graph connected. A gap in it — a
-   * seam the builder joined too strictly, a corner it never looked across — would otherwise make
-   * whole regions unreachable, and the search would spend its effort proving it rather than
-   * answering. Priced at twice the cost of digging, rock is a route only when nothing else is.
+   * {@link #FALLBACK_COST_PER_BLOCK}. That keeps the graph connected. A gap in it — a seam the
+   * builder joined too strictly, a corner it never looked across — would otherwise make whole
+   * regions unreachable, and the search would spend its effort proving it rather than answering.
+   * Priced at twice the cost of digging, rock is a route only when nothing else is.
    *
    * @param klass the class
    * @return {@code true} if usable

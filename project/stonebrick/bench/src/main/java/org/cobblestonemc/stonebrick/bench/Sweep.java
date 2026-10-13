@@ -49,7 +49,7 @@ final class Sweep {
       String outcome,
       double cost,
       long nodes,
-      int coarseColumns) {
+      int columns) {
 
     boolean solved() {
       return outcome.equals("success");
@@ -104,7 +104,7 @@ final class Sweep {
                     result.outcome(),
                     result.pathCost(),
                     result.nodesExpanded(),
-                    runner.lastCoarseColumns());
+                    runner.lastRegionColumns());
             points.add(point);
             // Each point as it lands, not only in the tables at the end: a full sweep runs for
             // hours, and one stopped partway through should leave its measurements behind.
@@ -117,7 +117,7 @@ final class Sweep {
                 point.outcome(),
                 point.cost(),
                 point.nodes(),
-                point.coarseColumns());
+                point.columns());
           }
         }
       }
@@ -159,7 +159,7 @@ final class Sweep {
           point.nodes(),
           point.solved() ? String.format(Locale.ROOT, "%.2f", point.cost()) : point.outcome(),
           excess,
-          point.coarseColumns() == 0 ? "-" : String.valueOf(point.coarseColumns()));
+          point.columns() == 0 ? "-" : String.valueOf(point.columns()));
     }
   }
 

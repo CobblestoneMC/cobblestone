@@ -18,8 +18,11 @@ import org.cobblestonemc.stonebrick.platform.Capture;
 import org.cobblestonemc.stonebrick.platform.CaptureChunks;
 
 /**
- * A capture's chunk columns read directly, without the simulated disk: {@link DirectProfiles} for
- * the region layer, for diagnostics nobody is timing.
+ * A capture's chunk columns read directly, without the simulated disk.
+ *
+ * <p>For the diagnostics rather than the benchmark. A report on estimate quality is not measuring
+ * what the terrain costs to fetch, and routing it through the IO model would charge reads to a
+ * solve nobody is timing.
  */
 final class DirectChunkColumns implements RegionGraph.ChunkColumns {
 

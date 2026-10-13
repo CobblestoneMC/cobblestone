@@ -21,10 +21,14 @@ import org.jetbrains.annotations.Nullable;
 /**
  * The fine search's heuristic, answered from a {@link RegionGraph} by a {@link RegionSearch}.
  *
- * <p>Where {@link CoarseHeuristic} summarizes each section as one node and prices it from how much
- * of it each medium covers, this one keeps the section's pieces apart — every connected patch of
- * ground, water, rock and air — and asks how they join. An estimate is then a route through those
- * pieces, priced continuously from the cell asked about rather than from its section's centre.
+ * <p>Instead of extrapolating from the steps already taken, which is what makes a running average
+ * drink a river that does not go anywhere, the estimate comes from the terrain ahead: every
+ * connected patch of ground, water, rock and air, and how they join. An estimate is a route through
+ * those pieces, priced continuously from the cell asked about.
+ *
+ * <p>It replaced a heuristic that summarized each 16³ section as one node priced from how much of
+ * it each medium covered. That could not tell whether the open half of a section reached the other
+ * side, and measured at a quarter to a half of the true cost underground.
  *
  * <p><b>Answers are final when given.</b> {@link RegionSearch} only answers once nothing left on
  * its frontier could undercut the answer, so a cell asked about twice gets the same number, and the
@@ -47,14 +51,15 @@ public final class RegionHeuristic implements HeuristicStrategy {
    * 0.7–0.95 of the true cost and never above, and a weight-2 search on an estimate that close
    * commits to the first route it likes. Over 58 runs at weight 2.0, against the best path any
    * configuration found: 1.0 expands 434 nodes (geometric mean) for paths +4.9% over; 0.85 expands
-   * 685 for +2.6%; 0.7 expands 1,934 for +0.6% and fails a route. COARSE, for scale, expands 1,913
-   * for +5.0% and fails 8.
+   * 685 for +2.6%; 0.7 expands 1,934 for +0.6% and fails a route. The section-coverage heuristic it
+   * replaced expanded 1,913 for +5.0% and failed 8.
    */
   public static final double DEFAULT_SCALE = 0.85;
 
   private final Function<DomainRegion<?>, RegionGraph.ChunkColumns> columnsFor;
   private final RegionCost cost;
   private final double scale;
+  private final double detourRatio;
 
   /**
    * Creates a heuristic over a single terrain source.
@@ -69,8 +74,9 @@ public final class RegionHeuristic implements HeuristicStrategy {
   /**
    * Creates a heuristic that builds a terrain source per solve, scaling every estimate.
    *
-   * <p>Per solve for the reason {@link CoarseHeuristic} gives: a trip may have legs in several
-   * worlds, and the target region knows which one its leg is in.
+   * <p>Per solve, not per strategy: one strategy is built per navigate, but a trip may have legs in
+   * several worlds, and a source bound to the first would answer every later leg from the wrong
+   * terrain without ever failing. The target region knows which world its leg is in.
    *
    * @param columnsFor builds a terrain source for a solve's target region
    * @param cost the agent
@@ -80,9 +86,27 @@ public final class RegionHeuristic implements HeuristicStrategy {
       Function<DomainRegion<?>, RegionGraph.ChunkColumns> columnsFor,
       RegionCost cost,
       double scale) {
+    this(columnsFor, cost, scale, RegionGraph.DEFAULT_DETOUR_RATIO);
+  }
+
+  /**
+   * Creates a heuristic with every tuning knob given, for measuring them.
+   *
+   * @param columnsFor builds a terrain source for a solve's target region
+   * @param cost the agent
+   * @param scale a factor on every estimate
+   * @param detourRatio how far a region may bend before the graph splits it; see {@link
+   *     RegionGraph#DEFAULT_DETOUR_RATIO}
+   */
+  public RegionHeuristic(
+      Function<DomainRegion<?>, RegionGraph.ChunkColumns> columnsFor,
+      RegionCost cost,
+      double scale,
+      double detourRatio) {
     this.columnsFor = columnsFor;
     this.cost = cost;
     this.scale = scale;
+    this.detourRatio = detourRatio;
   }
 
   @Override
@@ -93,7 +117,7 @@ public final class RegionHeuristic implements HeuristicStrategy {
 
   @Override
   public SolveHeuristic newSolve(int windowWidth, DomainRegion<?> target) {
-    return new Solve(target, new RegionGraph(columnsFor.apply(target)));
+    return new Solve(target, new RegionGraph(columnsFor.apply(target), detourRatio));
   }
 
   /** One solve's view: a search seeded on first use, and the answers it has given. */

@@ -21,8 +21,10 @@ import org.cobblestonemc.stonebrick.platform.StonebrickPlatformApi;
 /**
  * A capture's chunk columns for the region layer, read through the simulated disk.
  *
- * <p>{@link CaptureProfiles} without the profiling: the same reads, charged to the same clock, so
- * the two coarse layers are compared on what they cost to feed as well as on what they estimate.
+ * <p>Reads go through the same simulated disk as the search's own chunk fetches. Under a {@code
+ * zero} profile every answer is immediate; under {@code spinning} or {@code nvme} a column not yet
+ * resident comes back pending and the fine search parks, which is the path a live server is in
+ * constantly.
  */
 final class CaptureChunkColumns implements RegionGraph.ChunkColumns {
 
@@ -33,7 +35,11 @@ final class CaptureChunkColumns implements RegionGraph.ChunkColumns {
   private final Map<Long, MinecraftChunk> chunks = new HashMap<>();
   private final Map<Long, CompletableFuture<MinecraftChunk>> inFlight = new HashMap<>();
 
-  /** Reads past the capture's edge, kept apart from the capture's own log; see CaptureProfiles. */
+  /**
+   * Reads past the capture's edge, kept apart from the capture's own log. The backward search is
+   * expected to ask about terrain the fine search never touches: that is the edge of what is known,
+   * not a degenerate run.
+   */
   private final MissingCaptureLog beyond = new MissingCaptureLog();
 
   CaptureChunkColumns(StonebrickPlatformApi platform, String world) {

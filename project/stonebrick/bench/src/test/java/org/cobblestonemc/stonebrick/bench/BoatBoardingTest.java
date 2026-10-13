@@ -66,7 +66,7 @@ class BoatBoardingTest {
             .filter(scenario -> scenario.id().equals("overworld/ocean"))
             .findFirst()
             .orElseThrow()
-            .withHeuristic(Scenario.Heuristic.COARSE);
+            .withHeuristic(Scenario.Heuristic.REGIONS);
     ScenarioRunner runner = new ScenarioRunner(corpus, new Silent());
 
     RunResult player = runner.run(ocean, named(loadouts, "player"), SearchObserver.none());

@@ -218,38 +218,21 @@ public final class ScenarioRunner {
   }
 
   /**
-   * Builds the estimate the scenario asked for.
+   * The column source the last run used, or {@code null} if it did not run on regions.
    *
-   * <p>Chosen per scenario rather than globally so the two can be compared over identical terrain,
-   * with identical settings, in one run of the suite — which is the only way a difference in
-   * expanded nodes means the heuristic rather than the world.
+   * <p>Exposed rather than folded into {@link RunResult} because the region layer's reads are not
+   * gated, and recording them as a deterministic metric would imply a rigour they do not have. The
+   * sweep prints them so the cost is at least visible.
    */
-  /**
-   * The profile source the last run used, or {@code null} if it did not run on the coarse layer.
-   *
-   * <p>Exposed rather than folded into {@link RunResult} because the coarse pass's reads are not
-   * gated: they bypass the IO model entirely, and recording them as a deterministic metric would
-   * imply a rigour they do not have. The sweep prints them so the cost is at least visible.
-   */
-  private @org.jetbrains.annotations.Nullable CaptureProfiles lastCoarseProfiles;
-
-  public @org.jetbrains.annotations.Nullable CaptureProfiles lastCoarseProfiles() {
-    return lastCoarseProfiles;
-  }
-
-  /** The column source the last run used, or {@code null} if it did not run on regions. */
   private @org.jetbrains.annotations.Nullable CaptureChunkColumns lastRegionColumns;
 
   /**
-   * Returns how many chunk columns the last run's coarse layer read, whichever layer it was.
+   * Returns how many chunk columns the last run's region layer read.
    *
    * @return the column count, or 0 if the last run read none
    */
-  public int lastCoarseColumns() {
-    if (lastRegionColumns != null) {
-      return lastRegionColumns.chunkColumns();
-    }
-    return lastCoarseProfiles == null ? 0 : lastCoarseProfiles.chunkColumns();
+  public int lastRegionColumns() {
+    return lastRegionColumns == null ? 0 : lastRegionColumns.chunkColumns();
   }
 
   /**
@@ -264,33 +247,45 @@ public final class ScenarioRunner {
               "regions.scale",
               String.valueOf(org.cobblestonemc.minecraft.lod.RegionHeuristic.DEFAULT_SCALE)));
 
+  /**
+   * The detour a region may hold before the fill splits it, from {@code -Dregions.detour}; a tuning
+   * knob, like {@link #REGION_SCALE}.
+   */
+  static final double REGION_DETOUR =
+      Double.parseDouble(
+          System.getProperty(
+              "regions.detour",
+              String.valueOf(org.cobblestonemc.minecraft.lod.RegionGraph.DEFAULT_DETOUR_RATIO)));
+
+  /**
+   * Builds the estimate the scenario asked for.
+   *
+   * <p>Chosen per scenario rather than globally so heuristics can be compared over identical
+   * terrain, with identical settings, in one run of the suite — which is the only way a difference
+   * in expanded nodes means the heuristic rather than the world.
+   */
   private org.cobblestonemc.HeuristicStrategy heuristicFor(
       Scenario scenario,
       Loadout loadout,
       StonebrickPlayer player,
       Set<MinecraftStepType> excluded,
       StonebrickPlatformApi platform) {
-    // Cleared first, so a run without a coarse layer does not report the last one's reads.
-    lastCoarseProfiles = null;
+    // Cleared first, so a run without the region layer does not report the last one's reads.
     lastRegionColumns = null;
-    if (scenario.heuristic() == Scenario.Heuristic.ZERO) {
-      return Heuristics.zero();
-    }
-    if (scenario.heuristic() == Scenario.Heuristic.RUNNING_AVERAGE) {
-      return Heuristics.runningAverage(MinecraftModes.cheapestCostPerBlock(player, excluded));
-    }
-    if (scenario.heuristic() == Scenario.Heuristic.REGIONS) {
-      CaptureChunkColumns columns = new CaptureChunkColumns(platform, scenario.world());
-      lastRegionColumns = columns;
-      return new org.cobblestonemc.minecraft.lod.RegionHeuristic(
-          region -> columns,
-          org.cobblestonemc.minecraft.lod.RegionCost.forPlayer(player, excluded),
-          REGION_SCALE);
-    }
-    CaptureProfiles profiles = new CaptureProfiles(platform, scenario.world());
-    lastCoarseProfiles = profiles;
-    return new org.cobblestonemc.minecraft.lod.CoarseHeuristic(
-        profiles, org.cobblestonemc.minecraft.lod.CoarseCost.forPlayer(player, excluded));
+    return switch (scenario.heuristic()) {
+      case ZERO -> Heuristics.zero();
+      case RUNNING_AVERAGE ->
+          Heuristics.runningAverage(MinecraftModes.cheapestCostPerBlock(player, excluded));
+      case REGIONS -> {
+        CaptureChunkColumns columns = new CaptureChunkColumns(platform, scenario.world());
+        lastRegionColumns = columns;
+        yield new org.cobblestonemc.minecraft.lod.RegionHeuristic(
+            region -> columns,
+            org.cobblestonemc.minecraft.lod.RegionCost.forPlayer(player, excluded),
+            REGION_SCALE,
+            REGION_DETOUR);
+      }
+    };
   }
 
   /**

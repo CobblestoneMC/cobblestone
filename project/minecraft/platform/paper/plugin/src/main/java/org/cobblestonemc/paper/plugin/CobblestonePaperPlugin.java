@@ -269,7 +269,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                   + configured
                   + "', which is not a heuristic; using "
                   + org.cobblestonemc.api.SearchSettings.DEFAULT_HEURISTIC
-                  + ". Valid values: RUNNING_AVERAGE, COARSE, REGIONS");
+                  + ". Valid values: RUNNING_AVERAGE, REGIONS");
       return org.cobblestonemc.api.SearchSettings.DEFAULT_HEURISTIC;
     }
   }

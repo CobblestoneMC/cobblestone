@@ -69,7 +69,7 @@ public record Scenario(
      * No estimate at all, turning the search into Dijkstra.
      *
      * <p>Not for production: it expands everything. It is the only way to get a route's <i>true</i>
-     * optimal cost, which is what {@code bench verify} measures the coarse estimates against.
+     * optimal cost, which is what {@code bench verify} measures the region estimates against.
      */
     ZERO,
 
@@ -77,12 +77,9 @@ public record Scenario(
     RUNNING_AVERAGE,
 
     /**
-     * The coarse layer's estimate, from a backward search over section profiles. Production's
-     * default, and so the bench's.
+     * A backward search over connected terrain regions, resumed as the fine search asks.
+     * Production's default, and so the bench's.
      */
-    COARSE,
-
-    /** A backward search over connected terrain regions, resumed as the fine search asks. */
     REGIONS
   }
 

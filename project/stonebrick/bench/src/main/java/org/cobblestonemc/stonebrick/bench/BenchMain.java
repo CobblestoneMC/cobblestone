@@ -23,8 +23,8 @@ import org.cobblestonemc.SearchObserver;
  *   bench run      [--scenario id] [--tier ci|local] [--tag t]   run and compare against baselines
  *   bench accept   [--scenario id] [--tier ci|local]             run and record the results as accepted
  *   bench list                                                   show the corpus
- *   bench profile  --scenario &lt;capture&gt;                          profile a capture's sections
- *   bench h3       [--scenario id]                                coarse estimate vs realized cost
+ *   bench sweep    [--heuristic h] [--weights 1.5,2.0]            the nodes-versus-cost curve
+ *   bench verify   [--scenario id] [--agent a]                    estimates against Dijkstra's cost
  * </pre>
  *
  * <p>Exits non-zero when a gated metric moved, so CI fails on an unexplained change. That failure
@@ -46,18 +46,6 @@ public final class BenchMain {
     List<Loadout> loadouts =
         selectLoadouts(Loadout.loadAll(options.corpusRoot().resolve(Loadout.FILE_NAME)), options);
 
-    if (options.command().equals("h3")) {
-      for (Scenario scenario : scenarios) {
-        for (Loadout loadout : loadouts) {
-          if (!loadout.appliesTo(scenario)) {
-            continue;
-          }
-          HeuristicAccuracy.run(options.corpusRoot(), scenario, loadout, new QuietLogger());
-        }
-      }
-      return;
-    }
-
     if (options.command().equals("verify")) {
       for (Scenario scenario : scenarios) {
         for (Loadout loadout : loadouts) {
@@ -68,12 +56,6 @@ public final class BenchMain {
         }
       }
       Verify.aggregate();
-      return;
-    }
-
-    if (options.command().equals("profile")) {
-      ProfileReport.run(
-          options.corpusRoot(), options.scenarioId() == null ? "smoke" : options.scenarioId());
       return;
     }
 
@@ -96,9 +78,7 @@ public final class BenchMain {
               new ScenarioRunner(options.corpusRoot(), new QuietLogger()));
       default -> {
         System.out.println(
-            "Unknown command '"
-                + options.command()
-                + "'. Try run, sweep, accept, list, verify, h3 or profile.");
+            "Unknown command '" + options.command() + "'. Try run, sweep, accept, list or verify.");
         System.exit(2);
       }
     }

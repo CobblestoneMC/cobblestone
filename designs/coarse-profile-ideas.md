@@ -88,7 +88,9 @@ weight (2.0):
   (RUNNING_AVERAGE never boards a boat) are separate.
 
 ## Regions (2026-10-13): built instead of the face tables
-`RegionGraph`, `RegionSearch`, `RegionHeuristic` (`search.algorithm.heuristic: REGIONS`).
+`RegionGraph`, `RegionSearch`, `RegionHeuristic` (`search.algorithm.heuristic: REGIONS`). Now the
+default; the section profiles, CoarseSearch and the blends above are deleted, and the face tables
+were never built.
 - **Graph:** each chunk column is classed per cell (stand, soul, water, climb, air, solid) and
   flood-filled into regions per section. Regions are capped at a 1.5× walking detour, so a
   straight-line price stays honest. Portals join regions inside a column, and across column seams

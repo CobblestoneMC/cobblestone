@@ -12,12 +12,9 @@ import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.Heuristics;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
-import org.cobblestonemc.minecraft.lod.CoarseCost;
-import org.cobblestonemc.minecraft.lod.CoarseHeuristic;
 import org.cobblestonemc.minecraft.lod.RegionCost;
 import org.cobblestonemc.minecraft.lod.RegionHeuristic;
 import org.cobblestonemc.minecraft.lod.WorldChunkColumns;
-import org.cobblestonemc.minecraft.lod.WorldSectionProfiles;
 import org.cobblestonemc.minecraft.modes.MinecraftModes;
 
 /**
@@ -38,13 +35,13 @@ public final class MinecraftHeuristics {
    * do, or Tier 1 prices every route as if they could fly. See {@link
    * MinecraftModes#cheapestCostPerBlock}.
    *
-   * <p>The coarse heuristic reads terrain, so its profile source is built per solve from the target
+   * <p>The region heuristic reads terrain, so its column source is built per solve from the target
    * region's own world -- a trip through a portal has legs in different worlds, and a source bound
    * to the origin's world would answer every later leg from the wrong terrain without ever failing.
    *
-   * <p>Nothing is profiled up front. The fine search parks on an estimate whose chunks have not
+   * <p>Nothing is read up front. The fine search parks on an estimate whose chunks have not
    * arrived, the same way it parks on a mode waiting for blocks, so the terrain that gets
-   * summarised is the terrain the search actually asks about.
+   * classified is the terrain the search actually asks about.
    *
    * @param agent the navigating player
    * @param origin where the search starts
@@ -57,21 +54,13 @@ public final class MinecraftHeuristics {
       return Heuristics.runningAverage(
           MinecraftModes.cheapestCostPerBlock(agent, settings.excludedModes()));
     }
-    if (settings.settings().heuristic() == SearchSettings.Heuristic.REGIONS) {
-      return new RegionHeuristic(
-          target ->
-              new WorldChunkColumns(
-                  (MinecraftWorld) target.domain(), target.nearestBoundaryCell(origin)),
-          RegionCost.forPlayer(agent, settings.excludedModes()),
-          RegionHeuristic.DEFAULT_SCALE);
-    }
-    CoarseCost cost = CoarseCost.forPlayer(agent, settings.excludedModes());
-    return new CoarseHeuristic(
+    return new RegionHeuristic(
         target ->
             // The domain of a Tier-3 target region is always the world that leg runs in; the cast
             // is the price of HeuristicStrategy being domain-agnostic.
-            new WorldSectionProfiles(
+            new WorldChunkColumns(
                 (MinecraftWorld) target.domain(), target.nearestBoundaryCell(origin)),
-        cost);
+        RegionCost.forPlayer(agent, settings.excludedModes()),
+        RegionHeuristic.DEFAULT_SCALE);
   }
 }

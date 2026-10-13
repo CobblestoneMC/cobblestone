@@ -323,15 +323,11 @@ public final class ConfigKeys {
                 """
                 Which estimate the search prices its remaining journey with.
 
-                COARSE searches 16-block terrain summaries backwards from the destination, so it
-                reasons about where the terrain actually goes. It finds much better paths and
-                solves routes RUNNING_AVERAGE cannot solve at all, but each search profiles the
-                terrain it reasons over -- thousands of chunk reads on a long route -- and that
-                work is not yet shared between searches.
-
                 REGIONS searches connected patches of ground, water, rock and air backwards from
-                the destination. It reads the same terrain as COARSE, but tells a wall from a
-                tunnel.
+                the destination, so it reasons about where the terrain actually goes. It finds much
+                better paths and solves routes RUNNING_AVERAGE cannot solve at all, but each search
+                reads the terrain it reasons over -- hundreds of chunk reads on a long route -- and
+                that work is not yet shared between searches.
 
                 RUNNING_AVERAGE extrapolates from the cost of the last few steps. Nearly free, and
                 it mistakes a cheap river for a cheap route.""")

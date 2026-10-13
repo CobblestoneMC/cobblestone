@@ -54,18 +54,17 @@ public final class SearchSettings {
   /**
    * The estimate a search uses unless told otherwise.
    *
-   * <p>{@link Heuristic#COARSE} by default, from measurement. Over 22 routes at {@link
-   * #DEFAULT_HEURISTIC_WEIGHT}, a survival player's paths are +5.4% over the best found against the
-   * running average's +19.2%, 18 routes solve against 16, and the search expands fewer nodes. With
-   * a boat the gap is wider (+5.4% against +33.1%), because the running average never finds the
-   * water worth reaching.
+   * <p>{@link Heuristic#REGIONS} by default, from measurement. Over 58 runs (22 routes, four
+   * loadouts) at {@link #DEFAULT_HEURISTIC_WEIGHT} it solves all 58 against the running average's
+   * 48, and on the routes both solve it expands about a third of the nodes (geometric mean 685
+   * against 1,872) for paths +1.3% over the best found against +13.8%.
    *
-   * <p>⚠️ It is not free: each solve profiles the terrain it reasons over, which on a long route is
-   * thousands of chunk reads and seconds of CPU, and none of that is shared between searches yet. A
+   * <p>⚠️ It is not free: each solve reads and classifies the terrain it reasons over, which on a
+   * long route is hundreds of chunk reads, and none of that is shared between searches yet. A
    * server that runs many concurrent searches on slow storage should measure before trusting the
    * default.
    */
-  public static final Heuristic DEFAULT_HEURISTIC = Heuristic.COARSE;
+  public static final Heuristic DEFAULT_HEURISTIC = Heuristic.REGIONS;
 
   private final int maxCellsVisited;
   private final long maxWallClockMillis;
@@ -178,22 +177,13 @@ public final class SearchSettings {
     RUNNING_AVERAGE,
 
     /**
-     * A search over 16-block terrain summaries, run backwards from the destination.
-     *
-     * <p>Prices the journey from terrain it has actually looked at rather than from terrain it has
-     * just crossed. Costs chunk reads and CPU to build those summaries -- a long route touches
-     * thousands of columns -- and each solve currently pays for its own.
-     */
-    COARSE,
-
-    /**
      * A search over connected terrain regions -- patches of ground, water, rock and air joined
      * where a body can cross between them -- run backwards from the destination and resumed as the
      * fine search asks.
      *
-     * <p>Like {@link #COARSE} it reads the terrain ahead, but it keeps a section's pieces apart
-     * instead of summarizing them, so a wall is a wall and a tunnel is a way through. Costs chunk
-     * reads like {@link #COARSE}, and each solve pays for its own.
+     * <p>Prices the journey from terrain it has actually looked at rather than from terrain it has
+     * just crossed, and knows a wall from a tunnel. Costs chunk reads and CPU to classify the
+     * terrain -- a long route touches hundreds of columns -- and each solve pays for its own.
      */
     REGIONS
   }

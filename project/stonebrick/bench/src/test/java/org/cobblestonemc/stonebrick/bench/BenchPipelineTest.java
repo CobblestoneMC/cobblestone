@@ -181,9 +181,9 @@ class BenchPipelineTest {
 
     Scenario other =
         scenario.withHeuristic(
-            scenario.heuristic() == Scenario.Heuristic.COARSE
+            scenario.heuristic() == Scenario.Heuristic.REGIONS
                 ? Scenario.Heuristic.RUNNING_AVERAGE
-                : Scenario.Heuristic.COARSE);
+                : Scenario.Heuristic.REGIONS);
     Comparison.Verdict verdict =
         Comparison.compare(
             runner.run(other, Loadout.fallback(), SearchObserver.none()),

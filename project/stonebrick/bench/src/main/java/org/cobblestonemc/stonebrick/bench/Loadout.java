@@ -19,8 +19,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
-import org.cobblestonemc.minecraft.lod.CoarseCost;
 import org.cobblestonemc.minecraft.lod.Medium;
+import org.cobblestonemc.minecraft.lod.RegionCost;
 import org.cobblestonemc.stonebrick.platform.StonebrickPlayer;
 import org.yaml.snakeyaml.Yaml;
 
@@ -70,16 +70,16 @@ public record Loadout(
   }
 
   /**
-   * Returns the coarse mediums this loadout can use.
+   * Returns the mediums this loadout can use.
    *
-   * <p>Here rather than beside each caller so the heuristic, the accuracy report and the
-   * verification all price the same agent the same way. A medium the loadout's exclusions forbid is
-   * dropped, or the estimate would price a route the fine search is not allowed to take.
+   * <p>Here rather than beside each caller so the heuristic and the verification both price the
+   * same agent the same way. A medium the loadout's exclusions forbid is dropped, or the estimate
+   * would price a route the fine search is not allowed to take.
    *
    * @return the mediums
    */
   public java.util.Set<Medium> mediums() {
-    return CoarseCost.mediumsFor(player(), excludedModes);
+    return RegionCost.mediumsFor(player(), excludedModes);
   }
 
   /**

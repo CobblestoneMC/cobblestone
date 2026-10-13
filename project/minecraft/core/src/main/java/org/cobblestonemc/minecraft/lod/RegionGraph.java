@@ -41,9 +41,9 @@ import org.jetbrains.annotations.Nullable;
  *
  * <p><b>Regions stay inside a section, and stay nearly convex.</b> Within a section the fill
  * refuses a cell whose walking distance from the region's seed is much longer than the straight
- * line ({@link #DETOUR_RATIO}), because a region is priced in straight lines and a U-shaped cave
- * priced that way would claim a shortcut through its own wall. Large structures — a plain, a river
- * — become chains of section-sized regions, and the portals between them carry the shape.
+ * line ({@link #DEFAULT_DETOUR_RATIO}), because a region is priced in straight lines and a U-shaped
+ * cave priced that way would claim a shortcut through its own wall. Large structures — a plain, a
+ * river — become chains of section-sized regions, and the portals between them carry the shape.
  *
  * <p><b>Agent-independent.</b> Nothing here knows who is travelling: a region says what the terrain
  * is, and {@link RegionCost} decides what that is worth and whether it is passable at all. That is
@@ -58,13 +58,14 @@ public final class RegionGraph {
   public static final int NONE = -1;
 
   /**
-   * How much longer than a straight line the walk from a region's seed to one of its cells may be.
+   * How much longer than a straight line the walk from a region's seed to one of its cells may be,
+   * by default.
    *
    * <p>The region is priced as a straight line, so this is the most it can under-price a crossing
    * by: half again, plus {@link #DETOUR_SLACK}. A cave bending back on itself splits into two
    * regions joined at the bend, and the bend is then where the route is priced through.
    */
-  private static final double DETOUR_RATIO = 1.5;
+  public static final double DEFAULT_DETOUR_RATIO = 1.5;
 
   /**
    * Blocks of detour allowed regardless of distance, so a seed's immediate neighbours never split.
@@ -89,6 +90,7 @@ public final class RegionGraph {
   private static final int[][] HORIZONTAL = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 
   private final ChunkColumns source;
+  private final double detourRatio;
   private final int minY;
   private final int height;
   private final int sections;
@@ -138,7 +140,19 @@ public final class RegionGraph {
    * @param source where columns come from
    */
   public RegionGraph(ChunkColumns source) {
+    this(source, DEFAULT_DETOUR_RATIO);
+  }
+
+  /**
+   * Creates an empty graph that splits regions at a chosen detour.
+   *
+   * @param source where columns come from
+   * @param detourRatio how much longer than a straight line a walk inside one region may be; see
+   *     {@link #DEFAULT_DETOUR_RATIO}
+   */
+  public RegionGraph(ChunkColumns source, double detourRatio) {
     this.source = source;
+    this.detourRatio = detourRatio;
     this.minSection = Math.floorDiv(source.minY(), 16);
     int maxSection = Math.floorDiv(source.maxY(), 16);
     this.sections = maxSection - minSection + 1;
@@ -537,7 +551,7 @@ public final class RegionGraph {
       int dy = y - sy;
       int dz = z - sz;
       double straight = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      if (walked + 1 > DETOUR_RATIO * straight + DETOUR_SLACK) {
+      if (walked + 1 > detourRatio * straight + DETOUR_SLACK) {
         return tail; // left for a later seed, which will start a region of its own
       }
     }

@@ -17,8 +17,9 @@ import org.cobblestonemc.minecraft.MinecraftWorld;
 /**
  * A live world's chunk columns, for a {@link RegionGraph}.
  *
- * <p>The region layer's counterpart to {@link WorldSectionProfiles}: the same fetches, minus the
- * profiling, since the graph classifies a whole column itself.
+ * <p>Written against {@link MinecraftWorld} rather than any one platform's classes, so Paper and
+ * Sponge both get it without a copy. Nothing is read up front: the graph asks for a column the
+ * first time a search needs it, and the fine search parks until it lands.
  */
 public final class WorldChunkColumns implements RegionGraph.ChunkColumns {
 
