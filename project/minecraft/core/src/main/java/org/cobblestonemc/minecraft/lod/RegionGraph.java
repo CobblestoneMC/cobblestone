@@ -87,6 +87,9 @@ public final class RegionGraph {
   /** Regions a section can hold, as an unsigned byte with {@code 0xFF} reserved for none. */
   private static final int MAX_SECTION_REGIONS = 255;
 
+  /** A section whose cells are not all one class. */
+  private static final byte MIXED = -2;
+
   private static final int[][] HORIZONTAL = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 
   private final ChunkColumns source;
@@ -120,6 +123,13 @@ public final class RegionGraph {
   private final MinecraftBlock[] blocks;
   private final byte[] cls;
   private final float[] breakTime;
+
+  /**
+   * Each section's class if every cell shares it, {@code -1} if every cell is nothing, else {@link
+   * #MIXED}.
+   */
+  private final byte[] sectionClass;
+
   private final int[] regionOf;
   private final int[] queue = new int[16 * 16 * 16];
   private final int[] steps = new int[16 * 16 * 16];
@@ -168,6 +178,7 @@ public final class RegionGraph {
     this.cls = new byte[volume];
     this.breakTime = new float[volume];
     this.regionOf = new int[volume];
+    this.sectionClass = new byte[sections];
   }
 
   // ------------------------------------------------------------------------------------------
@@ -461,6 +472,15 @@ public final class RegionGraph {
     for (int s = 0; s < sections; s++) {
       int base = regionCount;
       int from = s << 12;
+      if (sectionClass[s] != MIXED) {
+        // Solid stone, open sky, deep water: one class edge to edge. A full cube is convex and
+        // connected, so the fill would make it one region anyway; this skips the fill.
+        if (sectionClass[s] >= 0) {
+          whole(s, cx, cz, key);
+        }
+        column.uniform[s] = sectionClass[s] >= 0 ? base : NONE;
+        continue;
+      }
       for (int cell = from; cell < from + 4096; cell++) {
         if (regionOf[cell] == NONE && cls[cell] >= 0 && regionCount - base < MAX_SECTION_REGIONS) {
           fill(cell, s, cx, cz, key);
@@ -471,6 +491,31 @@ public final class RegionGraph {
     columnContacts(cx, cz);
     flushContacts();
     return column;
+  }
+
+  /** Makes a uniform section one region, without filling it. */
+  private void whole(int section, int cx, int cz, long key) {
+    RegionClass klass = RegionClass.ALL[sectionClass[section]];
+    int id = newRegion(klass, key);
+    int from = section << 12;
+    Arrays.fill(regionOf, from, from + 4096, id);
+    int y = minY + (section << 4);
+    int[] box = {cx * 16, y, cz * 16, cx * 16 + 15, y + 15, cz * 16 + 15};
+    System.arraycopy(box, 0, regionBox, id * 6, 6);
+    double breakSum = 0;
+    for (int cell = from; cell < from + 4096; cell++) {
+      breakSum += breakTime[cell];
+    }
+    regionBreak[id] = (float) (breakSum / 4096);
+    if (klass == RegionClass.WATER) {
+      // A surface only if something other than water sits on its top layer.
+      int above = from + 4096;
+      boolean navigable = above >= cls.length;
+      for (int i = 0; i < 256 && !navigable; i++) {
+        navigable = cls[above + i] != RegionClass.WATER.ordinal();
+      }
+      regionNavigable[id] = navigable;
+    }
   }
 
   /** Sorts every cell of the column scratch into a class, or {@code -1} for none. */
@@ -504,6 +549,18 @@ public final class RegionGraph {
         }
         // Unbreakable: bedrock, barriers. Nothing, not a region a miner could be priced through.
       }
+    }
+    for (int s = 0; s < sections; s++) {
+      int from = s << 12;
+      byte first = cls[from];
+      byte uniform = first;
+      for (int cell = from + 1; cell < from + 4096; cell++) {
+        if (cls[cell] != first) {
+          uniform = MIXED;
+          break;
+        }
+      }
+      sectionClass[s] = uniform;
     }
   }
 
@@ -600,10 +657,11 @@ public final class RegionGraph {
       return tail;
     }
     if (capped) {
-      int dx = x - sx;
-      int dy = y - sy;
-      int dz = z - sz;
-      double straight = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      // Manhattan, because the fill walks face to face and so counts Manhattan steps. Against a
+      // Euclidean straight line, every open cube failed the cap towards its far corners — 45 steps
+      // against 26 blocks — and open sky and water split into regions for no reason. Measured in
+      // the same metric as the walk, a convex patch never splits and a cave that bends back does.
+      int straight = Math.abs(x - sx) + Math.abs(y - sy) + Math.abs(z - sz);
       if (walked + 1 > detourRatio * straight + DETOUR_SLACK) {
         return tail; // left for a later seed, which will start a region of its own
       }
@@ -620,6 +678,12 @@ public final class RegionGraph {
     int ox = cx * 16;
     int oz = cz * 16;
     for (int cell = 0; cell < volume; cell++) {
+      if (sectionClass[cell >> 12] != MIXED && ((cell >> 8) & 15) != 15) {
+        // Inside a uniform section every neighbour is the same region, and no standing cell can
+        // be one: only its top layer, against the section above, can touch anything else.
+        cell = (cell & ~0xFFF) | 0xEFF; // the loop's increment lands on the top layer's first cell
+        continue;
+      }
       int r = regionOf[cell];
       if (r == NONE) {
         continue;
