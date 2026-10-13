@@ -315,29 +315,43 @@ public final class RegionStore {
    */
   public void prebuild(int chunkX, int chunkZ, MinecraftChunk chunk) {
     long key = key(chunkX, chunkZ);
+    CompletableFuture<RegionColumn> promise = new CompletableFuture<>();
     synchronized (this) {
       if (memory.containsKey(key) || unwritten.containsKey(key) || loading.containsKey(key)) {
         return;
       }
+      // In flight like any load: a search asking meanwhile waits on this build rather than
+      // starting its own, and a block changing meanwhile keeps the result from being kept.
+      loading.put(key, promise);
     }
     try {
-      if (files != null && files.read(chunkX, chunkZ) != null) {
-        return; // stored already; reading it back is cheaper than rebuilding it when asked
+      RegionColumn stored = files == null ? null : files.read(chunkX, chunkZ);
+      if (stored != null) {
+        // Stored already. Kept in memory too, since a chunk loading is a sign it is about to be
+        // needed; but not written again.
+        settle(chunkX, chunkZ, stored, false, promise);
+        return;
       }
-    } catch (IOException unreadable) {
+    } catch (IOException | RuntimeException unreadable) {
       // Rebuild it, and the write replaces whatever is unreadable.
     }
-    RegionColumn column = built(chunkX, chunkZ, chunk);
-    synchronized (this) {
-      if (loading.containsKey(key) || memory.containsKey(key)) {
-        return; // a search got there first
-      }
-      remember(key, column);
-      if (files != null) {
-        unwritten.put(key, column);
-        removed.remove(key);
-      }
+    try {
+      settle(chunkX, chunkZ, built(chunkX, chunkZ, chunk), true, promise);
+    } catch (RuntimeException failed) {
+      fail(chunkX, chunkZ, promise, failed);
     }
+  }
+
+  /**
+   * Returns whether a column is in memory, unwritten, or on its way. Says nothing about disk.
+   *
+   * @param chunkX the chunk X
+   * @param chunkZ the chunk Z
+   * @return {@code true} if it is known without reading anything
+   */
+  public synchronized boolean known(int chunkX, int chunkZ) {
+    long key = key(chunkX, chunkZ);
+    return memory.containsKey(key) || unwritten.containsKey(key) || loading.containsKey(key);
   }
 
   /**

@@ -11,6 +11,7 @@ import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
@@ -18,6 +19,7 @@ import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
+import org.cobblestonemc.minecraft.lod.RegionStores;
 import org.cobblestonemc.paper.PaperNavigationServiceImpl;
 import org.cobblestonemc.paper.api.NavigationService;
 import org.cobblestonemc.paper.api.SearchModificationRegistrar;
@@ -48,6 +50,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
   private DataStore dataStore;
   private TripManager<Entity, PaperTripAgent, Location> tripManager;
   private PaperMetrics metrics;
+  private RegionStores regionStores;
+  private io.papermc.paper.threadedregions.scheduler.ScheduledTask regionFlush;
   private final SearchRegistry<Location> searchRegistry = new SearchRegistry<>();
 
   @Override
@@ -80,6 +84,30 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                 config.get(keys.chunksPrefetchDistance),
                 config.get(keys.chunksFetchAttempts),
                 config.get(keys.chunksPolicy)));
+    // Region summaries are shared by every search, kept on disk across restarts, forgotten when a
+    // block in their chunk changes, and made in the background as chunks load.
+    this.regionStores =
+        new RegionStores(
+            config.get(keys.regionsPersist) ? getDataFolder().toPath().resolve("regions") : null,
+            Math.max(16, config.get(keys.regionsMemoryMegabytes)) * 1024L * 1024L,
+            Math.max(1, Runtime.getRuntime().availableProcessors() / 4));
+    platformApi.useRegionStores(regionStores);
+    getServer()
+        .getPluginManager()
+        .registerEvents(
+            new RegionListener(
+                regionStores,
+                platformApi,
+                platformApi::readLoaded,
+                config.get(keys.regionsBuildOnChunkLoad)),
+            this);
+    long flushSeconds = Math.max(5, config.get(keys.regionsFlushSeconds));
+    this.regionFlush =
+        getServer()
+            .getAsyncScheduler()
+            .runAtFixedRate(
+                this, task -> regionStores.flush(), flushSeconds, flushSeconds, TimeUnit.SECONDS);
+
     PaperIntegrationRegistry integrationRegistry = new PaperIntegrationRegistry();
     getServer()
         .getServicesManager()
@@ -243,6 +271,13 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     if (platformApi != null) {
       // Cancels in-flight searches and stops the search worker pool.
       platformApi.shutdown();
+    }
+    if (regionFlush != null) {
+      regionFlush.cancel();
+    }
+    if (regionStores != null) {
+      // After the searches stop, so nothing builds a column behind the final write.
+      regionStores.close();
     }
     getServer().getServicesManager().unregisterAll(this);
     if (dataStore != null) {

@@ -97,6 +97,18 @@ public final class ConfigKeys {
    */
   public final ConfigKey<Integer> chunksFetchAttempts;
 
+  /** Whether region summaries are kept on disk across restarts. Requires a restart. */
+  public final ConfigKey<Boolean> regionsPersist;
+
+  /** How much memory each world's region summaries may hold, in megabytes. Requires a restart. */
+  public final ConfigKey<Integer> regionsMemoryMegabytes;
+
+  /** How often new region summaries are written to disk, in seconds. Requires a restart. */
+  public final ConfigKey<Integer> regionsFlushSeconds;
+
+  /** Whether chunks are summarized in the background as they load. Requires a restart. */
+  public final ConfigKey<Boolean> regionsBuildOnChunkLoad;
+
   /** Whether Cobblestone discovers vanilla portal links by watching players teleport. Mutable. */
   public final ConfigKey<Boolean> portalsDiscovery;
 
@@ -395,6 +407,54 @@ public final class ConfigKeys {
                 that might pass — a disk read that errored, a load that timed out, a chunk whose
                 save had not reached disk yet — before treating it as impassable. Chunks that
                 simply cannot be had, such as ones never generated, are not retried at all.""")
+            .requiresRestart()
+            .register();
+
+    manager.section(
+        "search.regions",
+        """
+        The terrain summaries the REGIONS heuristic searches over. Each chunk is summarized once
+        and kept, shared by every search, until a block in it changes.""");
+    this.regionsPersist =
+        manager
+            .key("search.regions.persist", true, Codec.ofBoolean())
+            .comment(
+                """
+                Whether to keep summaries on disk, under the plugin's data folder, so a restart
+                does not have to summarize the world again. A few kilobytes per chunk, for chunks
+                searches have touched or players have loaded. Off keeps them in memory only.""")
+            .requiresRestart()
+            .register();
+    this.regionsMemoryMegabytes =
+        manager
+            .key("search.regions.memory_megabytes", 128, Codec.ofInt())
+            .comment(
+                """
+                How much memory each world's summaries may hold, in megabytes. A summarized chunk
+                is about 40 KB in memory, so the default keeps around three thousand per world;
+                beyond that the least recently used are dropped and read back from disk when
+                needed.""")
+            .requiresRestart()
+            .register();
+    this.regionsFlushSeconds =
+        manager
+            .key("search.regions.flush_seconds", 60, Codec.ofInt())
+            .comment(
+                """
+                How often new summaries are written to disk, in seconds. They are also written
+                when the world saves and when the server stops; a crash loses at most this much,
+                and what is lost is summarized again when next needed.""")
+            .requiresRestart()
+            .register();
+    this.regionsBuildOnChunkLoad =
+        manager
+            .key("search.regions.build_on_chunk_load", true, Codec.ofBoolean())
+            .comment(
+                """
+                Whether to summarize chunks in the background as players load them, so that
+                terrain is ready before anyone navigates through it. Costs a little CPU per chunk
+                loaded, on a background thread, and no extra disk reads; when chunks load faster
+                than they can be summarized, the excess is skipped and summarized on demand.""")
             .requiresRestart()
             .register();
 

@@ -30,14 +30,18 @@ import org.cobblestonemc.Restriction;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
+import org.cobblestonemc.minecraft.ChunkFetch;
+import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
+import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.WorldRegion;
+import org.cobblestonemc.minecraft.lod.RegionStores;
 import org.cobblestonemc.minecraft.modes.MinecraftModes;
 import org.cobblestonemc.minecraft.registry.OwnedRegistry;
 import org.cobblestonemc.sponge.api.BoxWorldRegion;
@@ -47,6 +51,7 @@ import org.cobblestonemc.sponge.api.PassChecker;
 import org.cobblestonemc.sponge.api.SearchModificationRegistrar;
 import org.cobblestonemc.sponge.api.SearchModificationService;
 import org.cobblestonemc.sponge.api.Transition;
+import org.jetbrains.annotations.Nullable;
 import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockState;
@@ -79,6 +84,7 @@ public final class SpongeNavigationServiceImpl
 
   private final Map<String, MinecraftWorld> worldCache = new ConcurrentHashMap<>();
   private final OwnedRegistry<SearchModificationService> searchModifiers = new OwnedRegistry<>();
+  private volatile @Nullable RegionStores regionStores;
 
   /**
    * Creates the API for a plugin.
@@ -118,6 +124,31 @@ public final class SpongeNavigationServiceImpl
    */
   public void surveyWorlds() {
     platform.surveyWorlds();
+  }
+
+  /**
+   * Shares built region summaries between this server's searches, and with the next start if the
+   * stores keep them on disk. Without, each search summarizes its own terrain.
+   *
+   * @param stores the server's region stores
+   */
+  public void useRegionStores(RegionStores stores) {
+    this.regionStores = stores;
+  }
+
+  /**
+   * Reads a chunk the server already has loaded, off the server thread, without loading anything.
+   *
+   * @param world the world
+   * @param chunkX the chunk X
+   * @param chunkZ the chunk Z
+   * @return the chunk, or {@code null} if it is not loaded or cannot be read
+   */
+  public CompletableFuture<MinecraftChunk> readLoaded(ServerWorld world, int chunkX, int chunkZ) {
+    return platform
+        .fetchChunk(chunkX, chunkZ, wrap(world), ChunkLoadPolicy.LOADED_ONLY, false)
+        .thenApply(fetch -> fetch instanceof ChunkFetch.Success success ? success.chunk() : null)
+        .exceptionally(failure -> null);
   }
 
   @Override
@@ -232,7 +263,7 @@ public final class SpongeNavigationServiceImpl
         MinecraftModes.providerFor(
             agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
     HeuristicStrategy heuristic =
-        MinecraftHeuristics.forPlayer(agent, originPosition.cell(), settings);
+        MinecraftHeuristics.forPlayer(agent, originPosition.cell(), settings, regionStores);
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
         gatherTransitions(

@@ -11,11 +11,13 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.cobblestonemc.minecraft.MinecraftChunk;
@@ -40,6 +42,7 @@ public final class RegionStores implements AutoCloseable {
   private final double detourRatio;
   private final ExecutorService disk;
   private final ExecutorService builds;
+  private final ThreadPoolExecutor prebuilds;
   private final Map<String, RegionStore> stores = new ConcurrentHashMap<>();
 
   /**
@@ -58,7 +61,22 @@ public final class RegionStores implements AutoCloseable {
     this.builds =
         Executors.newFixedThreadPool(
             Math.max(1, builderThreads), daemons("cobblestone-regions-build"));
+    // Bounded, and dropping what does not fit: a player flying fast loads chunks faster than one
+    // thread can build them, and a queue that grew without limit would be memory and stale work.
+    // A dropped chunk costs nothing but being built on demand later.
+    this.prebuilds =
+        new ThreadPoolExecutor(
+            1,
+            1,
+            0,
+            TimeUnit.MILLISECONDS,
+            new ArrayBlockingQueue<>(PREBUILD_QUEUE),
+            daemons("cobblestone-regions-prebuild"),
+            new ThreadPoolExecutor.DiscardPolicy());
   }
+
+  /** Chunks waiting to be built ahead of time, at most. */
+  private static final int PREBUILD_QUEUE = 512;
 
   /**
    * Returns a world's store, creating it on first use.
@@ -106,7 +124,30 @@ public final class RegionStores implements AutoCloseable {
    */
   public void prebuild(MinecraftWorld world, int chunkX, int chunkZ, MinecraftChunk chunk) {
     RegionStore store = of(world);
-    builds.execute(() -> store.prebuild(chunkX, chunkZ, chunk));
+    prebuilds.execute(() -> store.prebuild(chunkX, chunkZ, chunk));
+  }
+
+  /**
+   * Returns whether a column is in hand or on its way, so a caller can skip fetching its chunk to
+   * prebuild it. Says nothing about disk.
+   *
+   * @param world the world
+   * @param chunkX the chunk X
+   * @param chunkZ the chunk Z
+   * @return {@code true} if building it now would be wasted
+   */
+  public boolean known(MinecraftWorld world, int chunkX, int chunkZ) {
+    return of(world).known(chunkX, chunkZ);
+  }
+
+  /**
+   * Returns whether there is room to queue another prebuild. When there is not, an offered chunk is
+   * skipped rather than queued: it is built when a search asks for it instead.
+   *
+   * @return {@code true} if a prebuild offered now would be queued
+   */
+  public boolean prebuildRoom() {
+    return prebuilds.getQueue().remainingCapacity() > 0;
   }
 
   /**
@@ -138,8 +179,10 @@ public final class RegionStores implements AutoCloseable {
    */
   @Override
   public void close() {
+    prebuilds.shutdown();
     builds.shutdown();
     try {
+      prebuilds.awaitTermination(5, TimeUnit.SECONDS);
       builds.awaitTermination(5, TimeUnit.SECONDS);
     } catch (InterruptedException interrupted) {
       Thread.currentThread().interrupt();

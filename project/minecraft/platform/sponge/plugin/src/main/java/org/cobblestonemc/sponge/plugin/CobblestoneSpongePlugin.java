@@ -9,12 +9,14 @@ package org.cobblestonemc.sponge.plugin;
 
 import com.google.inject.Inject;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Locale;
 import java.util.function.Supplier;
 import org.apache.logging.log4j.Logger;
 import org.bstats.sponge.Metrics;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
+import org.cobblestonemc.minecraft.lod.RegionStores;
 import org.cobblestonemc.plugin.LogoutCleanup;
 import org.cobblestonemc.plugin.config.ConfigKeys;
 import org.cobblestonemc.plugin.config.ConfigManager;
@@ -42,6 +44,8 @@ import org.spongepowered.api.event.lifecycle.StartedEngineEvent;
 import org.spongepowered.api.event.lifecycle.StoppingEngineEvent;
 import org.spongepowered.api.event.network.ServerSideConnectionEvent;
 import org.spongepowered.api.profile.GameProfile;
+import org.spongepowered.api.scheduler.ScheduledTask;
+import org.spongepowered.api.scheduler.Task;
 import org.spongepowered.api.world.server.ServerLocation;
 import org.spongepowered.plugin.PluginContainer;
 import org.spongepowered.plugin.builtin.jvm.Plugin;
@@ -69,6 +73,8 @@ public final class CobblestoneSpongePlugin {
   private final PluginContainer container;
   private final Logger logger;
   private final Path configDir;
+  private RegionStores regionStores;
+  private ScheduledTask regionFlush;
   private final Metrics.Factory metricsFactory;
 
   private Log4JCobblestoneLogger cobblestoneLogger;
@@ -136,6 +142,23 @@ public final class CobblestoneSpongePlugin {
             new AnvilOfflineChunkSource(cobblestoneLogger));
     this.navigationService.registerListeners(container);
     CobblestoneCoreApi.install(navigationService, navigationService);
+
+    // Region summaries are shared by every search, kept on disk across restarts, forgotten when a
+    // block in their chunk changes, and made in the background as chunks load.
+    this.regionStores =
+        new RegionStores(
+            config.get(keys.regionsPersist) ? configDir.resolve("regions") : null,
+            Math.max(16, config.get(keys.regionsMemoryMegabytes)) * 1024L * 1024L,
+            Math.max(1, Runtime.getRuntime().availableProcessors() / 4));
+    navigationService.useRegionStores(regionStores);
+    Sponge.eventManager()
+        .registerListeners(
+            container,
+            new SpongeRegionListener(
+                regionStores,
+                navigationService,
+                navigationService::readLoaded,
+                config.get(keys.regionsBuildOnChunkLoad)));
 
     // Discovered vanilla portals are surfaced to searches as an internal modifier, and learned from
     // player teleports by the portal listener. (Nether entry normalization is deferred on Sponge.)
@@ -232,6 +255,18 @@ public final class CobblestoneSpongePlugin {
     if (navigationService != null) {
       navigationService.surveyWorlds();
     }
+    if (regionStores != null) {
+      long flushSeconds = Math.max(5, config.get(keys.regionsFlushSeconds));
+      this.regionFlush =
+          Sponge.asyncScheduler()
+              .submit(
+                  Task.builder()
+                      .plugin(container)
+                      .delay(Duration.ofSeconds(flushSeconds))
+                      .interval(Duration.ofSeconds(flushSeconds))
+                      .execute(regionStores::flush)
+                      .build());
+    }
   }
 
   /** Registers the {@code /cobblestone} and {@code /navigate} commands. */
@@ -291,6 +326,13 @@ public final class CobblestoneSpongePlugin {
     }
     if (navigationService != null) {
       navigationService.shutdown();
+    }
+    if (regionFlush != null) {
+      regionFlush.cancel();
+    }
+    if (regionStores != null) {
+      // After the searches stop, so nothing builds a column behind the final write.
+      regionStores.close();
     }
     CobblestoneSpongeApi.uninstall();
     CobblestoneCoreApi.uninstall();
