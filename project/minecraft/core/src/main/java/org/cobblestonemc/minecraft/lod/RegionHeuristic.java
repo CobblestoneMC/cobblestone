@@ -58,6 +58,7 @@ public final class RegionHeuristic implements HeuristicStrategy {
   public static final double DEFAULT_SCALE = 0.85;
 
   private final Function<DomainRegion<?>, RegionGraph.ChunkColumns> columnsFor;
+  private final @Nullable Function<DomainRegion<?>, RegionStore> storeFor;
   private final RegionCost cost;
   private final double scale;
   private final double detourRatio;
@@ -105,7 +106,32 @@ public final class RegionHeuristic implements HeuristicStrategy {
       RegionCost cost,
       double scale,
       double detourRatio) {
+    this(columnsFor, null, cost, scale, detourRatio);
+  }
+
+  /**
+   * Creates a heuristic whose solves read built columns from a shared store, as a server's do.
+   *
+   * <p>Without a store each solve builds every column it needs and forgets them; with one, a column
+   * built by any search — or before the server last restarted — is read back instead.
+   *
+   * @param columnsFor builds a chunk source for a solve's target region, for the columns the store
+   *     has to build
+   * @param storeFor the store for a solve's target region's world, or {@code null} for a store of
+   *     each solve's own
+   * @param cost the agent
+   * @param scale a factor on every estimate
+   * @param detourRatio the fill's detour ratio, for a store of each solve's own; a shared store
+   *     carries its own
+   */
+  public RegionHeuristic(
+      Function<DomainRegion<?>, RegionGraph.ChunkColumns> columnsFor,
+      @Nullable Function<DomainRegion<?>, RegionStore> storeFor,
+      RegionCost cost,
+      double scale,
+      double detourRatio) {
     this.columnsFor = columnsFor;
+    this.storeFor = storeFor;
     this.cost = cost;
     this.scale = scale;
     this.detourRatio = detourRatio;
@@ -119,7 +145,12 @@ public final class RegionHeuristic implements HeuristicStrategy {
 
   @Override
   public SolveHeuristic newSolve(int windowWidth, DomainRegion<?> target) {
-    return new Solve(target, new RegionGraph(columnsFor.apply(target), detourRatio));
+    RegionGraph.ChunkColumns columns = columnsFor.apply(target);
+    RegionStore store =
+        storeFor == null
+            ? RegionStore.inMemory(columns.minY(), columns.maxY(), detourRatio)
+            : storeFor.apply(target);
+    return new Solve(target, new RegionGraph(store, columns));
   }
 
   /**

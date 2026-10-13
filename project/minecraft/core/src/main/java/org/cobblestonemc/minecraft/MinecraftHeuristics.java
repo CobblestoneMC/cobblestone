@@ -13,9 +13,12 @@ import org.cobblestonemc.Heuristics;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.lod.RegionCost;
+import org.cobblestonemc.minecraft.lod.RegionGraph;
 import org.cobblestonemc.minecraft.lod.RegionHeuristic;
+import org.cobblestonemc.minecraft.lod.RegionStores;
 import org.cobblestonemc.minecraft.lod.WorldChunkColumns;
 import org.cobblestonemc.minecraft.modes.MinecraftModes;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Builds the estimate a player's search prices its remaining journey with.
@@ -50,6 +53,27 @@ public final class MinecraftHeuristics {
    */
   public static HeuristicStrategy forPlayer(
       CobblestonePlayer agent, Cell origin, MinecraftSearchSettings settings) {
+    return forPlayer(agent, origin, settings, null);
+  }
+
+  /**
+   * Builds the heuristic the settings select, for one player, reading built terrain from a server's
+   * shared stores.
+   *
+   * <p>With stores, terrain any earlier search built — before the last restart too, if they keep it
+   * on disk — is read back rather than built again. Without, each solve builds its own.
+   *
+   * @param agent the navigating player
+   * @param origin where the search starts
+   * @param settings the search settings, which select the heuristic and the excluded modes
+   * @param stores the server's region stores, or {@code null} for each solve's own
+   * @return the heuristic strategy
+   */
+  public static HeuristicStrategy forPlayer(
+      CobblestonePlayer agent,
+      Cell origin,
+      MinecraftSearchSettings settings,
+      @Nullable RegionStores stores) {
     if (settings.settings().heuristic() == SearchSettings.Heuristic.RUNNING_AVERAGE) {
       return Heuristics.runningAverage(
           MinecraftModes.cheapestCostPerBlock(agent, settings.excludedModes()));
@@ -60,7 +84,9 @@ public final class MinecraftHeuristics {
             // is the price of HeuristicStrategy being domain-agnostic.
             new WorldChunkColumns(
                 (MinecraftWorld) target.domain(), target.nearestBoundaryCell(origin)),
+        stores == null ? null : target -> stores.of((MinecraftWorld) target.domain()),
         RegionCost.forPlayer(agent, settings.excludedModes()),
-        RegionHeuristic.DEFAULT_SCALE);
+        RegionHeuristic.DEFAULT_SCALE,
+        RegionGraph.DEFAULT_DETOUR_RATIO);
   }
 }

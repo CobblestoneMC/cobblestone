@@ -15,13 +15,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import org.cobblestonemc.FutureOr;
-import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The world as a graph of terrain regions joined by portals.
+ * The world as a graph of terrain regions joined by portals, as one search sees it.
  *
  * <p><b>Exact about topology, loose about geometry.</b> Every region is a flood-filled connected
  * piece of one {@link RegionClass}, so two regions are joined only where a body could actually
@@ -29,26 +29,18 @@ import org.jetbrains.annotations.Nullable;
  * cost of crossing one is a straight line priced at its class's rate. That is the trade this layer
  * is built on: a wrong price costs the fine search a few nodes, while a wrong connection — a wall
  * reported as a doorway — costs it thousands, so connections are computed from blocks and prices
- * are allowed to be rough. It is what the slice-coverage profile could not do: a coverage fraction
- * cannot tell whether the open half of a section reaches the other side.
+ * are allowed to be rough.
  *
- * <p><b>Built per chunk column, joined at seams.</b> A column is read once and every section of it
- * is classified and filled together, so the vertical joins between its sections, and the falls from
- * one to another, are exact. Neighbouring columns are joined by a seam the first time a search
- * needs to leave one, which needs both columns in hand. A column whose four seams are built is
+ * <p><b>Columns come from a {@link RegionStore}; seams are built here.</b> A column — every region
+ * and portal inside one chunk — is built once and shared by every search through the store, and
+ * kept on disk across restarts. This graph places each column it needs at an offset of its own, and
+ * joins neighbouring columns at seams the first time the search needs to leave one: seams need both
+ * columns, and are cheap enough to compute per search. A column whose four seams are built is
  * <em>complete</em>: its regions will never gain another portal, which is what lets a search relax
  * across a region once and trust that it saw everything.
  *
- * <p><b>Regions stay inside a section, and stay nearly convex.</b> Within a section the fill
- * refuses a cell whose walking distance from the region's seed is much longer than the straight
- * line ({@link #DEFAULT_DETOUR_RATIO}), because a region is priced in straight lines and a U-shaped
- * cave priced that way would claim a shortcut through its own wall. Large structures — a plain, a
- * river — become chains of section-sized regions, and the portals between them carry the shape.
- *
  * <p><b>Agent-independent.</b> Nothing here knows who is travelling: a region says what the terrain
- * is, and {@link RegionCost} decides what that is worth and whether it is passable at all. That is
- * what would let a server share one graph between every search over the same terrain; today each
- * solve builds its own.
+ * is, and {@link RegionCost} decides what that is worth and whether it is passable at all.
  *
  * <p>Not thread-safe. One solve owns one graph, and the search that reads it is single-flight.
  */
@@ -62,45 +54,28 @@ public final class RegionGraph {
    * by default.
    *
    * <p>The region is priced as a straight line, so this is the most it can under-price a crossing
-   * by: half again, plus {@link #DETOUR_SLACK}. A cave bending back on itself splits into two
+   * by: half again, plus a few blocks of slack. A cave bending back on itself splits into two
    * regions joined at the bend, and the bend is then where the route is priced through.
    */
   public static final double DEFAULT_DETOUR_RATIO = 1.5;
 
-  /**
-   * Blocks of detour allowed regardless of distance, so a seed's immediate neighbours never split.
-   */
-  private static final double DETOUR_SLACK = 3.0;
-
-  /**
-   * The deepest drop onto ground a fall portal joins.
-   *
-   * <p>{@code MovementCosts.SAFE_FALL_BLOCKS}. FallMode will go further at the price of damage,
-   * which it charges at several seconds a block; a route that needs that is rare, and pricing it as
-   * a cheap drop would invite the fine search to every cliff edge.
-   */
-  private static final int MAX_DROP = 3;
-
-  /** The deepest drop into water a fall portal joins: water breaks any fall. */
-  private static final int MAX_WATER_DROP = 32;
-
-  /** Regions a section can hold, as an unsigned byte with {@code 0xFF} reserved for none. */
-  private static final int MAX_SECTION_REGIONS = 255;
-
-  /** A section whose cells are not all one class. */
-  private static final byte MIXED = -2;
-
-  private static final int[][] HORIZONTAL = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-
-  private final ChunkColumns source;
-  private final double detourRatio;
+  private final RegionStore store;
+  private final ChunkColumns chunks;
   private final int minY;
   private final int height;
-  private final int sections;
-  private final int minSection;
 
-  private final Map<Long, Column> columns = new HashMap<>();
+  private final Map<Long, Placed> columns = new HashMap<>();
   private final Set<Long> seams = new HashSet<>();
+
+  /**
+   * Columns the store handed over after this graph had to wait for them, by column.
+   *
+   * <p>Kept here rather than asked for again: the store has them in memory too, but under a tight
+   * budget it may already have evicted one, and a search asking again would wait again.
+   */
+  private final Map<Long, RegionColumn> arrived = new ConcurrentHashMap<>();
+
+  private final RegionContacts contacts = new RegionContacts();
 
   // --- regions, struct of arrays ---
   private int regionCount;
@@ -119,66 +94,40 @@ public final class RegionGraph {
   private boolean[] portalDirected = new boolean[1024];
   private int[] portalBox = new int[6 * 1024];
 
-  // --- scratch for building one column, reused ---
-  private final MinecraftBlock[] blocks;
-  private final byte[] cls;
-  private final float[] breakTime;
-
-  /**
-   * Each section's class if every cell shares it, {@code -1} if every cell is nothing, else {@link
-   * #MIXED}.
-   */
-  private final byte[] sectionClass;
-
-  private final int[] regionOf;
-  private final int[] queue = new int[16 * 16 * 16];
-  private final int[] steps = new int[16 * 16 * 16];
-
-  /** Contacts found while building a column or seam, before they become portals. */
-  private final Map<Long, int[]> contacts = new HashMap<>();
-
-  private final Map<Long, int[]> drops = new HashMap<>();
-
-  /** The last contact touched, since consecutive cells nearly always join the same two regions. */
-  private long lastContact = Long.MIN_VALUE;
-
-  private int[] lastContactBox;
-
-  private long buildNanos;
+  private long placeNanos;
   private long seamNanos;
 
   /**
-   * Creates an empty graph over a source of chunk columns.
+   * Creates a graph over a store of its own, keeping everything in memory: one search's worth.
    *
-   * @param source where columns come from
+   * @param chunks where columns come from
    */
-  public RegionGraph(ChunkColumns source) {
-    this(source, DEFAULT_DETOUR_RATIO);
+  public RegionGraph(ChunkColumns chunks) {
+    this(chunks, DEFAULT_DETOUR_RATIO);
   }
 
   /**
-   * Creates an empty graph that splits regions at a chosen detour.
+   * Creates a graph over a store of its own that splits regions at a chosen detour.
    *
-   * @param source where columns come from
+   * @param chunks where columns come from
    * @param detourRatio how much longer than a straight line a walk inside one region may be; see
    *     {@link #DEFAULT_DETOUR_RATIO}
    */
-  public RegionGraph(ChunkColumns source, double detourRatio) {
-    this.source = source;
-    this.detourRatio = detourRatio;
-    this.minSection = Math.floorDiv(source.minY(), 16);
-    int maxSection = Math.floorDiv(source.maxY(), 16);
-    this.sections = maxSection - minSection + 1;
-    // Whole sections, so a section never straddles the world's floor or ceiling; the cells outside
-    // the build range are classified as nothing.
-    this.minY = minSection * 16;
-    this.height = sections * 16;
-    int volume = height * 256;
-    this.blocks = new MinecraftBlock[volume];
-    this.cls = new byte[volume];
-    this.breakTime = new float[volume];
-    this.regionOf = new int[volume];
-    this.sectionClass = new byte[sections];
+  public RegionGraph(ChunkColumns chunks, double detourRatio) {
+    this(RegionStore.inMemory(chunks.minY(), chunks.maxY(), detourRatio), chunks);
+  }
+
+  /**
+   * Creates a graph over a shared store.
+   *
+   * @param store where built columns are kept
+   * @param chunks where this search reads a chunk the store has to build a column from
+   */
+  public RegionGraph(RegionStore store, ChunkColumns chunks) {
+    this.store = store;
+    this.chunks = chunks;
+    this.minY = store.columnMinY();
+    this.height = store.sections() * 16;
   }
 
   // ------------------------------------------------------------------------------------------
@@ -186,15 +135,15 @@ public final class RegionGraph {
   // ------------------------------------------------------------------------------------------
 
   /**
-   * Returns the region at a world cell, or {@link #NONE}, if its column is built.
+   * Returns the region at a world cell, or {@link #NONE}, if its column is placed.
    *
    * @param x the world X
    * @param y the world Y
    * @param z the world Z
-   * @return the region, or {@link #NONE} — including when the column has not been built
+   * @return the region, or {@link #NONE} — including when the column has not been placed
    */
   public int regionAt(int x, int y, int z) {
-    Column column = columns.get(columnKey(Math.floorDiv(x, 16), Math.floorDiv(z, 16)));
+    Placed column = columns.get(columnKey(Math.floorDiv(x, 16), Math.floorDiv(z, 16)));
     if (column == null) {
       return NONE;
     }
@@ -312,7 +261,7 @@ public final class RegionGraph {
   }
 
   /**
-   * Returns how many chunk columns have been built.
+   * Returns how many chunk columns have been placed.
    *
    * @return the column count
    */
@@ -321,13 +270,22 @@ public final class RegionGraph {
   }
 
   /**
-   * Returns the time spent classifying and filling columns: reading every block of a chunk that is
-   * already in hand, and turning it into regions and the portals inside the column.
+   * Returns the store this graph reads columns from.
+   *
+   * @return the store
+   */
+  public RegionStore store() {
+    return store;
+  }
+
+  /**
+   * Returns the time spent placing stored columns into this graph: copying their regions and
+   * portals in at this graph's numbering. Building a column is the store's, and counted there.
    *
    * @return nanoseconds
    */
-  public long buildNanos() {
-    return buildNanos;
+  public long placeNanos() {
+    return placeNanos;
   }
 
   /**
@@ -340,22 +298,15 @@ public final class RegionGraph {
   }
 
   /**
-   * Returns roughly how much memory the graph holds, in bytes: what it would cost to keep.
+   * Returns roughly how much memory this graph holds of its own, in bytes.
    *
-   * <p>An estimate from array sizes, not a measurement of the heap. Object headers and the column
-   * map's own entries are counted at typical JVM sizes; the build scratch, which is the same size
-   * for any graph, is left out.
+   * <p>Its regions and portals, which it copies; not the columns' cell maps, which it shares with
+   * the store.
    *
    * @return the approximate footprint
    */
   public long footprintBytes() {
-    long bytes = 0;
-    for (Column column : columns.values()) {
-      bytes += 64 + column.uniform.length * 8L; // the map entry, uniform and base
-      for (byte[] cells : column.local) {
-        bytes += cells == null ? 8 : 16 + cells.length;
-      }
-    }
+    long bytes = columns.size() * 64L;
     // Per region: class, box, break time, navigable, column, portal list header and count.
     bytes += regionCount * (1L + 24 + 4 + 1 + 8 + 16 + 4);
     for (int region = 0; region < regionCount; region++) {
@@ -371,8 +322,8 @@ public final class RegionGraph {
   // ------------------------------------------------------------------------------------------
 
   /**
-   * Makes sure the column holding a world cell is built and complete, so every region in it has all
-   * of its portals.
+   * Makes sure the column holding a world cell is placed and complete, so every region in it has
+   * all of its portals.
    *
    * @param x the world X
    * @param z the world Z
@@ -390,7 +341,7 @@ public final class RegionGraph {
    */
   public @Nullable CompletableFuture<Void> completeRegion(int region) {
     long key = regionColumn[region];
-    Column column = columns.get(key);
+    Placed column = columns.get(key);
     if (column != null && column.complete) {
       return null; // the common case, and it allocates nothing
     }
@@ -398,15 +349,15 @@ public final class RegionGraph {
   }
 
   private @Nullable CompletableFuture<Void> completeColumn(int cx, int cz) {
-    Column column = columns.get(columnKey(cx, cz));
+    Placed column = columns.get(columnKey(cx, cz));
     if (column != null && column.complete) {
       return null;
     }
-    // Every column a seam reads, fetched together: one park for all five rather than five parks.
+    // Every column a seam reads, asked for together: one park for all five rather than five.
     List<CompletableFuture<?>> waiting = null;
     int[][] around = {{0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1}};
     for (int[] offset : around) {
-      CompletableFuture<?> pending = build(cx + offset[0], cz + offset[1]);
+      CompletableFuture<?> pending = place(cx + offset[0], cz + offset[1]);
       if (pending != null) {
         if (waiting == null) {
           waiting = new ArrayList<>();
@@ -415,7 +366,7 @@ public final class RegionGraph {
       }
     }
     if (waiting != null) {
-      return CompletableFuture.allOf(waiting.toArray(new CompletableFuture[0]));
+      return CompletableFuture.allOf(waiting.toArray(new CompletableFuture<?>[0]));
     }
     long started = System.nanoTime();
     seam(cx, cz, true);
@@ -427,327 +378,51 @@ public final class RegionGraph {
     return null;
   }
 
-  /** Builds a column if its chunk is in hand, or returns the future its chunk arrives on. */
-  private @Nullable CompletableFuture<?> build(int cx, int cz) {
+  /** Places a column if the store has it ready, or returns the future it arrives on. */
+  private @Nullable CompletableFuture<?> place(int cx, int cz) {
     long key = columnKey(cx, cz);
     if (columns.containsKey(key)) {
       return null;
     }
-    FutureOr<MinecraftChunk> chunk = source.column(cx, cz);
-    if (!chunk.isImmediate()) {
-      return chunk.future();
+    RegionColumn ready = arrived.remove(key);
+    if (ready == null) {
+      FutureOr<RegionColumn> column = store.column(cx, cz, chunks);
+      if (!column.isImmediate()) {
+        // Kept as it lands, so the search finds it on waking whatever the store does meanwhile. A
+        // failure is a column that cannot be known, like an ungenerated one.
+        return column
+            .future()
+            .handle(
+                (built, failure) -> {
+                  arrived.put(
+                      key, built != null ? built : RegionColumn.empty(cx, cz, minY, height / 16));
+                  return null;
+                });
+      }
+      ready = column.value();
     }
     long started = System.nanoTime();
-    columns.put(key, buildColumn(cx, cz, chunk.value()));
-    buildNanos += System.nanoTime() - started;
+    columns.put(key, placed(ready));
+    placeNanos += System.nanoTime() - started;
     return null;
   }
 
-  // ------------------------------------------------------------------------------------------
-  // Building a column
-  // ------------------------------------------------------------------------------------------
-
-  private Column buildColumn(int cx, int cz, @Nullable MinecraftChunk chunk) {
-    Column column = new Column(sections);
-    if (chunk == null) {
-      // A column that cannot be read is nothing at all: no regions, so no portals into it. The
-      // search routes around it, as the fine search will have to.
-      Arrays.fill(column.uniform, NONE);
-      return column;
+  /** Copies a column's regions and portals in at this graph's numbering. */
+  private Placed placed(RegionColumn column) {
+    int base = regionCount;
+    long key = columnKey(column.chunkX, column.chunkZ);
+    for (int r = 0; r < column.regionClass.length; r++) {
+      int id = newRegion(RegionClass.ALL[column.regionClass[r]], key);
+      System.arraycopy(column.regionBox, r * 6, regionBox, id * 6, 6);
+      regionBreak[id] = column.regionBreak[r];
+      regionNavigable[id] = column.regionNavigable[r];
     }
-    int top = source.maxY();
-    int bottom = source.minY();
-    for (int ly = 0; ly < height; ly++) {
-      int y = minY + ly;
-      boolean inside = y >= bottom && y <= top;
-      for (int z = 0; z < 16; z++) {
-        for (int x = 0; x < 16; x++) {
-          blocks[(ly << 8) | (z << 4) | x] = inside ? chunk.block(x, y, z) : null;
-        }
-      }
+    int[] box = new int[6];
+    for (int p = 0; p < column.portalA.length; p++) {
+      System.arraycopy(column.portalBox, p * 6, box, 0, 6);
+      newPortal(base + column.portalA[p], base + column.portalB[p], column.portalDirected[p], box);
     }
-    classify();
-    Arrays.fill(regionOf, NONE);
-    long key = columnKey(cx, cz);
-    for (int s = 0; s < sections; s++) {
-      int base = regionCount;
-      int from = s << 12;
-      if (sectionClass[s] != MIXED) {
-        // Solid stone, open sky, deep water: one class edge to edge. A full cube is convex and
-        // connected, so the fill would make it one region anyway; this skips the fill.
-        if (sectionClass[s] >= 0) {
-          whole(s, cx, cz, key);
-        }
-        column.uniform[s] = sectionClass[s] >= 0 ? base : NONE;
-        continue;
-      }
-      for (int cell = from; cell < from + 4096; cell++) {
-        if (regionOf[cell] == NONE && cls[cell] >= 0 && regionCount - base < MAX_SECTION_REGIONS) {
-          fill(cell, s, cx, cz, key);
-        }
-      }
-      column.store(s, base, regionOf, from);
-    }
-    columnContacts(cx, cz);
-    flushContacts();
-    return column;
-  }
-
-  /** Makes a uniform section one region, without filling it. */
-  private void whole(int section, int cx, int cz, long key) {
-    RegionClass klass = RegionClass.ALL[sectionClass[section]];
-    int id = newRegion(klass, key);
-    int from = section << 12;
-    Arrays.fill(regionOf, from, from + 4096, id);
-    int y = minY + (section << 4);
-    int[] box = {cx * 16, y, cz * 16, cx * 16 + 15, y + 15, cz * 16 + 15};
-    System.arraycopy(box, 0, regionBox, id * 6, 6);
-    double breakSum = 0;
-    for (int cell = from; cell < from + 4096; cell++) {
-      breakSum += breakTime[cell];
-    }
-    regionBreak[id] = (float) (breakSum / 4096);
-    if (klass == RegionClass.WATER) {
-      // A surface only if something other than water sits on its top layer.
-      int above = from + 4096;
-      boolean navigable = above >= cls.length;
-      for (int i = 0; i < 256 && !navigable; i++) {
-        navigable = cls[above + i] != RegionClass.WATER.ordinal();
-      }
-      regionNavigable[id] = navigable;
-    }
-  }
-
-  /** Sorts every cell of the column scratch into a class, or {@code -1} for none. */
-  private void classify() {
-    int volume = height * 256;
-    for (int cell = 0; cell < volume; cell++) {
-      MinecraftBlock block = blocks[cell];
-      cls[cell] = -1;
-      breakTime[cell] = 0;
-      if (block == null) {
-        continue;
-      }
-      if (block.isWater()) {
-        cls[cell] = (byte) RegionClass.WATER.ordinal();
-      } else if (block.isClimbable() || block.isScaffolding()) {
-        cls[cell] = (byte) RegionClass.CLIMB.ordinal();
-      } else if (block.isPassable()) {
-        MinecraftBlock floor = cell >= 256 ? blocks[cell - 256] : null;
-        MinecraftBlock head = cell + 256 < volume ? blocks[cell + 256] : null;
-        boolean stands = floor != null && floor.isSolidTop() && (head == null || head.isPassable());
-        cls[cell] =
-            (byte)
-                (stands
-                    ? (floor.isSoulSand() ? RegionClass.SOUL : RegionClass.STAND).ordinal()
-                    : RegionClass.AIR.ordinal());
-      } else if (!block.isLava()) {
-        double seconds = block.breakTimeSeconds();
-        if (!Double.isInfinite(seconds)) {
-          cls[cell] = (byte) RegionClass.SOLID.ordinal();
-          breakTime[cell] = (float) seconds;
-        }
-        // Unbreakable: bedrock, barriers. Nothing, not a region a miner could be priced through.
-      }
-    }
-    for (int s = 0; s < sections; s++) {
-      int from = s << 12;
-      byte first = cls[from];
-      byte uniform = first;
-      for (int cell = from + 1; cell < from + 4096; cell++) {
-        if (cls[cell] != first) {
-          uniform = MIXED;
-          break;
-        }
-      }
-      sectionClass[s] = uniform;
-    }
-  }
-
-  /**
-   * Flood-fills one region from a seed, within its section.
-   *
-   * <p>Breadth-first, so the first time a cell is reached is by its shortest walk from the seed,
-   * and that is the walk the detour cap is measured on.
-   */
-  private void fill(int seed, int section, int cx, int cz, long key) {
-    int c = cls[seed];
-    RegionClass klass = RegionClass.ALL[c];
-    boolean standing = klass.standing();
-    // Rock is dug through in straight lines whatever its shape, so its regions need not be convex.
-    boolean capped = klass != RegionClass.SOLID;
-    int id = newRegion(klass, key);
-    int sx = seed & 15;
-    int sz = (seed >> 4) & 15;
-    int sy = seed >> 8;
-    int floor = section << 4;
-    int ceiling = floor + 15;
-
-    int head = 0;
-    int tail = 0;
-    queue[tail] = seed;
-    steps[tail++] = 0;
-    regionOf[seed] = id;
-    int[] box = {
-      Integer.MAX_VALUE,
-      Integer.MAX_VALUE,
-      Integer.MAX_VALUE,
-      -Integer.MAX_VALUE,
-      -Integer.MAX_VALUE,
-      -Integer.MAX_VALUE
-    };
-    double breakSum = 0;
-    boolean navigable = false;
-    while (head < tail) {
-      int cell = queue[head];
-      int walked = steps[head++];
-      int x = cell & 15;
-      int z = (cell >> 4) & 15;
-      int y = cell >> 8;
-      grow(box, cx * 16 + x, minY + y, cz * 16 + z);
-      breakSum += breakTime[cell];
-      if (klass == RegionClass.WATER && !navigable) {
-        // A surface: water with something other than water above it.
-        navigable = cell + 256 >= cls.length || cls[cell + 256] != RegionClass.WATER.ordinal();
-      }
-      for (int[] h : HORIZONTAL) {
-        int nx = x + h[0];
-        int nz = z + h[1];
-        if (nx < 0 || nx > 15 || nz < 0 || nz > 15) {
-          continue;
-        }
-        tail = offer(cell, nx, y, nz, c, id, walked, tail, sx, sy, sz, capped);
-        if (standing) {
-          // A step up or down is a walking move, and joins two standing cells a level apart.
-          if (y < ceiling) {
-            tail = offer(cell, nx, y + 1, nz, c, id, walked, tail, sx, sy, sz, capped);
-          }
-          if (y > floor) {
-            tail = offer(cell, nx, y - 1, nz, c, id, walked, tail, sx, sy, sz, capped);
-          }
-        }
-      }
-      if (y < ceiling) {
-        tail = offer(cell, x, y + 1, z, c, id, walked, tail, sx, sy, sz, capped);
-      }
-      if (y > floor) {
-        tail = offer(cell, x, y - 1, z, c, id, walked, tail, sx, sy, sz, capped);
-      }
-    }
-    System.arraycopy(box, 0, regionBox, id * 6, 6);
-    regionBreak[id] = (float) (breakSum / tail);
-    regionNavigable[id] = navigable;
-  }
-
-  private int offer(
-      int from,
-      int x,
-      int y,
-      int z,
-      int c,
-      int id,
-      int walked,
-      int tail,
-      int sx,
-      int sy,
-      int sz,
-      boolean capped) {
-    int cell = (y << 8) | (z << 4) | x;
-    if (regionOf[cell] != NONE || cls[cell] != c) {
-      return tail;
-    }
-    if (capped) {
-      // Manhattan, because the fill walks face to face and so counts Manhattan steps. Against a
-      // Euclidean straight line, every open cube failed the cap towards its far corners — 45 steps
-      // against 26 blocks — and open sky and water split into regions for no reason. Measured in
-      // the same metric as the walk, a convex patch never splits and a cave that bends back does.
-      int straight = Math.abs(x - sx) + Math.abs(y - sy) + Math.abs(z - sz);
-      if (walked + 1 > detourRatio * straight + DETOUR_SLACK) {
-        return tail; // left for a later seed, which will start a region of its own
-      }
-    }
-    regionOf[cell] = id;
-    queue[tail] = cell;
-    steps[tail] = walked + 1;
-    return tail + 1;
-  }
-
-  /** Finds every contact between two regions inside the column just filled. */
-  private void columnContacts(int cx, int cz) {
-    int volume = height * 256;
-    int ox = cx * 16;
-    int oz = cz * 16;
-    for (int cell = 0; cell < volume; cell++) {
-      if (sectionClass[cell >> 12] != MIXED && ((cell >> 8) & 15) != 15) {
-        // Inside a uniform section every neighbour is the same region, and no standing cell can
-        // be one: only its top layer, against the section above, can touch anything else.
-        cell = (cell & ~0xFFF) | 0xEFF; // the loop's increment lands on the top layer's first cell
-        continue;
-      }
-      int r = regionOf[cell];
-      if (r == NONE) {
-        continue;
-      }
-      int x = cell & 15;
-      int z = (cell >> 4) & 15;
-      int y = cell >> 8;
-      // Each face once, in the positive direction.
-      if (x < 15) {
-        touch(r, regionOf[cell + 1], ox + x, y, oz + z, ox + x + 1, y, oz + z);
-      }
-      if (z < 15) {
-        touch(r, regionOf[cell + 16], ox + x, y, oz + z, ox + x, y, oz + z + 1);
-      }
-      if (cell + 256 < volume) {
-        touch(r, regionOf[cell + 256], ox + x, y, oz + z, ox + x, y + 1, oz + z);
-      }
-      if (!RegionClass.ALL[cls[cell]].standing()) {
-        continue;
-      }
-      for (int[] h : HORIZONTAL) {
-        int nx = x + h[0];
-        int nz = z + h[1];
-        if (nx < 0 || nx > 15 || nz < 0 || nz > 15) {
-          continue; // across a seam; the seam finds it
-        }
-        int beside = (y << 8) | (nz << 4) | nx;
-        // Steps: a standing cell joins whatever it can walk into a level above or below.
-        if (y + 1 < height) {
-          step(r, regionOf[beside + 256], ox + x, y, oz + z, ox + nx, y + 1, oz + nz);
-        }
-        if (y > 0) {
-          step(r, regionOf[beside - 256], ox + x, y, oz + z, ox + nx, y - 1, oz + nz);
-        }
-        if (cls[beside] == RegionClass.AIR.ordinal()) {
-          dropInto(r, ox + x, y, oz + z, ox + nx, oz + nz, beside, cls, regionOf);
-        }
-      }
-    }
-  }
-
-  /**
-   * Finds where a body stepping off a ledge into {@code air} lands, and joins the ledge to it.
-   *
-   * <p>Separate from the fill because a fall is one-way: the ledge reaches the ground, and the
-   * ground does not reach the ledge.
-   */
-  private void dropInto(
-      int from, int x, int y, int z, int airX, int airZ, int air, byte[] classes, int[] regions) {
-    for (int k = 1; k <= MAX_WATER_DROP && air - k * 256 >= 0; k++) {
-      int below = air - k * 256;
-      int c = classes[below];
-      if (c == RegionClass.AIR.ordinal()) {
-        continue;
-      }
-      boolean ground = c == RegionClass.STAND.ordinal() || c == RegionClass.SOUL.ordinal();
-      // One block down is a step, already joined by the step contacts.
-      if ((ground && k >= 2 && k <= MAX_DROP)
-          || c == RegionClass.WATER.ordinal()
-          || (c == RegionClass.CLIMB.ordinal() && k <= MAX_DROP)) {
-        drop(from, regions[below], x, y, z, airX, y, airZ);
-      }
-      return;
-    }
+    return new Placed(column, base);
   }
 
   // ------------------------------------------------------------------------------------------
@@ -757,19 +432,20 @@ public final class RegionGraph {
   /**
    * Joins a column to its neighbour in positive X (or positive Z), once.
    *
-   * <p>Both columns must be built. The scratch arrays hold neither, so this reads each through its
-   * stored regions; the class of a cell is its region's class.
+   * <p>The same rules a column applies inside itself — faces touching, a walking step a level up or
+   * down, a fall from a ledge — across the boundary between two. Both columns must be placed.
    */
   private void seam(int cx, int cz, boolean alongX) {
     long key = (columnKey(cx, cz) << 1) | (alongX ? 1 : 0);
     if (!seams.add(key)) {
       return;
     }
-    Column low = columns.get(columnKey(cx, cz));
-    Column high = columns.get(alongX ? columnKey(cx + 1, cz) : columnKey(cx, cz + 1));
+    Placed low = columns.get(columnKey(cx, cz));
+    Placed high = columns.get(alongX ? columnKey(cx + 1, cz) : columnKey(cx, cz + 1));
     int ox = cx * 16;
     int oz = cz * 16;
     for (int ly = 0; ly < height; ly++) {
+      int y = minY + ly;
       for (int t = 0; t < 16; t++) {
         // a is the low column's edge cell, b the high column's, face to face.
         int ax = alongX ? 15 : t;
@@ -782,7 +458,7 @@ public final class RegionGraph {
         int wbz = alongX ? oz + t : oz + 16;
         int ra = low.regionAt(ax, ly, az);
         int rb = high.regionAt(bx, ly, bz);
-        touch(ra, rb, wax, ly, waz, wbx, ly, wbz);
+        contacts.touch(ra, rb, wax, y, waz, wbx, y, wbz);
         if (ra != NONE && regionClassOf(ra).standing()) {
           seamSteps(ra, high, bx, ly, bz, wax, waz, wbx, wbz);
           if (rb != NONE && regionClassOf(rb) == RegionClass.AIR) {
@@ -797,22 +473,30 @@ public final class RegionGraph {
         }
       }
     }
-    flushContacts();
+    contacts.flush(this::newPortal);
   }
 
   private void seamSteps(
-      int from, Column other, int lx, int ly, int lz, int fx, int fz, int tx, int tz) {
+      int from, Placed other, int lx, int ly, int lz, int fx, int fz, int tx, int tz) {
+    int y = minY + ly;
     if (ly + 1 < height) {
-      step(from, other.regionAt(lx, ly + 1, lz), fx, ly, fz, tx, ly + 1, tz);
+      step(from, other.regionAt(lx, ly + 1, lz), fx, y, fz, tx, y + 1, tz);
     }
     if (ly > 0) {
-      step(from, other.regionAt(lx, ly - 1, lz), fx, ly, fz, tx, ly - 1, tz);
+      step(from, other.regionAt(lx, ly - 1, lz), fx, y, fz, tx, y - 1, tz);
+    }
+  }
+
+  private void step(int from, int to, int fx, int fy, int fz, int tx, int ty, int tz) {
+    if (to != NONE && to != from && RegionColumnBuilder.steppable(regionClassOf(to))) {
+      contacts.touch(from, to, fx, fy, fz, tx, ty, tz);
     }
   }
 
   private void seamDrop(
-      int from, Column other, int lx, int ly, int lz, int fx, int fz, int tx, int tz) {
-    for (int k = 1; k <= MAX_WATER_DROP && ly - k >= 0; k++) {
+      int from, Placed other, int lx, int ly, int lz, int fx, int fz, int tx, int tz) {
+    int y = minY + ly;
+    for (int k = 1; k <= RegionColumnBuilder.MAX_WATER_DROP && ly - k >= 0; k++) {
       int below = other.regionAt(lx, ly - k, lz);
       if (below == NONE) {
         return;
@@ -821,88 +505,16 @@ public final class RegionGraph {
       if (c == RegionClass.AIR) {
         continue;
       }
-      if ((c.standing() && k >= 2 && k <= MAX_DROP)
-          || c == RegionClass.WATER
-          || (c == RegionClass.CLIMB && k <= MAX_DROP)) {
-        drop(from, below, fx, ly, fz, tx, ly, tz);
+      if (RegionColumnBuilder.landing(c, k)) {
+        contacts.drop(from, below, fx, y, fz, tx, y, tz);
       }
       return;
     }
   }
 
   // ------------------------------------------------------------------------------------------
-  // Contacts and portals
+  // Storage
   // ------------------------------------------------------------------------------------------
-
-  /** Records that two cells of different regions share a face, in column-local Y. */
-  private void touch(int a, int b, int ax, int ay, int az, int bx, int by, int bz) {
-    if (a == NONE || b == NONE || a == b) {
-      return;
-    }
-    long key = a < b ? ((long) a << 32) | b : ((long) b << 32) | a;
-    record(contacts, key, ax, ay, az, bx, by, bz);
-  }
-
-  /** A walking step between a standing cell and one a level above or below. */
-  private void step(int from, int to, int fx, int fy, int fz, int tx, int ty, int tz) {
-    if (to == NONE || to == from) {
-      return;
-    }
-    RegionClass c = regionClassOf(to);
-    if (c.standing() || c == RegionClass.WATER || c == RegionClass.CLIMB) {
-      touch(from, to, fx, fy, fz, tx, ty, tz);
-    }
-  }
-
-  /**
-   * A fall from {@code from} into {@code to}, recorded one-way at the ledge: the box is the ledge
-   * and the air beside it, and the height fallen is priced inside the region landed in.
-   */
-  private void drop(int from, int to, int fx, int fy, int fz, int ax, int ay, int az) {
-    if (to == NONE || to == from) {
-      return;
-    }
-    record(drops, ((long) from << 32) | to, fx, fy, fz, ax, ay, az);
-  }
-
-  private void record(
-      Map<Long, int[]> into, long key, int ax, int ay, int az, int bx, int by, int bz) {
-    int[] box;
-    if (into == contacts && key == lastContact) {
-      box = lastContactBox;
-    } else {
-      box = into.get(key);
-      if (box == null) {
-        box =
-            new int[] {
-              Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE,
-              -Integer.MAX_VALUE, -Integer.MAX_VALUE, -Integer.MAX_VALUE
-            };
-        into.put(key, box);
-      }
-      if (into == contacts) {
-        lastContact = key;
-        lastContactBox = box;
-      }
-    }
-    grow(box, ax, minY + ay, az);
-    grow(box, bx, minY + by, bz);
-  }
-
-  private void flushContacts() {
-    for (Map.Entry<Long, int[]> entry : contacts.entrySet()) {
-      long key = entry.getKey();
-      newPortal((int) (key >>> 32), (int) key, false, entry.getValue());
-    }
-    for (Map.Entry<Long, int[]> entry : drops.entrySet()) {
-      long key = entry.getKey();
-      newPortal((int) (key >>> 32), (int) key, true, entry.getValue());
-    }
-    contacts.clear();
-    drops.clear();
-    lastContact = Long.MIN_VALUE;
-    lastContactBox = null;
-  }
 
   private RegionClass regionClassOf(int region) {
     return RegionClass.ALL[regionClass[region]];
@@ -952,15 +564,6 @@ public final class RegionGraph {
     regionPortalCount[region] = count + 1;
   }
 
-  private static void grow(int[] box, int x, int y, int z) {
-    box[0] = Math.min(box[0], x);
-    box[1] = Math.min(box[1], y);
-    box[2] = Math.min(box[2], z);
-    box[3] = Math.max(box[3], x);
-    box[4] = Math.max(box[4], y);
-    box[5] = Math.max(box[5], z);
-  }
-
   private static long columnKey(int cx, int cz) {
     return ((long) cx << 32) | (cz & 0xFFFF_FFFFL);
   }
@@ -973,55 +576,21 @@ public final class RegionGraph {
     return (int) key;
   }
 
-  /**
-   * One built chunk column: which region every cell belongs to.
-   *
-   * <p>Most sections are one region from edge to edge — open sky, solid stone — and those keep a
-   * single number instead of 4 096 bytes, which is most of what keeps a long route's graph small.
-   */
-  private static final class Column {
+  /** A stored column, placed in this graph at an offset. */
+  private static final class Placed {
 
-    final int[] uniform;
-    final int[] base;
-    final byte[][] local;
+    final RegionColumn column;
+    final int base;
     boolean complete;
 
-    Column(int sections) {
-      this.uniform = new int[sections];
-      this.base = new int[sections];
-      this.local = new byte[sections][];
-    }
-
-    void store(int section, int base, int[] regionOf, int from) {
-      int first = regionOf[from];
-      boolean same = true;
-      for (int cell = from + 1; cell < from + 4096 && same; cell++) {
-        same = regionOf[cell] == first;
-      }
-      if (same) {
-        uniform[section] = first;
-        return;
-      }
-      byte[] cells = new byte[4096];
-      for (int i = 0; i < 4096; i++) {
-        int region = regionOf[from + i];
-        cells[i] = (byte) (region == NONE ? 0xFF : region - base);
-      }
-      this.base[section] = base;
-      local[section] = cells;
+    Placed(RegionColumn column, int base) {
+      this.column = column;
+      this.base = base;
     }
 
     int regionAt(int lx, int ly, int lz) {
-      if (ly < 0 || ly >= uniform.length * 16) {
-        return NONE;
-      }
-      int section = ly >> 4;
-      byte[] cells = local[section];
-      if (cells == null) {
-        return uniform[section];
-      }
-      int value = cells[((ly & 15) << 8) | (lz << 4) | lx] & 0xFF;
-      return value == 0xFF ? NONE : base[section] + value;
+      int local = column.regionAt(lx, ly, lz);
+      return local == RegionColumn.NONE ? NONE : base + local;
     }
   }
 

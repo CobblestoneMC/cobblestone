@@ -23,7 +23,7 @@ import org.cobblestonemc.SearchObserver;
  *   bench run      [--scenario id] [--tier ci|local] [--tag t]   run and compare against baselines
  *   bench accept   [--scenario id] [--tier ci|local]             run and record the results as accepted
  *   bench list                                                   show the corpus
- *   bench sweep    [--heuristic h] [--weights 1.5,2.0]            the nodes-versus-cost curve
+ *   bench sweep    [--heuristic h] [--weights 1.5,2.0] [--io p] [--warm]   the nodes-versus-cost curve
  *   bench verify   [--scenario id] [--agent a]                    estimates against Dijkstra's cost
  * </pre>
  *
@@ -256,7 +256,8 @@ public final class BenchMain {
       Scenario.Heuristic heuristic,
       double[] weights,
       String agent,
-      org.cobblestonemc.stonebrick.platform.IoProfile io) {
+      org.cobblestonemc.stonebrick.platform.IoProfile io,
+      boolean warm) {
 
     static Options parse(String[] args) {
       String command = args.length > 0 && !args[0].startsWith("--") ? args[0] : "run";
@@ -271,6 +272,7 @@ public final class BenchMain {
       double[] weights = null;
       String agent = null;
       org.cobblestonemc.stonebrick.platform.IoProfile io = null;
+      boolean warm = false;
 
       for (int i = 0; i < args.length; i++) {
         switch (args[i]) {
@@ -286,6 +288,7 @@ public final class BenchMain {
           case "--weight", "--weights" -> weights = weights(args[++i]);
           case "--agent", "--loadout" -> agent = args[++i];
           case "--io" -> io = org.cobblestonemc.stonebrick.platform.IoProfile.byName(args[++i]);
+          case "--warm" -> warm = true;
           default -> {
             // positional command, already taken
           }
@@ -304,7 +307,8 @@ public final class BenchMain {
           heuristic,
           weights,
           agent,
-          io);
+          io,
+          warm);
     }
 
     private static double[] weights(String value) {

@@ -62,6 +62,7 @@ public final class RegionSearch {
   private long expansions;
   private long queries;
   private long queryNanos;
+  private long terrainNanos;
   private @Nullable CompletableFuture<Void> pending;
 
   /**
@@ -118,9 +119,37 @@ public final class RegionSearch {
     return queryNanos;
   }
 
+  /**
+   * Returns the time spent searching: answering, less whatever the answers spent waiting on the
+   * graph for terrain — placing columns, joining seams, and any read or build that ran inside.
+   *
+   * @return nanoseconds
+   */
+  public long searchNanos() {
+    return queryNanos - terrainNanos;
+  }
+
+  private @Nullable CompletableFuture<Void> completing(int x, int z) {
+    long started = System.nanoTime();
+    try {
+      return graph.complete(x, z);
+    } finally {
+      terrainNanos += System.nanoTime() - started;
+    }
+  }
+
+  private @Nullable CompletableFuture<Void> completingRegion(int region) {
+    long started = System.nanoTime();
+    try {
+      return graph.completeRegion(region);
+    } finally {
+      terrainNanos += System.nanoTime() - started;
+    }
+  }
+
   private double answer(Cell cell) {
     double backstop = cell.distance(goal) * cheapest;
-    CompletableFuture<Void> waiting = graph.complete(cell.x(), cell.z());
+    CompletableFuture<Void> waiting = completing(cell.x(), cell.z());
     if (waiting != null) {
       pending = waiting;
       return backstop;
@@ -140,7 +169,7 @@ public final class RegionSearch {
       // could not class. Optimistic, because a guess that is too high here would be a wall.
       return backstop;
     }
-    waiting = graph.completeRegion(region);
+    waiting = completingRegion(region);
     if (waiting != null) {
       pending = waiting;
       return backstop;
@@ -220,13 +249,13 @@ public final class RegionSearch {
    * @return a future to wait on, or {@code null} once seeded
    */
   private @Nullable CompletableFuture<Void> seed() {
-    CompletableFuture<Void> waiting = graph.complete(goal.x(), goal.z());
+    CompletableFuture<Void> waiting = completing(goal.x(), goal.z());
     if (waiting != null) {
       return waiting;
     }
     int region = usableRegionNear(goal.x(), goal.y(), goal.z());
     if (region != RegionGraph.NONE) {
-      waiting = graph.completeRegion(region);
+      waiting = completingRegion(region);
       if (waiting != null) {
         return waiting;
       }
@@ -259,9 +288,9 @@ public final class RegionSearch {
     }
     // Resident first, then commit: a settle that discovered halfway through that it needed a
     // column would leave half its neighbours relaxed.
-    CompletableFuture<Void> waiting = graph.completeRegion(graph.portalA(portal));
+    CompletableFuture<Void> waiting = completingRegion(graph.portalA(portal));
     if (waiting == null) {
-      waiting = graph.completeRegion(graph.portalB(portal));
+      waiting = completingRegion(graph.portalB(portal));
     }
     if (waiting != null) {
       pending = waiting;

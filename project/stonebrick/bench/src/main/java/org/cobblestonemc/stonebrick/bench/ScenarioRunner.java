@@ -253,8 +253,8 @@ public final class ScenarioRunner {
       return null;
     }
     long queries = 0;
-    long queryNanos = 0;
-    long buildNanos = 0;
+    long searchNanos = 0;
+    long placeNanos = 0;
     long seamNanos = 0;
     long bytes = 0;
     long regions = 0;
@@ -262,29 +262,69 @@ public final class ScenarioRunner {
     long expansions = 0;
     for (org.cobblestonemc.minecraft.lod.RegionSearch search : lastRegionHeuristic.searches()) {
       queries += search.queries();
-      queryNanos += search.queryNanos();
+      searchNanos += search.searchNanos();
       expansions += search.expansions();
-      buildNanos += search.graph().buildNanos();
+      placeNanos += search.graph().placeNanos();
       seamNanos += search.graph().seamNanos();
       bytes += search.graph().footprintBytes();
       regions += search.graph().regions();
       portals += search.graph().portals();
     }
+    org.cobblestonemc.minecraft.lod.RegionStore.Stats store = lastRegionStore.stats();
     long fetchNanos = lastRegionColumns.fetchNanos();
+
     return String.format(
         java.util.Locale.ROOT,
-        "readMs=%.1f buildMs=%.1f seamMs=%.1f searchMs=%.1f queries=%d settled=%d regions=%d"
-            + " portals=%d graphKB=%d",
+        "readMs=%.1f buildMs=%.1f diskMs=%.1f placeMs=%.1f seamMs=%.1f searchMs=%.1f queries=%d"
+            + " settled=%d built=%d fromDisk=%d diskKB=%d regions=%d portals=%d graphKB=%d"
+            + " storeKB=%d",
         fetchNanos / 1e6,
-        buildNanos / 1e6,
+        store.buildNanos() / 1e6,
+        store.diskNanos() / 1e6,
+        placeNanos / 1e6,
         seamNanos / 1e6,
-        Math.max(0, queryNanos - buildNanos - seamNanos - fetchNanos) / 1e6,
+        searchNanos / 1e6,
         queries,
         expansions,
+        store.builds(),
+        store.diskLoads(),
+        store.diskBytesRead() / 1024,
         regions,
         portals,
-        bytes / 1024);
+        bytes / 1024,
+        store.bytesInMemory() / 1024);
   }
+
+  /**
+   * Writes the last run's built columns to its cache on disk, if it has one.
+   *
+   * <p>What a server's periodic flush does; a warm sweep calls it between the run that fills the
+   * cache and the run it measures.
+   */
+  public void flushRegionCache() {
+    if (lastRegionStore != null) {
+      lastRegionStore.flush().join();
+      lastRegionStore.close().join();
+    }
+  }
+
+  /**
+   * Sets a directory to keep built columns in across runs, as a server keeps them across restarts;
+   * {@code null} to build every column afresh each run.
+   *
+   * @param directory the cache directory, or {@code null}
+   */
+  public void regionCache(@org.jetbrains.annotations.Nullable Path directory) {
+    if (lastRegionStore != null) {
+      lastRegionStore.close().join(); // released, so the directory can be deleted
+    }
+    this.regionCache = directory;
+  }
+
+  private org.cobblestonemc.minecraft.lod.@org.jetbrains.annotations.Nullable RegionStore
+      lastRegionStore;
+
+  private @org.jetbrains.annotations.Nullable Path regionCache;
 
   /**
    * The factor the region heuristic's estimates are scaled by, from {@code -Dregions.scale}.
@@ -324,6 +364,7 @@ public final class ScenarioRunner {
     // Cleared first, so a run without the region layer does not report the last one's reads.
     lastRegionColumns = null;
     lastRegionHeuristic = null;
+    lastRegionStore = null;
     return switch (scenario.heuristic()) {
       case ZERO -> Heuristics.zero();
       case RUNNING_AVERAGE ->
@@ -331,9 +372,33 @@ public final class ScenarioRunner {
       case REGIONS -> {
         CaptureChunkColumns columns = new CaptureChunkColumns(platform, scenario.world());
         lastRegionColumns = columns;
+        // One store for the run, on this thread: a cold start, or a restart over a cache on disk.
+        MinecraftWorld world = platform.world(scenario.world());
+        org.cobblestonemc.minecraft.lod.RegionColumnBuilder shape =
+            new org.cobblestonemc.minecraft.lod.RegionColumnBuilder(
+                world.minY(), world.maxY(), REGION_DETOUR);
+        lastRegionStore =
+            new org.cobblestonemc.minecraft.lod.RegionStore(
+                world.minY(),
+                world.maxY(),
+                REGION_DETOUR,
+                Long.MAX_VALUE,
+                regionCache == null
+                    ? null
+                    : new org.cobblestonemc.minecraft.lod.RegionFiles(
+                        regionCache.resolve(
+                            org.cobblestonemc.minecraft.lod.RegionFiles.directoryName(
+                                scenario.capture() + "-" + scenario.world())),
+                        shape.minY(),
+                        shape.sections(),
+                        REGION_DETOUR),
+                Runnable::run,
+                Runnable::run);
+        org.cobblestonemc.minecraft.lod.RegionStore store = lastRegionStore;
         lastRegionHeuristic =
             new org.cobblestonemc.minecraft.lod.RegionHeuristic(
                 region -> columns,
+                region -> store,
                 org.cobblestonemc.minecraft.lod.RegionCost.forPlayer(player, excluded),
                 REGION_SCALE,
                 REGION_DETOUR);
