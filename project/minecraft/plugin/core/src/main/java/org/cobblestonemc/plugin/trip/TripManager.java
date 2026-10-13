@@ -92,9 +92,8 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
    * @param guideSearch the short-range guide search for off-trail drift; may be {@code null}
    * @param live whether to also re-search periodically (a "live" trip)
    * @param liveIntervalMillis the delay between periodic re-searches, in milliseconds
-   * @param targetExists polled about once a second; the trip ends once it returns {@code false}
-   *     (the pet or mount it leads to has died). May be {@code null} for a target that cannot
-   *     vanish
+   * @param targetExists polled about once a second; the trip ends once it returns {@code false}.
+   *     May be {@code null} for a target that cannot vanish
    * @return the started trip, or empty if the player is at their limit
    */
   public synchronized Optional<Trip<E, P, L>> start(

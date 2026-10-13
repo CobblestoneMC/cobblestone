@@ -139,8 +139,8 @@ public final class Trip<E, P extends TripAgent<E>, L> {
   }
 
   /**
-   * Whether the target has stopped existing (a pet or mount that died), checked only every {@link
-   * #EXISTENCE_CHECK_TICKS} or so, since the check may look the target up.
+   * Whether the target has stopped existing, checked only every {@link #EXISTENCE_CHECK_TICKS} or
+   * so, since the check may look the target up.
    */
   private boolean targetVanished() {
     if (targetExists == null || ++ticksSinceExistenceCheck < existenceCheckEvery) {
