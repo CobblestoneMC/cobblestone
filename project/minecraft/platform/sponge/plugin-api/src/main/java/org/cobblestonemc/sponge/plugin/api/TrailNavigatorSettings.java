@@ -36,6 +36,13 @@ public final class TrailNavigatorSettings {
   public static final NavigatorSettingKey<List<Color>> COLORS =
       new NavigatorSettingKey<>("trail.colors");
 
+  /**
+   * Whether the trip's name floats over the trail while the player stands still, where hitting it
+   * cancels the trip. Unset follows the server's {@code trips.holograms} config.
+   */
+  public static final NavigatorSettingKey<Boolean> SHOW_LABEL =
+      new NavigatorSettingKey<>("trail.show_label");
+
   private TrailNavigatorSettings() {}
 
   /**
@@ -84,6 +91,18 @@ public final class TrailNavigatorSettings {
      */
     public Builder colors(List<Color> colors) {
       delegate.set(COLORS, List.copyOf(colors));
+      return this;
+    }
+
+    /**
+     * Sets whether the trip's name floats over the trail while the player stands still, where
+     * hitting it cancels the trip. Unset follows the server's {@code trips.holograms} config.
+     *
+     * @param show whether to show it
+     * @return this builder
+     */
+    public Builder showLabel(boolean show) {
+      delegate.set(SHOW_LABEL, show);
       return this;
     }
 

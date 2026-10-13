@@ -197,6 +197,9 @@ public final class CobblestoneMessages {
   public static final Message0 HUD_UNAVAILABLE =
       Message0.error("command.cobblestone.hud.unavailable");
 
+  /** Confirms a trip was cancelled by hitting its label ({@code {0}} = the label's text). */
+  public static final Message1 HOLOGRAM_CANCELED = Message1.success("hologram.canceled");
+
   /** Confirms the discovered-portal cache was cleared ({@code {0}} = how many were removed). */
   public static final Message1 PORTALS_CLEARED =
       Message1.success("command.cobblestone.portals.cleared");

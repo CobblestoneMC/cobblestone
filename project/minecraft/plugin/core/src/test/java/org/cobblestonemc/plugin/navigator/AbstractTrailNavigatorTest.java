@@ -13,17 +13,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.kyori.adventure.audience.Audience;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.api.Step;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
+import org.cobblestonemc.plugin.api.Navigator;
+import org.cobblestonemc.plugin.hologram.TrailLabels;
 import org.cobblestonemc.plugin.message.Messages;
 import org.junit.jupiter.api.Test;
 
 /** How {@link AbstractTrailNavigator} decides which trail nodes the smoother may move. */
 class AbstractTrailNavigatorTest {
+
+  private static final UUID PLAYER = UUID.randomUUID();
 
   @Test
   void minedNodesStayAtTheBlockTheyMine() {
@@ -48,12 +55,155 @@ class AbstractTrailNavigatorTest {
     }
   }
 
-  /** A navigator over a flat floor at y = -1, in one world, with the player at the origin. */
+  @Test
+  void labelPointIsOnTheTrailAtTheGivenDistance() {
+    var navigator = new TestNavigator(straightPath(10, -1));
+    navigator.tick();
+
+    Vec3 point = navigator.labelPoint(2.5).orElseThrow();
+    assertEquals(2.5, point.minus(navigator.player).length(), 1e-9);
+    assertEquals(0.9, point.y(), 1e-9, "at the trail's height");
+    assertEquals(0.5, point.z(), 1e-9, "on the straight trail");
+    assertTrue(point.x() > navigator.player.x(), "ahead of the player");
+  }
+
+  @Test
+  void labelPointFollowsThePlayerAlongTheTrail() {
+    var navigator = new TestNavigator(straightPath(10, -1));
+    navigator.player = new Vec3(4.5, 0, 0.5);
+    navigator.tick();
+
+    Vec3 point = navigator.labelPoint(2.5).orElseThrow();
+    assertTrue(point.x() > 6.5 && point.x() < 7.0, "2.5 blocks past the player: " + point);
+  }
+
+  @Test
+  void noLabelPointOffTheTrail() {
+    var navigator = new TestNavigator(straightPath(10, -1));
+    navigator.tick();
+    navigator.player = new Vec3(2.5, 0, 6.5);
+
+    assertEquals(Optional.empty(), navigator.labelPoint(2.5));
+  }
+
+  @Test
+  void labelPointFollowsTheGuideBackToTheTrail() {
+    var navigator = new TestNavigator(straightPath(10, -1));
+    navigator.player = new Vec3(2.5, 0, 6.5); // off to the side of the trail
+    navigator.tick();
+    assertEquals(Optional.empty(), navigator.labelPoint(2.5), "no guide drawn yet");
+
+    // A guide straight back toward the trail, as the guide search would find.
+    List<Step<Vec3, MinecraftStepPayload>> guide = new ArrayList<>();
+    for (int z = 5; z >= 1; z--) {
+      guide.add(
+          new Step<>(new Vec3(2, 0, z), 1, 1, MinecraftStepPayload.of(MinecraftStepType.WALK)));
+    }
+    navigator.setGuidePath(new Path<>(new Vec3(2, 0, 6), guide));
+    navigator.tick();
+
+    Vec3 point = navigator.labelPoint(2.5).orElseThrow();
+    assertEquals(2.5, point.minus(navigator.player).length(), 1e-9);
+    assertEquals(2.5, point.x(), 1e-9, "on the guide");
+    assertTrue(point.z() < 4.5 && point.z() > 3.5, "toward the trail: " + point);
+  }
+
+  @Test
+  void noLabelPointWhileLabelsAreOff() {
+    var navigator = new TestNavigator(straightPath(10, -1));
+    navigator.showLabel.set(false);
+    navigator.tick();
+
+    assertEquals(Optional.empty(), navigator.labelPoint(2.5));
+  }
+
+  @Test
+  void attachesItsLabelWhileTheTripRuns() {
+    List<String> calls = new ArrayList<>();
+    TrailLabels<Vec3> labels =
+        new TrailLabels<>() {
+          @Override
+          public void attach(UUID player, Navigator<Vec3> navigator, Source<Vec3> source) {
+            calls.add("attach " + player);
+          }
+
+          @Override
+          public void detach(UUID player, Navigator<Vec3> navigator) {
+            calls.add("detach " + player);
+          }
+        };
+    var navigator = new TestNavigator(straightPath(10, -1), labels);
+
+    navigator.start();
+    navigator.stop();
+    assertEquals(List.of("attach " + PLAYER, "detach " + PLAYER), calls);
+  }
+
+  @Test
+  void noLabelPointPastAnActionStep() {
+    var navigator = new TestNavigator(straightPath(10, 1)); // the second step opens a door
+    navigator.tick();
+
+    assertEquals(Optional.empty(), navigator.labelPoint(2.5));
+  }
+
+  @Test
+  void noLabelPointNearTheEnd() {
+    var navigator = new TestNavigator(straightPath(2, -1));
+    navigator.tick();
+
+    assertEquals(Optional.empty(), navigator.labelPoint(2.5));
+  }
+
+  /** {@code length} walked steps east from the origin; step {@code door} (if any) opens a door. */
+  private static Path<Vec3, MinecraftStepPayload> straightPath(int length, int door) {
+    List<Step<Vec3, MinecraftStepPayload>> steps = new ArrayList<>();
+    for (int i = 0; i < length; i++) {
+      MinecraftStepType type = i == door ? MinecraftStepType.OPEN_DOOR : MinecraftStepType.WALK;
+      steps.add(new Step<>(new Vec3(i + 1, 0, 0), 1, 1, MinecraftStepPayload.of(type)));
+    }
+    return new Path<>(new Vec3(0, 0, 0), steps);
+  }
+
+  /**
+   * A navigator over a flat floor at y = -1, in one world, with the player at the origin unless
+   * moved.
+   */
   private static final class TestNavigator extends AbstractTrailNavigator<Vec3> {
 
+    Vec3 player = new Vec3(0.5, 0, 0.5);
+    final AtomicBoolean showLabel;
+
     TestNavigator(Path<Vec3, MinecraftStepPayload> path) {
-      super(64, 1, 0, new Messages(Locale.ROOT, false, new SilentLogger()), Locale.ROOT);
+      this(path, TrailLabels.none());
+    }
+
+    TestNavigator(Path<Vec3, MinecraftStepPayload> path, TrailLabels<Vec3> labels) {
+      this(path, new AtomicBoolean(true), labels);
+    }
+
+    private TestNavigator(
+        Path<Vec3, MinecraftStepPayload> path, AtomicBoolean showLabel, TrailLabels<Vec3> labels) {
+      super(
+          64,
+          1,
+          0,
+          new Messages(Locale.ROOT, false, new SilentLogger()),
+          Locale.ROOT,
+          labels,
+          showLabel::get);
+      this.showLabel = showLabel;
       setPath(path);
+    }
+
+    @Override
+    protected Vec3 location(Vec3 point) {
+      return point;
+    }
+
+    @Override
+    protected UUID playerId() {
+      return PLAYER;
     }
 
     @Override
@@ -63,7 +213,7 @@ class AbstractTrailNavigatorTest {
 
     @Override
     protected Vec3 playerPoint() {
-      return new Vec3(0.5, 0, 0.5);
+      return player;
     }
 
     @Override

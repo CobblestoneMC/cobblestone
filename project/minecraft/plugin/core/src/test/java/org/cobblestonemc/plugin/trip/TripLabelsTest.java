@@ -5,16 +5,15 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.plugin.hud;
+package org.cobblestonemc.plugin.trip;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
-import org.cobblestonemc.plugin.trip.TripLabel;
 import org.junit.jupiter.api.Test;
 
-/** How {@link HudLabels} shortens a player's trip labels against each other. */
-class HudLabelsTest {
+/** How {@link TripLabels} shortens a player's trip labels against each other. */
+class TripLabelsTest {
 
   private static TripLabel address(String... keys) {
     return TripLabel.address(List.of(keys));
@@ -24,14 +23,14 @@ class HudLabelsTest {
   void aLoneTripIsJustItsDestinationKey() {
     assertEquals(
         List.of("home"),
-        HudLabels.shorten(List.of(address("cobblestone", "location", "private", "home"))));
+        TripLabels.shorten(List.of(address("cobblestone", "location", "private", "home"))));
   }
 
   @Test
   void distinctDestinationKeysNeedNothingMore() {
     assertEquals(
         List.of("home", "caves"),
-        HudLabels.shorten(
+        TripLabels.shorten(
             List.of(
                 address("cobblestone", "location", "private", "home"),
                 address("cobblestone", "location", "private", "caves"))));
@@ -41,7 +40,7 @@ class HudLabelsTest {
   void sharedDestinationKeysKeepTheKeyThatDiffers() {
     assertEquals(
         List.of("private home", "global home"),
-        HudLabels.shorten(
+        TripLabels.shorten(
             List.of(
                 address("cobblestone", "location", "private", "home"),
                 address("cobblestone", "location", "global", "home"))));
@@ -52,7 +51,7 @@ class HudLabelsTest {
     // "npc bob" names both; "citizens bob" is as short as it gets.
     assertEquals(
         List.of("citizens bob", "quests bob"),
-        HudLabels.shorten(
+        TripLabels.shorten(
             List.of(address("citizens", "npc", "bob"), address("quests", "npc", "bob"))));
   }
 
@@ -60,28 +59,28 @@ class HudLabelsTest {
   void prefersKeysNearerTheDestinationAmongEquallyShortChoices() {
     assertEquals(
         List.of("b home", "d home"),
-        HudLabels.shorten(List.of(address("a", "b", "home"), address("c", "d", "home"))));
+        TripLabels.shorten(List.of(address("a", "b", "home"), address("c", "d", "home"))));
   }
 
   @Test
   void anAddressThatIsAnotherAddressesSuffixIsShownInFull() {
     assertEquals(
         List.of("home", "towny home"),
-        HudLabels.shorten(List.of(address("home"), address("towny", "home"))));
+        TripLabels.shorten(List.of(address("home"), address("towny", "home"))));
   }
 
   @Test
   void matchingIsCaseInsensitive() {
     assertEquals(
         List.of("a Home", "b home"),
-        HudLabels.shorten(List.of(address("a", "Home"), address("b", "home"))));
+        TripLabels.shorten(List.of(address("a", "Home"), address("b", "home"))));
   }
 
   @Test
   void apiLabelsAreShownAsGivenButStillBlockAShorterAddress() {
     assertEquals(
         List.of("Lost Lantern", "location home", "home"),
-        HudLabels.shorten(
+        TripLabels.shorten(
             List.of(
                 TripLabel.of("Lost Lantern"), address("location", "home"), TripLabel.of("home"))));
   }
@@ -90,6 +89,6 @@ class HudLabelsTest {
   void identicalAddressesFallBackToTheFullText() {
     assertEquals(
         List.of("a home", "a home"),
-        HudLabels.shorten(List.of(address("a", "home"), address("a", "home"))));
+        TripLabels.shorten(List.of(address("a", "home"), address("a", "home"))));
   }
 }
