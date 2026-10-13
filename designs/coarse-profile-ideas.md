@@ -126,6 +126,32 @@ were never built.
   (tree leaves and logs isolated in the air). In `cave-lateral`, 5,000 of 16,500 regions are
   climbables, mostly cave vines and lichen breaking up the floor. Both are cheap targets.
 
+### Shared, persistent store (2026-10-13)
+Columns are built once into a `RegionStore` per world, shared by every search, written to
+`regions/` in 32x32-column files, and invalidated on block change. `bench sweep --warm` measures
+a restart: one run fills the cache, and a new store reads it back.
+
+Server time per run, w=2.0, all 58 runs, mean / median / p90 / max (ms), CPU plus modelled wait:
+
+| Disk | RUNNING_AVERAGE | REGIONS cold | REGIONS warm (after a restart) |
+| --- | --- | --- | --- |
+| none | 404 / 52 / 1,707 / 3,148 | 909 / 328 / 2,123 / 8,414 | 534 / 136 / 1,090 / 6,021 |
+| NVMe | 470 / 85 / 1,969 / 3,144 | 1,196 / 464 / 2,772 / 10,113 | 556 / 147 / 1,190 / 6,080 |
+| SATA | 470 / 89 / 1,852 / 3,124 | 1,199 / 463 / 2,793 / 10,162 | 551 / 146 / 1,185 / 6,000 |
+| busy | 543 / 109 / 2,197 / 3,287 | 1,479 / 612 / 3,334 / 12,105 | 576 / 173 / 1,208 / 6,076 |
+| spinning | 1,015 / 330 / 3,465 / 4,154 | 3,554 / 1,508 / 8,650 / 25,993 | 735 / 251 / 1,696 / 6,423 |
+
+- Paths and nodes are the same cold or warm, and under every disk model.
+- Warm SATA, mean per run: reading and decoding columns 195 ms, seams 43, region search 196,
+  fine search 92, disk wait 20. A stored column is 6.4 KB on disk.
+- The slowest warm run is a flyer on `cave-to-surface`: 6.0 s, of which region search 3.3 s
+  (906,000 portals settled over 2,100 columns, for a fine search that touched 49 chunks) and
+  reading columns 1.4 s. The backward search's reach, not building, is now the cost to cut.
+- Region memory per search (its graph plus the columns it used): median 12 MB, mean 27 MB, p90
+  62 MB, max 179 MB on that same route.
+- Disk reads in the bench are real reads of files just written, so they come from the OS cache;
+  only chunk reads go through the modelled disk.
+
 ## Other measured facts worth keeping
 - A seed doesn't reproduce blocks: re-captures differ in decorations. Baselines are tied to the
   capture they measured (`capturedAt` stamp).
