@@ -179,6 +179,18 @@ public final class SpongeNavigationServiceImpl
   }
 
   /**
+   * Whether the chunk at a block may have been generated. False only when it is known not to have
+   * been; while the world's existing chunks are still being indexed (once, on first use), the
+   * answer is true. Server thread only.
+   *
+   * @param location the block
+   * @return whether its chunk may exist
+   */
+  public boolean mayBeGenerated(ServerLocation location) {
+    return platform.mayExist(location.world(), location.blockX() >> 4, location.blockZ() >> 4);
+  }
+
+  /**
    * Returns the platform scheduler, so the plugin can tick trips on it.
    *
    * @return the scheduler

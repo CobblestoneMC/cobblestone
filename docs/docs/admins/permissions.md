@@ -38,12 +38,17 @@ Each destination has a canonical address, which maps to a node under `cobbleston
 | --- | --- |
 | `cobblestone location private home` | `cobblestone.navigate.cobblestone.location.private.home` |
 | `cobblestone death` | `cobblestone.navigate.cobblestone.death` |
+| `cobblestone respawn` | `cobblestone.navigate.cobblestone.respawn` |
+| `cobblestone spawn` | `cobblestone.navigate.cobblestone.spawn` |
+| `cobblestone target` | `cobblestone.navigate.cobblestone.target` |
+| `cobblestone coordinates block` | `cobblestone.navigate.cobblestone.coordinates.block` |
 | `cobblestone player Steve` | `cobblestone.navigate.cobblestone.player.Steve` |
 | `towny town riverwood home` | `cobblestone.navigate.towny.town.riverwood.home` |
 | `citizens npc Blacksmith` | `cobblestone.navigate.citizens.npc.Blacksmith` |
 
-Values typed after a destination are not part of its address, so they never change which node
-is checked.
+Values typed after a destination are not part of its address, so
+`/nav coordinates block 100 64 -200` checks `cobblestone.navigate.cobblestone.coordinates.block`
+whatever the coordinates are.
 
 The first segment is the lower-cased name of the owning plugin. Integrations register under the
 plugin they integrate with (`towny`, `citizens`, `essentials`, `betonquest`, …), not under the

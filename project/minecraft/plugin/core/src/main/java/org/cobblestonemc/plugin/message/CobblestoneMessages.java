@@ -139,6 +139,26 @@ public final class CobblestoneMessages {
   /** Shown for {@code /navigate death} when no death of the player's is on record. */
   public static final Message0 NAVIGATE_NO_DEATH = Message0.error("command.navigate.no_death");
 
+  /** Shown for {@code /navigate respawn} when the player has no bed, anchor or spawn point. */
+  public static final Message0 NAVIGATE_NO_RESPAWN = Message0.error("command.navigate.no_respawn");
+
+  /**
+   * Shown for {@code /navigate target} when the player is not looking at a block in range ({@code
+   * {0}} = the range, in blocks).
+   */
+  public static final Message1 NAVIGATE_NO_TARGET = Message1.error("command.navigate.no_target");
+
+  /**
+   * Shown for coordinates above or below the world ({@code {0}} = the lowest y, {@code {1}} = the
+   * highest, {@code {2}} = the world).
+   */
+  public static final Message3 NAVIGATE_OUTSIDE_WORLD =
+      Message3.error("command.navigate.outside_world");
+
+  /** Shown for coordinates in terrain that has never been generated. */
+  public static final Message0 NAVIGATE_UNGENERATED =
+      Message0.error("command.navigate.ungenerated");
+
   /** Shown when the destination is ambiguous ({@code {0}} = the candidate paths). */
   public static final Message1 NAVIGATE_DESTINATION_AMBIGUOUS =
       Message1.error("command.navigate.destination_ambiguous");

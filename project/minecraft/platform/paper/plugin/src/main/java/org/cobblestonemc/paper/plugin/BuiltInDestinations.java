@@ -8,18 +8,24 @@
 package org.cobblestonemc.paper.plugin;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
+import org.bukkit.util.Vector;
 import org.cobblestonemc.paper.PaperRegions;
+import org.cobblestonemc.paper.PaperTerrain;
 import org.cobblestonemc.paper.api.WholeWorldRegion;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
+import org.cobblestonemc.plugin.api.DestinationOption;
 import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.data.DeathLocationDao;
 import org.cobblestonemc.plugin.data.LocationDao;
@@ -29,12 +35,14 @@ import org.cobblestonemc.plugin.destination.DestinationProvider;
 import org.cobblestonemc.plugin.destination.NavigationTarget;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Message0;
+import org.cobblestonemc.plugin.message.Message1;
+import org.cobblestonemc.plugin.message.Message3;
 import org.cobblestonemc.plugin.message.Messages;
 
 /**
- * Cobblestone's own destinations: saved locations, other players, worlds, and the player's last
- * death. Written in Cobblestone's own terms ({@link NavigationTarget}) rather than adapted from the
- * integration API.
+ * Cobblestone's own destinations: saved locations, other players, worlds, and places such as the
+ * player's last death or the block they are looking at. Written in Cobblestone's own terms ({@link
+ * NavigationTarget}) rather than adapted from the integration API.
  */
 public class BuiltInDestinations implements DestinationProvider<Player> {
   public static final String PLAYER_TREE_KEY = "player";
@@ -42,7 +50,15 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
   public static final String LOCATION_TREE_KEY = "location";
   public static final String GLOBAL_TREE_KEY = "global";
   public static final String PRIVATE_TREE_KEY = "private";
+  public static final String COORDINATES_TREE_KEY = "coordinates";
   public static final String DEATH_KEY = "death";
+  public static final String TARGET_KEY = "target";
+  public static final String BLOCK_KEY = "block";
+  public static final String SPAWN_KEY = "spawn";
+  public static final String RESPAWN_KEY = "respawn";
+
+  /** How far away, in blocks, the block a player is looking at may be for {@code target}. */
+  static final int TARGET_RANGE = 256;
 
   private final LocationDao locations;
   private final DeathLocationDao deaths;
@@ -70,9 +86,13 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
     if (trackDeaths.getAsBoolean()) {
       root.leaf(DEATH_KEY, DestinationLeaf.ofValidity(() -> death(player)));
     }
-    return root.subtree(PLAYER_TREE_KEY, () -> players(player))
+    return root.leaf(TARGET_KEY, DestinationLeaf.ofValidity(() -> target(player)))
+        .leaf(SPAWN_KEY, DestinationLeaf.of(this::spawn))
+        .leaf(RESPAWN_KEY, DestinationLeaf.ofValidity(() -> respawn(player)))
+        .subtree(PLAYER_TREE_KEY, () -> players(player))
         .subtree(WORLD_TREE_KEY, () -> worlds(player))
         .subtree(LOCATION_TREE_KEY, () -> locations(player))
+        .subtree(COORDINATES_TREE_KEY, () -> coordinates(player))
         .build();
   }
 
@@ -83,6 +103,165 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
         .map(death -> stored(DEATH_KEY, death.world(), death.x(), death.y(), death.z()))
         .map(Validity::valid)
         .orElseGet(() -> invalid(player, CobblestoneMessages.NAVIGATE_NO_DEATH));
+  }
+
+  /**
+   * Where the player is looking: the open space in front of the block their crosshair is on, or the
+   * ground beneath it if that space is in mid-air (the side of a wall, say). Water stops the look
+   * like any block, so looking out to sea means its surface (unless the player is underwater);
+   * plants and other passable blocks are looked through. The look never reaches into an unloaded
+   * chunk, nor (on Folia) one another region owns. Invalid if no block is within {@link
+   * #TARGET_RANGE}.
+   */
+  private Validity<NavigationTarget> target(Player player) {
+    Location eye = player.getEyeLocation();
+    World world = eye.getWorld();
+    // From underwater, look through the water rather than at it.
+    boolean underwater = eye.getBlock().isLiquid();
+    int[] front = openBlockBefore(world, eye.toVector(), eye.getDirection(), underwater);
+    if (front == null) {
+      return Validity.invalid(render(player, CobblestoneMessages.NAVIGATE_NO_TARGET, TARGET_RANGE));
+    }
+    int y = PaperTerrain.landingY(world, front[0], front[1], front[2]);
+    return Validity.valid(atBlock(TARGET_KEY, new Location(world, front[0], y, front[2])));
+  }
+
+  /**
+   * Walks a look block by block, in the order it passes through them, and returns the block just
+   * before the first one that stops it ({@code {x, y, z}}), or {@code null} if nothing does within
+   * {@link #TARGET_RANGE}. Bukkit's own ray trace would load every chunk on the way, so this stops
+   * instead at the first chunk that is not loaded or (on Folia) not this region's to read.
+   */
+  private static int[] openBlockBefore(
+      World world, Vector from, Vector direction, boolean underwater) {
+    int x = from.getBlockX();
+    int y = from.getBlockY();
+    int z = from.getBlockZ();
+    int stepX = (int) Math.signum(direction.getX());
+    int stepY = (int) Math.signum(direction.getY());
+    int stepZ = (int) Math.signum(direction.getZ());
+    // How far along the look each axis's next block boundary is, and the distance between them.
+    double deltaX = stepX == 0 ? Double.POSITIVE_INFINITY : Math.abs(1 / direction.getX());
+    double deltaY = stepY == 0 ? Double.POSITIVE_INFINITY : Math.abs(1 / direction.getY());
+    double deltaZ = stepZ == 0 ? Double.POSITIVE_INFINITY : Math.abs(1 / direction.getZ());
+    double nextX = next(from.getX(), x, stepX, deltaX);
+    double nextY = next(from.getY(), y, stepY, deltaY);
+    double nextZ = next(from.getZ(), z, stepZ, deltaZ);
+    int[] last = {x, y, z};
+    double travelled = 0;
+    while (travelled <= TARGET_RANGE) {
+      if (y >= world.getMinHeight() && y < world.getMaxHeight()) {
+        if (!Bukkit.isOwnedByCurrentRegion(world, x >> 4, z >> 4)
+            || !world.isChunkLoaded(x >> 4, z >> 4)) {
+          return null;
+        }
+        if (stopsLook(world.getBlockData(x, y, z), underwater)) {
+          return last;
+        }
+      }
+      last = new int[] {x, y, z};
+      if (nextX <= nextY && nextX <= nextZ) {
+        x += stepX;
+        travelled = nextX;
+        nextX += deltaX;
+      } else if (nextY <= nextZ) {
+        y += stepY;
+        travelled = nextY;
+        nextY += deltaY;
+      } else {
+        z += stepZ;
+        travelled = nextZ;
+        nextZ += deltaZ;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * How far along the look the next block boundary on one axis is, or infinitely far if the look
+   * never crosses one (rather than the 0 &times; &infin; = NaN of a look starting on a boundary,
+   * which no comparison would ever pick).
+   */
+  private static double next(double position, int block, int step, double delta) {
+    if (step == 0) {
+      return Double.POSITIVE_INFINITY;
+    }
+    return (step > 0 ? block + 1 - position : position - block) * delta;
+  }
+
+  /** Whether a block stops a look: anything not passable, but not water or lava from within. */
+  private static boolean stopsLook(BlockData data, boolean underwater) {
+    Material material = data.getMaterial();
+    return !PaperTerrain.isPassable(data)
+        && !(underwater && (material == Material.WATER || material == Material.LAVA));
+  }
+
+  /**
+   * {@code coordinates block <x> <y> <z> [world]}. Strict, so {@code coordinates} must be typed: a
+   * bare {@code block} would mean nothing.
+   */
+  private DestinationNode<NavigationTarget> coordinates(Player player) {
+    return DestinationNode.<NavigationTarget>builder()
+        .strict()
+        .leaf(BLOCK_KEY, coordinateBlock(player))
+        .build();
+  }
+
+  /**
+   * One block, in the player's world unless named; invalid above or below the world, or in terrain
+   * that has never been generated.
+   */
+  private DestinationLeaf<NavigationTarget> coordinateBlock(Player player) {
+    DestinationOption<Integer> x =
+        DestinationOption.integer("x", () -> player.getLocation().getBlockX());
+    DestinationOption<Integer> y =
+        DestinationOption.integer("y", () -> player.getLocation().getBlockY());
+    DestinationOption<Integer> z =
+        DestinationOption.integer("z", () -> player.getLocation().getBlockZ());
+    DestinationOption<World> world = worldOption();
+    return DestinationLeaf.withOptions(
+        List.of(x, y, z, world),
+        values -> {
+          World target = values.find(world).orElseGet(player::getWorld);
+          int blockY = values.get(y);
+          if (blockY < target.getMinHeight() || blockY >= target.getMaxHeight()) {
+            return Validity.invalid(
+                render(
+                    player,
+                    CobblestoneMessages.NAVIGATE_OUTSIDE_WORLD,
+                    target.getMinHeight(),
+                    target.getMaxHeight() - 1,
+                    target.getName()));
+          }
+          int blockX = values.get(x);
+          int blockZ = values.get(z);
+          if (!target.isChunkLoaded(blockX >> 4, blockZ >> 4)
+              && !target.isChunkGenerated(blockX >> 4, blockZ >> 4)) {
+            return invalid(player, CobblestoneMessages.NAVIGATE_UNGENERATED);
+          }
+          return Validity.valid(atBlock(BLOCK_KEY, new Location(target, blockX, blockY, blockZ)));
+        });
+  }
+
+  /**
+   * The world spawn: where a player with no respawn point of their own respawns. There is one per
+   * server, in its respawn world (normally the overworld).
+   */
+  private NavigationTarget spawn() {
+    return atBlock(SPAWN_KEY, Bukkit.getServer().getRespawnWorld().getSpawnLocation());
+  }
+
+  /**
+   * Where the player will respawn — their bed, a charged respawn anchor, or wherever a plugin or
+   * {@code /spawnpoint} set it. Read without validating it (that would load its chunk), so an
+   * obstructed bed still counts. Invalid if the player has none.
+   */
+  private Validity<NavigationTarget> respawn(Player player) {
+    Location respawn = player.getRespawnLocation(false);
+    if (respawn == null || respawn.getWorld() == null) {
+      return invalid(player, CobblestoneMessages.NAVIGATE_NO_RESPAWN);
+    }
+    return Validity.valid(atBlock(RESPAWN_KEY, respawn));
   }
 
   private DestinationNode<NavigationTarget> players(Player player) {
@@ -177,6 +356,18 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
         .build();
   }
 
+  /** A stationary destination at one block, with its coordinates in the hover detail. */
+  private NavigationTarget atBlock(String name, Location location) {
+    return NavigationTarget.builder(name, () -> regions.block(location).stream().toList())
+        .detail(
+            DestinationDetails.coordinates(
+                location.getBlockX(),
+                location.getBlockY(),
+                location.getBlockZ(),
+                location.getWorld().getKey().asString()))
+        .build();
+  }
+
   /** The loaded world with the given namespaced key, or {@code null}. */
   private static World world(String key) {
     NamespacedKey worldKey = NamespacedKey.fromString(key);
@@ -189,5 +380,28 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
 
   private Component render(Player player, Message0 message) {
     return messages.render(player.locale(), message);
+  }
+
+  private Component render(Player player, Message1 message, Object arg) {
+    return messages.render(player.locale(), message, arg);
+  }
+
+  private Component render(Player player, Message3 message, Object arg1, Object arg2, Object arg3) {
+    return messages.render(player.locale(), message, arg1, arg2, arg3);
+  }
+
+  /** An optional trailing world, by name or namespaced key. */
+  private static DestinationOption<World> worldOption() {
+    return DestinationOption.optional(
+        "world",
+        partial -> Bukkit.getWorlds().stream().map(World::getName).toList(),
+        token -> {
+          World byName = Bukkit.getWorld(token);
+          if (byName != null) {
+            return Optional.of(byName);
+          }
+          NamespacedKey key = NamespacedKey.fromString(token.toLowerCase(Locale.ROOT));
+          return Optional.ofNullable(key == null ? null : Bukkit.getWorld(key));
+        });
   }
 }

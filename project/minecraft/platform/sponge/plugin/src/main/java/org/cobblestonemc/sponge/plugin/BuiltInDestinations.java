@@ -9,12 +9,15 @@ package org.cobblestonemc.sponge.plugin;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 import net.kyori.adventure.text.Component;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
+import org.cobblestonemc.plugin.api.DestinationOption;
 import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.data.DeathLocationDao;
 import org.cobblestonemc.plugin.data.Location;
@@ -25,19 +28,29 @@ import org.cobblestonemc.plugin.destination.DestinationProvider;
 import org.cobblestonemc.plugin.destination.NavigationTarget;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Message0;
+import org.cobblestonemc.plugin.message.Message1;
+import org.cobblestonemc.plugin.message.Message3;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.sponge.SpongeRegions;
+import org.cobblestonemc.sponge.SpongeTerrain;
 import org.cobblestonemc.sponge.api.WholeWorldRegion;
 import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.Sponge;
+import org.spongepowered.api.data.Keys;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
+import org.spongepowered.api.util.RespawnLocation;
+import org.spongepowered.api.util.blockray.RayTrace;
+import org.spongepowered.api.util.blockray.RayTraceResult;
+import org.spongepowered.api.world.DefaultWorldKeys;
+import org.spongepowered.api.world.LocatableBlock;
 import org.spongepowered.api.world.server.ServerLocation;
 import org.spongepowered.api.world.server.ServerWorld;
+import org.spongepowered.math.vector.Vector3d;
 
 /**
- * Cobblestone's own destinations: saved locations, other players, worlds, and the player's last
- * death. Written in Cobblestone's own terms ({@link NavigationTarget}) rather than adapted from the
- * integration API.
+ * Cobblestone's own destinations: saved locations, other players, worlds, and places such as the
+ * player's last death or the block they are looking at. Written in Cobblestone's own terms ({@link
+ * NavigationTarget}) rather than adapted from the integration API.
  */
 public final class BuiltInDestinations implements DestinationProvider<ServerPlayer> {
 
@@ -46,11 +59,20 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
   public static final String LOCATION_TREE_KEY = "location";
   public static final String GLOBAL_TREE_KEY = "global";
   public static final String PRIVATE_TREE_KEY = "private";
+  public static final String COORDINATES_TREE_KEY = "coordinates";
   public static final String DEATH_KEY = "death";
+  public static final String TARGET_KEY = "target";
+  public static final String BLOCK_KEY = "block";
+  public static final String SPAWN_KEY = "spawn";
+  public static final String RESPAWN_KEY = "respawn";
+
+  /** How far away, in blocks, the block a player is looking at may be for {@code target}. */
+  static final int TARGET_RANGE = 256;
 
   private final LocationDao locations;
   private final DeathLocationDao deaths;
   private final SpongeRegions regions;
+  private final Predicate<ServerLocation> generated;
   private final BooleanSupplier trackDeaths;
   private final Messages messages;
 
@@ -58,11 +80,13 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
       LocationDao locations,
       DeathLocationDao deaths,
       SpongeRegions regions,
+      Predicate<ServerLocation> generated,
       BooleanSupplier trackDeaths,
       Messages messages) {
     this.locations = locations;
     this.deaths = deaths;
     this.regions = regions;
+    this.generated = generated;
     this.trackDeaths = trackDeaths;
     this.messages = messages;
   }
@@ -74,9 +98,13 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
     if (trackDeaths.getAsBoolean()) {
       root.leaf(DEATH_KEY, DestinationLeaf.ofValidity(() -> death(player)));
     }
-    return root.subtree(PLAYER_TREE_KEY, () -> players(player))
+    return root.leaf(TARGET_KEY, DestinationLeaf.ofValidity(() -> target(player)))
+        .leaf(SPAWN_KEY, DestinationLeaf.of(this::spawn))
+        .leaf(RESPAWN_KEY, DestinationLeaf.ofValidity(() -> respawn(player)))
+        .subtree(PLAYER_TREE_KEY, () -> players(player))
         .subtree(WORLD_TREE_KEY, () -> worlds(player))
         .subtree(LOCATION_TREE_KEY, () -> locations(player))
+        .subtree(COORDINATES_TREE_KEY, () -> coordinates(player))
         .build();
   }
 
@@ -87,6 +115,114 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
         .map(death -> stored(DEATH_KEY, death.world(), death.x(), death.y(), death.z()))
         .map(Validity::valid)
         .orElseGet(() -> invalid(player, CobblestoneMessages.NAVIGATE_NO_DEATH));
+  }
+
+  /**
+   * Where the player is looking: the open space in front of the block their crosshair is on, or the
+   * ground beneath it if that space is in mid-air (the side of a wall, say). Water stops the look
+   * like any block, so looking out to sea means its surface (unless the player is underwater);
+   * plants and other passable blocks are looked through. The look never reaches into an unloaded
+   * chunk. Invalid if no block is within {@link #TARGET_RANGE}.
+   */
+  private Validity<NavigationTarget> target(ServerPlayer player) {
+    ServerWorld world = player.world();
+    Vector3d eye = player.get(Keys.EYE_POSITION).orElseGet(player::position);
+    // From underwater, look through the water rather than at it.
+    boolean underwater =
+        !world.block(eye.floorX(), eye.floorY(), eye.floorZ()).fluidState().isEmpty();
+    Optional<RayTraceResult<LocatableBlock>> hit =
+        RayTrace.block()
+            .world(world)
+            .sourceEyePosition(player)
+            .direction(player)
+            .limit(TARGET_RANGE)
+            .continueWhileLocation(
+                location -> world.isChunkLoadedAtBlock(location.blockPosition(), false))
+            .select(
+                block ->
+                    !SpongeTerrain.isPassable(block.blockState())
+                        && !(underwater && !block.blockState().fluidState().isEmpty()))
+            .execute();
+    if (hit.isEmpty()) {
+      return Validity.invalid(render(player, CobblestoneMessages.NAVIGATE_NO_TARGET, TARGET_RANGE));
+    }
+    // The hit is on the face the look came through; just short of it, back towards the eye, is
+    // the open block in front of that face.
+    Vector3d at = hit.get().hitPosition();
+    Vector3d front = at.add(eye.sub(at).normalize().mul(0.01));
+    int y = SpongeTerrain.landingY(world, front.floorX(), front.floorY(), front.floorZ());
+    return Validity.valid(
+        atBlock(TARGET_KEY, ServerLocation.of(world, front.floorX(), y, front.floorZ())));
+  }
+
+  /**
+   * {@code coordinates block <x> <y> <z> [world]}. Strict, so {@code coordinates} must be typed: a
+   * bare {@code block} would mean nothing.
+   */
+  private DestinationNode<NavigationTarget> coordinates(ServerPlayer player) {
+    return DestinationNode.<NavigationTarget>builder()
+        .strict()
+        .leaf(BLOCK_KEY, coordinateBlock(player))
+        .build();
+  }
+
+  /**
+   * One block, in the player's world unless named; invalid above or below the world, or in terrain
+   * that has never been generated.
+   */
+  private DestinationLeaf<NavigationTarget> coordinateBlock(ServerPlayer player) {
+    DestinationOption<Integer> x =
+        DestinationOption.integer("x", () -> player.serverLocation().blockX());
+    DestinationOption<Integer> y =
+        DestinationOption.integer("y", () -> player.serverLocation().blockY());
+    DestinationOption<Integer> z =
+        DestinationOption.integer("z", () -> player.serverLocation().blockZ());
+    DestinationOption<ServerWorld> world = worldOption();
+    return DestinationLeaf.withOptions(
+        List.of(x, y, z, world),
+        values -> {
+          ServerWorld target = values.find(world).orElseGet(player::world);
+          int blockY = values.get(y);
+          if (blockY < target.min().y() || blockY > target.max().y()) {
+            return Validity.invalid(
+                render(
+                    player,
+                    CobblestoneMessages.NAVIGATE_OUTSIDE_WORLD,
+                    target.min().y(),
+                    target.max().y(),
+                    target.key().asString()));
+          }
+          ServerLocation block = ServerLocation.of(target, values.get(x), blockY, values.get(z));
+          if (!generated.test(block)) {
+            return invalid(player, CobblestoneMessages.NAVIGATE_UNGENERATED);
+          }
+          return Validity.valid(atBlock(BLOCK_KEY, block));
+        });
+  }
+
+  /**
+   * The world spawn: where a player with no respawn point of their own respawns. There is one per
+   * server, in its default world (normally the overworld), which is always loaded.
+   */
+  private NavigationTarget spawn() {
+    ServerWorld world =
+        Sponge.server().worldManager().world(DefaultWorldKeys.DEFAULT).orElseThrow();
+    return atBlock(SPAWN_KEY, ServerLocation.of(world, world.properties().spawnPosition()));
+  }
+
+  /**
+   * Where the player will respawn — their bed, a charged respawn anchor, or wherever a plugin or
+   * {@code /spawnpoint} set it. Not validated, so an obstructed bed still counts. Invalid if the
+   * player has none, or its world is not loaded.
+   */
+  private Validity<NavigationTarget> respawn(ServerPlayer player) {
+    return player
+        .get(Keys.RESPAWN_LOCATIONS)
+        .flatMap(respawns -> respawns.values().stream().findFirst())
+        .flatMap(RespawnLocation::asLocation)
+        .map(location -> atBlock(RESPAWN_KEY, location))
+        .map(Validity::valid)
+        .orElseGet(() -> invalid(player, CobblestoneMessages.NAVIGATE_NO_RESPAWN));
   }
 
   private DestinationNode<NavigationTarget> players(ServerPlayer player) {
@@ -191,12 +327,51 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
         .build();
   }
 
+  /** A stationary destination at one block, with its coordinates in the hover detail. */
+  private NavigationTarget atBlock(String name, ServerLocation location) {
+    return NavigationTarget.builder(name, () -> List.of(regions.block(location)))
+        .detail(
+            DestinationDetails.coordinates(
+                location.blockX(),
+                location.blockY(),
+                location.blockZ(),
+                location.worldKey().asString()))
+        .build();
+  }
+
   private Validity<NavigationTarget> invalid(ServerPlayer player, Message0 reason) {
     return Validity.invalid(render(player, reason));
   }
 
   private Component render(ServerPlayer player, Message0 message) {
     return messages.render(player.locale(), message);
+  }
+
+  private Component render(ServerPlayer player, Message1 message, Object arg) {
+    return messages.render(player.locale(), message, arg);
+  }
+
+  private Component render(
+      ServerPlayer player, Message3 message, Object arg1, Object arg2, Object arg3) {
+    return messages.render(player.locale(), message, arg1, arg2, arg3);
+  }
+
+  /** An optional trailing world, by namespaced key ({@code minecraft:} may be left off). */
+  private static DestinationOption<ServerWorld> worldOption() {
+    return DestinationOption.optional(
+        "world",
+        partial ->
+            Sponge.server().worldManager().worlds().stream()
+                .map(world -> world.key().asString())
+                .toList(),
+        token -> {
+          try {
+            return world(token.toLowerCase(Locale.ROOT));
+          } catch (RuntimeException e) {
+            // Not a valid key at all; the platform's key parser decides what it throws.
+            return Optional.empty();
+          }
+        });
   }
 
   private static Optional<ServerWorld> world(String key) {

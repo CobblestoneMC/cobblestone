@@ -34,8 +34,8 @@ Navigate back to it from anywhere:
 Cobblestone reports `Searching for a route...`, then `Success!` once a route is found. Hover over
 `Success!` to see the search time and estimated travel time. Hover over `Searching for a route...`,
 or over the error if no route is found, to see the destination's address. For a fixed place, such
-as a saved location or your death location, the coordinates are shown too, so you can still find
-your way there by hand. The trip ends automatically when you
+as a saved location, your death location or a set of coordinates, the coordinates are shown too,
+so you can still find your way there by hand. The trip ends automatically when you
 arrive within two blocks of the destination.
 
 ## The trail
@@ -71,6 +71,45 @@ plugins installed on the server.
 
 Your most recent death location. Admins may disable this destination. If you have not died since it
 was enabled, you are told so.
+
+### Respawn point
+
+```
+/nav respawn
+```
+
+Where you will respawn: your bed, a charged respawn anchor, or a point set by `/spawnpoint`. If you
+have none, you are told so.
+
+### World spawn
+
+```
+/nav spawn
+```
+
+Where you respawn if you have no respawn point of your own. The server has one, normally in the
+overworld.
+
+### Target
+
+```
+/nav target
+```
+
+The block you are looking at, up to 256 blocks away: the open space in front of it, or the ground
+below that if it is the side of a wall. Water counts as something to look at, unless you are
+underwater; grass and flowers are looked through.
+
+### Coordinates
+
+```
+/nav coordinates block 100 64 -200                 # a block in this world
+/nav coordinates block 100 64 -200 world_nether    # a block in another world
+```
+
+Whole numbers only. The world is optional and defaults to the one you are in. Tab completion offers
+your own coordinates. The word `coordinates` is always required. Coordinates in terrain that has
+never been generated are refused.
 
 ### Players
 
@@ -115,8 +154,8 @@ may be omitted as long as the remainder identifies exactly one destination:
 ```
 
 The destination's own name is always required. Some levels, such as town and NPC names, are marked
-strict by their provider and are also required. A destination that takes values takes them after its
-name; they are never part of the address.
+strict by their provider and are also required. A destination that takes values, such as
+`coordinates`, takes them after its name; they are never part of the address.
 
 If the input matches more than one destination, the candidates are listed:
 

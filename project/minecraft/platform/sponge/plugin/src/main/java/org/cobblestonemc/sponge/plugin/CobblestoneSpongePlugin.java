@@ -203,6 +203,7 @@ public final class CobblestoneSpongePlugin {
             dataStore.locations(),
             dataStore.deaths(),
             navigationService.regions(),
+            navigationService::mayBeGenerated,
             () -> config.get(keys.deathsTrack),
             messages));
     // Each player's last death is recorded so they can navigate back to it.

@@ -30,6 +30,10 @@ keyed by the name of the plugin that registered it:
 cobblestone location private home
 cobblestone location global spawn
 cobblestone death
+cobblestone respawn
+cobblestone spawn
+cobblestone target
+cobblestone coordinates block <x> <y> <z> [world]
 cobblestone player <name>
 cobblestone world <name>
 towny town <town> home
