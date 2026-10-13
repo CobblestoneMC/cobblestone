@@ -114,7 +114,7 @@ final class Sweep {
             System.out.printf(
                 Locale.ROOT,
                 "point %s %s w=%.2f %s cost=%.3f expanded=%d columns=%d ms=%d ioMs=%d reads=%d"
-                    + " regionReads=%d coldReads=%d%s%n",
+                    + " regionReads=%d coldReads=%d opened=%d%s%n",
                 point.scenario(),
                 heuristic,
                 weight,
@@ -128,6 +128,7 @@ final class Sweep {
                 result.chunkReads(),
                 result.profileChunkReads(),
                 result.coldChunkReads(),
+                result.nodesOpened(),
                 breakdown == null ? "" : " " + breakdown);
           }
         }
