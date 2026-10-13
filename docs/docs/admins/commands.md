@@ -31,7 +31,7 @@ cobblestone location private home
 cobblestone location global spawn
 cobblestone death
 cobblestone respawn
-cobblestone spawn [world]
+cobblestone spawn
 cobblestone target
 cobblestone coordinates block <x> <y> <z> [world]
 cobblestone player <name>

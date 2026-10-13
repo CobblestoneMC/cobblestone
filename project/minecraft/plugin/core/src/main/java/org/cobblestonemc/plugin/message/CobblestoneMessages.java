@@ -155,6 +155,10 @@ public final class CobblestoneMessages {
   public static final Message3 NAVIGATE_OUTSIDE_WORLD =
       Message3.error("command.navigate.outside_world");
 
+  /** Shown for coordinates in terrain that has never been generated. */
+  public static final Message0 NAVIGATE_UNGENERATED =
+      Message0.error("command.navigate.ungenerated");
+
   /** Shown when the destination is ambiguous ({@code {0}} = the candidate paths). */
   public static final Message1 NAVIGATE_DESTINATION_AMBIGUOUS =
       Message1.error("command.navigate.destination_ambiguous");

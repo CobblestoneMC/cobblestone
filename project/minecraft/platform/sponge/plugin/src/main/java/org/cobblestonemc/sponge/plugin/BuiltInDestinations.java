@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 import net.kyori.adventure.text.Component;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
 import org.cobblestonemc.plugin.api.DestinationOption;
@@ -40,6 +41,7 @@ import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.util.RespawnLocation;
 import org.spongepowered.api.util.blockray.RayTrace;
 import org.spongepowered.api.util.blockray.RayTraceResult;
+import org.spongepowered.api.world.DefaultWorldKeys;
 import org.spongepowered.api.world.LocatableBlock;
 import org.spongepowered.api.world.server.ServerLocation;
 import org.spongepowered.api.world.server.ServerWorld;
@@ -70,6 +72,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
   private final LocationDao locations;
   private final DeathLocationDao deaths;
   private final SpongeRegions regions;
+  private final Predicate<ServerLocation> generated;
   private final BooleanSupplier trackDeaths;
   private final Messages messages;
 
@@ -77,11 +80,13 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
       LocationDao locations,
       DeathLocationDao deaths,
       SpongeRegions regions,
+      Predicate<ServerLocation> generated,
       BooleanSupplier trackDeaths,
       Messages messages) {
     this.locations = locations;
     this.deaths = deaths;
     this.regions = regions;
+    this.generated = generated;
     this.trackDeaths = trackDeaths;
     this.messages = messages;
   }
@@ -94,7 +99,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
       root.leaf(DEATH_KEY, DestinationLeaf.ofValidity(() -> death(player)));
     }
     return root.leaf(TARGET_KEY, DestinationLeaf.ofValidity(() -> target(player)))
-        .leaf(SPAWN_KEY, spawn(player))
+        .leaf(SPAWN_KEY, DestinationLeaf.of(this::spawn))
         .leaf(RESPAWN_KEY, DestinationLeaf.ofValidity(() -> respawn(player)))
         .subtree(PLAYER_TREE_KEY, () -> players(player))
         .subtree(WORLD_TREE_KEY, () -> worlds(player))
@@ -161,7 +166,10 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
         .build();
   }
 
-  /** One block, in the player's world unless named; invalid above or below the world. */
+  /**
+   * One block, in the player's world unless named; invalid above or below the world, or in terrain
+   * that has never been generated.
+   */
   private DestinationLeaf<NavigationTarget> coordinateBlock(ServerPlayer player) {
     DestinationOption<Integer> x =
         DestinationOption.integer("x", () -> player.serverLocation().blockX());
@@ -184,21 +192,22 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
                     target.max().y(),
                     target.key().asString()));
           }
-          return Validity.valid(
-              atBlock(BLOCK_KEY, ServerLocation.of(target, values.get(x), blockY, values.get(z))));
+          ServerLocation block = ServerLocation.of(target, values.get(x), blockY, values.get(z));
+          if (!generated.test(block)) {
+            return invalid(player, CobblestoneMessages.NAVIGATE_UNGENERATED);
+          }
+          return Validity.valid(atBlock(BLOCK_KEY, block));
         });
   }
 
-  /** {@code spawn [world]}: the world's spawn point, in the player's world unless named. */
-  private DestinationLeaf<NavigationTarget> spawn(ServerPlayer player) {
-    DestinationOption<ServerWorld> world = worldOption();
-    return DestinationLeaf.withOptions(
-        List.of(world),
-        values -> {
-          ServerWorld target = values.find(world).orElseGet(player::world);
-          return Validity.valid(
-              atBlock(SPAWN_KEY, ServerLocation.of(target, target.properties().spawnPosition())));
-        });
+  /**
+   * The world spawn: where a player with no respawn point of their own respawns. There is one per
+   * server, in its default world (normally the overworld), which is always loaded.
+   */
+  private NavigationTarget spawn() {
+    ServerWorld world =
+        Sponge.server().worldManager().world(DefaultWorldKeys.DEFAULT).orElseThrow();
+    return atBlock(SPAWN_KEY, ServerLocation.of(world, world.properties().spawnPosition()));
   }
 
   /**

@@ -84,9 +84,11 @@ have none, you are told so.
 ### World spawn
 
 ```
-/nav spawn                         # this world's spawn
-/nav spawn world_nether            # another world's spawn
+/nav spawn
 ```
+
+Where you respawn if you have no respawn point of your own. The server has one, normally in the
+overworld.
 
 ### Target
 
@@ -106,7 +108,8 @@ underwater; grass and flowers are looked through.
 ```
 
 Whole numbers only. The world is optional and defaults to the one you are in. Tab completion offers
-your own coordinates. The word `coordinates` is always required.
+your own coordinates. The word `coordinates` is always required. Coordinates in terrain that has
+never been generated are refused.
 
 ### Players
 

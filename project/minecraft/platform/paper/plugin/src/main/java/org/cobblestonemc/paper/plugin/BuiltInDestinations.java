@@ -87,7 +87,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
       root.leaf(DEATH_KEY, DestinationLeaf.ofValidity(() -> death(player)));
     }
     return root.leaf(TARGET_KEY, DestinationLeaf.ofValidity(() -> target(player)))
-        .leaf(SPAWN_KEY, spawn(player))
+        .leaf(SPAWN_KEY, DestinationLeaf.of(this::spawn))
         .leaf(RESPAWN_KEY, DestinationLeaf.ofValidity(() -> respawn(player)))
         .subtree(PLAYER_TREE_KEY, () -> players(player))
         .subtree(WORLD_TREE_KEY, () -> worlds(player))
@@ -144,9 +144,9 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
     double deltaX = stepX == 0 ? Double.POSITIVE_INFINITY : Math.abs(1 / direction.getX());
     double deltaY = stepY == 0 ? Double.POSITIVE_INFINITY : Math.abs(1 / direction.getY());
     double deltaZ = stepZ == 0 ? Double.POSITIVE_INFINITY : Math.abs(1 / direction.getZ());
-    double nextX = boundary(from.getX(), x, stepX) * deltaX;
-    double nextY = boundary(from.getY(), y, stepY) * deltaY;
-    double nextZ = boundary(from.getZ(), z, stepZ) * deltaZ;
+    double nextX = next(from.getX(), x, stepX, deltaX);
+    double nextY = next(from.getY(), y, stepY, deltaY);
+    double nextZ = next(from.getZ(), z, stepZ, deltaZ);
     int[] last = {x, y, z};
     double travelled = 0;
     while (travelled <= TARGET_RANGE) {
@@ -177,9 +177,16 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
     return null;
   }
 
-  /** How far, in blocks along one axis, {@code position} is from its block's next boundary. */
-  private static double boundary(double position, int block, int step) {
-    return step > 0 ? block + 1 - position : position - block;
+  /**
+   * How far along the look the next block boundary on one axis is, or infinitely far if the look
+   * never crosses one (rather than the 0 &times; &infin; = NaN of a look starting on a boundary,
+   * which no comparison would ever pick).
+   */
+  private static double next(double position, int block, int step, double delta) {
+    if (step == 0) {
+      return Double.POSITIVE_INFINITY;
+    }
+    return (step > 0 ? block + 1 - position : position - block) * delta;
   }
 
   /** Whether a block stops a look: anything not passable, but not water or lava from within. */
@@ -200,7 +207,10 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
         .build();
   }
 
-  /** One block, in the player's world unless named; invalid above or below the world. */
+  /**
+   * One block, in the player's world unless named; invalid above or below the world, or in terrain
+   * that has never been generated.
+   */
   private DestinationLeaf<NavigationTarget> coordinateBlock(Player player) {
     DestinationOption<Integer> x =
         DestinationOption.integer("x", () -> player.getLocation().getBlockX());
@@ -223,20 +233,22 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
                     target.getMaxHeight() - 1,
                     target.getName()));
           }
-          return Validity.valid(
-              atBlock(BLOCK_KEY, new Location(target, values.get(x), blockY, values.get(z))));
+          int blockX = values.get(x);
+          int blockZ = values.get(z);
+          if (!target.isChunkLoaded(blockX >> 4, blockZ >> 4)
+              && !target.isChunkGenerated(blockX >> 4, blockZ >> 4)) {
+            return invalid(player, CobblestoneMessages.NAVIGATE_UNGENERATED);
+          }
+          return Validity.valid(atBlock(BLOCK_KEY, new Location(target, blockX, blockY, blockZ)));
         });
   }
 
-  /** {@code spawn [world]}: the world's spawn point, in the player's world unless named. */
-  private DestinationLeaf<NavigationTarget> spawn(Player player) {
-    DestinationOption<World> world = worldOption();
-    return DestinationLeaf.withOptions(
-        List.of(world),
-        values -> {
-          World target = values.find(world).orElseGet(player::getWorld);
-          return Validity.valid(atBlock(SPAWN_KEY, target.getSpawnLocation()));
-        });
+  /**
+   * The world spawn: where a player with no respawn point of their own respawns. There is one per
+   * server, in its respawn world (normally the overworld).
+   */
+  private NavigationTarget spawn() {
+    return atBlock(SPAWN_KEY, Bukkit.getServer().getRespawnWorld().getSpawnLocation());
   }
 
   /**
