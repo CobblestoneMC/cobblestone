@@ -14,6 +14,9 @@ import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.lod.CoarseCost;
 import org.cobblestonemc.minecraft.lod.CoarseHeuristic;
+import org.cobblestonemc.minecraft.lod.RegionCost;
+import org.cobblestonemc.minecraft.lod.RegionHeuristic;
+import org.cobblestonemc.minecraft.lod.WorldChunkColumns;
 import org.cobblestonemc.minecraft.lod.WorldSectionProfiles;
 import org.cobblestonemc.minecraft.modes.MinecraftModes;
 
@@ -53,6 +56,14 @@ public final class MinecraftHeuristics {
     if (settings.settings().heuristic() == SearchSettings.Heuristic.RUNNING_AVERAGE) {
       return Heuristics.runningAverage(
           MinecraftModes.cheapestCostPerBlock(agent, settings.excludedModes()));
+    }
+    if (settings.settings().heuristic() == SearchSettings.Heuristic.REGIONS) {
+      return new RegionHeuristic(
+          target ->
+              new WorldChunkColumns(
+                  (MinecraftWorld) target.domain(), target.nearestBoundaryCell(origin)),
+          RegionCost.forPlayer(agent, settings.excludedModes()),
+          RegionHeuristic.DEFAULT_SCALE);
     }
     CoarseCost cost = CoarseCost.forPlayer(agent, settings.excludedModes());
     return new CoarseHeuristic(

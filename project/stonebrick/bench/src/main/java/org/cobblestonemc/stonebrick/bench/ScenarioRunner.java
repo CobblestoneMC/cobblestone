@@ -237,17 +237,55 @@ public final class ScenarioRunner {
     return lastCoarseProfiles;
   }
 
+  /** The column source the last run used, or {@code null} if it did not run on regions. */
+  private @org.jetbrains.annotations.Nullable CaptureChunkColumns lastRegionColumns;
+
+  /**
+   * Returns how many chunk columns the last run's coarse layer read, whichever layer it was.
+   *
+   * @return the column count, or 0 if the last run read none
+   */
+  public int lastCoarseColumns() {
+    if (lastRegionColumns != null) {
+      return lastRegionColumns.chunkColumns();
+    }
+    return lastCoarseProfiles == null ? 0 : lastCoarseProfiles.chunkColumns();
+  }
+
+  /**
+   * The factor the region heuristic's estimates are scaled by, from {@code -Dregions.scale}.
+   *
+   * <p>A property rather than a scenario field because it is a tuning knob being measured, not a
+   * part of any route; once settled it belongs in {@code RegionHeuristic.DEFAULT_SCALE}.
+   */
+  static final double REGION_SCALE =
+      Double.parseDouble(
+          System.getProperty(
+              "regions.scale",
+              String.valueOf(org.cobblestonemc.minecraft.lod.RegionHeuristic.DEFAULT_SCALE)));
+
   private org.cobblestonemc.HeuristicStrategy heuristicFor(
       Scenario scenario,
       Loadout loadout,
       StonebrickPlayer player,
       Set<MinecraftStepType> excluded,
       StonebrickPlatformApi platform) {
+    // Cleared first, so a run without a coarse layer does not report the last one's reads.
+    lastCoarseProfiles = null;
+    lastRegionColumns = null;
     if (scenario.heuristic() == Scenario.Heuristic.ZERO) {
       return Heuristics.zero();
     }
     if (scenario.heuristic() == Scenario.Heuristic.RUNNING_AVERAGE) {
       return Heuristics.runningAverage(MinecraftModes.cheapestCostPerBlock(player, excluded));
+    }
+    if (scenario.heuristic() == Scenario.Heuristic.REGIONS) {
+      CaptureChunkColumns columns = new CaptureChunkColumns(platform, scenario.world());
+      lastRegionColumns = columns;
+      return new org.cobblestonemc.minecraft.lod.RegionHeuristic(
+          region -> columns,
+          org.cobblestonemc.minecraft.lod.RegionCost.forPlayer(player, excluded),
+          REGION_SCALE);
     }
     CaptureProfiles profiles = new CaptureProfiles(platform, scenario.world());
     lastCoarseProfiles = profiles;

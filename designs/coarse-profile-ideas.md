@@ -87,6 +87,28 @@ weight (2.0):
 - **Open:** baselines need re-accepting with the configuration stamp. #28 (design/ removal) and #27
   (RUNNING_AVERAGE never boards a boat) are separate.
 
+## Regions (2026-10-13): built instead of the face tables
+`RegionGraph`, `RegionSearch`, `RegionHeuristic` (`search.algorithm.heuristic: REGIONS`).
+- **Graph:** each chunk column is classed per cell (stand, soul, water, climb, air, solid) and
+  flood-filled into regions per section. Regions are capped at a 1.5× walking detour, so a
+  straight-line price stays honest. Portals join regions inside a column, and across column seams
+  once both are read. Falls of up to 3 blocks (32 into water) are one-way portals. The graph knows
+  nothing about the agent; `RegionCost` decides what each class costs and whether it is usable.
+  Rock is always usable, at the fallback rate without a pickaxe, so the graph stays connected.
+- **Search:** Reverse Resumable A*, run backward from the goal and focused on the fine search's
+  origin, resumed only when a query needs it. Each portal's label carries the point its route
+  crosses at, so diagonals are not priced as staircases. Answers are final when given.
+- **Measured at w=2.0, scale 0.85, 58 runs:** 58/58 solved (COARSE 50, RUNNING_AVERAGE 48).
+  On the 48 runs all three solved: 685 nodes against 1,913 and 1,872; paths +1.3% over the best
+  any of them found, against +3.6% and +13.8%; about half COARSE's chunk columns; the sweep took
+  90 s against COARSE's 131 s. `verify` on cave-lateral, vertical-small, along-river and
+  hilly-jungle: unscaled estimates 0.7–0.95 of Dijkstra's cost and never above it. COARSE sits at
+  0.16–0.48 in the nether climb and the cave.
+- **Weak spots:** a plain player on `ocean` (+11.8% against COARSE), `vertical-small` (+12.4%) and
+  `cave-lateral` (+10.3%). The estimate is not too high on any of these; a near-exact estimate
+  under weight 2 commits early. Boarding a boat (1 s) is not priced, and the boat runs expand more
+  nodes than the others.
+
 ## Other measured facts worth keeping
 - A seed doesn't reproduce blocks: re-captures differ in decorations. Baselines are tied to the
   capture they measured (`capturedAt` stamp).

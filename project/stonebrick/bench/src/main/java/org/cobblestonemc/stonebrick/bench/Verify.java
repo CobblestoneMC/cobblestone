@@ -17,6 +17,9 @@ import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.minecraft.lod.CoarseCost;
 import org.cobblestonemc.minecraft.lod.CoarseSearch;
+import org.cobblestonemc.minecraft.lod.RegionCost;
+import org.cobblestonemc.minecraft.lod.RegionGraph;
+import org.cobblestonemc.minecraft.lod.RegionSearch;
 import org.cobblestonemc.stonebrick.format.CorpusLayout;
 import org.cobblestonemc.stonebrick.platform.Capture;
 
@@ -143,9 +146,30 @@ final class Verify {
             CoarseCost.forMediums(loadout.mediums()),
             scenario.destination());
 
+    // Focused on the route's start, as the heuristic's own search is.
+    RegionSearch regions =
+        new RegionSearch(
+            new RegionGraph(
+                new DirectChunkColumns(
+                    capture,
+                    scenario.world(),
+                    capture.minY(scenario.world()),
+                    capture.maxY(scenario.world()))),
+            RegionCost.forMediums(loadout.mediums()),
+            scenario.destination(),
+            path.get(0));
+    List<Double> regionEstimates = new ArrayList<>();
+
     System.out.printf(Locale.ROOT, "%n%s@%s%n", scenario.id(), loadout.name());
     System.out.printf(
-        Locale.ROOT, "  %-22s %10s %10s %8s%n", "cell", "estimate", "optimal", "ratio");
+        Locale.ROOT,
+        "  %-22s %10s %10s %10s %8s %8s%n",
+        "cell",
+        "coarse",
+        "regions",
+        "optimal",
+        "ratio",
+        "regions");
 
     List<Sample> measured = new ArrayList<>();
     List<Cell> cells = new ArrayList<>();
@@ -165,21 +189,27 @@ final class Verify {
               loadout,
               SearchObserver.none());
       double estimate = coarse.costToGoal(cell, Long.MAX_VALUE);
+      double regionEstimate = regions.costToGoal(cell);
       Sample sample = new Sample(cell, estimate, truth.pathCost(), truth.outcome());
       measured.add(sample);
       if (sample.informative()) {
         cells.add(cell);
         optimums.add(truth.pathCost());
+        regionEstimates.add(regionEstimate);
       }
       System.out.printf(
           Locale.ROOT,
-          "  %-22s %10.2f %10s %8s%n",
+          "  %-22s %10.2f %10.2f %10s %8s %8s%n",
           cell.x() + "," + cell.y() + "," + cell.z(),
           estimate,
+          regionEstimate,
           sample.measured()
               ? String.format(Locale.ROOT, "%.2f", sample.optimal())
               : truth.outcome(),
-          sample.informative() ? String.format(Locale.ROOT, "%.3f", sample.ratio()) : "-");
+          sample.informative() ? String.format(Locale.ROOT, "%.3f", sample.ratio()) : "-",
+          sample.informative()
+              ? String.format(Locale.ROOT, "%.3f", regionEstimate / sample.optimal())
+              : "-");
     }
     summarise(measured);
     // Only the far samples go on to the blend comparison and the aggregate: they are the ones the
@@ -193,6 +223,16 @@ final class Verify {
       }
     }
     sweepFallback(scenario, loadout, capture, far, farOptimums);
+    List<Double> regionRatios = new ArrayList<>();
+    for (int i = 0; i < cells.size(); i++) {
+      if (cells.get(i).distance(scenario.destination()) >= FAR) {
+        regionRatios.add(regionEstimates.get(i) / optimums.get(i));
+      }
+    }
+    if (!regionRatios.isEmpty()) {
+      FAR_RATIOS.computeIfAbsent("REGIONS -", k -> new ArrayList<>()).addAll(regionRatios);
+      System.out.println("  " + band("REGIONS", "-", regionRatios));
+    }
   }
 
   /**

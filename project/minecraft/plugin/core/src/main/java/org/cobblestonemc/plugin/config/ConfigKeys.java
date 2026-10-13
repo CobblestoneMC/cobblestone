@@ -329,6 +329,10 @@ public final class ConfigKeys {
                 terrain it reasons over -- thousands of chunk reads on a long route -- and that
                 work is not yet shared between searches.
 
+                REGIONS searches connected patches of ground, water, rock and air backwards from
+                the destination. It reads the same terrain as COARSE, but tells a wall from a
+                tunnel.
+
                 RUNNING_AVERAGE extrapolates from the cost of the last few steps. Nearly free, and
                 it mistakes a cheap river for a cheap route.""")
             .mutable()

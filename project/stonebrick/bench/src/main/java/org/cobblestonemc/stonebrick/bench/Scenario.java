@@ -80,7 +80,10 @@ public record Scenario(
      * The coarse layer's estimate, from a backward search over section profiles. Production's
      * default, and so the bench's.
      */
-    COARSE
+    COARSE,
+
+    /** A backward search over connected terrain regions, resumed as the fine search asks. */
+    REGIONS
   }
 
   /** Which corpus a scenario belongs to. */

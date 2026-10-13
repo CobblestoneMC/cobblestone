@@ -95,7 +95,6 @@ final class Sweep {
               variant = variant.withIo(options.io());
             }
             RunResult result = runner.run(variant, loadout, SearchObserver.none());
-            CaptureProfiles profiles = runner.lastCoarseProfiles();
             Point point =
                 new Point(
                     scenario.runId(loadout),
@@ -105,9 +104,7 @@ final class Sweep {
                     result.outcome(),
                     result.pathCost(),
                     result.nodesExpanded(),
-                    heuristic == Scenario.Heuristic.COARSE && profiles != null
-                        ? profiles.chunkColumns()
-                        : 0);
+                    runner.lastCoarseColumns());
             points.add(point);
             // Each point as it lands, not only in the tables at the end: a full sweep runs for
             // hours, and one stopped partway through should leave its measurements behind.

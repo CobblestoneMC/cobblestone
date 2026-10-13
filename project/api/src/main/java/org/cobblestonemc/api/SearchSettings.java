@@ -184,7 +184,18 @@ public final class SearchSettings {
      * just crossed. Costs chunk reads and CPU to build those summaries -- a long route touches
      * thousands of columns -- and each solve currently pays for its own.
      */
-    COARSE
+    COARSE,
+
+    /**
+     * A search over connected terrain regions -- patches of ground, water, rock and air joined
+     * where a body can cross between them -- run backwards from the destination and resumed as the
+     * fine search asks.
+     *
+     * <p>Like {@link #COARSE} it reads the terrain ahead, but it keeps a section's pieces apart
+     * instead of summarizing them, so a wall is a wall and a tunnel is a way through. Costs chunk
+     * reads like {@link #COARSE}, and each solve pays for its own.
+     */
+    REGIONS
   }
 
   /** A fluent builder for {@link SearchSettings}. */
