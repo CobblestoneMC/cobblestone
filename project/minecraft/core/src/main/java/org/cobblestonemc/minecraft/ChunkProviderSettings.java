@@ -11,24 +11,24 @@ package org.cobblestonemc.minecraft;
  * Tunables for the {@link ChunkProvider}: cache capacity, the read-ahead distance, how often a
  * chunk may fail transiently before it is given up on, and the load policy.
  *
- * @param maxCachedChunks LRU capacity, in chunk snapshots, <b>per solve</b>
+ * @param maxCachedChunks LRU capacity, in chunk snapshots, <b>per search</b>
  * @param prefetchDistance how far ahead of a served block, in blocks along the line towards the
  *     destination, chunks are prefetched; {@code 0} disables read-ahead entirely
- * @param maxFetchAttempts how many transient failures a chunk may have in one solve before the
- *     solve stops asking for it and treats it as a wall; see {@link ChunkFetch.Failed}
+ * @param maxFetchAttempts how many transient failures a chunk may have in one search before the
+ *     search stops asking for it and treats it as a wall; see {@link ChunkFetch.Failed}
  * @param loadPolicy how aggressively to materialize missing chunks
  */
 public record ChunkProviderSettings(
     int maxCachedChunks, int prefetchDistance, int maxFetchAttempts, ChunkLoadPolicy loadPolicy) {
 
   /**
-   * Default LRU capacity, per solve.
+   * Default LRU capacity, per search.
    *
-   * <p>Small on purpose. The cache no longer exists to remember the world — reading a chunk off
-   * disk is now cheap enough that remembering one past the search that wanted it buys nothing — it
-   * exists to stop a single solve from going back to disk for the same chunk over and over as its
-   * frontier works across a chunk border. A frontier touches a handful of chunks at a time, so a
-   * few dozen covers the working set with room to spare.
+   * <p>The cache no longer exists to remember the world — reading a chunk off disk is now cheap
+   * enough that remembering one past the search that wanted it buys nothing — it exists to stop a
+   * search from going back to disk for the same chunk over and over as its frontier works across a
+   * chunk border, and to let a later leg reuse what an earlier one read nearby. The bound is what
+   * one search may hold at once, whatever its legs cover.
    */
   public static final int DEFAULT_MAX_CACHED_CHUNKS = 1024;
 
@@ -42,7 +42,7 @@ public record ChunkProviderSettings(
   public static final int DEFAULT_PREFETCH_DISTANCE = 16;
 
   /**
-   * Default number of transient failures a chunk may have in one solve before it is given up on.
+   * Default number of transient failures a chunk may have in one search before it is given up on.
    *
    * <p>Enough to ride out a read that collided with a save or a load that lost a race, and few
    * enough that a chunk which keeps failing costs a solve a handful of reads rather than one per

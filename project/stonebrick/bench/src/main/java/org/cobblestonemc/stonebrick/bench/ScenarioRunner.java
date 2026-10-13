@@ -27,6 +27,7 @@ import org.cobblestonemc.api.NavigationResult;
 import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
+import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -112,7 +113,7 @@ public final class ScenarioRunner {
 
       Counting counting = new Counting(observer);
       SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> handle =
-          start(scenario, loadout, world, player, scheduler, counting);
+          start(scenario, loadout, platform, world, player, scheduler, counting);
 
       long startedAt = System.nanoTime();
       boolean settled = scheduler.drainUntil(() -> handle.future().isDone(), MAX_TASKS);
@@ -173,6 +174,7 @@ public final class ScenarioRunner {
   private SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> start(
       Scenario scenario,
       Loadout loadout,
+      StonebrickPlatformApi platform,
       MinecraftWorld world,
       StonebrickPlayer player,
       DeterministicScheduler scheduler,
@@ -181,7 +183,11 @@ public final class ScenarioRunner {
     // with a null break checker meant every scenario ran as a player free to tunnel through
     // anything -- one point in the space, and not the representative one.
     Set<MinecraftStepType> excluded = loadout.excludedModes();
-    MinecraftMovementBehavior behavior = MinecraftMovementBehavior.forPlayer(player, excluded);
+    // A chunk cache of the search's own, as in production: how it hits and misses is part of what
+    // the benchmark measures.
+    MinecraftMovementBehavior behavior =
+        MinecraftMovementBehavior.forPlayer(
+            new ChunkProvider(platform, platform.settings()), player, excluded);
 
     Cell goal = scenario.destination();
     int radius = scenario.destinationRadius();

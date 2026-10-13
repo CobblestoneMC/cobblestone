@@ -26,7 +26,7 @@ class FallingTest {
 
   private final TestPlayer player = TestPlayer.walker();
   private final MinecraftMovementBehavior walker =
-      MinecraftMovementBehavior.forPlayer(player, Set.of());
+      MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of());
 
   @Test
   void fallsOffAnEdgeAndCostsHealTimeForDamage() {
@@ -70,7 +70,8 @@ class FallingTest {
             .set(1, 0, 0, TestBlocks.solid())
             .build();
     MinecraftMovementBehavior noFall =
-        MinecraftMovementBehavior.forPlayer(player, Set.of(MinecraftStepType.FALL));
+        MinecraftMovementBehavior.forPlayer(
+            TestWorld.CHUNKS, player, Set.of(MinecraftStepType.FALL));
     assertFalse(TestMovements.from(noFall, world, new Cell(0, 5, 0)).reaches(new Cell(1, 1, 0)));
   }
 }
