@@ -41,8 +41,9 @@ import org.cobblestonemc.plugin.message.Messages;
 
 /**
  * Cobblestone's own destinations: saved locations, other players, worlds, and places such as the
- * player's last death or the block they are looking at. Written in Cobblestone's own terms ({@link
- * NavigationTarget}) rather than adapted from the integration API.
+ * player's last death or the surface above them. Written in Cobblestone's own terms ({@link
+ * NavigationTarget}) rather than an integration's, so they can use regions an integration's region
+ * type cannot express — like the surface, whose extent depends on the blocks.
  */
 public class BuiltInDestinations implements DestinationProvider<Player> {
   public static final String PLAYER_TREE_KEY = "player";
@@ -52,6 +53,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
   public static final String PRIVATE_TREE_KEY = "private";
   public static final String COORDINATES_TREE_KEY = "coordinates";
   public static final String DEATH_KEY = "death";
+  public static final String SURFACE_KEY = "surface";
   public static final String TARGET_KEY = "target";
   public static final String BLOCK_KEY = "block";
   public static final String SPAWN_KEY = "spawn";
@@ -86,7 +88,8 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
     if (trackDeaths.getAsBoolean()) {
       root.leaf(DEATH_KEY, DestinationLeaf.ofValidity(() -> death(player)));
     }
-    return root.leaf(TARGET_KEY, DestinationLeaf.ofValidity(() -> target(player)))
+    return root.leaf(SURFACE_KEY, DestinationLeaf.ofValidity(() -> surface(player)))
+        .leaf(TARGET_KEY, DestinationLeaf.ofValidity(() -> target(player)))
         .leaf(SPAWN_KEY, DestinationLeaf.of(this::spawn))
         .leaf(RESPAWN_KEY, DestinationLeaf.ofValidity(() -> respawn(player)))
         .subtree(PLAYER_TREE_KEY, () -> players(player))
@@ -103,6 +106,19 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
         .map(death -> stored(DEATH_KEY, death.world(), death.x(), death.y(), death.z()))
         .map(Validity::valid)
         .orElseGet(() -> invalid(player, CobblestoneMessages.NAVIGATE_NO_DEATH));
+  }
+
+  /**
+   * Anywhere open to the sky, in the player's current world; invalid if the player is already out
+   * in the open.
+   */
+  private Validity<NavigationTarget> surface(Player player) {
+    Location at = player.getLocation();
+    World world = at.getWorld();
+    if (PaperTerrain.isOpenToSky(world, at.getBlockX(), at.getBlockY(), at.getBlockZ())) {
+      return invalid(player, CobblestoneMessages.NAVIGATE_ALREADY_ON_SURFACE);
+    }
+    return Validity.valid(NavigationTarget.builder(SURFACE_KEY, regions.surface(world)).build());
   }
 
   /**
@@ -197,13 +213,15 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
   }
 
   /**
-   * {@code coordinates block <x> <y> <z> [world]}. Strict, so {@code coordinates} must be typed: a
-   * bare {@code block} would mean nothing.
+   * {@code coordinates block <x> <y> <z> [world]} and {@code coordinates surface <x> <z> [world]}.
+   * Strict, so {@code coordinates} must be typed: {@code surface} alone means the nearest open sky,
+   * and a bare {@code block} would mean nothing.
    */
   private DestinationNode<NavigationTarget> coordinates(Player player) {
     return DestinationNode.<NavigationTarget>builder()
         .strict()
         .leaf(BLOCK_KEY, coordinateBlock(player))
+        .leaf(SURFACE_KEY, coordinateSurface(player))
         .build();
   }
 
@@ -240,6 +258,32 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
             return invalid(player, CobblestoneMessages.NAVIGATE_UNGENERATED);
           }
           return Validity.valid(atBlock(BLOCK_KEY, new Location(target, blockX, blockY, blockZ)));
+        });
+  }
+
+  /**
+   * Wherever the column at x, z is open to the sky, in the player's world unless named; invalid in
+   * terrain that has never been generated.
+   */
+  private DestinationLeaf<NavigationTarget> coordinateSurface(Player player) {
+    DestinationOption<Integer> x =
+        DestinationOption.integer("x", () -> player.getLocation().getBlockX());
+    DestinationOption<Integer> z =
+        DestinationOption.integer("z", () -> player.getLocation().getBlockZ());
+    DestinationOption<World> world = worldOption();
+    return DestinationLeaf.withOptions(
+        List.of(x, z, world),
+        values -> {
+          World target = values.find(world).orElseGet(player::getWorld);
+          int columnX = values.get(x);
+          int columnZ = values.get(z);
+          if (!target.isChunkLoaded(columnX >> 4, columnZ >> 4)
+              && !target.isChunkGenerated(columnX >> 4, columnZ >> 4)) {
+            return invalid(player, CobblestoneMessages.NAVIGATE_UNGENERATED);
+          }
+          return Validity.valid(
+              NavigationTarget.builder(SURFACE_KEY, regions.surface(target, columnX, columnZ))
+                  .build());
         });
   }
 

@@ -12,9 +12,9 @@ import org.bukkit.block.data.BlockData;
 
 /**
  * Reads of the terrain around a player by the same rules the search uses, for destinations that
- * look at the world before searching: what is {@linkplain #isPassable passable}, and where a body
- * would {@linkplain #landingY land}. Each reads blocks, so call it on the thread that owns that
- * part of the world.
+ * look at the world before searching: what is {@linkplain #isPassable passable}, what is
+ * {@linkplain #isOpenToSky open to the sky}, and where a body would {@linkplain #landingY land}.
+ * Each reads blocks, so call it on the thread that owns that part of the world.
  */
 public final class PaperTerrain {
 
@@ -29,6 +29,26 @@ public final class PaperTerrain {
    */
   public static boolean isPassable(BlockData data) {
     return new PaperBlock(data).isPassable();
+  }
+
+  /**
+   * Returns whether the block at the given position is open to the sky: nothing but passable blocks
+   * above it, all the way to the top of the world, as the {@code surface} destinations mean it.
+   * Water and leaves count as a roof.
+   *
+   * @param world the world
+   * @param x the block x-coordinate
+   * @param y the block y-coordinate
+   * @param z the block z-coordinate
+   * @return {@code true} if every block above it is passable
+   */
+  public static boolean isOpenToSky(World world, int x, int y, int z) {
+    for (int above = world.getMaxHeight() - 1; above > y; above--) {
+      if (!isPassable(world.getBlockData(x, above, z))) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**

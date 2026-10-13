@@ -90,6 +90,16 @@ have none, you are told so.
 Where you respawn if you have no respawn point of your own. The server has one, normally in the
 overworld.
 
+### Surface
+
+```
+/nav surface
+```
+
+The nearest place open to the sky. The route heads upward, so it is the quickest way out of a cave
+or a mine. Water, leaves and glass count as a roof. If you are already open to the sky, you are
+told so instead.
+
 ### Target
 
 ```
@@ -105,11 +115,12 @@ underwater; grass and flowers are looked through.
 ```
 /nav coordinates block 100 64 -200                 # a block in this world
 /nav coordinates block 100 64 -200 world_nether    # a block in another world
+/nav coordinates surface 100 -200                  # the open-sky spot at x=100, z=-200
 ```
 
 Whole numbers only. The world is optional and defaults to the one you are in. Tab completion offers
-your own coordinates. The word `coordinates` is always required. Coordinates in terrain that has
-never been generated are refused.
+your own coordinates. The word `coordinates` is always required, so `/nav surface` still means the
+nearest open sky. Coordinates in terrain that has never been generated are refused.
 
 ### Players
 
