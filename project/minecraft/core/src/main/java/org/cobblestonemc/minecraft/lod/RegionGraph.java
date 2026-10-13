@@ -134,6 +134,9 @@ public final class RegionGraph {
 
   private int[] lastContactBox;
 
+  private long buildNanos;
+  private long seamNanos;
+
   /**
    * Creates an empty graph over a source of chunk columns.
    *
@@ -306,6 +309,52 @@ public final class RegionGraph {
     return columns.size();
   }
 
+  /**
+   * Returns the time spent classifying and filling columns: reading every block of a chunk that is
+   * already in hand, and turning it into regions and the portals inside the column.
+   *
+   * @return nanoseconds
+   */
+  public long buildNanos() {
+    return buildNanos;
+  }
+
+  /**
+   * Returns the time spent joining columns at their seams.
+   *
+   * @return nanoseconds
+   */
+  public long seamNanos() {
+    return seamNanos;
+  }
+
+  /**
+   * Returns roughly how much memory the graph holds, in bytes: what it would cost to keep.
+   *
+   * <p>An estimate from array sizes, not a measurement of the heap. Object headers and the column
+   * map's own entries are counted at typical JVM sizes; the build scratch, which is the same size
+   * for any graph, is left out.
+   *
+   * @return the approximate footprint
+   */
+  public long footprintBytes() {
+    long bytes = 0;
+    for (Column column : columns.values()) {
+      bytes += 64 + column.uniform.length * 8L; // the map entry, uniform and base
+      for (byte[] cells : column.local) {
+        bytes += cells == null ? 8 : 16 + cells.length;
+      }
+    }
+    // Per region: class, box, break time, navigable, column, portal list header and count.
+    bytes += regionCount * (1L + 24 + 4 + 1 + 8 + 16 + 4);
+    for (int region = 0; region < regionCount; region++) {
+      bytes += regionPortals[region].length * 4L;
+    }
+    // Per portal: both regions, the flag, and the box.
+    bytes += portalCount * (4L + 4 + 1 + 24);
+    return bytes;
+  }
+
   // ------------------------------------------------------------------------------------------
   // Completing
   // ------------------------------------------------------------------------------------------
@@ -357,10 +406,12 @@ public final class RegionGraph {
     if (waiting != null) {
       return CompletableFuture.allOf(waiting.toArray(new CompletableFuture[0]));
     }
+    long started = System.nanoTime();
     seam(cx, cz, true);
     seam(cx - 1, cz, true);
     seam(cx, cz, false);
     seam(cx, cz - 1, false);
+    seamNanos += System.nanoTime() - started;
     columns.get(columnKey(cx, cz)).complete = true;
     return null;
   }
@@ -375,7 +426,9 @@ public final class RegionGraph {
     if (!chunk.isImmediate()) {
       return chunk.future();
     }
+    long started = System.nanoTime();
     columns.put(key, buildColumn(cx, cz, chunk.value()));
+    buildNanos += System.nanoTime() - started;
     return null;
   }
 

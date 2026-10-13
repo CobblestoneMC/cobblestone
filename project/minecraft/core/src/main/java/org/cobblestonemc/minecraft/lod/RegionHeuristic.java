@@ -8,6 +8,7 @@
 package org.cobblestonemc.minecraft.lod;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
@@ -60,6 +61,7 @@ public final class RegionHeuristic implements HeuristicStrategy {
   private final RegionCost cost;
   private final double scale;
   private final double detourRatio;
+  private final List<RegionSearch> searches = new java.util.ArrayList<>();
 
   /**
    * Creates a heuristic over a single terrain source.
@@ -118,6 +120,18 @@ public final class RegionHeuristic implements HeuristicStrategy {
   @Override
   public SolveHeuristic newSolve(int windowWidth, DomainRegion<?> target) {
     return new Solve(target, new RegionGraph(columnsFor.apply(target), detourRatio));
+  }
+
+  /**
+   * Returns the searches this strategy's solves have run, one per solve that asked anything.
+   *
+   * <p>For diagnostics: the benchmark reads what each spent on building terrain against searching
+   * it. Kept for the strategy's life, which is one navigate.
+   *
+   * @return the searches, oldest first
+   */
+  public List<RegionSearch> searches() {
+    return List.copyOf(searches);
   }
 
   /** One solve's view: a search seeded on first use, and the answers it has given. */
@@ -179,6 +193,7 @@ public final class RegionHeuristic implements HeuristicStrategy {
         // Seeded at the first cell asked about, which is the solve's start: the search focuses on
         // it, and the goal cell worth aiming at depends on where the route begins.
         search = new RegionSearch(graph, cost, target.nearestBoundaryCell(from), from);
+        searches.add(search);
       }
       return search;
     }

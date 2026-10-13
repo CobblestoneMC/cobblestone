@@ -60,6 +60,8 @@ public final class RegionSearch {
   private int goalRegion = Integer.MIN_VALUE;
 
   private long expansions;
+  private long queries;
+  private long queryNanos;
   private @Nullable CompletableFuture<Void> pending;
 
   /**
@@ -89,6 +91,34 @@ public final class RegionSearch {
    * @return the estimate, never negative and never infinite
    */
   public double costToGoal(Cell cell) {
+    long started = System.nanoTime();
+    try {
+      return answer(cell);
+    } finally {
+      queries++;
+      queryNanos += System.nanoTime() - started;
+    }
+  }
+
+  /**
+   * Returns how many questions this search has answered, placeholders included.
+   *
+   * @return the query count
+   */
+  public long queries() {
+    return queries;
+  }
+
+  /**
+   * Returns the time spent answering, including any terrain the answers had to build.
+   *
+   * @return nanoseconds
+   */
+  public long queryNanos() {
+    return queryNanos;
+  }
+
+  private double answer(Cell cell) {
     double backstop = cell.distance(goal) * cheapest;
     CompletableFuture<Void> waiting = graph.complete(cell.x(), cell.z());
     if (waiting != null) {

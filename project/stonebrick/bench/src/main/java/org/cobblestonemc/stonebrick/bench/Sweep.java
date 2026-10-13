@@ -108,16 +108,21 @@ final class Sweep {
             points.add(point);
             // Each point as it lands, not only in the tables at the end: a full sweep runs for
             // hours, and one stopped partway through should leave its measurements behind.
+            // The wall-clock parts trail the deterministic ones, so a parser reading fixed fields
+            // still finds them where it always did.
+            String breakdown = runner.lastRegionBreakdown();
             System.out.printf(
                 Locale.ROOT,
-                "point %s %s w=%.2f %s cost=%.3f expanded=%d columns=%d%n",
+                "point %s %s w=%.2f %s cost=%.3f expanded=%d columns=%d ms=%d%s%n",
                 point.scenario(),
                 heuristic,
                 weight,
                 point.outcome(),
                 point.cost(),
                 point.nodes(),
-                point.columns());
+                point.columns(),
+                result.realMillis(),
+                breakdown == null ? "" : " " + breakdown);
           }
         }
       }

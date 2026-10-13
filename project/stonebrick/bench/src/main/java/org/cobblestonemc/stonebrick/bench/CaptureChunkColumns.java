@@ -55,6 +55,13 @@ final class CaptureChunkColumns implements RegionGraph.ChunkColumns {
     return chunks.size();
   }
 
+  /** Time spent reading and decoding columns, where the read completed on the spot. */
+  private long fetchNanos;
+
+  long fetchNanos() {
+    return fetchNanos;
+  }
+
   @Override
   public FutureOr<MinecraftChunk> column(int chunkX, int chunkZ) {
     long key = ((long) chunkX << 32) | (chunkZ & 0xFFFF_FFFFL);
@@ -63,6 +70,8 @@ final class CaptureChunkColumns implements RegionGraph.ChunkColumns {
     }
     CompletableFuture<MinecraftChunk> reading = inFlight.get(key);
     if (reading == null) {
+      // Under a zero-IO profile the read and its decode run right here, so this is their cost.
+      long started = System.nanoTime();
       reading =
           platform
               .fetchForProfile(world, chunkX, chunkZ, beyond)
@@ -73,6 +82,7 @@ final class CaptureChunkColumns implements RegionGraph.ChunkColumns {
                     chunks.put(key, chunk);
                     inFlight.remove(key);
                   });
+      fetchNanos += System.nanoTime() - started;
       if (!reading.isDone()) {
         inFlight.put(key, reading);
       }

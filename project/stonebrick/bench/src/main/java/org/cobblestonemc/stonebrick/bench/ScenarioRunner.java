@@ -235,6 +235,57 @@ public final class ScenarioRunner {
     return lastRegionColumns == null ? 0 : lastRegionColumns.chunkColumns();
   }
 
+  private org.cobblestonemc.minecraft.lod.@org.jetbrains.annotations.Nullable RegionHeuristic
+      lastRegionHeuristic;
+
+  /**
+   * Returns where the last run's region layer spent its time and memory, or {@code null} if it did
+   * not run on regions.
+   *
+   * <p>Wall-clock, so it varies from machine to machine and run to run; it is reported, never
+   * gated. The parts nest: reading a column happens inside building the graph, and building it
+   * happens inside answering a query, so each is subtracted from the one around it.
+   *
+   * @return the breakdown, as {@code key=value} pairs
+   */
+  public @org.jetbrains.annotations.Nullable String lastRegionBreakdown() {
+    if (lastRegionColumns == null || lastRegionHeuristic == null) {
+      return null;
+    }
+    long queries = 0;
+    long queryNanos = 0;
+    long buildNanos = 0;
+    long seamNanos = 0;
+    long bytes = 0;
+    long regions = 0;
+    long portals = 0;
+    long expansions = 0;
+    for (org.cobblestonemc.minecraft.lod.RegionSearch search : lastRegionHeuristic.searches()) {
+      queries += search.queries();
+      queryNanos += search.queryNanos();
+      expansions += search.expansions();
+      buildNanos += search.graph().buildNanos();
+      seamNanos += search.graph().seamNanos();
+      bytes += search.graph().footprintBytes();
+      regions += search.graph().regions();
+      portals += search.graph().portals();
+    }
+    long fetchNanos = lastRegionColumns.fetchNanos();
+    return String.format(
+        java.util.Locale.ROOT,
+        "readMs=%.1f buildMs=%.1f seamMs=%.1f searchMs=%.1f queries=%d settled=%d regions=%d"
+            + " portals=%d graphKB=%d",
+        fetchNanos / 1e6,
+        buildNanos / 1e6,
+        seamNanos / 1e6,
+        Math.max(0, queryNanos - buildNanos - seamNanos - fetchNanos) / 1e6,
+        queries,
+        expansions,
+        regions,
+        portals,
+        bytes / 1024);
+  }
+
   /**
    * The factor the region heuristic's estimates are scaled by, from {@code -Dregions.scale}.
    *
@@ -272,6 +323,7 @@ public final class ScenarioRunner {
       StonebrickPlatformApi platform) {
     // Cleared first, so a run without the region layer does not report the last one's reads.
     lastRegionColumns = null;
+    lastRegionHeuristic = null;
     return switch (scenario.heuristic()) {
       case ZERO -> Heuristics.zero();
       case RUNNING_AVERAGE ->
@@ -279,11 +331,13 @@ public final class ScenarioRunner {
       case REGIONS -> {
         CaptureChunkColumns columns = new CaptureChunkColumns(platform, scenario.world());
         lastRegionColumns = columns;
-        yield new org.cobblestonemc.minecraft.lod.RegionHeuristic(
-            region -> columns,
-            org.cobblestonemc.minecraft.lod.RegionCost.forPlayer(player, excluded),
-            REGION_SCALE,
-            REGION_DETOUR);
+        lastRegionHeuristic =
+            new org.cobblestonemc.minecraft.lod.RegionHeuristic(
+                region -> columns,
+                org.cobblestonemc.minecraft.lod.RegionCost.forPlayer(player, excluded),
+                REGION_SCALE,
+                REGION_DETOUR);
+        yield lastRegionHeuristic;
       }
     };
   }
