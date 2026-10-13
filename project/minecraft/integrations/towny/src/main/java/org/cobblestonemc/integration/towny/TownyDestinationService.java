@@ -48,7 +48,7 @@ final class TownyDestinationService implements DestinationService {
 
   @Override
   public PlatformDestinationTree<World, Vector3i> provide(Player player) {
-    DestinationTree towns = DestinationTree.builder().strict();
+    DestinationTree towns = DestinationTree.builder();
     for (Town town : TownyAPI.getInstance().getTowns()) {
       String name = town.getName();
       // The whole town is a leaf; its home/outpost/type/plot are a sub-tree — same key, both roles.
