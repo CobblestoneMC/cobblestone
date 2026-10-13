@@ -30,6 +30,7 @@ import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
+import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
@@ -241,6 +242,8 @@ public final class SpongeNavigationServiceImpl
     // Built on the server thread: it reads the Sponge player, which worker threads must not touch.
     MinecraftMovementBehavior behavior =
         MinecraftMovementBehavior.forPlayer(
+            // The search's own chunk cache, dropped with it; see ChunkProvider.
+            new ChunkProvider(platform, chunkSettings),
             new SpongePlayer(player),
             settings.excludedModes(),
             breakChecker,
@@ -435,7 +438,6 @@ public final class SpongeNavigationServiceImpl
 
   @Override
   public MinecraftWorld wrap(ServerWorld world) {
-    return worldCache.computeIfAbsent(
-        world.key().asString(), key -> new SpongeWorld(world, platform, chunkSettings));
+    return worldCache.computeIfAbsent(world.key().asString(), key -> new SpongeWorld(world));
   }
 }

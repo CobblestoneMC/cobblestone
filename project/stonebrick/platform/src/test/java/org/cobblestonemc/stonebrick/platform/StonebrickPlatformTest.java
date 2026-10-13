@@ -22,6 +22,7 @@ import org.cobblestonemc.Position;
 import org.cobblestonemc.api.NavigationResult;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
+import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
@@ -134,11 +135,13 @@ class StonebrickPlatformTest {
     StonebrickPlatformApi platform = platform(root);
     MinecraftWorld world = platform.world(SyntheticCapture.OVERWORLD);
 
+    ChunkProvider chunks = new ChunkProvider(platform, platform.settings());
+
     // Read straight through the floor of the captured band.
-    var chunk = world.chunkAt(new Cell(8, 40, 8), new Cell(8, 40, 8));
+    var chunk = chunks.chunk(new Cell(8, 40, 8), world, new Cell(8, 40, 8));
     assertNotNull(chunk);
 
-    world.blockAt(new Cell(8, 40, 8), new Cell(8, 40, 8)).toFuture().get();
+    chunks.block(new Cell(8, 40, 8), world, new Cell(8, 40, 8)).toFuture().get();
 
     assertFalse(platform.missing().isEmpty());
     String report = platform.missing().report("shallow");
@@ -154,28 +157,14 @@ class StonebrickPlatformTest {
     StonebrickPlatformApi platform = platform(root);
     MinecraftWorld world = platform.world(SyntheticCapture.OVERWORLD);
 
-    var stone = world.blockAt(new Cell(0, 60, 0), new Cell(0, 60, 0)).toFuture().get();
-    var air = world.blockAt(new Cell(0, 70, 0), new Cell(0, 70, 0)).toFuture().get();
+    ChunkProvider chunks = new ChunkProvider(platform, platform.settings());
+    var stone = chunks.block(new Cell(0, 60, 0), world, new Cell(0, 60, 0)).toFuture().get();
+    var air = chunks.block(new Cell(0, 70, 0), world, new Cell(0, 70, 0)).toFuture().get();
 
     assertTrue(stone.isSolidTop());
     assertFalse(stone.isPassable());
     assertEquals(1.5, stone.breakTimeSeconds());
     assertTrue(air.isPassable());
     assertFalse(air.isSolidTop());
-  }
-
-  @Test
-  void aScopedWorldEqualsTheOneItCameFrom(@TempDir Path dir) throws Exception {
-    Path root = dir.resolve("scoped");
-    SyntheticCapture.write(root, SyntheticCapture.flatGround(63), 0, 0, 0, 0, 3, 4);
-
-    StonebrickPlatformApi platform = platform(root);
-    MinecraftWorld world = platform.world(SyntheticCapture.OVERWORLD);
-
-    // Domains are map keys and participate in Position equality; a scoped view that compared
-    // unequal would silently split every lookup keyed by domain.
-    assertEquals(world, world.scopedForSolve());
-    assertEquals(world.hashCode(), world.scopedForSolve().hashCode());
-    assertInstanceOf(StonebrickWorld.class, world.scopedForSolve());
   }
 }

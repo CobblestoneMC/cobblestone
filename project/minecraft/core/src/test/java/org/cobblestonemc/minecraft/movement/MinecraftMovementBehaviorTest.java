@@ -35,7 +35,8 @@ class MinecraftMovementBehaviorTest {
   private static final CobblestonePlayer FLIER = TestPlayer.create(true, false, false);
 
   private static Abilities abilitiesOf(CobblestonePlayer player, MinecraftStepType... excluded) {
-    return MinecraftMovementBehavior.forPlayer(player, Set.of(excluded)).abilities();
+    return MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of(excluded))
+        .abilities();
   }
 
   @Test
@@ -103,7 +104,9 @@ class MinecraftMovementBehaviorTest {
     TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
     Moves moves =
         TestMovements.from(
-            MinecraftMovementBehavior.forPlayer(FLIER, Set.of()), world, new Cell(0, 1, 0));
+            MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, FLIER, Set.of()),
+            world,
+            new Cell(0, 1, 0));
     assertTrue(moves.ofType(MinecraftStepType.WALK).isEmpty());
     assertEquals(17, moves.ofType(MinecraftStepType.FLY).size(), "every neighbor but the floor");
   }
@@ -118,7 +121,9 @@ class MinecraftMovementBehaviorTest {
     TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
     Moves moves =
         TestMovements.from(
-            MinecraftMovementBehavior.forPlayer(glider, Set.of()), world, new Cell(0, 1, 0));
+            MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, glider, Set.of()),
+            world,
+            new Cell(0, 1, 0));
 
     Set<Cell> seen = new HashSet<>();
     for (Movement<MinecraftStepPayload> movement : moves.all()) {
@@ -133,7 +138,7 @@ class MinecraftMovementBehaviorTest {
     TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
     Cell goal = new Cell(10, 8, 0);
     Collection<Movement<MinecraftStepPayload>> movements =
-        MinecraftMovementBehavior.forPlayer(player, Set.of(), null, 1)
+        MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of(), null, 1)
             .movements(new Cell(0, 1, 0), world, TraversalState.DEFAULT, goal)
             .value();
 
@@ -150,11 +155,13 @@ class MinecraftMovementBehaviorTest {
   void theCheapestCostPerBlockFollowsTheAbilities() {
     assertEquals(
         MovementCosts.FLY,
-        MinecraftMovementBehavior.forPlayer(FLIER, Set.of()).cheapestCostPerBlock(),
+        MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, FLIER, Set.of())
+            .cheapestCostPerBlock(),
         1e-9);
     assertEquals(
         MovementCosts.FALL_PER_BLOCK,
-        MinecraftMovementBehavior.forPlayer(TestPlayer.walker(), Set.of(MinecraftStepType.HORSE))
+        MinecraftMovementBehavior.forPlayer(
+                TestWorld.CHUNKS, TestPlayer.walker(), Set.of(MinecraftStepType.HORSE))
             .cheapestCostPerBlock(),
         1e-9);
   }

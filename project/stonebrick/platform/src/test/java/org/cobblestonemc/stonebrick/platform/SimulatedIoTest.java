@@ -26,6 +26,7 @@ import org.cobblestonemc.api.NavigationResult;
 import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
+import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
@@ -86,7 +87,10 @@ class SimulatedIoTest {
     ClosedOrder observer = new ClosedOrder();
 
     MinecraftMovementBehavior behavior =
-        MinecraftMovementBehavior.forPlayer(player, java.util.Set.<MinecraftStepType>of());
+        MinecraftMovementBehavior.forPlayer(
+            new ChunkProvider(platform, platform.settings()),
+            player,
+            java.util.Set.<MinecraftStepType>of());
 
     SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> handle =
         CobblestoneApi.load()
@@ -190,7 +194,7 @@ class SimulatedIoTest {
     Run run = run(root, IoProfile.spinning());
 
     assertTrue(run.coldReads() > 0);
-    // The per-solve chunk cache means a chunk is re-fetched when it falls out and is read again;
+    // The per-search chunk cache means a chunk is re-fetched when it falls out and is read again;
     // if that never happened, the cold/warm distinction would be modelling nothing.
     assertTrue(run.reads() >= run.coldReads());
   }
