@@ -11,6 +11,7 @@ import java.util.Optional;
 import org.cobblestonemc.CellRegion;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.minecraft.SurfaceRegion;
 import org.cobblestonemc.minecraft.api.WorldRegion;
 import org.spongepowered.api.world.server.ServerLocation;
@@ -55,9 +56,9 @@ public final class SpongeRegions {
    * Everywhere in a world that is open to the sky; see {@link SurfaceRegion}.
    *
    * @param world the world
-   * @return the region
+   * @return a factory making the region for each search, which it reads blocks from
    */
-  public DomainRegion<MinecraftWorld> surface(ServerWorld world) {
+  public RegionFactory surface(ServerWorld world) {
     return SurfaceRegion.anywhere(worlds.wrap(world));
   }
 
@@ -67,9 +68,9 @@ public final class SpongeRegions {
    * @param world the world
    * @param x the column's block x-coordinate
    * @param z the column's block z-coordinate
-   * @return the region
+   * @return a factory making the region for each search, which it reads blocks from
    */
-  public DomainRegion<MinecraftWorld> surface(ServerWorld world, int x, int z) {
+  public RegionFactory surface(ServerWorld world, int x, int z) {
     return SurfaceRegion.column(worlds.wrap(world), x, z);
   }
 }

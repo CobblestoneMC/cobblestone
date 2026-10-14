@@ -64,7 +64,7 @@ public interface MinecraftDestination<W, V> {
 
   /**
    * Returns whether this destination's target still exists, for a target that can stop existing — a
-   * pet or mount that dies. A trip polls it about once a second and ends quietly once it returns
+   * player who logs off, say. A trip polls it about once a second and ends quietly once it returns
    * {@code false}. Merely being out of reach (unloaded, say) is not ceasing to exist. Always {@code
    * true} by default.
    *

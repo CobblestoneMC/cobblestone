@@ -77,6 +77,18 @@ final class SpongePlatformApi implements PlatformApi<Entity> {
     }
   }
 
+  /**
+   * Whether a chunk may have been generated; see {@link SpongeChunkLoader#mayExist}.
+   *
+   * @param world the world
+   * @param chunkX the chunk x coordinate
+   * @param chunkZ the chunk z coordinate
+   * @return whether the chunk may exist
+   */
+  boolean mayExist(ServerWorld world, int chunkX, int chunkZ) {
+    return chunks.mayExist(world, chunkX, chunkZ);
+  }
+
   @Override
   public MinecraftScheduler<Entity> scheduler() {
     return scheduler;

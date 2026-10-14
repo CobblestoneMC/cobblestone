@@ -22,6 +22,8 @@ dependencies {
     api(project(":minecraft:minecraft-api"))
     // Provided by the server at runtime; Adventure comes bundled with Sponge.
     compileOnly(libs.sponge.api12)
+    // SpongeAPI's Adventure carries JetBrains annotations; without them javac warns on every class.
+    compileOnly("org.jetbrains:annotations:24.0.1")
 }
 
 mavenPublishing {

@@ -30,10 +30,13 @@ import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
+import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
+import org.cobblestonemc.minecraft.ChunkSource;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
@@ -124,7 +127,7 @@ public final class SpongeNavigationServiceImpl
       ServerPlayer player, ServerLocation destination, MinecraftSearchSettings settings) {
     DomainRegion<MinecraftWorld> region =
         new CellRegion<>(SpongeConversions.cell(destination), wrap(destination.world()));
-    return search(player, new SingleDestination<>(region), settings);
+    return search(player, new SingleDestination<>(region), settings, newChunkSource());
   }
 
   @Override
@@ -135,7 +138,10 @@ public final class SpongeNavigationServiceImpl
       MinecraftSearchSettings settings) {
     BoxWorldRegion region = BoxWorldRegion.of(location1, location2);
     return search(
-        player, new SingleDestination<>(SpongeConversions.region(region, this)), settings);
+        player,
+        new SingleDestination<>(SpongeConversions.region(region, this)),
+        settings,
+        newChunkSource());
   }
 
   /**
@@ -143,7 +149,8 @@ public final class SpongeNavigationServiceImpl
    * span several regions/endpoints. Not on the public native façade, because it speaks the search's
    * own region type: make those with {@link #regions()}.
    *
-   * <p>The destination's regions are read once, here, on the calling thread.
+   * <p>The destination's regions are read once, here, on the calling thread, and made for this
+   * search: a region that reads blocks reads them through the search's own chunk source.
    *
    * @param player the navigating player
    * @param destination the goal, as one or more regions
@@ -152,10 +159,12 @@ public final class SpongeNavigationServiceImpl
    */
   public SearchHandle<ServerLocation, MinecraftStepPayload> navigatePlayerToDestination(
       ServerPlayer player,
-      Destination<DomainRegion<MinecraftWorld>> destination,
+      Destination<RegionFactory> destination,
       MinecraftSearchSettings settings) {
-    List<DomainRegion<MinecraftWorld>> regions = List.copyOf(destination.regions());
-    return search(player, () -> regions, settings);
+    ChunkProvider chunks = newChunkSource();
+    List<DomainRegion<MinecraftWorld>> regions =
+        destination.regions().stream().map(region -> region.create(chunks)).toList();
+    return search(player, () -> regions, settings, chunks);
   }
 
   /**
@@ -176,6 +185,18 @@ public final class SpongeNavigationServiceImpl
    */
   public Position<MinecraftWorld> position(ServerLocation location) {
     return new Position<>(SpongeConversions.cell(location), wrap(location.world()));
+  }
+
+  /**
+   * Whether the chunk at a block may have been generated. False only when it is known not to have
+   * been; while the world's existing chunks are still being indexed (once, on first use), the
+   * answer is true. Server thread only.
+   *
+   * @param location the block
+   * @return whether its chunk may exist
+   */
+  public boolean mayBeGenerated(ServerLocation location) {
+    return platform.mayExist(location.world(), location.blockX() >> 4, location.blockZ() >> 4);
   }
 
   /**
@@ -214,10 +235,19 @@ public final class SpongeNavigationServiceImpl
     return searchModifiers.purge(owner);
   }
 
+  /**
+   * The chunk cache for one search, shared by everything in it that reads blocks and dropped with
+   * it; see {@link ChunkProvider}.
+   */
+  private ChunkProvider newChunkSource() {
+    return new ChunkProvider(platform, chunkSettings);
+  }
+
   private SearchHandle<ServerLocation, MinecraftStepPayload> search(
       ServerPlayer player,
       Destination<DomainRegion<MinecraftWorld>> destination,
-      MinecraftSearchSettings settings) {
+      MinecraftSearchSettings settings,
+      ChunkSource chunks) {
     logger.debug("Search triggered for player {} to destination {}", player.name(), destination);
     ServerLocation origin = originOf(player);
     Position<MinecraftWorld> originPosition =
@@ -229,6 +259,7 @@ public final class SpongeNavigationServiceImpl
     // Built on the server thread: it reads the Sponge player, which worker threads must not touch.
     MinecraftMovementBehavior behavior =
         MinecraftMovementBehavior.forPlayer(
+            chunks,
             new SpongePlayer(player),
             settings.excludedModes(),
             breakChecker,
@@ -423,7 +454,6 @@ public final class SpongeNavigationServiceImpl
 
   @Override
   public MinecraftWorld wrap(ServerWorld world) {
-    return worldCache.computeIfAbsent(
-        world.key().asString(), key -> new SpongeWorld(world, platform, chunkSettings));
+    return worldCache.computeIfAbsent(world.key().asString(), key -> new SpongeWorld(world));
   }
 }

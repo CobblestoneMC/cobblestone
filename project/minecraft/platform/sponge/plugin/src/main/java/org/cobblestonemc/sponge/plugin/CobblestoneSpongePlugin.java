@@ -21,6 +21,7 @@ import org.cobblestonemc.plugin.config.ConfigManager;
 import org.cobblestonemc.plugin.data.DataStore;
 import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.DataStores;
+import org.cobblestonemc.plugin.hologram.TrailLabelManager;
 import org.cobblestonemc.plugin.hud.TripHud;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchGate;
@@ -29,6 +30,7 @@ import org.cobblestonemc.plugin.trip.TripManager;
 import org.cobblestonemc.sponge.AnvilOfflineChunkSource;
 import org.cobblestonemc.sponge.SpongeNavigationServiceImpl;
 import org.cobblestonemc.sponge.api.CobblestoneCoreApi;
+import org.cobblestonemc.sponge.hologram.SpongeHolograms;
 import org.cobblestonemc.sponge.plugin.api.CobblestoneSpongeApi;
 import org.cobblestonemc.sponge.plugin.api.TrailNavigatorSettings;
 import org.spongepowered.api.Server;
@@ -36,7 +38,6 @@ import org.spongepowered.api.Sponge;
 import org.spongepowered.api.command.Command;
 import org.spongepowered.api.config.ConfigDir;
 import org.spongepowered.api.entity.Entity;
-import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.lifecycle.ConstructPluginEvent;
 import org.spongepowered.api.event.lifecycle.RegisterCommandEvent;
@@ -83,6 +84,7 @@ public final class CobblestoneSpongePlugin {
   private SpongeIntegrationRegistry integrationRegistry;
   private TripManager<Entity, SpongeTripAgent, ServerLocation> tripManager;
   private TripHud<Entity, SpongeTripAgent, ServerLocation> tripHud;
+  private SpongeHolograms holograms;
   private SpongeTripServiceImpl tripService;
   private SearchRegistry<ServerLocation> searchRegistry;
   private SearchGate searchGate;
@@ -168,10 +170,21 @@ public final class CobblestoneSpongePlugin {
     this.tripManager =
         new TripManager<>(navigationService.scheduler(), config.get(keys.tripsMaxActivePerPlayer));
     this.integrationRegistry = new SpongeIntegrationRegistry(navigationService.regions());
+    // Each trail floats its trip's name over itself while the player stands still; hitting it
+    // cancels the trip. SpongeAPI can't show an entity to one player only, so everyone nearby sees
+    // these labels.
+    this.holograms = new SpongeHolograms();
+    Sponge.eventManager().registerListeners(container, holograms);
+    TrailLabelManager<Entity, SpongeTripAgent, ServerLocation> trailLabels =
+        new TrailLabelManager<>(
+            tripManager,
+            navigationService.scheduler(),
+            messages,
+            new SpongeHologramPlatform(holograms));
     integrationRegistry.registerNavigator(
         container,
         TrailNavigatorSettings.NAVIGATOR_ID,
-        new SpongeTrailNavigatorFactory(config, keys, messages));
+        new SpongeTrailNavigatorFactory(config, keys, messages, trailLabels));
     this.tripHud =
         new TripHud<>(
             tripManager,
@@ -179,8 +192,7 @@ public final class CobblestoneSpongePlugin {
             messages,
             dataStore.playerPreferences(),
             () -> config.get(keys.tripsHud),
-            agent -> new SpongeHudDisplay((ServerPlayer) agent.entity()),
-            agent -> ((ServerPlayer) agent.entity()).locale(),
+            agent -> new SpongeHudDisplay(agent.player()),
             cobblestoneLogger);
     tripManager.onChange(tripHud::refresh);
     // Cobblestone's own destinations sit under its id like an integration's, but are written in its
@@ -192,6 +204,7 @@ public final class CobblestoneSpongePlugin {
             dataStore.deaths(),
             dataStore.mounts(),
             navigationService.regions(),
+            navigationService::mayBeGenerated,
             () -> config.get(keys.deathsTrack),
             messages));
     // Each player's last death is recorded so they can navigate back to it.
@@ -323,7 +336,10 @@ public final class CobblestoneSpongePlugin {
       tripHud.closeAll();
     }
     if (tripManager != null) {
-      tripManager.stopEverything();
+      tripManager.stopEverything(); // also clears the trails' labels
+    }
+    if (holograms != null) {
+      holograms.removeAll();
     }
     if (navigationService != null) {
       navigationService.shutdown();

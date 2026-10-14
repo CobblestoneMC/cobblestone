@@ -14,6 +14,7 @@ import java.util.Set;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.api.TraversalState;
+import org.cobblestonemc.minecraft.ChunkSource;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
@@ -32,7 +33,12 @@ final class Falls {
 
   /** Adds the falls from {@code from} to {@code edges}, fetching the columns under any ledge. */
   static FutureOr<Edges> offer(
-      MinecraftWorld world, Cell from, TraversalState state, BlockView view, Edges edges) {
+      ChunkSource chunks,
+      MinecraftWorld world,
+      Cell from,
+      TraversalState state,
+      BlockView view,
+      Edges edges) {
     List<Cell> ledges = null;
     for (int[] dir : HORIZONTAL) {
       Cell entry = from.plus(dir[0], 0, dir[1]);
@@ -64,7 +70,7 @@ final class Falls {
         columns.add(entry.plus(0, -d, 0));
       }
     }
-    return BlockLookup.fetchApart(world, columns, from)
+    return BlockLookup.fetchApart(chunks, world, columns, from)
         .map(
             below -> {
               for (Cell entry : falling) {

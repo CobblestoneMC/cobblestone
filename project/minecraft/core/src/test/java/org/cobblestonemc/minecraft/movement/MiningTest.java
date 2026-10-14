@@ -31,7 +31,7 @@ class MiningTest {
 
   private final TestPlayer player = TestPlayer.walker();
   private final MinecraftMovementBehavior walker =
-      MinecraftMovementBehavior.forPlayer(player, Set.of());
+      MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of());
 
   private static TestWorld wallTo(int wallX, MinecraftBlock feet, MinecraftBlock head) {
     return TestWorld.builder("w")
@@ -101,7 +101,8 @@ class MiningTest {
     TestWorld world = wallTo(1, TestBlocks.solid(2.0), TestBlocks.solid(2.0));
     assertFalse(
         TestMovements.from(
-                MinecraftMovementBehavior.forPlayer(player, Set.of(MinecraftStepType.MINE)),
+                MinecraftMovementBehavior.forPlayer(
+                    TestWorld.CHUNKS, player, Set.of(MinecraftStepType.MINE)),
                 world,
                 new Cell(0, 1, 0))
             .reaches(new Cell(1, 1, 0)));
@@ -117,7 +118,7 @@ class MiningTest {
         (cell, breakWorld, block) ->
             CompletableFuture.completedFuture(!cell.equals(new Cell(1, 1, 0)));
     MinecraftMovementBehavior checked =
-        MinecraftMovementBehavior.forPlayer(player, Set.of(), forbidWall, 0);
+        MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of(), forbidWall, 0);
 
     Movement<MinecraftStepPayload> tunnel =
         TestMovements.from(checked, world, new Cell(0, 1, 0)).to(new Cell(1, 1, 0));

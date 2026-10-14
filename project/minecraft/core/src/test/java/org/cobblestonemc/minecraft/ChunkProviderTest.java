@@ -161,9 +161,9 @@ class ChunkProviderTest {
   }
 
   /**
-   * The cache belongs to one solve and is sized to its frontier, so the least recently used chunk
-   * goes when a new one arrives. This is the only thing that evicts now: there is no staleness
-   * window and no invalidation, because nothing a solve caches outlives the solve.
+   * The cache belongs to one search and is size-bounded, so the least recently used chunk goes when
+   * a new one arrives. This is the only thing that evicts now: there is no staleness window and no
+   * invalidation, because nothing a search caches outlives the search.
    */
   @Test
   void theLeastRecentlyUsedChunkIsDroppedOnceTheCacheIsFull() {

@@ -28,57 +28,52 @@ class SurfaceRegionTest {
         .build();
   }
 
-  /** The region as a solve sees it, reading through {@code world}. */
-  private static DomainRegion<MinecraftWorld> solving(SurfaceRegion region, MinecraftWorld world) {
-    return region.scopedForSolve(world);
+  /** The region as a search sees it, reading the test world's blocks. */
+  private static DomainRegion<MinecraftWorld> searching(RegionFactory region) {
+    return region.create(TestWorld.CHUNKS);
   }
 
   @Test
   void openColumnIsSurfaceAboveTheGround() {
-    TestWorld world = world();
-    DomainRegion<MinecraftWorld> surface = solving(SurfaceRegion.anywhere(world), world);
+    DomainRegion<MinecraftWorld> surface = searching(SurfaceRegion.anywhere(world()));
     assertTrue(surface.contains(new Cell(2, 65, 0)));
     assertTrue(surface.contains(new Cell(2, 100, 0)));
   }
 
   @Test
   void roofedColumnIsNotSurfaceUnderTheRoof() {
-    TestWorld world = world();
-    DomainRegion<MinecraftWorld> surface = solving(SurfaceRegion.anywhere(world), world);
+    DomainRegion<MinecraftWorld> surface = searching(SurfaceRegion.anywhere(world()));
     assertFalse(surface.contains(new Cell(-2, 65, 0)));
     assertTrue(surface.contains(new Cell(-2, 71, 0)));
   }
 
   @Test
   void nearestBoundaryIsStraightUpAboveTheRoof() {
-    TestWorld world = world();
-    DomainRegion<MinecraftWorld> surface = solving(SurfaceRegion.anywhere(world), world);
+    DomainRegion<MinecraftWorld> surface = searching(SurfaceRegion.anywhere(world()));
     assertEquals(new Cell(-2, 71, 0), surface.nearestBoundaryCell(new Cell(-2, 65, 0)));
   }
 
   @Test
   void nearestBoundaryOfAnOpenCellIsItself() {
-    TestWorld world = world();
-    DomainRegion<MinecraftWorld> surface = solving(SurfaceRegion.anywhere(world), world);
+    DomainRegion<MinecraftWorld> surface = searching(SurfaceRegion.anywhere(world()));
     Cell open = new Cell(2, 65, 0);
     assertEquals(open, surface.nearestBoundaryCell(open));
   }
 
   @Test
   void columnRegionOnlyContainsItsColumn() {
-    TestWorld world = world();
-    DomainRegion<MinecraftWorld> column = solving(SurfaceRegion.column(world, 3, 3), world);
+    DomainRegion<MinecraftWorld> column = searching(SurfaceRegion.column(world(), 3, 3));
     assertTrue(column.contains(new Cell(3, 65, 3)));
     assertFalse(column.contains(new Cell(2, 65, 3)));
   }
 
   @Test
   void columnRegionSteersAcrossWithoutReadingTheColumn() {
-    CountingWorld world = new CountingWorld(world());
-    DomainRegion<MinecraftWorld> column = solving(SurfaceRegion.column(world, -3, 3), world);
+    CountingChunks chunks = new CountingChunks();
+    DomainRegion<MinecraftWorld> column = SurfaceRegion.column(world(), -3, 3).create(chunks);
     // Level with the player until they reach it...
     assertEquals(new Cell(-3, 40, 3), column.nearestBoundaryCell(new Cell(2, 40, 0)));
-    assertEquals(0, world.reads.get());
+    assertEquals(0, chunks.reads.get());
     // ...then up through its roof.
     assertEquals(new Cell(-3, 71, 3), column.nearestBoundaryCell(new Cell(-3, 65, 3)));
   }
@@ -86,100 +81,46 @@ class SurfaceRegionTest {
   @Test
   void emptyColumnIsSurfaceAllTheWayDown() {
     TestWorld empty = TestWorld.builder("minecraft:the_end").build();
-    assertTrue(
-        solving(SurfaceRegion.anywhere(empty), empty).contains(new Cell(0, empty.minY(), 0)));
-  }
-
-  @Test
-  void anUnboundRegionReadsNothingAndClaimsNothing() {
-    CountingWorld world = new CountingWorld(world());
-    SurfaceRegion surface = SurfaceRegion.anywhere(world);
-    Cell open = new Cell(2, 65, 0);
-    assertFalse(surface.contains(open));
-    assertEquals(open, surface.nearestBoundaryCell(open));
-    assertEquals(0, world.reads.get());
+    assertTrue(searching(SurfaceRegion.anywhere(empty)).contains(new Cell(0, empty.minY(), 0)));
   }
 
   @Test
   void aChunkNotYetInHandIsNotWaitedFor() {
-    TestWorld world = world();
-    DomainRegion<MinecraftWorld> surface =
-        solving(SurfaceRegion.anywhere(world), new LoadingWorld(world));
+    ChunkSource loading =
+        (cell, world, destination) -> FutureOr.ofFuture(new CompletableFuture<>());
+    DomainRegion<MinecraftWorld> surface = SurfaceRegion.anywhere(world()).create(loading);
     Cell underRoof = new Cell(-2, 65, 0);
     assertFalse(surface.contains(new Cell(2, 65, 0)), "unknown is not open");
     assertEquals(underRoof, surface.nearestBoundaryCell(underRoof), "no guess about the roof");
   }
 
   @Test
-  void scopedRegionKeepsTheOriginalDomain() {
-    TestWorld world = world();
-    SurfaceRegion surface = SurfaceRegion.anywhere(world);
-    assertEquals(world, surface.scopedForSolve(world).domain());
+  void eachSearchReadsThroughItsOwnChunks() {
+    RegionFactory factory = SurfaceRegion.anywhere(world());
+    CountingChunks first = new CountingChunks();
+    CountingChunks second = new CountingChunks();
+    Cell open = new Cell(2, 65, 0);
+    assertTrue(factory.create(first).contains(open));
+    // A roof one search worked out is not carried into the next, which reads for itself.
+    assertTrue(factory.create(second).contains(open));
+    assertEquals(1, first.reads.get());
+    assertEquals(1, second.reads.get());
   }
 
-  /** A world that counts the chunks read through it. */
-  private static final class CountingWorld extends ForwardingWorld {
+  @Test
+  void theRegionIsInItsWorld() {
+    TestWorld world = world();
+    assertEquals(world, searching(SurfaceRegion.anywhere(world)).domain());
+  }
+
+  /** The test world's chunks, counting how many are read. */
+  private static final class CountingChunks implements ChunkSource {
     private final AtomicInteger reads = new AtomicInteger();
 
-    CountingWorld(MinecraftWorld delegate) {
-      super(delegate);
-    }
-
     @Override
-    public FutureOr<MinecraftChunk> chunkAt(Cell cell, Cell destination) {
+    public FutureOr<MinecraftChunk> chunk(Cell cell, MinecraftWorld world, Cell destination) {
       reads.incrementAndGet();
-      return super.chunkAt(cell, destination);
-    }
-  }
-
-  /** A world whose chunks are all still loading. */
-  private static final class LoadingWorld extends ForwardingWorld {
-
-    LoadingWorld(MinecraftWorld delegate) {
-      super(delegate);
-    }
-
-    @Override
-    public FutureOr<MinecraftChunk> chunkAt(Cell cell, Cell destination) {
-      return FutureOr.ofFuture(new CompletableFuture<>());
-    }
-  }
-
-  private abstract static class ForwardingWorld implements MinecraftWorld {
-    private final MinecraftWorld delegate;
-
-    ForwardingWorld(MinecraftWorld delegate) {
-      this.delegate = delegate;
-    }
-
-    @Override
-    public String key() {
-      return delegate.key();
-    }
-
-    @Override
-    public Environment environment() {
-      return delegate.environment();
-    }
-
-    @Override
-    public int minY() {
-      return delegate.minY();
-    }
-
-    @Override
-    public int maxY() {
-      return delegate.maxY();
-    }
-
-    @Override
-    public FutureOr<MinecraftBlock> blockAt(Cell cell, Cell destination) {
-      return delegate.blockAt(cell, destination);
-    }
-
-    @Override
-    public FutureOr<MinecraftChunk> chunkAt(Cell cell, Cell destination) {
-      return delegate.chunkAt(cell, destination);
+      return TestWorld.CHUNKS.chunk(cell, world, destination);
     }
   }
 }

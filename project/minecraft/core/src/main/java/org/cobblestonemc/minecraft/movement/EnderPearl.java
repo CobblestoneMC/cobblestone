@@ -14,6 +14,7 @@ import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.Movement;
 import org.cobblestonemc.api.TraversalState;
+import org.cobblestonemc.minecraft.ChunkSource;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftKeys;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -47,6 +48,7 @@ final class EnderPearl {
 
   /** Offers a throw from {@code from} to {@code goal}, if it is in range and a pearl is left. */
   static void offer(
+      ChunkSource chunks,
       MinecraftWorld world,
       Cell from,
       TraversalState state,
@@ -71,17 +73,17 @@ final class EnderPearl {
             time,
             MinecraftStepPayload.of(MinecraftStepType.TELEPORT),
             next,
-            ballisticCheck(world, from, goal)));
+            ballisticCheck(chunks, world, from, goal)));
   }
 
   /** A lazy check that every block on the throw's line is passable (else the throw is blocked). */
   private static Supplier<FutureOr<Boolean>> ballisticCheck(
-      MinecraftWorld world, Cell from, Cell to) {
+      ChunkSource chunks, MinecraftWorld world, Cell from, Cell to) {
     List<Cell> path = line(from, to);
     return () -> {
       List<FutureOr<Boolean>> passable = new ArrayList<>(path.size());
       for (Cell cell : path) {
-        passable.add(world.blockAt(cell, null).map(MinecraftBlock::isPassable));
+        passable.add(chunks.block(cell, world, null).map(MinecraftBlock::isPassable));
       }
       // restricted (true) if any cell along the throw is not passable.
       return FutureOr.all(passable).map(list -> list.contains(Boolean.FALSE));

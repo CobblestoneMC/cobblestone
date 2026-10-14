@@ -15,6 +15,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.minecraft.api.WorldRegion;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
 import org.cobblestonemc.plugin.api.DestinationOption;
@@ -72,6 +73,7 @@ public final class PlatformTrees {
             destination.destination().regions().stream()
                 .map(regions)
                 .flatMap(Optional::stream)
+                .map(RegionFactory::of)
                 .toList(),
         destination.displayName(),
         destination.isMobile(),

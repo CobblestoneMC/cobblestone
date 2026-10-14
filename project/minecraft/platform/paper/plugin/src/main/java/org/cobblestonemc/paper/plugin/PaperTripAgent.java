@@ -7,25 +7,48 @@
 
 package org.cobblestonemc.paper.plugin;
 
+import java.util.Locale;
 import java.util.UUID;
+import net.kyori.adventure.audience.Audience;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 import org.cobblestonemc.plugin.trip.TripAgent;
 
-public class PaperTripAgent implements TripAgent<Entity> {
+/** A {@link TripAgent} wrapping the guided {@link Player}. */
+public final class PaperTripAgent implements TripAgent<Entity> {
 
-  private final Entity entity;
+  private final Player player;
 
-  public PaperTripAgent(Entity entity) {
-    this.entity = entity;
+  public PaperTripAgent(Player player) {
+    this.player = player;
+  }
+
+  /**
+   * Returns the guided player.
+   *
+   * @return the player
+   */
+  public Player player() {
+    return player;
   }
 
   @Override
   public UUID uuid() {
-    return entity.getUniqueId();
+    return player.getUniqueId();
   }
 
   @Override
   public Entity entity() {
-    return entity;
+    return player;
+  }
+
+  @Override
+  public Audience audience() {
+    return player;
+  }
+
+  @Override
+  public Locale locale() {
+    return player.locale();
   }
 }

@@ -94,7 +94,7 @@ final class LoadedChunkIndex {
   /**
    * Returns whether a chunk is believed to be loaded. Safe from any thread.
    *
-   * @param world the world's key
+   * @param worldKey the world's key
    * @param chunkX the chunk X
    * @param chunkZ the chunk Z
    * @return {@code true} if the chunk is thought to be in memory

@@ -13,9 +13,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.BooleanSupplier;
 import net.kyori.adventure.audience.Audience;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
+import org.cobblestonemc.plugin.hologram.TrailLabels;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.navigator.AbstractTrailNavigator;
 import org.cobblestonemc.plugin.navigator.TrailBlock;
@@ -23,7 +25,6 @@ import org.cobblestonemc.plugin.navigator.TrailSmoother;
 import org.cobblestonemc.plugin.navigator.Vec3;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockState;
-import org.spongepowered.api.data.Keys;
 import org.spongepowered.api.effect.particle.ParticleEffect;
 import org.spongepowered.api.effect.particle.ParticleOptions;
 import org.spongepowered.api.effect.particle.ParticleType;
@@ -31,7 +32,6 @@ import org.spongepowered.api.effect.particle.ParticleTypes;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.util.Color;
 import org.spongepowered.api.world.server.ServerLocation;
-import org.spongepowered.api.world.server.ServerWorld;
 import org.spongepowered.math.vector.Vector3d;
 
 /**
@@ -59,8 +59,10 @@ final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> 
       List<Color> palette,
       double density,
       int recalcDistance,
-      Messages messages) {
-    super(bufferCells, density, recalcDistance, messages, player.locale());
+      Messages messages,
+      TrailLabels<ServerLocation> labels,
+      BooleanSupplier showLabel) {
+    super(bufferCells, density, recalcDistance, messages, player.locale(), labels, showLabel);
     this.playerId = player.uniqueId();
     this.particles = List.copyOf(particleTypes);
     this.highlightParticles = List.copyOf(highlightParticleTypes);
@@ -70,6 +72,11 @@ final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> 
 
   private Optional<ServerPlayer> player() {
     return Sponge.server().player(playerId);
+  }
+
+  @Override
+  protected UUID playerId() {
+    return playerId;
   }
 
   @Override
@@ -94,6 +101,11 @@ final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> 
   protected Vec3 renderPoint(ServerLocation location) {
     // Y is raised by 0.9 instead of 0.5 so it sits near the centre of the player's body.
     return new Vec3(location.blockX() + 0.5, location.blockY() + 0.9, location.blockZ() + 0.5);
+  }
+
+  @Override
+  protected ServerLocation location(Vec3 point) {
+    return player().orElseThrow().world().location(point.x(), point.y(), point.z());
   }
 
   @Override
@@ -142,41 +154,6 @@ final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> 
     if (player.isEmpty()) {
       return (x, y, z) -> TrailBlock.UNLOADED;
     }
-    return new WorldProbe(player.get().world());
-  }
-
-  /** Reads one world for one tick, checking whether a chunk is loaded once per run of lookups. */
-  private final class WorldProbe implements TrailSmoother.BlockProbe {
-
-    private final ServerWorld world;
-    private final int minY;
-    private final int maxY;
-    private long lastChunk = Long.MIN_VALUE; // a chunk far beyond the world border
-    private boolean lastLoaded;
-
-    WorldProbe(ServerWorld world) {
-      this.world = world;
-      this.minY = world.min().y();
-      this.maxY = world.max().y();
-    }
-
-    @Override
-    public TrailBlock at(int x, int y, int z) {
-      if (y < minY || y > maxY) {
-        return TrailBlock.OPEN;
-      }
-      long chunk = ((long) (x >> 4) << 32) | ((z >> 4) & 0xFFFFFFFFL);
-      if (chunk != lastChunk) {
-        lastChunk = chunk;
-        lastLoaded = world.isBlockLoaded(x, y, z); // never let a lookup load the chunk
-      }
-      if (!lastLoaded) {
-        return TrailBlock.UNLOADED;
-      }
-      return solidByState.computeIfAbsent(
-              world.block(x, y, z), state -> state.get(Keys.IS_SOLID).orElse(false))
-          ? TrailBlock.SOLID
-          : TrailBlock.OPEN;
-    }
+    return new SpongeWorldProbe(player.get().world(), solidByState);
   }
 }

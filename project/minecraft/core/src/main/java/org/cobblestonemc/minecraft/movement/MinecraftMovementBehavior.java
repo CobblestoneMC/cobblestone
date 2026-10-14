@@ -17,6 +17,7 @@ import org.cobblestonemc.Movement;
 import org.cobblestonemc.MovementBehavior;
 import org.cobblestonemc.api.TraversalState;
 import org.cobblestonemc.minecraft.BreakChecker;
+import org.cobblestonemc.minecraft.ChunkSource;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftKeys;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -34,13 +35,18 @@ public final class MinecraftMovementBehavior
   /** The cells read in a vehicle: one block out, one down to two up. */
   private static final int[][] IN_VEHICLE = box(1, -1, 2);
 
+  private final ChunkSource chunks;
   private final Abilities can;
   private final @Nullable Mining mining;
   private final int[][] dismountedOffsets;
   private final TraversalState initialState;
 
-  MinecraftMovementBehavior(
-      Abilities can, @Nullable BreakChecker breakChecker, TraversalState initialState) {
+  private MinecraftMovementBehavior(
+      ChunkSource chunks,
+      Abilities can,
+      @Nullable BreakChecker breakChecker,
+      TraversalState initialState) {
+    this.chunks = chunks;
     this.can = can;
     this.initialState = initialState;
     this.mining = can.mine() ? new Mining(breakChecker) : null;
@@ -50,19 +56,23 @@ public final class MinecraftMovementBehavior
   /**
    * Builds the behavior for {@code player} with no mining constraint and no ender pearls.
    *
+   * @param chunks where the search reads blocks from
    * @param player the player being navigated
    * @param excluded step types to leave out
    * @return the behavior
    */
   public static MinecraftMovementBehavior forPlayer(
-      CobblestonePlayer player, Set<MinecraftStepType> excluded) {
-    return forPlayer(player, excluded, null, 0);
+      ChunkSource chunks, CobblestonePlayer player, Set<MinecraftStepType> excluded) {
+    return forPlayer(chunks, player, excluded, null, 0);
   }
 
   /**
    * Builds the behavior for {@code player}, minus any excluded step types (e.g. {@code -no-fly}).
    * The player's capabilities are read here, once, so call this on a thread allowed to read them.
    *
+   * @param chunks where the search reads blocks from: its own, so build one behavior per search.
+   *     The behavior holds it, and with it every cached chunk, for as long as the behavior is
+   *     reachable, so do not keep the behavior, or a handle to its search, past the search
    * @param player the player being navigated
    * @param excluded step types to leave out
    * @param breakChecker the injected breakability check for mining, or {@code null} if no
@@ -71,6 +81,7 @@ public final class MinecraftMovementBehavior
    * @return the behavior
    */
   public static MinecraftMovementBehavior forPlayer(
+      ChunkSource chunks,
       CobblestonePlayer player,
       Set<MinecraftStepType> excluded,
       @Nullable BreakChecker breakChecker,
@@ -109,7 +120,7 @@ public final class MinecraftMovementBehavior
         player.isInBoat()
             ? TraversalState.DEFAULT.with(MinecraftKeys.VEHICLE, MinecraftKeys.Vehicle.BOAT)
             : TraversalState.DEFAULT;
-    return new MinecraftMovementBehavior(can, breakChecker, initialState);
+    return new MinecraftMovementBehavior(chunks, can, breakChecker, initialState);
   }
 
   @Override
@@ -120,12 +131,12 @@ public final class MinecraftMovementBehavior
     FutureOr<Edges> local;
     if (vehicle == null) {
       local =
-          BlockLookup.fetch(world, from, cells(from, dismountedOffsets), goal)
+          BlockLookup.fetch(chunks, world, from, cells(from, dismountedOffsets), goal)
               .flatMap(view -> dismounted(from, world, state, view, edges));
     } else if (vehicle == MinecraftKeys.Vehicle.BOAT) {
       // Getting out is always open to a player in a boat; only paddling needs the boat ability.
       local =
-          BlockLookup.fetch(world, from, cells(from, IN_VEHICLE), goal)
+          BlockLookup.fetch(chunks, world, from, cells(from, IN_VEHICLE), goal)
               .map(
                   view -> {
                     if (can.paddle()) {
@@ -136,7 +147,7 @@ public final class MinecraftMovementBehavior
                   });
     } else if (vehicle == MinecraftKeys.Vehicle.HORSE && can.horse()) {
       local =
-          BlockLookup.fetch(world, from, cells(from, IN_VEHICLE), goal)
+          BlockLookup.fetch(chunks, world, from, cells(from, IN_VEHICLE), goal)
               .map(
                   view -> {
                     Vehicles.horse(from, state, view, edges);
@@ -148,7 +159,7 @@ public final class MinecraftMovementBehavior
     return local.map(
         collected -> {
           if (can.enderPearls() > 0) {
-            EnderPearl.offer(world, from, state, goal, can.enderPearls(), collected);
+            EnderPearl.offer(chunks, world, from, state, goal, can.enderPearls(), collected);
           }
           return collected.movements();
         });
@@ -161,7 +172,7 @@ public final class MinecraftMovementBehavior
       Vehicles.boardBoat(from, state, view, edges);
     }
     if (can.fall()) {
-      return Falls.offer(world, from, state, view, edges);
+      return Falls.offer(chunks, world, from, state, view, edges);
     }
     return FutureOr.of(edges);
   }
