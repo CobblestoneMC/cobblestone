@@ -41,8 +41,8 @@ import org.yaml.snakeyaml.Yaml;
  * of the same seed -- so captures stay local, and so do the baselines measured against them.
  *
  * <p><b>Commands go in over stdin.</b> Paper reads its console from standard input, so driving it
- * needs no RCON port, no password and no protocol implementation — and the copier already reports
- * to the console, so the same stream says when a capture has finished.
+ * needs no RCON port, no password and no protocol implementation — and the utility plugin already
+ * reports to the console, so the same stream says when a capture has finished.
  *
  * <p>⚠️ Running a Minecraft server means accepting Mojang's EULA, which is not something this tool
  * will do on someone's behalf. It refuses to start until told explicitly.
@@ -57,7 +57,7 @@ public final class CorpusProvisioner {
 
   private final Path corpusRoot;
   private final Path workDir;
-  private final Path copierJar;
+  private final Path utilityJar;
   private final boolean eulaAccepted;
   private final String javaExecutable;
 
@@ -66,16 +66,16 @@ public final class CorpusProvisioner {
    *
    * @param corpusRoot the corpus directory, holding {@code corpus.yml} and the captures
    * @param workDir where the server is unpacked and run
-   * @param copierJar the built copier plugin
+   * @param utilityJar the built utility plugin
    * @param eulaAccepted whether the caller has accepted Mojang's EULA
    * @param javaExecutable the Java to run the server with; modern Paper needs a newer one than this
    *     build compiles with, so the Gradle toolchain resolves it rather than trusting PATH
    */
   public CorpusProvisioner(
-      Path corpusRoot, Path workDir, Path copierJar, boolean eulaAccepted, String javaExecutable) {
+      Path corpusRoot, Path workDir, Path utilityJar, boolean eulaAccepted, String javaExecutable) {
     this.corpusRoot = corpusRoot;
     this.workDir = workDir;
-    this.copierJar = copierJar;
+    this.utilityJar = utilityJar;
     this.eulaAccepted = eulaAccepted;
     this.javaExecutable = javaExecutable;
   }
@@ -374,8 +374,8 @@ public final class CorpusProvisioner {
     Files.createDirectories(workDir.resolve("plugins"));
     Files.writeString(workDir.resolve("eula.txt"), "eula=true\n", StandardCharsets.UTF_8);
     Files.copy(
-        copierJar,
-        workDir.resolve("plugins").resolve(copierJar.getFileName()),
+        utilityJar,
+        workDir.resolve("plugins").resolve(utilityJar.getFileName()),
         StandardCopyOption.REPLACE_EXISTING);
 
     Map<String, String> properties = new LinkedHashMap<>();
@@ -454,7 +454,8 @@ public final class CorpusProvisioner {
                       if (line.contains("Done (") && line.contains("For help, type")) {
                         booted.set(true);
                       }
-                      // The copier already reports to the console, so the same stream that shows
+                      // The utility plugin already reports to the console, so the same stream that
+                      // shows
                       // progress is the one that says a capture is over.
                       if (line.contains("Capture complete.")
                           || line.contains("Capture cancelled.")) {
@@ -477,7 +478,7 @@ public final class CorpusProvisioner {
       int done = 0;
       for (Request request : requests) {
         String command =
-            "copier copy capsule %d %d %d %d %d --name %s --world %s --full --generate --overwrite"
+            "stonebrick copy capsule %d %d %d %d %d --name %s --world %s --full --generate --overwrite"
                 .formatted(
                     request.x1(),
                     request.z1(),
@@ -540,7 +541,7 @@ public final class CorpusProvisioner {
 
   /** Moves what the server captured into the corpus. */
   private void collect() throws IOException {
-    Path out = workDir.resolve("plugins").resolve("StonebrickCopier").resolve("out");
+    Path out = workDir.resolve("plugins").resolve("StonebrickUtility").resolve("out");
     Path from = out.resolve(CorpusLayout.CAPTURES);
     if (!Files.isDirectory(from)) {
       throw new IOException("the server wrote no captures at " + from);
@@ -559,13 +560,13 @@ public final class CorpusProvisioner {
   /**
    * Entry point for the Gradle task.
    *
-   * @param args corpus root, work directory, copier jar, eula flag, java executable
+   * @param args corpus root, work directory, utility jar, eula flag, java executable
    * @throws Exception if provisioning fails
    */
   public static void main(String[] args) throws Exception {
     if (args.length < 5) {
       System.err.println(
-          "usage: CorpusProvisioner <corpusRoot> <workDir> <copierJar> <eula> <javaExecutable>");
+          "usage: CorpusProvisioner <corpusRoot> <workDir> <utilityJar> <eula> <javaExecutable>");
       System.exit(2);
       return;
     }

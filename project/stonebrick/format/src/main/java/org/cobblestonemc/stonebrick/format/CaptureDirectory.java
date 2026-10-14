@@ -145,9 +145,9 @@ public final class CaptureDirectory {
   /**
    * Counts the column files across every world in the capture.
    *
-   * <p>Used by {@code /copier estimate} to report the running corpus total, since the file count is
-   * a harder ceiling than the byte count: a version-controlled corpus stops being pleasant to work
-   * with long before it stops fitting on disk.
+   * <p>Used by {@code /stonebrick estimate} to report the running corpus total, since the file
+   * count is a harder ceiling than the byte count: a version-controlled corpus stops being pleasant
+   * to work with long before it stops fitting on disk.
    *
    * @return the number of column files
    * @throws IOException if the capture cannot be walked

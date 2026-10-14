@@ -119,7 +119,7 @@ class StonebrickPlatformTest {
     assertFalse(platform.missing().isEmpty(), "reads past the capture edge must be recorded");
     String report = platform.missing().report("narrow");
     // The report has to be actionable on its own: a region, and the command that captures it.
-    assertTrue(report.contains("/copier copy"), report);
+    assertTrue(report.contains("/stonebrick copy"), report);
     assertTrue(report.contains(SyntheticCapture.OVERWORLD), report);
     assertTrue(report.contains("degenerate"), report);
   }

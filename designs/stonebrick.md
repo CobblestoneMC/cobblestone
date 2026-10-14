@@ -4,7 +4,7 @@ Status: partly implemented (2026-10-04, PR #24). Drafted 2026-09-22; the section
 design as written, and where the build departed from it the commit history says why.
 
 **Built**
-- `stonebrick-format`, `stonebrick-copier`, `stonebrick-platform`, `stonebrick-bench` (§1–§8).
+- `stonebrick-format`, `stonebrick-utility`, `stonebrick-platform`, `stonebrick-bench` (§1–§8).
   `bench` commands: `run`, `accept`, `list`, `sweep` (heuristic × weight grid), `verify`
   (estimates against a Dijkstra optimum). `h3` and `profile` went with the section profiles.
 - Core seams: `TimeSource`, `SearchObserver` (the §8.3 `Tier2Observer`, renamed), the
@@ -36,7 +36,7 @@ reproducibly, benchmarked tightly, and watched frame by frame.
 ```
 project/stonebrick/
   format/       :stonebrick-format      pure Java. Reader/writer for the .sbc capture format.
-  copier/       :stonebrickcopier       Paper plugin. /copier. Capturing world data is nothing to do
+  utility/      :stonebrick-utility     Paper plugin. /stonebrick. Capturing world data is nothing to do
                                         with navigation, so it does not carry the Cobblestone name.
   platform/     :stonebrick-platform    PlatformApi / MinecraftWorld / Chunk / Block, IO delay model,
                                         deterministic scheduler, fake agent + restrictions.
@@ -46,14 +46,14 @@ project/stonebrick/
 
 Gradle names stay flat like the rest of the tree (`project(":stonebrick:format").name = "stonebrick-format"`).
 
-Why `format` is its own module: the copier needs Bukkit and ships inside a plugin jar; the platform
+Why `format` is its own module: the utility plugin needs Bukkit and ships inside a plugin jar; the platform
 must stay pure Java so benchmarks have no server on the classpath. Both need the same codec, and
 the codec is the contract between them — a version mismatch there is the one bug that silently
 produces wrong benchmark numbers, so it lives in exactly one place.
 
 **Dependencies**
 - `format` → nothing (Java 21, `java.util.zip` only).
-- `copier` → `format`, `:paper-core` (compileOnly Paper API), shaded plugin.
+- `utility` → `format`, `:paper-core` (compileOnly Paper API), shaded plugin.
 - `platform` → `format`, `:core`, `:minecraft-core`.
 - `bench` → `platform`, JMH, `:core`.
 - `visualizer` → `platform`, `format`, LWJGL3.
@@ -96,24 +96,24 @@ re-deriving would need a server.
 
 So they are not. **Block data stores only blockstate strings**
 (`minecraft:oak_door[facing=east,half=lower,open=false]`); traits live beside it in `traits.json`,
-one table per capture, written by the copier from the real `PaperBlock` (§4).
+one table per capture, written by the utility plugin from the real `PaperBlock` (§4).
 
 That splits the two lifetimes cleanly. Block data is captured once and frozen. When trait logic
 changes, only `traits.json` is regenerated — and even that can be done offline from the strings,
 without a server, by a `stonebrick-format` tool. The blocks are never re-copied. `capture.json`
-records the copier and MC versions, so a stale table is detected rather than quietly used.
+records the utility plugin and MC versions, so a stale table is detected rather than quietly used.
 
 ---
 
 ## 3. The capture format: one file per chunk column
 
 **Captures are machine-local and are not version-controlled.** Each developer captures their own
-with `/copier`; `project/stonebrick/data/` is gitignored. A shared team would put the corpus on
+with `/stonebrick`; `project/stonebrick/data/` is gitignored. A shared team would put the corpus on
 shared storage rather than in the repository — a benchmark corpus is build input, and putting
 hundreds of megabytes of it in git makes every clone pay for terrain most of them will never read.
 
 What survives that decision is **byte-stability**: re-capturing unchanged terrain still produces
-identical files, so the copier can skip the write and a re-capture after editing one hut rewrites a
+identical files, so the utility plugin can skip the write and a re-capture after editing one hut rewrites a
 handful of columns rather than everything. That property is what makes iterating on a test fixture
 cheap, and it is worth having whether or not git is involved.
 
@@ -122,7 +122,7 @@ cheap, and it is worth having whether or not git is involved.
 ```
 stonebrick/data/<capture-name>/
   capture.meta                       world keys, environment, minY/maxY, MC version,
-                                     copier version, capture time
+                                     utility plugin version, capture time
   traits.tsv                         blockstate string -> trait record (§4)
   overworld/c.<x>.<z>.sbc            one file per chunk column
   the_nether/c.<x>.<z>.sbc
@@ -173,7 +173,7 @@ costing three bytes.
 
 ### 3.3 Partial vertical capture
 
-The copier takes a vertical mode, because the difference between "surface band" and "full column" is
+The utility plugin takes a vertical mode, because the difference between "surface band" and "full column" is
 a 6× difference in corpus size:
 
 | Mode | Meaning |
@@ -193,7 +193,7 @@ Cube payloads are stored **uncompressed**.
 The deciding argument is byte-stability. `Deflater` output depends on the JDK's zlib and its
 level and strategy defaults, so a re-capture on a different JDK would produce different bytes for
 identical blocks. Raw payloads are a pure function of the world, so re-capturing an unchanged region
-is a genuine no-op: the copier compares and skips the write, and `/copier copy --overwrite` over
+is a genuine no-op: the utility plugin compares and skips the write, and `/stonebrick copy --overwrite` over
 untouched terrain reports every column unchanged.
 
 (In practice a live server is never quite untouched — grass grows, vines descend — so a re-capture
@@ -217,7 +217,7 @@ uniform stone below) ≈ 16 KB. Measured on a real capture: 81 columns of a surf
 
 A capture is therefore a few megabytes for a scenario-sized region and a few hundred for the longest
 routes. None of it is version-controlled, so the only budget that matters is the disk of whoever is
-running the benchmark — which is why `/copier estimate` reports size and file count before a job
+running the benchmark — which is why `/stonebrick estimate` reports size and file count before a job
 rather than after.
 
 **Use `--full` for a scenario-sized capture.** Vertical trimming is a real lever at hundreds of
@@ -229,22 +229,22 @@ first time. Trim only when the capture is big enough for it to matter.
 
 ---
 
-## 4. `stonebrickcopier` — the Paper helper plugin
+## 4. `stonebrick-utility` — the Paper helper plugin
 
-Lives at `project/stonebrick/copier`, applies `cobblestone.paper-plugin-conventions`, depends on
+Lives at `project/stonebrick/utility`, applies `cobblestone.paper-plugin-conventions`, depends on
 `:stonebrick-format` and `:paper-core`. Named for what it does, not for Cobblestone.
 
 ### Commands
 
-All under one root, `/copier`:
+All under one root, `/stonebrick`:
 
 ```
-/copier copy <x1> <z1> <x2> <z2> [options]     capture a chunk rectangle
-/copier copy here <radiusChunks> [options]
-/copier estimate <same args as copy>           size/file-count report; captures nothing
-/copier mark <scenario> origin|dest            stamp your position into a scenario stub
-/copier traits [capture]                       rebuild traits.tsv from the capture's own palettes
-/copier status | /copier cancel
+/stonebrick copy <x1> <z1> <x2> <z2> [options]     capture a chunk rectangle
+/stonebrick copy here <radiusChunks> [options]
+/stonebrick estimate <same args as copy>           size/file-count report; captures nothing
+/stonebrick mark <scenario> origin|dest            stamp your position into a scenario stub
+/stonebrick traits [capture]                       rebuild traits.tsv from the capture's own palettes
+/stonebrick status | /stonebrick cancel
 ```
 
 Options: `--name <capture>` · `--world <key>` · `--blocks` (coordinates are block, not chunk) ·
@@ -252,7 +252,7 @@ Options: `--name <capture>` · `--world <key>` · `--blocks` (coordinates are bl
 
 Coordinates are **chunk** coordinates by default; `~` relative coordinates are supported.
 
-**`/copier estimate` is not optional.** The region a capture covers cannot be adjusted afterwards
+**`/stonebrick estimate` is not optional.** The region a capture covers cannot be adjusted afterwards
 without re-running the whole job, so knowing the cost while still standing in the world is what
 makes the vertical mode a decision rather than a guess. It samples a scattered subset of columns,
 encodes them for real, and reports:
@@ -272,7 +272,7 @@ literal nodes: the vertical modes are mutually exclusive and the rest combine fr
 tree would need a branch per legal combination. A suggestion list buys the discoverability without
 the thicket.
 
-**`/copier mark`** is what makes authoring 50 scenarios bearable: stand at the start, `mark <id>
+**`/stonebrick mark`** is what makes authoring 50 scenarios bearable: stand at the start, `mark <id>
 origin`; walk to the end, `mark <id> dest`. It writes a scenario stub with both positions, world
 keys, and your current capability flags, and it computes the corridor rectangle so `copy` can be run
 straight from it.
@@ -286,22 +286,22 @@ straight from it.
 - Re-capturing an unchanged region rewrites byte-identical files (§3.4), so `git status` stays clean.
 - Guard rails: refuse above `maxChunks` (default 100 000) without `--force`; refuse to overwrite
   without `--overwrite`; warn when a capture would push the corpus past the file-count soft limit.
-- Writes to `plugins/StonebrickCopier/out/<capture>/`, laid out exactly as §3.1 so the directory can
+- Writes to `plugins/StonebrickUtility/out/<capture>/`, laid out exactly as §3.1 so the directory can
   be copied into the repo as-is.
 
 ### Where blockstate → traits lives
 
-**The rule: the copier may reach into `paper-core` as deeply as it needs to. Nothing else in
-stonebrick may depend on `paper-core` at all.** The copier is a Paper plugin that only ever runs on
+**The rule: the utility plugin may reach into `paper-core` as deeply as it needs to. Nothing else in
+stonebrick may depend on `paper-core` at all.** The utility plugin is a Paper plugin that only ever runs on
 a live server; the benchmarking modules must stay pure Java with no server on the classpath. The
 `.sbc` + `traits.tsv` pair is the boundary between them, and it is a one-way boundary.
 
-So `traits.json` is written by the copier using **the real `PaperBlock`**, which means benchmark
+So `traits.json` is written by the utility plugin using **the real `PaperBlock`**, which means benchmark
 blocks answer `isPassable()` / `breakTimeSeconds()` / `supportsBoat()` byte-for-byte as production's
 do, with no second trait table to drift.
 
-`PaperBlocks.of(...)` and `PaperBlock` are package-private. The copier reaches them with **one shim
-class declared in package `org.cobblestonemc.paper`**, inside the copier module:
+`PaperBlocks.of(...)` and `PaperBlock` are package-private. The utility plugin reaches them with **one shim
+class declared in package `org.cobblestonemc.paper`**, inside the utility plugin module:
 
 ```java
 package org.cobblestonemc.paper;   // deliberately: package-private access to PaperBlock
@@ -319,10 +319,10 @@ public final class PaperBlockBridge {
 }
 ```
 
-Package-private access works across jar boundaries (there is no JPMS here, and the copier shades
+Package-private access works across jar boundaries (there is no JPMS here, and the utility plugin shades
 `paper-core` anyway). This adds **no public API to `paper-core`** and changes no production code —
 the split package lives entirely in a module that never ships. If `paper-core` renames or reshapes
-`PaperBlock`, the copier fails to compile, which is exactly the loud failure we want.
+`PaperBlock`, the utility plugin fails to compile, which is exactly the loud failure we want.
 
 Rejected alternatives, for the record:
 - *A third hand-written trait table in stonebrick.* Viable — the codebase already has two
@@ -335,7 +335,7 @@ Rejected alternatives, for the record:
 - *Lifting the canonical table into `minecraft-core`* so both platforms adapt to it. The honest
   long-term fix for the existing duplication, but a production refactor to serve a test harness.
 
-Scope note: the copier emits traits only for blockstates that actually appear in a capture's palette
+Scope note: the utility plugin emits traits only for blockstates that actually appear in a capture's palette
 — a few hundred entries, not the ~28 000-state space.
 
 ---
@@ -361,7 +361,7 @@ selected per run by `onMissingCapture`:
 
 | Policy | Behavior | Use |
 |---|---|---|
-| **`ERROR`** (default) | fail the run with the coordinates and a ready-to-paste `/copier` command | benchmarking |
+| **`ERROR`** (default) | fail the run with the coordinates and a ready-to-paste `/stonebrick` command | benchmarking |
 | `WALL` | answer `ChunkFetch.Failed.permanent()`, i.e. behave as production does for ungenerated chunks | scenarios that are *about* ungenerated terrain (G2, G3) |
 
 `ERROR` is the default because a benchmark that silently walks into a fabricated wall is a
@@ -371,7 +371,7 @@ should be directly actionable:
 ```
 Scenario ow-river-orthogonal read minecraft:overworld cube (78, 4, -20),
 which this capture does not contain. The run is degenerate and was aborted.
-  /copier copy 72 -26 84 -14 --name corpus-2026-09 --surface 24 24
+  /stonebrick copy 72 -26 84 -14 --name corpus-2026-09 --surface 24 24
 ```
 
 `WALL` is not a lesser mode — treating uncaptured terrain as impassable is exactly what a production
@@ -467,7 +467,7 @@ smoke-walk:
   ungenerated: ["4,-2", "5,-2"]
 ```
 
-`/copier mark <id> origin|dest` updates only the position it names and leaves the rest of the entry
+`/stonebrick mark <id> origin|dest` updates only the position it names and leaves the rest of the entry
 alone, so hand-edited fields survive a mistyped command.
 
 **`ungenerated`** declares chunks the platform presents as never generated, whatever the capture
@@ -605,7 +605,7 @@ Sizing rules that get there:
   instead and lower `maxCellsVisited` to match.
 - **One capture, many scenarios.** Most of the catalogue varies the *agent* or the *destination*, not
   the terrain — A9 and A10 differ only by whether a boat is in the inventory.
-- **`/copier estimate` before every capture**, and it reports the running corpus total so the budget
+- **`/stonebrick estimate` before every capture**, and it reports the running corpus total so the budget
   is visible while you are standing in the world rather than after the commit.
 
 ### 7.3 The fixtures capture
@@ -728,9 +728,9 @@ about 2 000 files and 4 MB, hosting roughly twenty scenarios including every dis
 the re-plan loop (A20) and the corridor-width assertion (G8). `portal-pair` follows when Tier 1
 becomes interesting.
 
-**Practical capture procedure:** fly the route in spectator, `/copier mark <id> origin` at the start
+**Practical capture procedure:** fly the route in spectator, `/stonebrick mark <id> origin` at the start
 and `... dest` at the end — that writes the scenario stub *and* computes the corridor rectangle.
-Then `/copier estimate` it, adjust the vertical mode until the size is sane, and `/copier copy`.
+Then `/stonebrick estimate` it, adjust the vertical mode until the size is sane, and `/stonebrick copy`.
 Nether and End columns land in their own subdirectory of the same capture; a scenario references
 whichever worlds it needs.
 
@@ -1347,7 +1347,7 @@ algorithm decision in this document is a bet; the harness is what settles them.
 ### Part 1 — the harness
 
 1. `stonebrick-format` — the `.sbc` codec, round-trip tests against synthetic columns. No server.
-2. `stonebrickcopier` with the `PaperBlockBridge` shim, `/copier estimate` before `/copier copy`.
+2. `stonebrick-utility` with the `PaperBlockBridge` shim, `/stonebrick estimate` before `/stonebrick copy`.
 3. Build the **fixtures** world; capture it. Capture A1 and A2.
 4. `stonebrick-platform`, `ZERO` IO only, `onMissingCapture: ERROR`. One scenario end to end.
 5. Core prerequisites: `TimeSource`, the insertion-sequence tiebreak, `Tier2Observer`.
@@ -1412,10 +1412,10 @@ Two things that are not about benchmarking but fall out of the work:
   directory listing is the manifest.
 - **Sidecars are sorted TSV, not JSON** (`traits.tsv`, `capture.meta`): line-diffable on
   regeneration, and it keeps `stonebrick-format` dependency-free.
-- **Traits**: copier uses the real `PaperBlock` via a split-package shim (`PaperBlockBridge`,
-  declared in `org.cobblestonemc.paper` inside the copier module). No `paper-core` widening,
+- **Traits**: the utility plugin uses the real `PaperBlock` via a split-package shim (`PaperBlockBridge`,
+  declared in `org.cobblestonemc.paper` inside the utility plugin module). No `paper-core` widening,
   no second trait table, and no other stonebrick module may depend on `paper-core`.
-- **Copier**: `stonebrickcopier`, `/copier <cmd>`, with `estimate` as a first-class command.
+- **Utility plugin**: `stonebrick-utility`, `/stonebrick <cmd>`, with `estimate` as a first-class command.
 - **No golden solves.** Every result carries solve time *and* path cost; regressions are caught
   against committed baselines, gated on deterministic counters, with wall time advisory only.
 - **Missing capture data is a loud error by default**, `WALL` only where the scenario is about

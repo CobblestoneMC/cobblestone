@@ -150,7 +150,7 @@ public final class MissingCaptureLog {
                   Sbc.sectionFloor(Sbc.sectionOf((int) maxY.get())) + Sbc.CUBE_SIZE - 1);
     }
     text.append(
-        "  /copier copy %d %d %d %d --name %s --world %s%s --overwrite%n"
+        "  /stonebrick copy %d %d %d %d --name %s --world %s%s --overwrite%n"
             .formatted(x1, z1, x2, z2, captureName, worldKey, vertical));
     return text.toString();
   }

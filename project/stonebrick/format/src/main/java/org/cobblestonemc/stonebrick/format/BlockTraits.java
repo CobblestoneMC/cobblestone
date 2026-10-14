@@ -11,9 +11,9 @@ package org.cobblestonemc.stonebrick.format;
  * Everything a search needs to know about one block state, as a captured fact.
  *
  * <p><b>Deliberately not a {@code MinecraftBlock}.</b> This module knows nothing about Minecraft,
- * so both ends adapt: the copier turns the platform's real block implementation into one of these,
- * and the benchmark platform turns one of these back into a block. Keeping the middle neutral is
- * what lets a capture be read without a server anywhere on the classpath.
+ * so both ends adapt: the utility plugin turns the platform's real block implementation into one of
+ * these, and the benchmark platform turns one of these back into a block. Keeping the middle
+ * neutral is what lets a capture be read without a server anywhere on the classpath.
  *
  * <p>Traits live beside block data rather than inside it (see {@link Sbc}) because their lifetimes
  * differ: captured blocks are frozen forever, while trait logic is code that changes. Regenerating
@@ -36,10 +36,10 @@ public record BlockTraits(
   /**
    * The direction order the {@code enterable} and {@code exitable} bit fields use.
    *
-   * <p>Written down here, in this module, because it is a <b>wire contract</b>: the copier encodes
-   * against it on one machine and the platform decodes against it on another, months later. Neither
-   * side may use its own enum's ordinal, which would silently reinterpret every face the day
-   * someone reorders a constant.
+   * <p>Written down here, in this module, because it is a <b>wire contract</b>: the utility plugin
+   * encodes against it on one machine and the platform decodes against it on another, months later.
+   * Neither side may use its own enum's ordinal, which would silently reinterpret every face the
+   * day someone reorders a constant.
    */
   public static final String[] DIRECTIONS = {"NORTH", "EAST", "SOUTH", "WEST", "UP", "DOWN"};
 
