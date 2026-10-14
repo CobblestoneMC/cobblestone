@@ -64,6 +64,9 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
   public static final String RESPAWN_KEY = "respawn";
   public static final String MOUNT_KEY = "mount";
 
+  /** Another name for {@code mount}, for the many players whose mount is a horse. */
+  public static final String HORSE_ALIAS = "horse";
+
   /** How far away, in blocks, the block a player is looking at may be for {@code target}. */
   static final int TARGET_RANGE = 256;
 
@@ -104,6 +107,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
         .leaf(SPAWN_KEY, DestinationLeaf.of(this::spawn))
         .leaf(RESPAWN_KEY, DestinationLeaf.ofValidity(() -> respawn(player)))
         .leaf(MOUNT_KEY, DestinationLeaf.ofValidity(() -> mount(player)))
+        .alias(HORSE_ALIAS, MOUNT_KEY)
         .subtree(PLAYER_TREE_KEY, () -> players(player))
         .subtree(WORLD_TREE_KEY, () -> worlds(player))
         .subtree(LOCATION_TREE_KEY, () -> locations(player))

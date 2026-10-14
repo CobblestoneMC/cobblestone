@@ -10,6 +10,7 @@ package org.cobblestonemc.plugin.destination;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.LinkedHashMap;
@@ -501,6 +502,50 @@ class DestinationResolverTest {
     assertEquals(List.of("coordinates"), suggest(roots, List.of("coord")));
   }
 
+  @Test
+  void anAliasReachesItsDestinationUnderItsOwnKey() {
+    var roots = roots(node("cobblestone").leaf("mount").alias("horse", "mount"));
+
+    for (List<String> args :
+        List.of(List.of("horse"), List.of("HORSE"), List.of("cobblestone", "horse"))) {
+      Resolved<?> resolved = assertInstanceOf(Resolved.class, resolve(roots, args));
+      assertEquals(List.of("cobblestone", "mount"), resolved.address(), args.toString());
+    }
+    // The permission is the destination's own, whichever name was typed.
+    assertInstanceOf(
+        NotFound.class,
+        DestinationResolver.resolve(
+            roots,
+            List.of("horse"),
+            ALL,
+            address -> !address.equals(List.of("cobblestone", "mount"))));
+  }
+
+  @Test
+  void anAliasIsNotSuggested() {
+    var roots = roots(node("cobblestone").leaf("mount").alias("horse", "mount"));
+
+    assertEquals(List.of(), suggest(roots, List.of("hor")));
+    assertEquals(List.of("mount"), suggest(roots, List.of("cobblestone", "")));
+  }
+
+  @Test
+  void anAliasTakesItsDestinationsOptions() {
+    var roots = roots(node("cobblestone").template("coordinates").alias("xyz", "coordinates"));
+
+    Resolved<?> resolved =
+        assertInstanceOf(Resolved.class, resolve(roots, List.of("xyz", "1", "2", "3")));
+    assertEquals(List.of("cobblestone", "coordinates"), resolved.address());
+    assertEquals(List.of("64"), suggest(roots, List.of("xyz", "1", "")));
+  }
+
+  @Test
+  void anAliasMustNameALeafAndNotShadowAKey() {
+    DestinationNode.Builder<String> builder = DestinationNode.<String>builder().leaf("mount", null);
+    assertThrows(IllegalArgumentException.class, () -> builder.alias("horse", "pet"));
+    assertThrows(IllegalArgumentException.class, () -> builder.alias("mount", "mount"));
+  }
+
   // -----------------------------------------------------------------------------------------
   // Fixtures
   // -----------------------------------------------------------------------------------------
@@ -541,6 +586,7 @@ class DestinationResolverTest {
     private final Map<String, Supplier<? extends DestinationNode<String>>> subs =
         new LinkedHashMap<>();
     private final Map<String, DestinationLeaf<String>> leaves = new LinkedHashMap<>();
+    private final Map<String, String> aliases = new LinkedHashMap<>();
 
     private Tree(String key) {
       this.key = key;
@@ -583,6 +629,11 @@ class DestinationResolverTest {
       return this;
     }
 
+    Tree alias(String alias, String leafKey) {
+      aliases.put(alias, leafKey);
+      return this;
+    }
+
     Tree sub(Tree child) {
       subs.put(
           child.key,
@@ -594,7 +645,7 @@ class DestinationResolverTest {
     }
 
     DestinationNode<String> build() {
-      return new DestinationNode.Simple<>(strict, subs, leaves);
+      return new DestinationNode.Simple<>(strict, subs, leaves, aliases);
     }
   }
 }

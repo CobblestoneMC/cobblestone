@@ -126,11 +126,13 @@ nearest open sky. Coordinates in terrain that has never been generated are refus
 
 ```
 /nav mount
+/nav horse
 ```
 
-The tamed horse, donkey, mule, llama or camel you last rode. The route is recomputed periodically
-as it moves while it is loaded, and otherwise heads to where it was last seen. If it dies, the trip
-ends, and `/nav mount` then leads to the mount you rode before it.
+The tamed horse, donkey, mule, llama or camel you last rode. `horse` is another name for it, for
+any of these. The route is recomputed periodically as it moves while it is loaded, and otherwise
+heads to where it was last seen. If it dies, the trip ends, and there is no mount to go back to
+until you ride another.
 
 ### Players
 
