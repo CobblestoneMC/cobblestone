@@ -30,7 +30,7 @@ class BoatTest {
 
   private final CobblestonePlayer withBoat = TestPlayer.create(false, true, false);
   private final MinecraftMovementBehavior boat =
-      MinecraftMovementBehavior.forPlayer(withBoat, Set.of());
+      MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, withBoat, Set.of());
 
   @Test
   void enteringWaterPlacesBoatAndSetsVehicleState() {
@@ -93,7 +93,8 @@ class BoatTest {
   @Test
   void excludingBoatsStillLetsAPlayerInOneGetOut() {
     MinecraftMovementBehavior noBoat =
-        MinecraftMovementBehavior.forPlayer(withBoat, Set.of(MinecraftStepType.BOAT));
+        MinecraftMovementBehavior.forPlayer(
+            TestWorld.CHUNKS, withBoat, Set.of(MinecraftStepType.BOAT));
     Moves moves = TestMovements.from(noBoat, shore(), new Cell(1, 1, 0), BOATING);
 
     assertTrue(moves.ofType(MinecraftStepType.BOAT).isEmpty());
@@ -106,7 +107,8 @@ class BoatTest {
 
   @Test
   void aPlayerInABoatStartsInItAndPaddles() {
-    MinecraftMovementBehavior behavior = MinecraftMovementBehavior.forPlayer(inBoat, Set.of());
+    MinecraftMovementBehavior behavior =
+        MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, inBoat, Set.of());
     assertEquals(MinecraftKeys.Vehicle.BOAT, behavior.initialState().get(MinecraftKeys.VEHICLE));
 
     Moves moves = TestMovements.from(behavior, shore(), new Cell(1, 1, 0), behavior.initialState());
@@ -117,7 +119,8 @@ class BoatTest {
   @Test
   void excludingBoatsLeavesAPlayerInOneOnlyGettingOut() {
     MinecraftMovementBehavior behavior =
-        MinecraftMovementBehavior.forPlayer(inBoat, Set.of(MinecraftStepType.BOAT));
+        MinecraftMovementBehavior.forPlayer(
+            TestWorld.CHUNKS, inBoat, Set.of(MinecraftStepType.BOAT));
     assertEquals(MinecraftKeys.Vehicle.BOAT, behavior.initialState().get(MinecraftKeys.VEHICLE));
 
     Moves moves = TestMovements.from(behavior, shore(), new Cell(1, 1, 0), behavior.initialState());
@@ -136,7 +139,9 @@ class BoatTest {
             .build();
     assertTrue(
         TestMovements.from(
-                MinecraftMovementBehavior.forPlayer(inBoat, Set.of()), world, new Cell(0, 1, 0))
+                MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, inBoat, Set.of()),
+                world,
+                new Cell(0, 1, 0))
             .ofType(MinecraftStepType.PLACE_BOAT)
             .isEmpty());
   }
@@ -166,7 +171,9 @@ class BoatTest {
     CobblestonePlayer walker = TestPlayer.walker();
     assertTrue(
         TestMovements.from(
-                MinecraftMovementBehavior.forPlayer(walker, Set.of()), world, new Cell(0, 1, 0))
+                MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, walker, Set.of()),
+                world,
+                new Cell(0, 1, 0))
             .ofType(MinecraftStepType.PLACE_BOAT)
             .isEmpty());
   }

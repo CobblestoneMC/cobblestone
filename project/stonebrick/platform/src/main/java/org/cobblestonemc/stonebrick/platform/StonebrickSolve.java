@@ -22,6 +22,7 @@ import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.Transition;
 import org.cobblestonemc.api.NavigationResult;
 import org.cobblestonemc.api.SearchSettings;
+import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
@@ -113,8 +114,11 @@ public final class StonebrickSolve {
       SearchSettings settings,
       List<? extends Transition<MinecraftStepPayload, MinecraftWorld>> transitions,
       List<? extends Restriction<MinecraftWorld>> restrictions) {
+    // A chunk cache of the search's own, as in production: how it hits and misses is part of what
+    // the benchmark measures.
     MinecraftMovementBehavior behavior =
-        MinecraftMovementBehavior.forPlayer(player, Set.<MinecraftStepType>of());
+        MinecraftMovementBehavior.forPlayer(
+            new ChunkProvider(platform, platform.settings()), player, Set.<MinecraftStepType>of());
     HeuristicStrategy heuristic =
         MinecraftHeuristics.forPlayer(
             behavior, new MinecraftSearchSettings(settings, Set.of(), Set.of(), Set.of()));

@@ -26,6 +26,7 @@ import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.NavigationResult;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
+import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
@@ -115,7 +116,10 @@ class DeterminismTest {
     ClosedOrder observer = new ClosedOrder();
 
     MinecraftMovementBehavior behavior =
-        MinecraftMovementBehavior.forPlayer(player, java.util.Set.<MinecraftStepType>of());
+        MinecraftMovementBehavior.forPlayer(
+            new ChunkProvider(platform, platform.settings()),
+            player,
+            java.util.Set.<MinecraftStepType>of());
 
     NavigationResult<Position<MinecraftWorld>, MinecraftStepPayload> result =
         CobblestoneApi.load()

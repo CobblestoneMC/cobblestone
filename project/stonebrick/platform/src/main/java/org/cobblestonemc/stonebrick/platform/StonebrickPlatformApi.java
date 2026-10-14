@@ -70,8 +70,7 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
     for (String key : capture.worldKeys()) {
       worlds.put(
           key,
-          new StonebrickWorld(
-              this, settings, key, capture.minY(key), capture.maxY(key), capture.environment(key)));
+          new StonebrickWorld(key, capture.minY(key), capture.maxY(key), capture.environment(key)));
     }
   }
 

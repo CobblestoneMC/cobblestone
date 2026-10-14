@@ -11,9 +11,9 @@ package org.cobblestonemc.minecraft;
  * An immutable reading of the {@link ChunkProvider}'s counters, taken with {@link
  * ChunkProvider#stats()}.
  *
- * <p>A provider belongs to one solve, so these are that solve's own counters — no subtraction
+ * <p>A provider belongs to one search, so these are that search's own counters — no subtraction
  * needed to attribute them, and no interference from other searches running at the same time.
- * {@link #since(ChunkProviderStats)} remains for comparing two readings within a solve.
+ * {@link #since(ChunkProviderStats)} remains for comparing two readings within a search.
  *
  * @param chunkLookups calls to {@link ChunkProvider#chunk} — once per chunk per caller that wants
  *     blocks in it, <b>not</b> once per block: a caller resolves its whole neighborhood from a

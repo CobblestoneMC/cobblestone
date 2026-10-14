@@ -47,6 +47,11 @@ import org.cobblestonemc.plugin.api.OptionValues;
  * tokens after it do not fit its options, and nothing else matches, the result is {@link
  * InvalidOptions} so the player can be shown how to use it.
  *
+ * <p>A level may also give a destination {@linkplain DestinationNode#aliases() aliases}: other
+ * names a player might guess, such as {@code horse} for {@code mount}. An alias stands in for the
+ * destination's own key when typed, and the destination is still addressed by its key. Aliases are
+ * never suggested.
+ *
  * <p>Matching is case-insensitive throughout, so two providers registering {@code quest} and {@code
  * Quest} collide deliberately rather than silently offering the player two look-alike paths.
  *
@@ -272,16 +277,12 @@ public final class DestinationResolver {
     if (ai >= args.size()) {
       return; // nothing left to match, and a destination's own key is never optional
     }
-    // A destination is named by its exact key, followed by nothing but its options.
-    String token = args.get(ai);
-    for (Map.Entry<String, DestinationLeaf<D>> entry : node.leaves().entrySet()) {
-      if (!entry.getKey().equalsIgnoreCase(token)) {
-        continue;
-      }
-      trail.add(entry.getKey());
+    // A destination is named by its exact key (or an alias), followed by nothing but its options.
+    for (String leafKey : leavesNamed(node, args.get(ai))) {
+      trail.add(leafKey);
       List<String> address = List.copyOf(trail);
       trail.removeLast();
-      DestinationLeaf<D> leaf = entry.getValue();
+      DestinationLeaf<D> leaf = node.leaves().get(leafKey);
       if (out.allows(address, leaf)) {
         applyOptions(address, leaf, args.subList(ai + 1, args.size()), out);
       }
@@ -431,18 +432,14 @@ public final class DestinationResolver {
       List<String> trail,
       Candidates out,
       Access<D> access) {
-    String key = prefix.get(pi);
     List<String> typedOptions = prefix.subList(pi + 1, prefix.size());
-    for (Map.Entry<String, DestinationLeaf<D>> entry : node.leaves().entrySet()) {
-      if (!entry.getKey().equalsIgnoreCase(key)) {
-        continue;
-      }
-      DestinationLeaf<D> leaf = entry.getValue();
+    for (String leafKey : leavesNamed(node, prefix.get(pi))) {
+      DestinationLeaf<D> leaf = node.leaves().get(leafKey);
       List<DestinationOption<?>> options = leaf.options();
       if (typedOptions.size() >= options.size()) {
         continue; // takes no options, or all of them have been typed
       }
-      trail.add(entry.getKey());
+      trail.add(leafKey);
       List<String> address = List.copyOf(trail);
       trail.removeLast();
       if (!access.allows(address, leaf) || !allParse(options, typedOptions)) {
@@ -600,6 +597,26 @@ public final class DestinationResolver {
   // -----------------------------------------------------------------------------------------
   // Shared
   // -----------------------------------------------------------------------------------------
+
+  /** The keys of {@code node}'s leaves that {@code token} names, by key or by alias. */
+  private static List<String> leavesNamed(DestinationNode<?> node, String token) {
+    List<String> keys = new ArrayList<>();
+    for (String key : node.leaves().keySet()) {
+      if (key.equalsIgnoreCase(token)) {
+        keys.add(key);
+      }
+    }
+    node.aliases()
+        .forEach(
+            (alias, key) -> {
+              if (alias.equalsIgnoreCase(token)
+                  && node.leaves().containsKey(key)
+                  && !keys.contains(key)) {
+                keys.add(key);
+              }
+            });
+    return keys;
+  }
 
   private static boolean hasAll(Predicate<String> hasPermission, List<String> permissions) {
     for (String permission : permissions) {

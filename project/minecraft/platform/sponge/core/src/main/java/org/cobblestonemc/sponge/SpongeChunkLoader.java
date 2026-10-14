@@ -153,6 +153,20 @@ final class SpongeChunkLoader {
   }
 
   /**
+   * Whether a chunk may have been generated: false only once the {@link ChunkExistenceIndex} knows
+   * it never was. Starts the world's scan if it has not begun. Server thread only.
+   *
+   * @param world the world
+   * @param chunkX the chunk x coordinate
+   * @param chunkZ the chunk z coordinate
+   * @return whether the chunk may exist
+   */
+  boolean mayExist(ServerWorld world, int chunkX, int chunkZ) {
+    return world.isChunkLoaded(chunkX, 0, chunkZ, true)
+        || index.presence(world, chunkX, chunkZ) != ChunkExistenceIndex.Presence.ABSENT;
+  }
+
+  /**
    * Stops reading and loading chunks. Fetches already underway are answered as transient failures
    * rather than handed on to the ticket machinery: a server on its way down should not start
    * loading chunks for a search that is also on its way down.

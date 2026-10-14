@@ -24,7 +24,7 @@ class DoorwayTest {
 
   private final TestPlayer player = TestPlayer.walker();
   private final MinecraftMovementBehavior door =
-      MinecraftMovementBehavior.forPlayer(player, Set.of());
+      MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of());
 
   @Test
   void walksThroughClosedWoodenDoorToTheFarSide() {
@@ -90,7 +90,8 @@ class DoorwayTest {
   @Test
   void aPlayerForbiddenFromOpeningDoorsCannotWorkAShutOne() {
     MinecraftMovementBehavior cannotOpen =
-        MinecraftMovementBehavior.forPlayer(player, Set.of(MinecraftStepType.OPEN_DOOR));
+        MinecraftMovementBehavior.forPlayer(
+            TestWorld.CHUNKS, player, Set.of(MinecraftStepType.OPEN_DOOR));
     TestWorld world =
         TestWorld.builder("w")
             .floor(0, -1, -1, 3, 1, TestBlocks.solid())
@@ -104,7 +105,8 @@ class DoorwayTest {
   @Test
   void aPlayerForbiddenFromOpeningDoorsStillWalksThroughAnOpenOne() {
     MinecraftMovementBehavior cannotOpen =
-        MinecraftMovementBehavior.forPlayer(player, Set.of(MinecraftStepType.OPEN_DOOR));
+        MinecraftMovementBehavior.forPlayer(
+            TestWorld.CHUNKS, player, Set.of(MinecraftStepType.OPEN_DOOR));
     TestWorld world =
         TestWorld.builder("w")
             .floor(0, -1, -1, 3, 1, TestBlocks.solid())

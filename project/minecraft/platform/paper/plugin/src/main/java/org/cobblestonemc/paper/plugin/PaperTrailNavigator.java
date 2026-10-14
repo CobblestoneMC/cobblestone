@@ -9,7 +9,9 @@ package org.cobblestonemc.paper.plugin;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.BooleanSupplier;
 import net.kyori.adventure.audience.Audience;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
@@ -19,6 +21,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
+import org.cobblestonemc.plugin.hologram.TrailLabels;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.navigator.AbstractTrailNavigator;
 import org.cobblestonemc.plugin.navigator.TrailBlock;
@@ -50,8 +53,10 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
       List<Color> palette,
       double density,
       int recalcDistance,
-      Messages messages) {
-    super(bufferCells, density, recalcDistance, messages, player.locale());
+      Messages messages,
+      TrailLabels<Location> labels,
+      BooleanSupplier showLabel) {
+    super(bufferCells, density, recalcDistance, messages, player.locale(), labels, showLabel);
     this.player = player;
     this.particles = List.copyOf(particleTypes);
     this.highlightParticles = List.copyOf(highlightParticleTypes);
@@ -61,6 +66,11 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
       dusts.add(new Particle.DustOptions(color, DUST_SIZE));
     }
     setPath(path);
+  }
+
+  @Override
+  protected UUID playerId() {
+    return player.getUniqueId();
   }
 
   @Override
@@ -85,6 +95,11 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
     // Y is raised by 0.9 instead of 0.5 so it's in the center of the player's body-ish.
     return new Vec3(
         location.getBlockX() + 0.5, location.getBlockY() + 0.9, location.getBlockZ() + 0.5);
+  }
+
+  @Override
+  protected Location location(Vec3 point) {
+    return new Location(player.getWorld(), point.x(), point.y(), point.z());
   }
 
   @Override
@@ -137,46 +152,6 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
     if (world == null) {
       return (x, y, z) -> TrailBlock.UNLOADED;
     }
-    return new WorldProbe(world);
-  }
-
-  /**
-   * Reads one world for one tick. Whether a chunk is readable is checked once per run of lookups in
-   * it, not per block, and a block is read without creating a {@code Block}.
-   */
-  private static final class WorldProbe implements TrailSmoother.BlockProbe {
-
-    private final World world;
-    private final int minY;
-    private final int maxY;
-    private long lastChunk = Long.MIN_VALUE; // a chunk far beyond the world border
-    private boolean lastReadable;
-
-    WorldProbe(World world) {
-      this.world = world;
-      this.minY = world.getMinHeight();
-      this.maxY = world.getMaxHeight();
-    }
-
-    @Override
-    public TrailBlock at(int x, int y, int z) {
-      if (y < minY || y >= maxY) {
-        return TrailBlock.OPEN;
-      }
-      int chunkX = x >> 4;
-      int chunkZ = z >> 4;
-      long chunk = ((long) chunkX << 32) | (chunkZ & 0xFFFFFFFFL);
-      if (chunk != lastChunk) {
-        lastChunk = chunk;
-        // Check ownership first (Folia), and never let a lookup load the chunk.
-        lastReadable =
-            Bukkit.isOwnedByCurrentRegion(world, chunkX, chunkZ)
-                && world.isChunkLoaded(chunkX, chunkZ);
-      }
-      if (!lastReadable) {
-        return TrailBlock.UNLOADED;
-      }
-      return world.getType(x, y, z).isSolid() ? TrailBlock.SOLID : TrailBlock.OPEN;
-    }
+    return new PaperWorldProbe(world);
   }
 }

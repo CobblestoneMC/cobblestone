@@ -27,8 +27,11 @@ import org.cobblestonemc.plugin.data.MountLocation;
  */
 final class JdbcMountDao implements MountDao {
 
-  /** How many mounts are remembered per player. */
-  static final int KEPT_PER_PLAYER = 5;
+  /**
+   * How many mounts are remembered per player. Only the newest is navigated to for now; the table
+   * holds one row per player and mount, so keeping more needs no new migration.
+   */
+  static final int KEPT_PER_PLAYER = 1;
 
   private static final String INSERT =
       "INSERT INTO cobblestone_mount (player, mount, world, x, y, z, ridden_at)"

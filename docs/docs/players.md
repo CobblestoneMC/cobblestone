@@ -84,9 +84,11 @@ have none, you are told so.
 ### World spawn
 
 ```
-/nav spawn                         # this world's spawn
-/nav spawn world_nether            # another world's spawn
+/nav spawn
 ```
+
+Where you respawn if you have no respawn point of your own. The server has one, normally in the
+overworld.
 
 ### Surface
 
@@ -118,17 +120,19 @@ underwater; grass and flowers are looked through.
 
 Whole numbers only. The world is optional and defaults to the one you are in. Tab completion offers
 your own coordinates. The word `coordinates` is always required, so `/nav surface` still means the
-nearest open sky.
+nearest open sky. Coordinates in terrain that has never been generated are refused.
 
 ### Mount
 
 ```
 /nav mount
+/nav horse
 ```
 
-The tamed horse, donkey, mule, llama or camel you last rode. The route is recomputed periodically
-as it moves while it is loaded, and otherwise heads to where it was last seen. If it dies, the trip
-ends, and `/nav mount` then leads to the mount you rode before it.
+The tamed horse, donkey, mule, llama or camel you last rode. `horse` is another name for it, for
+any of these. The route is recomputed periodically as it moves while it is loaded, and otherwise
+heads to where it was last seen. If it dies, the trip ends, and there is no mount to go back to
+until you ride another.
 
 ### Pets
 
@@ -253,6 +257,14 @@ caves - 48s
 
 Each trip is named by the shortest part of its address that tells it apart from your other trips.
 `/stone hud` with no argument switches it on or off; your choice is remembered.
+
+To tell several trails apart, stand still for a second: a few blocks ahead of you, the name of
+each trip appears over its trail (or the guide back to it), named the same way as in the HUD. With
+one trip to a player named Steve it reads `Steve`; add a trip to a town also named Steve and they
+read `player Steve` and `town Steve`. A label only appears where you can see it, and the labels go
+away as soon as you move, so they stay out of your way while you follow the trail. **Hit a label to
+cancel that trip.** On Sponge servers, other players nearby can see your labels too, but only you
+can cancel your trips with them.
 
 ## Errors
 

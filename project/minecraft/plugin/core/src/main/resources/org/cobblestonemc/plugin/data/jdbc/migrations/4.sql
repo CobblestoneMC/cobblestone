@@ -1,10 +1,11 @@
 -- The mounts (horses, donkeys, llamas, camels, ...) each player has ridden, so they can navigate
 -- back to them. One row per player and mount: getting off a mount again updates its row, and
--- ridden_at (epoch millis of that dismount) orders a player's mounts newest first. Only the few
--- most recent are kept per player. Navigating to "mount" means the newest one, so if it dies (and
--- its row is dropped) the one before it takes over.
--- The position is where the mount was last seen: updated when its chunk unloads. Both that and the
--- drop on death are keyed by the mount alone, hence the index.
+-- ridden_at (epoch millis of that dismount) orders a player's mounts newest first. Navigating to
+-- "mount" means the newest one. Only that one is kept for now, but the table allows more, so
+-- keeping a history later needs no new migration.
+-- The position is where the mount was last seen: updated when its chunk unloads and when the server
+-- stops. Both that and the drop on death are keyed by the mount alone, hence the index. Lookups by
+-- player use the primary key, which leads with player.
 CREATE TABLE cobblestone_mount (
   player CHAR(36) NOT NULL,
   mount CHAR(36) NOT NULL,

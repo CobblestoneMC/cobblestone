@@ -50,6 +50,9 @@ final class PaperSearchHandle implements SearchHandle<Location, MinecraftStepPay
               .future()
               .whenComplete(
                   (result, err) -> {
+                    // The finished search still holds its chunk cache, through its behavior; let it
+                    // go rather than keep it as long as the caller keeps this handle.
+                    inner = null;
                     if (err != null || result == null) {
                       future.complete(new NavigationResult.Error<>(err));
                     } else {

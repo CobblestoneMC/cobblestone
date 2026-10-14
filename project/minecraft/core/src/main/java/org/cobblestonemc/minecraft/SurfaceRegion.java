@@ -29,24 +29,24 @@ import org.jetbrains.annotations.Nullable;
  * <p>Water and leaves are not passable, so they count as a roof: a player at the bottom of the
  * ocean or under a canopy is not yet at the surface.
  *
- * <p><b>It never waits for a chunk.</b> It reads only through the view a solve binds it to with
- * {@link #scopedForSolve}, and only chunks that view already holds — which, for the cells a search
- * expands, it always does. A column whose chunk is not in hand is simply not known yet: none of its
- * cells count as open, and the nearest boundary falls back to a guess that reads nothing (see
- * {@link #nearestBoundaryCell}). Unbound, as it is before a solve starts, it knows nothing. Each
- * column's roof is computed once per bound region and remembered.
+ * <p><b>It never waits for a chunk.</b> It reads through the search's own {@link ChunkSource}, and
+ * only chunks that source already holds — which, for the cells the search expands, it always does.
+ * A column whose chunk is not in hand is simply not known yet: none of its cells count as open, and
+ * the nearest boundary falls back to a guess that reads nothing (see {@link #nearestBoundaryCell}).
+ * Each column's roof is computed once per search and remembered.
+ *
+ * <p>Since it needs the search's chunks, it is made per search, through a {@link RegionFactory}.
  */
 public final class SurfaceRegion implements DomainRegion<MinecraftWorld> {
 
   private final MinecraftWorld world;
-  private final @Nullable MinecraftWorld readWorld;
+  private final ChunkSource chunks;
   private final @Nullable Column column;
   private final Map<Long, Integer> roofs = new ConcurrentHashMap<>();
 
-  private SurfaceRegion(
-      MinecraftWorld world, @Nullable MinecraftWorld readWorld, @Nullable Column column) {
+  private SurfaceRegion(MinecraftWorld world, ChunkSource chunks, @Nullable Column column) {
     this.world = world;
-    this.readWorld = readWorld;
+    this.chunks = chunks;
     this.column = column;
   }
 
@@ -54,10 +54,10 @@ public final class SurfaceRegion implements DomainRegion<MinecraftWorld> {
    * Every cell in the world that is open to the sky.
    *
    * @param world the world
-   * @return the region
+   * @return a factory making the region for each search
    */
-  public static SurfaceRegion anywhere(MinecraftWorld world) {
-    return new SurfaceRegion(world, null, null);
+  public static RegionFactory anywhere(MinecraftWorld world) {
+    return chunks -> new SurfaceRegion(world, chunks, null);
   }
 
   /**
@@ -66,10 +66,11 @@ public final class SurfaceRegion implements DomainRegion<MinecraftWorld> {
    * @param world the world
    * @param x the column's block x-coordinate
    * @param z the column's block z-coordinate
-   * @return the region
+   * @return a factory making the region for each search
    */
-  public static SurfaceRegion column(MinecraftWorld world, int x, int z) {
-    return new SurfaceRegion(world, null, new Column(x, z));
+  public static RegionFactory column(MinecraftWorld world, int x, int z) {
+    Column column = new Column(x, z);
+    return chunks -> new SurfaceRegion(world, chunks, column);
   }
 
   @Override
@@ -105,11 +106,6 @@ public final class SurfaceRegion implements DomainRegion<MinecraftWorld> {
     return new Cell(from.x(), roof.getAsInt() + 1, from.z());
   }
 
-  @Override
-  public DomainRegion<MinecraftWorld> scopedForSolve(MinecraftWorld readDomain) {
-    return new SurfaceRegion(world, readDomain, column);
-  }
-
   /**
    * The y of the highest non-passable block in the column, or one below the world floor if there is
    * none — a cell is open to the sky exactly when it is above this — or empty if the column's chunk
@@ -131,11 +127,8 @@ public final class SurfaceRegion implements DomainRegion<MinecraftWorld> {
   }
 
   private @Nullable MinecraftChunk chunkInHand(int x, int z) {
-    if (readWorld == null) {
-      return null;
-    }
     Cell probe = new Cell(x, world.maxY(), z);
-    FutureOr<MinecraftChunk> chunk = readWorld.chunkAt(probe, probe);
+    FutureOr<MinecraftChunk> chunk = chunks.chunk(probe, world, probe);
     return chunk.isImmediate() ? chunk.value() : null;
   }
 

@@ -14,9 +14,9 @@ import java.util.UUID;
  * ({@code /navigate mount}).
  *
  * <p>Each player has one record per mount, refreshed every time they get off it; the newest is the
- * one {@code mount} leads to. The position is where the mount was when the player got off, or when
- * its chunk was last unloaded, whichever came later; while the mount is loaded the plugin layer
- * follows the live entity instead.
+ * one {@code mount} leads to. The position is where the mount was when the player got off, when its
+ * chunk was last unloaded, or when the server last stopped, whichever came latest; while the mount
+ * is loaded the plugin layer follows the live entity instead.
  *
  * @param player the rider
  * @param mount the mount's entity id

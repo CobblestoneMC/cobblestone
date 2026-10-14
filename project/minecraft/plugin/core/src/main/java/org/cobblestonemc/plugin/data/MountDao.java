@@ -11,15 +11,14 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Persistence for the {@link MountLocation mounts} each player has ridden. A player's few most
- * recently ridden mounts are kept, so that when the newest dies the one before it can still be
- * found. Implementations must be safe to call from any thread.
+ * Persistence for the {@link MountLocation mounts} each player has ridden. Only a player's most
+ * recently ridden mount is kept for now. Implementations must be safe to call from any thread.
  */
 public interface MountDao {
 
   /**
    * Records that a player has just got off a mount: stores it as their newest, replacing any
-   * earlier record of that same mount, and forgets their oldest beyond the few that are kept.
+   * earlier record of that same mount, and forgets their older ones beyond those that are kept.
    *
    * @param location the mount, where it is, and when it was ridden
    */

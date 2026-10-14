@@ -63,17 +63,6 @@ final class Tier2Search<T, D extends Domain> {
 
   private final CobblestoneLogger logger;
   private final D domain;
-
-  /**
-   * The domain this solve actually reads blocks through: {@link Domain#scopedForSolve()} of {@link
-   * #domain}, so whatever caching it does belongs to this solve and dies with it.
-   *
-   * <p>Kept apart from {@link #domain} so that nothing scoped escapes: results are built from
-   * {@code domain}, and a finished path that carried the scoped view would pin its caches for as
-   * long as anything held the path.
-   */
-  private final D readDomain;
-
   private final DomainRegion<D> target;
   private final MovementBehavior<T, D> behavior;
   private final List<? extends Restriction<D>> restrictions;
@@ -221,10 +210,7 @@ final class Tier2Search<T, D extends Domain> {
             logger,
             "DomainLocal[" + virtualPath.fromCell() + " to " + virtualPath.targetRegion() + "]");
     this.domain = virtualPath.domain();
-    @SuppressWarnings("unchecked")
-    D scoped = (D) virtualPath.domain().scopedForSolve();
-    this.readDomain = scoped;
-    this.target = virtualPath.targetRegion().scopedForSolve(scoped);
+    this.target = virtualPath.targetRegion();
     this.behavior = behavior;
     this.restrictions = restrictions;
     this.hasRestrictions = !restrictions.isEmpty();
@@ -564,7 +550,7 @@ final class Tier2Search<T, D extends Domain> {
   /** Expands one closed node, where {@code goal} is the target cell its movements aim at. */
   private void expand(Node<T> node, Cell goal) {
     FutureOr<Collection<Movement<T>>> movements =
-        behavior.movements(node.key.cell(), readDomain, node.key.state(), goal);
+        behavior.movements(node.key.cell(), domain, node.key.state(), goal);
     if (!movements.isImmediate()) {
       pendingExpansion = new PendingExpansion<>(node.key, movements);
       movements
@@ -752,7 +738,7 @@ final class Tier2Search<T, D extends Domain> {
   private FutureOr<Boolean> impassable(Cell cell) {
     List<FutureOr<Boolean>> verdicts = new ArrayList<>(restrictions.size());
     for (Restriction<D> restriction : restrictions) {
-      verdicts.add(restriction.impassable(cell, readDomain));
+      verdicts.add(restriction.impassable(cell, domain));
     }
     return FutureOr.all(verdicts).map(list -> list.contains(Boolean.TRUE));
   }
