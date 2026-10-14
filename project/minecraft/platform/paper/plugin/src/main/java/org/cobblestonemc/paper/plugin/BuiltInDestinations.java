@@ -19,8 +19,10 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
+import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.paper.PaperRegions;
 import org.cobblestonemc.paper.PaperTerrain;
 import org.cobblestonemc.paper.api.WholeWorldRegion;
@@ -29,6 +31,8 @@ import org.cobblestonemc.plugin.api.DestinationOption;
 import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.data.DeathLocationDao;
 import org.cobblestonemc.plugin.data.LocationDao;
+import org.cobblestonemc.plugin.data.MountDao;
+import org.cobblestonemc.plugin.data.MountLocation;
 import org.cobblestonemc.plugin.destination.DestinationDetails;
 import org.cobblestonemc.plugin.destination.DestinationNode;
 import org.cobblestonemc.plugin.destination.DestinationProvider;
@@ -58,12 +62,18 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
   public static final String BLOCK_KEY = "block";
   public static final String SPAWN_KEY = "spawn";
   public static final String RESPAWN_KEY = "respawn";
+  public static final String MOUNT_KEY = "mount";
+
+  /** Another name for {@code mount}, for the many players whose mount is a horse. */
+  public static final String HORSE_ALIAS = "horse";
 
   /** How far away, in blocks, the block a player is looking at may be for {@code target}. */
   static final int TARGET_RANGE = 256;
 
   private final LocationDao locations;
   private final DeathLocationDao deaths;
+  private final MountDao mounts;
+  private final MinecraftScheduler<Entity> scheduler;
   private final PaperRegions regions;
   private final BooleanSupplier trackDeaths;
   private final Messages messages;
@@ -71,11 +81,15 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
   public BuiltInDestinations(
       LocationDao locations,
       DeathLocationDao deaths,
+      MountDao mounts,
+      MinecraftScheduler<Entity> scheduler,
       PaperRegions regions,
       BooleanSupplier trackDeaths,
       Messages messages) {
     this.locations = locations;
     this.deaths = deaths;
+    this.mounts = mounts;
+    this.scheduler = scheduler;
     this.regions = regions;
     this.trackDeaths = trackDeaths;
     this.messages = messages;
@@ -92,6 +106,8 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
         .leaf(TARGET_KEY, DestinationLeaf.ofValidity(() -> target(player)))
         .leaf(SPAWN_KEY, DestinationLeaf.of(this::spawn))
         .leaf(RESPAWN_KEY, DestinationLeaf.ofValidity(() -> respawn(player)))
+        .leaf(MOUNT_KEY, DestinationLeaf.ofValidity(() -> mount(player)))
+        .alias(HORSE_ALIAS, MOUNT_KEY)
         .subtree(PLAYER_TREE_KEY, () -> players(player))
         .subtree(WORLD_TREE_KEY, () -> worlds(player))
         .subtree(LOCATION_TREE_KEY, () -> locations(player))
@@ -306,6 +322,41 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
       return invalid(player, CobblestoneMessages.NAVIGATE_NO_RESPAWN);
     }
     return Validity.valid(atBlock(RESPAWN_KEY, respawn));
+  }
+
+  /**
+   * The mount the player last rode: followed live while it is loaded, and otherwise where it was
+   * last seen. A trip to it ends if it dies. Invalid if the player has not ridden one since mount
+   * tracking began, or it has died since.
+   */
+  private Validity<NavigationTarget> mount(Player player) {
+    return mounts
+        .get(player.getUniqueId())
+        .map(this::mount)
+        .map(Validity::valid)
+        .orElseGet(() -> invalid(player, CobblestoneMessages.NAVIGATE_NO_MOUNT));
+  }
+
+  private NavigationTarget mount(MountLocation mount) {
+    // Follows the mount while it is loaded, so live trips track it; otherwise heads to where it
+    // was last seen.
+    TrackedEntity tracked = new TrackedEntity(mount.mount(), scheduler);
+    return NavigationTarget.builder(
+            MOUNT_KEY,
+            () ->
+                regions
+                    .block(
+                        tracked
+                            .location()
+                            .orElseGet(
+                                () ->
+                                    new Location(
+                                        world(mount.world()), mount.x(), mount.y(), mount.z())))
+                    .stream()
+                    .toList())
+        .mobile()
+        .existence(tracked::alive)
+        .build();
   }
 
   private DestinationNode<NavigationTarget> players(Player player) {

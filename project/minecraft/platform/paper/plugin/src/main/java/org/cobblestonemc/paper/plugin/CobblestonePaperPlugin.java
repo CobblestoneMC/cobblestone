@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Supplier;
+import java.util.logging.Level;
 import net.kyori.adventure.key.Key;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
@@ -55,6 +56,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
   private TripHud<Entity, PaperTripAgent, Location> tripHud;
   private PaperHolograms holograms;
   private PaperMetrics metrics;
+  private MountListener mountListener;
   private final SearchRegistry<Location> searchRegistry = new SearchRegistry<>();
 
   @Override
@@ -113,6 +115,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
         new BuiltInDestinations(
             dataStore.locations(),
             dataStore.deaths(),
+            dataStore.mounts(),
+            platformApi.scheduler(),
             platformApi.regions(),
             () -> config.get(keys.deathsTrack),
             messages));
@@ -123,6 +127,9 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             new DeathListener(
                 dataStore.deaths(), platformApi.scheduler(), () -> config.get(keys.deathsTrack)),
             this);
+    // So is their last mount.
+    mountListener = new MountListener(dataStore.mounts(), platformApi.scheduler());
+    getServer().getPluginManager().registerEvents(mountListener, this);
 
     // Trips tick on the platform scheduler (Folia-safe region tasks); the default trail navigator
     // is
@@ -291,6 +298,13 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
       platformApi.shutdown();
     }
     getServer().getServicesManager().unregisterAll(this);
+    if (mountListener != null) {
+      try {
+        mountListener.saveLoaded();
+      } catch (RuntimeException e) {
+        getLogger().log(Level.WARNING, "Could not save where loaded mounts are", e);
+      }
+    }
     if (dataStore != null) {
       dataStore.close();
     }

@@ -45,6 +45,17 @@ public interface DestinationNode<D> {
   Map<String, DestinationLeaf<D>> leaves();
 
   /**
+   * Returns the other names the leaves at this level answer to, each mapped to the key of the leaf
+   * it names. An alias is only ever typed: it is not suggested, and the destination it reaches is
+   * addressed (in messages and permissions) by its own key.
+   *
+   * @return the aliases
+   */
+  default Map<String, String> aliases() {
+    return Map.of();
+  }
+
+  /**
    * Begins a level.
    *
    * @param <D> what the leaves build
@@ -60,18 +71,35 @@ public interface DestinationNode<D> {
    * @param strict whether it may never be omitted
    * @param subTrees the children
    * @param leaves the leaves
+   * @param aliases the leaves' other names, each mapped to its leaf's key
    * @param <D> what the leaves build
    */
   record Simple<D>(
       boolean strict,
       Map<String, Supplier<? extends DestinationNode<D>>> subTrees,
-      Map<String, DestinationLeaf<D>> leaves)
+      Map<String, DestinationLeaf<D>> leaves,
+      Map<String, String> aliases)
       implements DestinationNode<D> {
 
     /** Canonical constructor; copies the maps. */
     public Simple {
       subTrees = Map.copyOf(subTrees);
       leaves = Map.copyOf(leaves);
+      aliases = Map.copyOf(aliases);
+    }
+
+    /**
+     * A level without aliases.
+     *
+     * @param strict whether it may never be omitted
+     * @param subTrees the children
+     * @param leaves the leaves
+     */
+    public Simple(
+        boolean strict,
+        Map<String, Supplier<? extends DestinationNode<D>>> subTrees,
+        Map<String, DestinationLeaf<D>> leaves) {
+      this(strict, subTrees, leaves, Map.of());
     }
   }
 
@@ -86,6 +114,7 @@ public interface DestinationNode<D> {
     private final Map<String, Supplier<? extends DestinationNode<D>>> subTrees =
         new LinkedHashMap<>();
     private final Map<String, DestinationLeaf<D>> leaves = new LinkedHashMap<>();
+    private final Map<String, String> aliases = new LinkedHashMap<>();
 
     private Builder() {}
 
@@ -124,12 +153,31 @@ public interface DestinationNode<D> {
     }
 
     /**
+     * Gives the leaf just added another name, for players who guess it; see {@link #aliases()}.
+     *
+     * @param alias the other name
+     * @param key the key of a leaf already added
+     * @return this builder
+     * @throws IllegalArgumentException if no leaf has that key, or the alias is already a key here
+     */
+    public Builder<D> alias(String alias, String key) {
+      if (!leaves.containsKey(key)) {
+        throw new IllegalArgumentException("No leaf " + key + " to alias");
+      }
+      if (leaves.containsKey(alias) || subTrees.containsKey(alias)) {
+        throw new IllegalArgumentException(alias + " is already a key here");
+      }
+      aliases.put(alias, key);
+      return this;
+    }
+
+    /**
      * Builds the level.
      *
      * @return the level
      */
     public DestinationNode<D> build() {
-      return new Simple<>(strict, subTrees, leaves);
+      return new Simple<>(strict, subTrees, leaves, aliases);
     }
   }
 }

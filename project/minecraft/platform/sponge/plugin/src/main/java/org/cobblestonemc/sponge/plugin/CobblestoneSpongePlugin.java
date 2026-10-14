@@ -90,6 +90,7 @@ public final class CobblestoneSpongePlugin {
   private SearchGate searchGate;
   private Supplier<SearchSettings> searchSettings;
   private SpongeMetrics metrics;
+  private SpongeMountListener mountListener;
 
   @Inject
   CobblestoneSpongePlugin(
@@ -202,6 +203,7 @@ public final class CobblestoneSpongePlugin {
         new BuiltInDestinations(
             dataStore.locations(),
             dataStore.deaths(),
+            dataStore.mounts(),
             navigationService.regions(),
             navigationService::mayBeGenerated,
             () -> config.get(keys.deathsTrack),
@@ -214,6 +216,9 @@ public final class CobblestoneSpongePlugin {
                 dataStore.deaths(),
                 navigationService.scheduler(),
                 () -> config.get(keys.deathsTrack)));
+    // So is their last mount.
+    mountListener = new SpongeMountListener(dataStore.mounts(), navigationService.scheduler());
+    Sponge.eventManager().registerListeners(container, mountListener);
 
     // Keep the chunk cache honest: a block changing evicts the snapshot it belongs to.
 
@@ -341,6 +346,13 @@ public final class CobblestoneSpongePlugin {
     }
     CobblestoneSpongeApi.uninstall();
     CobblestoneCoreApi.uninstall();
+    if (mountListener != null) {
+      try {
+        mountListener.saveLoaded();
+      } catch (RuntimeException e) {
+        logger.warn("Could not save where loaded mounts are", e);
+      }
+    }
     if (dataStore != null) {
       dataStore.close();
     }
