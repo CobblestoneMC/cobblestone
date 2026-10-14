@@ -126,6 +126,25 @@ were never built.
   (tree leaves and logs isolated in the air). In `cave-lateral`, 5,000 of 16,500 regions are
   climbables, mostly cave vines and lichen breaking up the floor. Both are cheap targets.
 
+### The scale folded into the weight (2026-10-14)
+The 0.85 scale on region estimates is gone; the default weight is 1.7, the old product. They
+are not quite the same search: the fine search eases its weight to 1 over the last 64 blocks,
+so near the target the estimate is now taken at 1.0 where it was taken at 0.85. All 58 runs, no
+disk model, cold:
+
+| Weight | Solved | Nodes (geometric mean) | Paths over best | Worst | Mean ms |
+| --- | --- | --- | --- | --- | --- |
+| old 2.0 × 0.85 | 58 | 1,005 | +1.3% | +8.9% | – |
+| 1.5 | 58 | 1,146 | +0.1% | +0.8% | 1,321 |
+| 1.6 | 58 | 924 | +0.8% | +6.4% | 1,275 |
+| 1.65 | 58 | 852 | +1.1% | +8.9% | 1,260 |
+| **1.7** | 58 | 800 | +1.5% | +8.9% | 1,236 |
+| 1.75 | 58 | 757 | +1.8% | +12.3% | 1,228 |
+| 2.0 | 58 | 600 | +4.4% | +23.0% | 1,103 |
+
+Time hardly moves with the weight: building the regions dominates a cold run. Not to be fitted
+more finely until the new scenarios are in.
+
 ### Shared, persistent store (2026-10-13)
 Columns are built once into a `RegionStore` per world, shared by every search, written to
 `regions/` in 32x32-column files, and invalidated on block change. `bench sweep --warm` measures

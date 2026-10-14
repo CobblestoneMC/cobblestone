@@ -43,33 +43,33 @@ public final class SearchSettings {
   /**
    * Default A* heuristic weight (1.0 = admissible/optimal; &gt;1 = faster, weighted A*).
    *
-   * <p>Measured under {@link #DEFAULT_HEURISTIC} over 58 runs, scored on the 55 every weight solved
-   * (nodes as a geometric mean, paths against the best any weight found):
+   * <p>Tuned for {@link #DEFAULT_HEURISTIC}, whose estimate {@code bench verify} puts at 0.7–0.95
+   * of the true cost and never above. Over 58 runs, scored on the 55 every weight solved (nodes as
+   * a geometric mean, paths against the best any weight found):
    *
    * <pre>
-   *   1.5    2,754 nodes   +0.2%   55 of 58 solved
-   *   1.75   1,365 nodes   +1.8%   58 of 58
-   *   2.0      952 nodes   +3.0%   58 of 58
+   *   1.275  2,754 nodes   +0.2%   55 of 58 solved
+   *   1.49   1,365 nodes   +1.8%   58 of 58
+   *   1.7      952 nodes   +3.0%   58 of 58
    * </pre>
    *
-   * <p>2.0 for now: below 1.75 the search starts running out of cells, and between the two the
-   * choice is a trade of about 40% more nodes for paths about 1% cheaper. The region estimate is
-   * itself scaled by 0.85, so the weight and that scale multiply.
+   * <p>1.7: below about 1.5 the search starts running out of cells, and between the two the choice
+   * is a trade of about 40% more nodes for paths about 1% cheaper. Another heuristic would want its
+   * own weight; this one is only right for estimates about as close as these.
    */
-  public static final double DEFAULT_HEURISTIC_WEIGHT = 2.0;
+  public static final double DEFAULT_HEURISTIC_WEIGHT = 1.7;
 
   /**
    * The estimate a search uses unless told otherwise.
    *
    * <p>{@link Heuristic#REGIONS} by default, from measurement. Over 58 runs (22 routes, four
-   * loadouts) at {@link #DEFAULT_HEURISTIC_WEIGHT} it solves all 58 against the running average's
-   * 48, and on the routes both solve it expands about a third of the nodes (geometric mean 685
-   * against 1,872) for paths +1.3% over the best found against +13.8%.
+   * loadouts) it solves all 58 against the running average's 48, expands about a quarter of the
+   * nodes (geometric mean 1,005 against 3,887), and its paths average +5.5% over the best found
+   * against +17.9%.
    *
-   * <p>⚠️ It is not free: each solve reads and classifies the terrain it reasons over, which on a
-   * long route is hundreds of chunk reads, and none of that is shared between searches yet. A
-   * server that runs many concurrent searches on slow storage should measure before trusting the
-   * default.
+   * <p>⚠️ It is not free: a search reads the terrain it reasons over, and the first search over new
+   * terrain has to summarize it, which on a long route is hundreds of chunk reads. Summaries are
+   * shared between searches and kept on disk, so later searches mostly read them back.
    */
   public static final Heuristic DEFAULT_HEURISTIC = Heuristic.REGIONS;
 

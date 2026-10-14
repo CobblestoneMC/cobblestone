@@ -29,8 +29,8 @@ import org.cobblestonemc.stonebrick.platform.Capture;
  * destination. That is expensive, which is why this samples rather than sweeps, and it is the only
  * number worth comparing an estimate against.
  *
- * <p>The estimate is the unscaled one, the region search's own answer: the scale production puts on
- * it is a tuning choice made against this measurement, not part of what is measured.
+ * <p>The estimate is the region search's own answer, before the search's heuristic weight: the
+ * weight is a tuning choice made against this measurement, not part of what is measured.
  *
  * <p>What matters in the output is the <b>over</b> column: estimates above the true cost. A* is
  * only guaranteed to return an optimal path when the estimate never exceeds what remains, and while

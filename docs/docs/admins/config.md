@@ -79,7 +79,7 @@ limit; a manual `/navigate` always runs.
 | `search.algorithm.max_cells_visited` | `200000` | live |
 | `search.algorithm.max_wall_clock_seconds` | `60` | live |
 | `search.algorithm.heuristic` | `REGIONS` | live |
-| `search.algorithm.heuristic_weight` | `2.0` | live |
+| `search.algorithm.heuristic_weight` | `1.7` | live |
 | `search.algorithm.tier1_unsolved_pessimism` | `1.5` | live |
 | `search.algorithm.running_average_width` | `5` | live |
 

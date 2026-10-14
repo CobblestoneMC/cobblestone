@@ -327,20 +327,8 @@ public final class ScenarioRunner {
   private @org.jetbrains.annotations.Nullable Path regionCache;
 
   /**
-   * The factor the region heuristic's estimates are scaled by, from {@code -Dregions.scale}.
-   *
-   * <p>A property rather than a scenario field because it is a tuning knob being measured, not a
-   * part of any route; once settled it belongs in {@code RegionHeuristic.DEFAULT_SCALE}.
-   */
-  static final double REGION_SCALE =
-      Double.parseDouble(
-          System.getProperty(
-              "regions.scale",
-              String.valueOf(org.cobblestonemc.minecraft.lod.RegionHeuristic.DEFAULT_SCALE)));
-
-  /**
    * The detour a region may hold before the fill splits it, from {@code -Dregions.detour}; a tuning
-   * knob, like {@link #REGION_SCALE}.
+   * knob being measured, not a part of any route.
    */
   static final double REGION_DETOUR =
       Double.parseDouble(
@@ -400,7 +388,6 @@ public final class ScenarioRunner {
                 region -> columns,
                 region -> store,
                 org.cobblestonemc.minecraft.lod.RegionCost.forPlayer(player, excluded),
-                REGION_SCALE,
                 REGION_DETOUR);
         yield lastRegionHeuristic;
       }

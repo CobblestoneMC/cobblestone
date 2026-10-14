@@ -45,22 +45,9 @@ public final class RegionHeuristic implements HeuristicStrategy {
    */
   private static final int CACHE_LIMIT = 1 << 20;
 
-  /**
-   * The factor production applies to every estimate.
-   *
-   * <p>Below 1 because the unscaled estimate is already close: {@code bench verify} puts it at
-   * 0.7–0.95 of the true cost and never above, and a weight-2 search on an estimate that close
-   * commits to the first route it likes. Over 58 runs at weight 2.0, against the best path any
-   * configuration found: 1.0 expands 434 nodes (geometric mean) for paths +4.9% over; 0.85 expands
-   * 685 for +2.6%; 0.7 expands 1,934 for +0.6% and fails a route. The section-coverage heuristic it
-   * replaced expanded 1,913 for +5.0% and failed 8.
-   */
-  public static final double DEFAULT_SCALE = 0.85;
-
   private final Function<DomainRegion<?>, RegionGraph.ChunkColumns> columnsFor;
   private final @Nullable Function<DomainRegion<?>, RegionStore> storeFor;
   private final RegionCost cost;
-  private final double scale;
   private final double detourRatio;
   private final List<RegionSearch> searches = new java.util.ArrayList<>();
 
@@ -71,69 +58,39 @@ public final class RegionHeuristic implements HeuristicStrategy {
    * @param cost the agent
    */
   public RegionHeuristic(RegionGraph.ChunkColumns columns, RegionCost cost) {
-    this(region -> columns, cost, DEFAULT_SCALE);
+    this(region -> columns, null, cost, RegionGraph.DEFAULT_DETOUR_RATIO);
   }
 
   /**
-   * Creates a heuristic that builds a terrain source per solve, scaling every estimate.
+   * Creates a heuristic that builds a terrain source per solve, reading built columns from a shared
+   * store, as a server's do.
    *
    * <p>Per solve, not per strategy: one strategy is built per navigate, but a trip may have legs in
    * several worlds, and a source bound to the first would answer every later leg from the wrong
    * terrain without ever failing. The target region knows which world its leg is in.
    *
-   * @param columnsFor builds a terrain source for a solve's target region
-   * @param cost the agent
-   * @param scale a factor on every estimate; below 1 leaves the weighted search room to explore
-   */
-  public RegionHeuristic(
-      Function<DomainRegion<?>, RegionGraph.ChunkColumns> columnsFor,
-      RegionCost cost,
-      double scale) {
-    this(columnsFor, cost, scale, RegionGraph.DEFAULT_DETOUR_RATIO);
-  }
-
-  /**
-   * Creates a heuristic with every tuning knob given, for measuring them.
-   *
-   * @param columnsFor builds a terrain source for a solve's target region
-   * @param cost the agent
-   * @param scale a factor on every estimate
-   * @param detourRatio how far a region may bend before the graph splits it; see {@link
-   *     RegionGraph#DEFAULT_DETOUR_RATIO}
-   */
-  public RegionHeuristic(
-      Function<DomainRegion<?>, RegionGraph.ChunkColumns> columnsFor,
-      RegionCost cost,
-      double scale,
-      double detourRatio) {
-    this(columnsFor, null, cost, scale, detourRatio);
-  }
-
-  /**
-   * Creates a heuristic whose solves read built columns from a shared store, as a server's do.
-   *
    * <p>Without a store each solve builds every column it needs and forgets them; with one, a column
    * built by any search — or before the server last restarted — is read back instead.
+   *
+   * <p>Estimates are the region search's own answers, unscaled. How far the fine search trusts them
+   * is the search's heuristic weight, and nothing else.
    *
    * @param columnsFor builds a chunk source for a solve's target region, for the columns the store
    *     has to build
    * @param storeFor the store for a solve's target region's world, or {@code null} for a store of
    *     each solve's own
    * @param cost the agent
-   * @param scale a factor on every estimate
    * @param detourRatio the fill's detour ratio, for a store of each solve's own; a shared store
-   *     carries its own
+   *     carries its own; see {@link RegionGraph#DEFAULT_DETOUR_RATIO}
    */
   public RegionHeuristic(
       Function<DomainRegion<?>, RegionGraph.ChunkColumns> columnsFor,
       @Nullable Function<DomainRegion<?>, RegionStore> storeFor,
       RegionCost cost,
-      double scale,
       double detourRatio) {
     this.columnsFor = columnsFor;
     this.storeFor = storeFor;
     this.cost = cost;
-    this.scale = scale;
     this.detourRatio = detourRatio;
   }
 
@@ -207,7 +164,7 @@ public final class RegionHeuristic implements HeuristicStrategy {
     public double estimate(Cell from, double distance, TraversalState state, double trailAverage) {
       Double known = answered.get(from);
       if (known != null) {
-        return scale * known;
+        return known;
       }
       // Reached only when something estimates without preparing; answer, but cache only a real
       // answer.
@@ -216,7 +173,7 @@ public final class RegionHeuristic implements HeuristicStrategy {
       if (running.takePending() == null) {
         remember(from, estimate);
       }
-      return scale * estimate;
+      return estimate;
     }
 
     private RegionSearch search(Cell from) {

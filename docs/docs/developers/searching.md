@@ -108,7 +108,7 @@ queries, such as reachability checks, should set smaller limits.
 | `maxCellsVisited` | 200 000 | Cell limit; a few hundred bytes per cell |
 | `maxWallClockMillis` | 60 000 | Time limit |
 | `heuristic` | `REGIONS` | `REGIONS` reads the terrain ahead; `RUNNING_AVERAGE` extrapolates from recent steps |
-| `heuristicWeight` | 2.0 | `1.0` is optimal; higher is faster and bounded-suboptimal |
+| `heuristicWeight` | 1.7 | `1.0` is optimal; higher is faster and bounded-suboptimal |
 | `tier1UnsolvedPessimism` | 1.5 | Cost multiplier for unsolved route legs |
 | `runningAverageWidth` | 5 | Heuristic smoothing window |
 
