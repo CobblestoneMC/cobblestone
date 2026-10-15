@@ -436,19 +436,18 @@ final class NavigateCommand {
       Messages messages,
       SpongeIntegrationRegistry integrations) {
     messages.send(player, locale, CobblestoneMessages.NAVIGATE_HELP_HEADER);
-    SpongeCommandHelp.line(
+    CommandHelp.line(
         player, messages, locale, "/navigate <destination…>", "command.navigate.help.destination");
-    SpongeCommandHelp.line(
+    CommandHelp.line(
         player, messages, locale, "-navigator <id>", "command.navigate.help.navigator");
-    SpongeCommandHelp.line(
-        player, messages, locale, "-no-mode <mode>", "command.navigate.help.no_mode");
-    SpongeCommandHelp.line(
+    CommandHelp.line(player, messages, locale, "-no-mode <mode>", "command.navigate.help.no_mode");
+    CommandHelp.line(
         player,
         messages,
         locale,
         "-no-world <world> / -no-dimension <dim>",
         "command.navigate.help.no_world");
-    SpongeCommandHelp.line(player, messages, locale, "-live", "command.navigate.help.live");
+    CommandHelp.line(player, messages, locale, "-live", "command.navigate.help.live");
   }
 
   private static Predicate<List<String>> canNavigate(ServerPlayer player) {

@@ -308,7 +308,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
   private NavigationTarget mount(MountLocation mount) {
     // Follows the mount while it is loaded, so live trips track it; otherwise heads to where it
     // was last seen.
-    SpongeTrackedEntity tracked = new SpongeTrackedEntity(mount.mount());
+    TrackedEntity tracked = new TrackedEntity(mount.mount());
     return NavigationTarget.builder(
             MOUNT_KEY,
             () ->
@@ -352,7 +352,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
           DestinationLeaf.of(
               () -> {
                 // Follows the pet, so live trips track it, and ends the trip if it dies.
-                SpongeTrackedEntity tracked = new SpongeTrackedEntity(pet.uuid());
+                TrackedEntity tracked = new TrackedEntity(pet.uuid());
                 return NavigationTarget.builder(
                         name, () -> tracked.location().map(regions::block).stream().toList())
                     .mobile()
