@@ -32,9 +32,9 @@ import org.cobblestonemc.SearchObserver;
  * it, which it would have given up at anyway.
  *
  * <p>Everything else is reported, not judged: whether each heuristic arrives, at what cost, how
- * close a failure came, whether the route is too easy to tell heuristics apart, and whether {@code
- * verify} can reach Dijkstra's true optimum, which costs far more than a solve and is out of reach
- * on a long or open route.
+ * close a failure came, whether the route is too easy to tell heuristics apart, and whether
+ * Dijkstra can reach the route's true optimum, which costs far more than a solve and is out of
+ * reach on a long or open route.
  *
  * <p><b>Dijkstra is the same fine search with no heuristic at weight 1</b>, priced by the same
  * movement modes as production, so its cost is the true optimum under the costs the game is
@@ -58,10 +58,10 @@ public final class ScenarioCheck {
   /** How many times the capture may grow before the check gives up on it. */
   static final int MAX_ROUNDS = 6;
 
-  /** {@code verify}'s Dijkstra cell limit: a route it cannot finish within this is unmeasurable. */
+  /** Dijkstra's cell limit: a route it cannot finish within this has no optimum to compare to. */
   static final int DIJKSTRA_CELLS = 4_000_000;
 
-  /** Dijkstra's time limit here: shorter than {@code verify}'s, since someone is waiting. */
+  /** Dijkstra's time limit here: kept short, since someone is waiting. */
   static final long DIJKSTRA_MILLIS = 180_000;
 
   /**
@@ -82,7 +82,15 @@ public final class ScenarioCheck {
   private ScenarioCheck() {}
 
   /** One loadout's results. */
-  private record Row(Loadout loadout, RunResult regions, RunResult average) {}
+  /** One loadout's results, by heuristic. */
+  private record Row(Loadout loadout, Map<Scenario.Heuristic, RunResult> results) {}
+
+  /** Every estimate production can run: each one a scenario is checked under. */
+  private static List<Scenario.Heuristic> heuristics() {
+    return java.util.Arrays.stream(Scenario.Heuristic.values())
+        .filter(heuristic -> heuristic.production() != null)
+        .toList();
+  }
 
   /**
    * Checks a scenario, reporting as it goes.
@@ -141,15 +149,11 @@ public final class ScenarioCheck {
       NeededChunks grown = capsule;
       int outside = 0;
       for (Loadout loadout : applicable) {
-        RunResult regions =
-            runner.run(
-                scenario.withHeuristic(Scenario.Heuristic.REGIONS), loadout, SearchObserver.none());
-        RunResult average =
-            runner.run(
-                scenario.withHeuristic(Scenario.Heuristic.RUNNING_AVERAGE),
-                loadout,
-                SearchObserver.none());
-        for (RunResult result : List.of(regions, average)) {
+        Map<Scenario.Heuristic, RunResult> results = new LinkedHashMap<>();
+        for (Scenario.Heuristic heuristic : heuristics()) {
+          RunResult result =
+              runner.run(scenario.withHeuristic(heuristic), loadout, SearchObserver.none());
+          results.put(heuristic, result);
           if (!result.outcome().equals("success")) {
             continue; // its wandering is not terrain the route needs
           }
@@ -158,7 +162,7 @@ public final class ScenarioCheck {
           }
           outside += result.missingChunks().size();
         }
-        rows.add(new Row(loadout, regions, average));
+        rows.add(new Row(loadout, results));
       }
       // Missing terrain inside the capsule is a capture that came back with holes, which another
       // round fills just the same.
@@ -185,62 +189,65 @@ public final class ScenarioCheck {
               + " rounds: the capture cannot keep up with the route.");
     }
 
-    out.accept("  Loadout             REGIONS                          RUNNING_AVERAGE");
+    StringBuilder header = new StringBuilder(String.format(Locale.ROOT, "  %-19s", "Loadout"));
+    for (Scenario.Heuristic heuristic : heuristics()) {
+      header.append(String.format(Locale.ROOT, " %-44s", heuristic));
+    }
+    out.accept(header.toString().stripTrailing());
     for (Row row : rows) {
-      out.accept(
-          String.format(
-              Locale.ROOT,
-              "  %-19s %-32s %s",
-              row.loadout().name(),
-              summary(row.regions()),
-              summary(row.average())));
+      StringBuilder line =
+          new StringBuilder(String.format(Locale.ROOT, "  %-19s", row.loadout().name()));
+      for (RunResult result : row.results().values()) {
+        line.append(String.format(Locale.ROOT, " %-44s", summary(result)));
+      }
+      out.accept(line.toString().stripTrailing());
     }
 
     List<String> warnings = new ArrayList<>();
     boolean usable = contained;
     boolean anyArrived =
         rows.stream()
-            .anyMatch(
-                row ->
-                    row.regions().outcome().equals("success")
-                        || row.average().outcome().equals("success"));
+            .flatMap(row -> row.results().values().stream())
+            .anyMatch(result -> result.outcome().equals("success"));
     if (!anyArrived) {
       warnings.add(
           "No search arrived for any loadout. Still measurable, by how close each came; but check"
               + " that the destination can be reached.");
     }
     for (Row row : rows) {
-      for (RunResult failed : List.of(row.regions(), row.average())) {
-        if (!failed.outcome().equals("success") && !failed.missingChunks().isEmpty()) {
+      for (Map.Entry<Scenario.Heuristic, RunResult> entry : row.results().entrySet()) {
+        RunResult result = entry.getValue();
+        if (!result.outcome().equals("success") && !result.missingChunks().isEmpty()) {
           warnings.add(
               String.format(
                   Locale.ROOT,
                   "%s for %s wandered %,d chunks past the capture before giving up; those are"
                       + " walls to it.",
-                  failed.configuration().getOrDefault("heuristic", "a search"),
+                  entry.getKey(),
                   row.loadout().name(),
-                  failed.missingChunks().size()));
+                  result.missingChunks().size()));
         }
       }
     }
     if (rows.stream()
-        .allMatch(
-            row ->
-                row.regions().nodesExpanded() < EASY_NODES
-                    && row.average().nodesExpanded() < EASY_NODES)) {
+        .flatMap(row -> row.results().values().stream())
+        .allMatch(result -> result.nodesExpanded() < EASY_NODES)) {
       warnings.add(
           "Every search finished in under "
               + EASY_NODES
               + " nodes: too easy to tell heuristics apart. A longer or harder route says more.");
     }
     for (Row row : rows) {
-      if (row.regions().realMillis() > SLOW_MILLIS) {
-        warnings.add(
-            String.format(
-                Locale.ROOT,
-                "REGIONS took %.1f s for %s.",
-                row.regions().realMillis() / 1000.0,
-                row.loadout().name()));
+      for (Map.Entry<Scenario.Heuristic, RunResult> entry : row.results().entrySet()) {
+        if (entry.getValue().realMillis() > SLOW_MILLIS) {
+          warnings.add(
+              String.format(
+                  Locale.ROOT,
+                  "%s took %.1f s for %s.",
+                  entry.getKey(),
+                  entry.getValue().realMillis() / 1000.0,
+                  row.loadout().name()));
+        }
       }
     }
 
@@ -248,9 +255,9 @@ public final class ScenarioCheck {
     out.accept(
         String.format(
             Locale.ROOT,
-            "  Dijkstra, for verify (up to %,d cells%s):",
+            "  Dijkstra, for the true optimum (up to %,d cells%s):",
             budget,
-            budget < DIJKSTRA_CELLS ? ", less than verify's because of the heap" : ""));
+            budget < DIJKSTRA_CELLS ? ", fewer than it could take because of the heap" : ""));
     for (Row row : rows) {
       RunResult dijkstra;
       try {
@@ -268,7 +275,7 @@ public final class ScenarioCheck {
         out.accept(
             String.format(
                 Locale.ROOT,
-                "    %-17s ran out of memory: verify cannot measure this route from its start",
+                "    %-17s ran out of memory: no optimum for this route from its start",
                 row.loadout().name()));
         continue;
       }
@@ -277,7 +284,7 @@ public final class ScenarioCheck {
         warnings.add(
             String.format(
                 Locale.ROOT,
-                "Dijkstra for %s reached %,d chunks past the capture; verify's optimum there"
+                "Dijkstra for %s reached %,d chunks past the capture; its optimum there"
                     + " treats them as walls.",
                 row.loadout().name(),
                 dijkstra.missingChunks().size()));
@@ -316,37 +323,36 @@ public final class ScenarioCheck {
     if (!dijkstra.outcome().equals("success")) {
       return String.format(
           Locale.ROOT,
-          "%s %s after %,d cells, %.0f s: verify cannot measure this route from its start",
+          "%s %s after %,d cells, %.0f s: no optimum for this route from its start",
           name,
           dijkstra.outcome(),
           dijkstra.nodesExpanded(),
           dijkstra.realMillis() / 1000.0);
     }
     double optimum = dijkstra.pathCost();
-    String regions =
-        row.regions().outcome().equals("success")
-            ? String.format(
-                Locale.ROOT, "REGIONS %+.1f%%", 100 * (row.regions().pathCost() / optimum - 1))
-            : "REGIONS unsolved";
-    String average =
-        row.average().outcome().equals("success")
-            ? String.format(
-                Locale.ROOT,
-                "RUNNING_AVERAGE %+.1f%%",
-                100 * (row.average().pathCost() / optimum - 1))
-            : "RUNNING_AVERAGE unsolved";
+    List<String> against = new ArrayList<>();
+    for (Map.Entry<Scenario.Heuristic, RunResult> entry : row.results().entrySet()) {
+      RunResult result = entry.getValue();
+      against.add(
+          result.outcome().equals("success")
+              ? String.format(
+                  Locale.ROOT,
+                  "%s %+.1f%%",
+                  entry.getKey(),
+                  100 * (result.pathCost() / optimum - 1))
+              : entry.getKey() + " unsolved");
+    }
     return String.format(
         Locale.ROOT,
-        "%s optimum %.1f in %,d cells, %.0f s; %s, %s",
+        "%s optimum %.1f in %,d cells, %.0f s; %s",
         name,
         optimum,
         dijkstra.nodesExpanded(),
         dijkstra.realMillis() / 1000.0,
-        regions,
-        average);
+        String.join(", ", against));
   }
 
-  /** As many cells as fit in about half the heap that is free, up to {@code verify}'s limit. */
+  /** As many cells as fit in about half the heap that is free, up to {@link #DIJKSTRA_CELLS}. */
   private static long dijkstraBudget() {
     Runtime runtime = Runtime.getRuntime();
     System.gc();

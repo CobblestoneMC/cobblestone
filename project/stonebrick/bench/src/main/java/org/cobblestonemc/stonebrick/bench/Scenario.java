@@ -39,6 +39,8 @@ import org.yaml.snakeyaml.Yaml;
  * @param origin where the agent starts
  * @param destination the cell sought
  * @param destinationRadius how far from {@code destination} counts as arrival
+ * @param destinationBox an area that counts as arrival instead, as {@code {min, max}} corners, or
+ *     {@code null}; {@code destination} then stays the route's anchor, for its capture
  * @param settings the search limits
  * @param io what a chunk read costs
  * @param onMissingCapture what to do about reads outside the capture
@@ -56,6 +58,7 @@ public record Scenario(
     Cell origin,
     Cell destination,
     int destinationRadius,
+    Cell @org.jetbrains.annotations.Nullable [] destinationBox,
     SearchLimits settings,
     IoProfile io,
     MissingCapturePolicy onMissingCapture,
@@ -268,6 +271,7 @@ public record Scenario(
             origin,
             destination,
             destinationRadius,
+            destinationBox,
             settings,
             io,
             onMissingCapture,
@@ -296,6 +300,7 @@ public record Scenario(
         cell,
         destination,
         destinationRadius,
+        destinationBox,
         settings,
         io,
         onMissingCapture,
@@ -321,6 +326,7 @@ public record Scenario(
         origin,
         destination,
         destinationRadius,
+        destinationBox,
         limits,
         io,
         onMissingCapture,
@@ -351,6 +357,7 @@ public record Scenario(
         origin,
         destination,
         destinationRadius,
+        destinationBox,
         tuned,
         io,
         onMissingCapture,
@@ -392,6 +399,7 @@ public record Scenario(
         origin,
         destination,
         destinationRadius,
+        destinationBox,
         settings,
         profile,
         onMissingCapture,
@@ -430,6 +438,7 @@ public record Scenario(
         cell(requireMap(root, "origin", file), file),
         cell(destination, file),
         integer(destination, "radius", 0),
+        box(destination, file),
         new SearchLimits(
             number(limits, "heuristicWeight", SearchSettings.DEFAULT_HEURISTIC_WEIGHT),
             integer(limits, "maxCellsVisited", SearchSettings.DEFAULT_MAX_CELLS_VISITED),
@@ -445,6 +454,31 @@ public record Scenario(
             string(root, "heuristic", SearchSettings.DEFAULT_HEURISTIC.name())
                 .toUpperCase(java.util.Locale.ROOT)
                 .replace('-', '_')));
+  }
+
+  /**
+   * Reads a destination's box, {@code box: { from: {x, y, z}, to: {x, y, z} }}, as its least and
+   * greatest corners, or {@code null} if it has none.
+   *
+   * <p>For a destination that is an area, such as a village: what a server's town or region
+   * destinations are, and what lets a route arrive by whichever side is cheapest.
+   */
+  @SuppressWarnings("unchecked")
+  private static Cell @org.jetbrains.annotations.Nullable [] box(
+      Map<String, Object> destination, Path file) throws IOException {
+    Object raw = destination.get("box");
+    if (raw == null) {
+      return null;
+    }
+    if (!(raw instanceof Map<?, ?> box)) {
+      throw new IOException(file + ": destination box must be { from: ..., to: ... }");
+    }
+    Cell from = cell(requireMap((Map<String, Object>) box, "from", file), file);
+    Cell to = cell(requireMap((Map<String, Object>) box, "to", file), file);
+    return new Cell[] {
+      new Cell(Math.min(from.x(), to.x()), Math.min(from.y(), to.y()), Math.min(from.z(), to.z())),
+      new Cell(Math.max(from.x(), to.x()), Math.max(from.y(), to.y()), Math.max(from.z(), to.z()))
+    };
   }
 
   /**

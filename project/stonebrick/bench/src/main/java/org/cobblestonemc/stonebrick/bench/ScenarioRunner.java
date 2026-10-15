@@ -193,13 +193,19 @@ public final class ScenarioRunner {
 
     Cell goal = scenario.destination();
     int radius = scenario.destinationRadius();
-    DomainRegion<MinecraftWorld> target =
-        radius <= 0
-            ? StonebrickSolve.at(world, goal)
-            : StonebrickSolve.box(
-                world,
-                new Cell(goal.x() - radius, goal.y() - radius, goal.z() - radius),
-                new Cell(goal.x() + radius, goal.y() + radius, goal.z() + radius));
+    DomainRegion<MinecraftWorld> target;
+    if (scenario.destinationBox() != null) {
+      target =
+          StonebrickSolve.box(world, scenario.destinationBox()[0], scenario.destinationBox()[1]);
+    } else if (radius > 0) {
+      target =
+          StonebrickSolve.box(
+              world,
+              new Cell(goal.x() - radius, goal.y() - radius, goal.z() - radius),
+              new Cell(goal.x() + radius, goal.y() + radius, goal.z() + radius));
+    } else {
+      target = StonebrickSolve.at(world, goal);
+    }
 
     SearchSettings.Builder builder =
         SearchSettings.builder()
@@ -468,7 +474,7 @@ public final class ScenarioRunner {
     final AtomicLong opened = new AtomicLong();
     final AtomicLong closed = new AtomicLong();
 
-    /** The least straight-line distance to the destination of any cell settled, squared. */
+    /** The least squared straight-line distance to the destination of any cell settled. */
     private volatile long closestSquared = Long.MAX_VALUE;
 
     Counting(SearchObserver delegate, Cell destination) {

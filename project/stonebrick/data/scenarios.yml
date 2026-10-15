@@ -114,6 +114,14 @@ minecraft:overworld:
     origin: { x: 2, y: 64, z: -43 }
     destination: { x: 310, y: 104, z: -267 }
 
+  long-cave:
+    capture: long-cave
+    tier: LOCAL
+    io: zero
+    origin: { x: 331, y: 23, z: -7 }
+    destination: { x: -38, y: -8, z: -43 }
+    tags: [underground]
+
   long-ocean:
     capture: long-ocean
     tier: LOCAL
@@ -162,6 +170,18 @@ minecraft:overworld:
     origin: { x: 788, y: 72, z: 55 }
     destination: { x: 850, y: 63, z: -869 }
 
+  mountain-box:
+    capture: mountain-box
+    tier: LOCAL
+    io: zero
+    origin: { x: 522, y: 63, z: -318 }
+    destination:
+      x: 492
+      y: 69
+      z: -270
+      box: { from: { x: 507, y: 65, z: -285 }, to: { x: 478, y: 73, z: -255 } }
+    tags: [surface, no-pickaxe]
+
   mountain-peaks:
     capture: mountain-peaks
     tier: LOCAL
@@ -178,6 +198,14 @@ minecraft:overworld:
     origin: { x: 761, y: 163, z: -67 }
     destination: { x: 619, y: 146, z: -235 }
 
+  mountain-point:
+    capture: mountain-point
+    tier: LOCAL
+    io: zero
+    origin: { x: 522, y: 63, z: -318 }
+    destination: { x: 507, y: 65, z: -285 }
+    tags: [surface, no-pickaxe]
+
   ocean:
     capture: ocean
     tier: LOCAL
@@ -193,6 +221,30 @@ minecraft:overworld:
     io: zero
     origin: { x: 1056, y: 63, z: -227 }
     destination: { x: 1208, y: 64, z: -337 }
+
+  short-forest:
+    capture: short-forest
+    tier: LOCAL
+    io: zero
+    origin: { x: 398, y: 63, z: 84 }
+    destination: { x: 440, y: 62, z: 120 }
+    tags: [surface, no-pickaxe]
+
+  short-hill:
+    capture: short-hill
+    tier: LOCAL
+    io: zero
+    origin: { x: 272, y: 62, z: 304 }
+    destination: { x: 336, y: 72, z: 330 }
+    tags: [surface, no-pickaxe]
+
+  short-river:
+    capture: short-river
+    tier: LOCAL
+    io: zero
+    origin: { x: 2, y: 64, z: -43 }
+    destination: { x: 60, y: 62, z: -15 }
+    tags: [surface]
 
   snowy-slopes:
     capture: snowy-slopes
@@ -232,6 +284,18 @@ minecraft:overworld:
     io: zero
     origin: { x: -880, y: 86, z: 60 }
     destination: { x: -788, y: 97, z: 8 }
+    tags: [surface, no-pickaxe]
+
+  village-river:
+    capture: village-river
+    tier: LOCAL
+    io: zero
+    origin: { x: -152, y: 64, z: 761 }
+    destination:
+      x: -287
+      y: 64
+      z: 816
+      box: { from: { x: -224, y: 63, z: 881 }, to: { x: -350, y: 90, z: 752 } }
     tags: [surface, no-pickaxe]
 
   village-short:
@@ -316,6 +380,14 @@ minecraft:the_nether:
     io: zero
     origin: { x: -597, y: 74, z: -465 }
     destination: { x: -517, y: 83, z: -352 }
+    tags: [nether]
+
+  short-nether:
+    capture: short-nether
+    tier: LOCAL
+    io: zero
+    origin: { x: 71, y: 85, z: -42 }
+    destination: { x: 120, y: 99, z: -30 }
     tags: [nether]
 
   soul-sand-valley:

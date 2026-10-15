@@ -1,5 +1,5 @@
 // stonebrick-bench — runs the corpus, records what each scenario cost, and compares a run against
-// the committed baselines. Not published; not shipped. (designs/stonebrick.md §8)
+// the committed baselines. Not published; not shipped. (See README.md.)
 plugins {
     id("cobblestone.java-conventions")
     application

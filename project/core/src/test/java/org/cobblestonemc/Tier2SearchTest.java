@@ -334,6 +334,87 @@ class Tier2SearchTest {
   }
 
   /**
+   * A node whose estimate is pending is waited for, not expanded around. In the diamond, B's
+   * estimate is held back while C's is ready: a search that pressed on would expand C, reach D the
+   * dear way, and could arrive at G by a route no estimate chose. It must instead expand nothing
+   * until B's estimate lands, and then take the cheap route through B.
+   */
+  @Test
+  void waitsForAPendingEstimateRatherThanExpandingAroundIt() {
+    CompletableFuture<Void> bReady = new CompletableFuture<>();
+    Cell b = new Cell(1, 0, 0);
+    HeuristicStrategy heuristic =
+        new HeuristicStrategy() {
+          @Override
+          public double estimate(Cell from, DomainRegion<?> target, TraversalState state) {
+            return 0.0;
+          }
+
+          @Override
+          public SolveHeuristic newSolve(int windowWidth, DomainRegion<?> target) {
+            return new SolveHeuristic() {
+              @Override
+              public double seed() {
+                return 0.0;
+              }
+
+              @Override
+              public double advance(double trailAverage, double stepCost, double blocks) {
+                return trailAverage;
+              }
+
+              @Override
+              public double estimate(
+                  Cell from, double distance, TraversalState state, double trailAverage) {
+                return 0.0;
+              }
+
+              @Override
+              public CompletableFuture<Void> prepare(Cell from) {
+                return from.equals(b) && !bReady.isDone() ? bReady : null;
+              }
+            };
+          }
+        };
+    java.util.List<Cell> closed = new java.util.ArrayList<>();
+    SearchObserver observer =
+        new SearchObserver() {
+          @Override
+          public void closed(Cell cell, double cost, double estimatedTotalCost) {
+            closed.add(cell);
+          }
+        };
+
+    Tier2Search<TestStep, TestDomain> search =
+        new Tier2Search<>(
+            new TestCobblestoneLogger(),
+            virtualPath(new Cell(0, 0, 0), new Cell(3, 0, 0)),
+            new DiamondBehavior(),
+            List.of(),
+            heuristic,
+            1000,
+            5,
+            1.0,
+            () -> false,
+            Runnable::run,
+            TimeSource.system(DIRECT_SCHEDULER),
+            observer,
+            0);
+
+    CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
+
+    assertFalse(future.isDone(), "B's estimate is pending");
+    assertEquals(List.of(new Cell(0, 0, 0)), closed, "nothing past A expands while B waits");
+
+    bReady.complete(null);
+
+    assertTrue(future.isDone());
+    Tier2Result<TestStep, TestDomain> result = future.getNow(null);
+    assertInstanceOf(Tier2Result.Solved.class, result);
+    assertEquals(3.0, ((Tier2Result.Solved<TestStep, TestDomain>) result).cost(), 1e-9);
+  }
+
+  /**
    * A heuristic that keeps handing back futures that are already done, without ever becoming able
    * to answer, must not wedge the search thread. Each retry parks and wakes at once; if the retries
    * ran in one loop the deadline would never be checked and the solve would never finish. A failed

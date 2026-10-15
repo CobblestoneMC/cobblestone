@@ -80,6 +80,24 @@ public final class BenchMain {
 
     switch (options.command()) {
       case "list" -> list(scenarios, loadouts);
+      case "check" -> {
+        boolean usable = true;
+        for (Scenario scenario : scenarios) {
+          try {
+            usable &=
+                ScenarioCheck.run(
+                    options.corpusRoot(),
+                    scenario,
+                    loadouts,
+                    capsule -> requireCaptured(options.corpusRoot(), scenario, capsule),
+                    System.out::println);
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+          }
+        }
+        System.exit(usable ? 0 : 1);
+      }
       case "path" -> {
         ScenarioRunner runner = new ScenarioRunner(options.corpusRoot(), new QuietLogger());
         for (Scenario scenario : scenarios) {
@@ -111,24 +129,6 @@ public final class BenchMain {
           }
         }
       }
-      case "check" -> {
-        boolean usable = true;
-        for (Scenario scenario : scenarios) {
-          try {
-            usable &=
-                ScenarioCheck.run(
-                    options.corpusRoot(),
-                    scenario,
-                    loadouts,
-                    capsule -> requireCaptured(options.corpusRoot(), scenario, capsule),
-                    System.out::println);
-          } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return;
-          }
-        }
-        System.exit(usable ? 0 : 1);
-      }
       case "accept" -> accept(scenarios, loadouts, options);
       case "run" -> System.exit(run(scenarios, loadouts, options) ? 0 : 1);
       case "sweep" ->
@@ -141,7 +141,7 @@ public final class BenchMain {
         System.out.println(
             "Unknown command '"
                 + options.command()
-                + "'. Try run, sweep, accept, list, check or verify.");
+                + "'. Try run, sweep, accept, list, check, path or verify.");
         System.exit(2);
       }
     }
