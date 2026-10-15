@@ -10,6 +10,14 @@ minecraft:overworld:
     origin: { x: 398, y: 63, z: 84 }
     destination: { x: 706, y: 63, z: 155 }
 
+  ancient-city:
+    capture: ancient-city
+    tier: LOCAL
+    io: zero
+    origin: { x: 1534, y: -47, z: -1739 }
+    destination: { x: 1713, y: -51, z: -1664 }
+    tags: [underground]
+
   around-mountain:
     capture: around-mountain
     tier: LOCAL
@@ -17,6 +25,14 @@ minecraft:overworld:
     io: zero
     origin: { x: 631, y: 70, z: -317 }
     destination: { x: 517, y: 63, z: -161 }
+
+  badlands:
+    capture: badlands
+    tier: LOCAL
+    io: zero
+    origin: { x: 5504, y: 75, z: -5448 }
+    destination: { x: 5504, y: 81, z: -5748 }
+    tags: [surface, no-pickaxe]
 
   cave-lateral:
     capture: cave-lateral
@@ -66,6 +82,30 @@ minecraft:overworld:
     origin: { x: 117, y: 63, z: -58 }
     destination: { x: 107, y: -54, z: 12 }
 
+  desert-cactus:
+    capture: desert-cactus
+    tier: LOCAL
+    io: zero
+    origin: { x: 2288, y: 70, z: 2840 }
+    destination: { x: 2403, y: 62, z: 3117 }
+    tags: [surface, no-pickaxe]
+
+  dripstone-caves:
+    capture: dripstone-caves
+    tier: LOCAL
+    io: zero
+    origin: { x: -19, y: 12, z: 26 }
+    destination: { x: 134, y: 27, z: 22 }
+    tags: [underground]
+
+  frozen-ocean:
+    capture: frozen-ocean
+    tier: LOCAL
+    io: zero
+    origin: { x: 2608, y: 62, z: 216 }
+    destination: { x: 2808, y: 62, z: 216 }
+    tags: [surface]
+
   hilly-jungle:
     capture: jungle
     tier: LOCAL
@@ -74,6 +114,30 @@ minecraft:overworld:
     origin: { x: 2, y: 64, z: -43 }
     destination: { x: 310, y: 104, z: -267 }
 
+  long-ocean:
+    capture: long-ocean
+    tier: LOCAL
+    io: zero
+    origin: { x: 1728, y: 62, z: -384 }
+    destination: { x: 1728, y: 62, z: 1116 }
+    tags: [surface]
+
+  long-overland:
+    capture: long-overland
+    tier: LOCAL
+    io: zero
+    origin: { x: -880, y: 86, z: 60 }
+    destination: { x: 1120, y: 65, z: -40 }
+    tags: [surface, no-pickaxe]
+
+  lush-caves:
+    capture: lush-caves
+    tier: LOCAL
+    io: zero
+    origin: { x: -177, y: 8, z: -141 }
+    destination: { x: -287, y: -21, z: -10 }
+    tags: [underground]
+
   mangrove-small:
     capture: mangrove-small
     tier: LOCAL
@@ -81,6 +145,14 @@ minecraft:overworld:
     io: zero
     origin: { x: 1269, y: 63, z: -332 }
     destination: { x: 1138, y: 63, z: -45 }
+
+  mineshaft:
+    capture: mineshaft
+    tier: LOCAL
+    io: zero
+    origin: { x: 220, y: -47, z: 255 }
+    destination: { x: 322, y: -52, z: 342 }
+    tags: [underground]
 
   mixed-biome-surface:
     capture: mixed-biome-surface
@@ -122,8 +194,64 @@ minecraft:overworld:
     origin: { x: 1056, y: 63, z: -227 }
     destination: { x: 1208, y: 64, z: -337 }
 
+  snowy-slopes:
+    capture: snowy-slopes
+    tier: LOCAL
+    io: zero
+    origin: { x: 1456, y: 129, z: -1960 }
+    destination: { x: 1244, y: 106, z: -2172 }
+    tags: [surface]
+
+  stronghold:
+    capture: stronghold
+    tier: LOCAL
+    io: zero
+    origin: { x: 1638, y: -25, z: -204 }
+    destination: { x: 1678, y: -22, z: -118 }
+    tags: [underground]
+
+  swamp:
+    capture: swamp
+    tier: LOCAL
+    io: zero
+    origin: { x: 1008, y: 62, z: -744 }
+    destination: { x: 1220, y: 62, z: -532 }
+    tags: [surface]
+
+  trial-chambers:
+    capture: trial-chambers
+    tier: LOCAL
+    io: zero
+    origin: { x: -334, y: -24, z: 269 }
+    destination: { x: -234, y: -31, z: 280 }
+    tags: [underground]
+
+  village-plains:
+    capture: village-plains
+    tier: LOCAL
+    io: zero
+    origin: { x: -880, y: 86, z: 60 }
+    destination: { x: -788, y: 97, z: 8 }
+    tags: [surface, no-pickaxe]
+
+  village-short:
+    capture: village-short
+    tier: LOCAL
+    io: zero
+    origin: { x: -828, y: 93, z: 11 }
+    destination: { x: -788, y: 97, z: 7 }
+    tags: [surface, no-pickaxe]
+
 
 minecraft:the_end:
+  end-islands:
+    capture: end-islands
+    tier: LOCAL
+    io: zero
+    origin: { x: -1830, y: 59, z: 80 }
+    destination: { x: -1568, y: 62, z: 80 }
+    tags: [end]
+
   end-small:
     capture: end-small
     tier: LOCAL
@@ -142,6 +270,22 @@ minecraft:the_nether:
     origin: { x: 211, y: 81, z: -82 }
     destination: { x: 218, y: 84, z: -263 }
 
+  basalt-deltas:
+    capture: basalt-deltas
+    tier: LOCAL
+    io: zero
+    origin: { x: -60, y: 57, z: -50 }
+    destination: { x: -150, y: 56, z: -150 }
+    tags: [nether]
+
+  bastion:
+    capture: bastion
+    tier: LOCAL
+    io: zero
+    origin: { x: -350, y: 46, z: 215 }
+    destination: { x: -300, y: 36, z: 260 }
+    tags: [nether]
+
   distance:
     capture: distance
     tier: LOCAL
@@ -149,6 +293,30 @@ minecraft:the_nether:
     io: zero
     origin: { x: 286, y: 83, z: -75 }
     destination: { x: 562, y: 49, z: 204 }
+
+  long-nether:
+    capture: long-nether
+    tier: LOCAL
+    io: zero
+    origin: { x: 286, y: 83, z: -75 }
+    destination: { x: 1250, y: 64, z: 380 }
+    tags: [nether]
+
+  nether-forest:
+    capture: nether-forest
+    tier: LOCAL
+    io: zero
+    origin: { x: -34, y: 65, z: 131 }
+    destination: { x: -34, y: 81, z: 331 }
+    tags: [nether]
+
+  nether-fortress:
+    capture: nether-fortress
+    tier: LOCAL
+    io: zero
+    origin: { x: -597, y: 74, z: -465 }
+    destination: { x: -517, y: 83, z: -352 }
+    tags: [nether]
 
   soul-sand-valley:
     capture: soul-sand-valley
