@@ -7,12 +7,17 @@
 
 package org.cobblestonemc.paper.plugin;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -21,6 +26,8 @@ import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Tameable;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.Vector;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.paper.PaperRegions;
@@ -30,6 +37,7 @@ import org.cobblestonemc.plugin.api.DestinationLeaf;
 import org.cobblestonemc.plugin.api.DestinationOption;
 import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.data.DeathLocationDao;
+import org.cobblestonemc.plugin.data.ExpiringCache;
 import org.cobblestonemc.plugin.data.LocationDao;
 import org.cobblestonemc.plugin.data.MountDao;
 import org.cobblestonemc.plugin.data.MountLocation;
@@ -44,8 +52,8 @@ import org.cobblestonemc.plugin.message.Message3;
 import org.cobblestonemc.plugin.message.Messages;
 
 /**
- * Cobblestone's own destinations: saved locations, other players, worlds, and places such as the
- * player's last death or the surface above them. Written in Cobblestone's own terms ({@link
+ * Cobblestone's own destinations: saved locations, other players, worlds, pets, and places such as
+ * the player's last death or the surface above them. Written in Cobblestone's own terms ({@link
  * NavigationTarget}) rather than an integration's, so they can use regions an integration's region
  * type cannot express — like the surface, whose extent depends on the blocks.
  */
@@ -55,6 +63,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
   public static final String LOCATION_TREE_KEY = "location";
   public static final String GLOBAL_TREE_KEY = "global";
   public static final String PRIVATE_TREE_KEY = "private";
+  public static final String PET_TREE_KEY = "pet";
   public static final String COORDINATES_TREE_KEY = "coordinates";
   public static final String DEATH_KEY = "death";
   public static final String SURFACE_KEY = "surface";
@@ -70,6 +79,13 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
   /** How far away, in blocks, the block a player is looking at may be for {@code target}. */
   static final int TARGET_RANGE = 256;
 
+  /**
+   * When a pet was tamed (epoch millis), stamped on the entity by {@link PaperPetListener} so pets
+   * that share a name are numbered oldest first. Pets tamed before Cobblestone was installed have
+   * none.
+   */
+  static final NamespacedKey TAMED_AT = new NamespacedKey("cobblestone", "tamed_at");
+
   private final LocationDao locations;
   private final DeathLocationDao deaths;
   private final MountDao mounts;
@@ -77,6 +93,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
   private final PaperRegions regions;
   private final BooleanSupplier trackDeaths;
   private final Messages messages;
+  private final ExpiringCache<UUID, List<Pet>> petsByOwner = new ExpiringCache<>();
 
   public BuiltInDestinations(
       LocationDao locations,
@@ -111,6 +128,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
         .subtree(PLAYER_TREE_KEY, () -> players(player))
         .subtree(WORLD_TREE_KEY, () -> worlds(player))
         .subtree(LOCATION_TREE_KEY, () -> locations(player))
+        .subtree(PET_TREE_KEY, () -> pets(player))
         .subtree(COORDINATES_TREE_KEY, () -> coordinates(player))
         .build();
   }
@@ -358,6 +376,71 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
         .existence(tracked::alive)
         .build();
   }
+
+  /**
+   * The player's named pets that are currently loaded, keyed by name (spaces become {@code _}).
+   * Pets that share a name are numbered {@code Name}, {@code Name-2}, … oldest first, by when they
+   * were tamed; those tamed before Cobblestone was installed come after, in a fixed order.
+   *
+   * <p>Finding them means scanning every loaded entity, and this level is visited on every
+   * tab-completion keystroke, so the scan is cached per player for a second. Each pet's location is
+   * still looked up live when a search is made.
+   */
+  private DestinationNode<NavigationTarget> pets(Player player) {
+    List<Pet> pets = petsByOwner.get(player.getUniqueId(), BuiltInDestinations::scanPets);
+    DestinationNode.Builder<NavigationTarget> node = DestinationNode.builder();
+    Set<String> taken = new HashSet<>();
+    for (Pet pet : pets) {
+      String key = pet.name();
+      for (int n = 2; !taken.add(key.toLowerCase(Locale.ROOT)); n++) {
+        key = pet.name() + "-" + n;
+      }
+      String name = key;
+      node.leaf(
+          key,
+          DestinationLeaf.of(
+              () -> {
+                // Follows the pet, so live trips track it, and ends the trip if it dies.
+                PaperTrackedEntity tracked = new PaperTrackedEntity(pet.uuid(), scheduler);
+                return NavigationTarget.builder(
+                        name, () -> tracked.location().flatMap(regions::block).stream().toList())
+                    .mobile()
+                    .existence(tracked::alive)
+                    .build();
+              }));
+    }
+    return node.build();
+  }
+
+  /** Every loaded, named pet the player owns, by name, then oldest first. */
+  private static List<Pet> scanPets(UUID owner) {
+    List<Pet> pets = new ArrayList<>();
+    for (World world : Bukkit.getWorlds()) {
+      for (Tameable tameable : world.getEntitiesByClass(Tameable.class)) {
+        Component customName = tameable.customName();
+        if (customName == null || !owner.equals(tameable.getOwnerUniqueId())) {
+          continue;
+        }
+        String name =
+            PlainTextComponentSerializer.plainText()
+                .serialize(customName)
+                .trim()
+                .replaceAll("\\s+", "_");
+        if (name.isEmpty()) {
+          continue;
+        }
+        Long tamedAt = tameable.getPersistentDataContainer().get(TAMED_AT, PersistentDataType.LONG);
+        pets.add(new Pet(tameable.getUniqueId(), name, tamedAt == null ? Long.MAX_VALUE : tamedAt));
+      }
+    }
+    pets.sort(
+        Comparator.comparing(Pet::name, String.CASE_INSENSITIVE_ORDER)
+            .thenComparingLong(Pet::tamedAt)
+            .thenComparing(Pet::uuid));
+    return List.copyOf(pets);
+  }
+
+  private record Pet(UUID uuid, String name, long tamedAt) {}
 
   private DestinationNode<NavigationTarget> players(Player player) {
     UUID self = player.getUniqueId();

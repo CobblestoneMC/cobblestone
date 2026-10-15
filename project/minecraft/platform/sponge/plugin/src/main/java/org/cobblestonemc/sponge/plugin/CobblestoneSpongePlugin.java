@@ -41,6 +41,7 @@ import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.lifecycle.ConstructPluginEvent;
 import org.spongepowered.api.event.lifecycle.RegisterCommandEvent;
+import org.spongepowered.api.event.lifecycle.RegisterDataEvent;
 import org.spongepowered.api.event.lifecycle.StartedEngineEvent;
 import org.spongepowered.api.event.lifecycle.StoppingEngineEvent;
 import org.spongepowered.api.event.network.ServerSideConnectionEvent;
@@ -90,6 +91,7 @@ public final class CobblestoneSpongePlugin {
   private SearchGate searchGate;
   private Supplier<SearchSettings> searchSettings;
   private SpongeMetrics metrics;
+  private SpongePetListener petListener;
   private SpongeMountListener mountListener;
 
   @Inject
@@ -107,6 +109,9 @@ public final class CobblestoneSpongePlugin {
   @Listener
   public void onConstructPlugin(ConstructPluginEvent event) {
     this.cobblestoneLogger = new Log4JCobblestoneLogger(logger);
+    // Created first: its data key must exist by the time RegisterDataEvent fires, even if the rest
+    // of startup fails below.
+    this.petListener = new SpongePetListener(container);
 
     Path configFile = configDir.resolve("config.yml");
     this.config = new ConfigManager(configFile, cobblestoneLogger);
@@ -204,6 +209,7 @@ public final class CobblestoneSpongePlugin {
             dataStore.locations(),
             dataStore.deaths(),
             dataStore.mounts(),
+            petListener,
             navigationService.regions(),
             navigationService::mayBeGenerated,
             () -> config.get(keys.deathsTrack),
@@ -216,9 +222,10 @@ public final class CobblestoneSpongePlugin {
                 dataStore.deaths(),
                 navigationService.scheduler(),
                 () -> config.get(keys.deathsTrack)));
-    // So is their last mount.
+    // So are their last mount, and when each of their pets was tamed (to number same-named pets).
     mountListener = new SpongeMountListener(dataStore.mounts(), navigationService.scheduler());
     Sponge.eventManager().registerListeners(container, mountListener);
+    Sponge.eventManager().registerListeners(container, petListener);
 
     // Keep the chunk cache honest: a block changing evicts the snapshot it belongs to.
 
@@ -268,6 +275,14 @@ public final class CobblestoneSpongePlugin {
     SpongePermissions.register(container);
     if (navigationService != null) {
       navigationService.surveyWorlds();
+    }
+  }
+
+  /** Registers the custom data Cobblestone keeps on entities (when each pet was tamed). */
+  @Listener
+  public void onRegisterData(RegisterDataEvent event) {
+    if (petListener != null) {
+      petListener.onRegisterData(event);
     }
   }
 

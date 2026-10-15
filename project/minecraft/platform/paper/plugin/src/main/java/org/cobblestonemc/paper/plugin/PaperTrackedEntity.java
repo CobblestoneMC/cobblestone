@@ -16,7 +16,7 @@ import org.bukkit.entity.LivingEntity;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 
 /**
- * An entity a destination follows — a mount — read safely from any thread.
+ * An entity a destination follows — a pet or a mount — read safely from any thread.
  *
  * <p>Entities may only be looked up on a server thread, and (on Folia) only read by the region that
  * owns them, but a live trip's re-search asks for the destination's location from a search thread.
@@ -31,6 +31,14 @@ final class PaperTrackedEntity {
 
   private final UUID uuid;
   private final MinecraftScheduler<Entity> scheduler;
+
+  // Written by server threads (the command's, the trip's, or a task on the entity's scheduler) and
+  // read by any thread, search threads included. Volatile is all the guarding they need: each is
+  // replaced whole, never changed in place (a location is a fresh copy, and cloned again for the
+  // reader), and the two are never needed together. Two writers racing can leave the older read
+  // last, but the next refresh, about a second later, corrects it. alive() reads the last-seen
+  // entity's health from the trip's thread, which on Folia may not own it; a stale read there only
+  // ends the trip a check later.
   private volatile Entity lastSeen;
   private volatile Location lastLocation;
 
