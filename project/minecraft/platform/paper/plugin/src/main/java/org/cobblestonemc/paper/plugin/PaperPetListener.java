@@ -19,7 +19,7 @@ import org.bukkit.persistence.PersistentDataType;
  * game does not remember an entity's age across chunk loads, so this is the only stable "how old"
  * there is.
  */
-final class PetListener implements Listener {
+final class PaperPetListener implements Listener {
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   public void onTame(EntityTameEvent event) {

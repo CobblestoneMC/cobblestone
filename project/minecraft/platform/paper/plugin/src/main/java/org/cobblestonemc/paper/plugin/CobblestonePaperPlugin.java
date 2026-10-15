@@ -130,7 +130,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     // So are their last mount, and when each of their pets was tamed (to number same-named pets).
     mountListener = new PaperMountListener(dataStore.mounts(), platformApi.scheduler());
     getServer().getPluginManager().registerEvents(mountListener, this);
-    getServer().getPluginManager().registerEvents(new PetListener(), this);
+    getServer().getPluginManager().registerEvents(new PaperPetListener(), this);
 
     // Trips tick on the platform scheduler (Folia-safe region tasks); the default trail navigator
     // is

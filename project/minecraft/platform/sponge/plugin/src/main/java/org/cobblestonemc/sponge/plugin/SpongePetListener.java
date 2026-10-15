@@ -27,11 +27,11 @@ import org.spongepowered.plugin.PluginContainer;
  * <p>The stamp is a custom data key persisted with the entity; it is registered through {@link
  * #onRegisterData}, which the plugin must forward its {@link RegisterDataEvent} to.
  */
-final class PetListener {
+final class SpongePetListener {
 
   private final Key<Value<Long>> tamedAt;
 
-  PetListener(PluginContainer container) {
+  SpongePetListener(PluginContainer container) {
     this.tamedAt = Key.from(container, "tamed_at", Long.class);
   }
 

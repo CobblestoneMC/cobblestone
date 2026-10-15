@@ -88,7 +88,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
   private final LocationDao locations;
   private final DeathLocationDao deaths;
   private final MountDao mounts;
-  private final PetListener pets;
+  private final SpongePetListener pets;
   private final SpongeRegions regions;
   private final Predicate<ServerLocation> generated;
   private final BooleanSupplier trackDeaths;
@@ -99,7 +99,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
       LocationDao locations,
       DeathLocationDao deaths,
       MountDao mounts,
-      PetListener pets,
+      SpongePetListener pets,
       SpongeRegions regions,
       Predicate<ServerLocation> generated,
       BooleanSupplier trackDeaths,

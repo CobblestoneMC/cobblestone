@@ -80,8 +80,9 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
   static final int TARGET_RANGE = 256;
 
   /**
-   * When a pet was tamed (epoch millis), stamped on the entity by {@link PetListener} so pets that
-   * share a name are numbered oldest first. Pets tamed before Cobblestone was installed have none.
+   * When a pet was tamed (epoch millis), stamped on the entity by {@link PaperPetListener} so pets
+   * that share a name are numbered oldest first. Pets tamed before Cobblestone was installed have
+   * none.
    */
   static final NamespacedKey TAMED_AT = new NamespacedKey("cobblestone", "tamed_at");
 

@@ -91,7 +91,7 @@ public final class CobblestoneSpongePlugin {
   private SearchGate searchGate;
   private Supplier<SearchSettings> searchSettings;
   private SpongeMetrics metrics;
-  private PetListener petListener;
+  private SpongePetListener petListener;
   private SpongeMountListener mountListener;
 
   @Inject
@@ -111,7 +111,7 @@ public final class CobblestoneSpongePlugin {
     this.cobblestoneLogger = new Log4JCobblestoneLogger(logger);
     // Created first: its data key must exist by the time RegisterDataEvent fires, even if the rest
     // of startup fails below.
-    this.petListener = new PetListener(container);
+    this.petListener = new SpongePetListener(container);
 
     Path configFile = configDir.resolve("config.yml");
     this.config = new ConfigManager(configFile, cobblestoneLogger);
