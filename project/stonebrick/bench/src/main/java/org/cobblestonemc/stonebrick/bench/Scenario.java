@@ -13,14 +13,18 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.stonebrick.platform.IoMode;
 import org.cobblestonemc.stonebrick.platform.IoProfile;
+import org.jetbrains.annotations.Nullable;
 import org.yaml.snakeyaml.Yaml;
 
 /**
@@ -41,6 +45,8 @@ import org.yaml.snakeyaml.Yaml;
  * @param destinationRadius how far from {@code destination} counts as arrival
  * @param destinationBox an area that counts as arrival instead, as {@code {min, max}} corners, or
  *     {@code null}; {@code destination} then stays the route's anchor, for its capture
+ * @param warps where teleports usable from anywhere in the world land, as Essentials' {@code /warp}
+ *     and {@code /home} are: what makes Tier 1 choose between routes
  * @param settings the search limits
  * @param io what a chunk read costs
  * @param onMissingCapture what to do about reads outside the capture
@@ -58,7 +64,8 @@ public record Scenario(
     Cell origin,
     Cell destination,
     int destinationRadius,
-    Cell @org.jetbrains.annotations.Nullable [] destinationBox,
+    Cell @Nullable [] destinationBox,
+    List<Cell> warps,
     SearchLimits settings,
     IoProfile io,
     MissingCapturePolicy onMissingCapture,
@@ -91,9 +98,9 @@ public record Scenario(
      */
     REGIONS(SearchSettings.Heuristic.REGIONS);
 
-    private final SearchSettings.@org.jetbrains.annotations.Nullable Heuristic production;
+    private final SearchSettings.@Nullable Heuristic production;
 
-    Heuristic(SearchSettings.@org.jetbrains.annotations.Nullable Heuristic production) {
+    Heuristic(SearchSettings.@Nullable Heuristic production) {
       this.production = production;
     }
 
@@ -102,7 +109,7 @@ public record Scenario(
      *
      * @return the production heuristic
      */
-    public SearchSettings.@org.jetbrains.annotations.Nullable Heuristic production() {
+    public SearchSettings.@Nullable Heuristic production() {
       return production;
     }
   }
@@ -152,11 +159,16 @@ public record Scenario(
    * independently, and every scenario is run under every loadout.
    */
   public record AgentSpec(
-      boolean canFly, boolean canGlide, boolean hasBoat, boolean inBoat, Set<String> permissions) {
+      boolean canFly,
+      boolean canGlide,
+      boolean hasBoat,
+      boolean inBoat,
+      int soulSpeed,
+      Set<String> permissions) {
 
     /** Returns a plain survival player with no special capabilities. */
     public static AgentSpec plain() {
-      return new AgentSpec(false, false, false, false, Set.of());
+      return new AgentSpec(false, false, false, false, 0, Set.of());
     }
   }
 
@@ -218,8 +230,7 @@ public record Scenario(
         if (!(entry.getValue() instanceof Map)) {
           throw new IOException(file + ": '" + entry.getKey() + "' is not a scenario");
         }
-        Map<String, Object> body =
-            new java.util.LinkedHashMap<>((Map<String, Object>) entry.getValue());
+        Map<String, Object> body = new LinkedHashMap<>((Map<String, Object>) entry.getValue());
         body.put("id", idOf(world.getKey(), entry.getKey()));
         body.put("world", world.getKey());
         try {
@@ -229,7 +240,7 @@ public record Scenario(
         }
       }
     }
-    scenarios.sort(java.util.Comparator.comparing(Scenario::id));
+    scenarios.sort(Comparator.comparing(Scenario::id));
     return scenarios;
   }
 
@@ -272,6 +283,7 @@ public record Scenario(
             destination,
             destinationRadius,
             destinationBox,
+            warps,
             settings,
             io,
             onMissingCapture,
@@ -301,6 +313,7 @@ public record Scenario(
         destination,
         destinationRadius,
         destinationBox,
+        warps,
         settings,
         io,
         onMissingCapture,
@@ -327,6 +340,7 @@ public record Scenario(
         destination,
         destinationRadius,
         destinationBox,
+        warps,
         limits,
         io,
         onMissingCapture,
@@ -358,6 +372,7 @@ public record Scenario(
         destination,
         destinationRadius,
         destinationBox,
+        warps,
         tuned,
         io,
         onMissingCapture,
@@ -400,6 +415,7 @@ public record Scenario(
         destination,
         destinationRadius,
         destinationBox,
+        warps,
         settings,
         profile,
         onMissingCapture,
@@ -427,7 +443,7 @@ public record Scenario(
         id,
         string(root, "description", ""),
         new LinkedHashSet<>(stringList(root, "tags")),
-        Tier.valueOf(string(root, "tier", "CI").toUpperCase(java.util.Locale.ROOT)),
+        Tier.valueOf(string(root, "tier", "CI").toUpperCase(Locale.ROOT)),
         require(root, "capture", file),
         // Top level first: the world belongs to the scenario, not to one of its endpoints. The
         // per-position fallbacks are for files written before the format collapsed into one.
@@ -439,6 +455,7 @@ public record Scenario(
         cell(destination, file),
         integer(destination, "radius", 0),
         box(destination, file),
+        warps(root, file),
         new SearchLimits(
             number(limits, "heuristicWeight", SearchSettings.DEFAULT_HEURISTIC_WEIGHT),
             integer(limits, "maxCellsVisited", SearchSettings.DEFAULT_MAX_CELLS_VISITED),
@@ -446,13 +463,13 @@ public record Scenario(
                 number(limits, "maxWallClockMillis", SearchSettings.DEFAULT_MAX_WALL_CLOCK_MILLIS)),
         profile,
         MissingCapturePolicy.valueOf(
-            string(root, "onMissingCapture", "ERROR").toUpperCase(java.util.Locale.ROOT)),
+            string(root, "onMissingCapture", "ERROR").toUpperCase(Locale.ROOT)),
         string(root, "expect", "success"),
         ungenerated(root, file),
         Heuristic.valueOf(
             // Whatever production ships, so the gate guards the search players actually get.
             string(root, "heuristic", SearchSettings.DEFAULT_HEURISTIC.name())
-                .toUpperCase(java.util.Locale.ROOT)
+                .toUpperCase(Locale.ROOT)
                 .replace('-', '_')));
   }
 
@@ -464,8 +481,8 @@ public record Scenario(
    * destinations are, and what lets a route arrive by whichever side is cheapest.
    */
   @SuppressWarnings("unchecked")
-  private static Cell @org.jetbrains.annotations.Nullable [] box(
-      Map<String, Object> destination, Path file) throws IOException {
+  private static Cell @Nullable [] box(Map<String, Object> destination, Path file)
+      throws IOException {
     Object raw = destination.get("box");
     if (raw == null) {
       return null;
@@ -482,6 +499,32 @@ public record Scenario(
   }
 
   /**
+   * Reads the warps, {@code warps: [{x, y, z}, ...]}, in the scenario's world.
+   *
+   * <p>A route with warps is a Tier-1 search: a walk to the goal, or a teleport and a walk from
+   * wherever it lands, and Tier 1 solves legs until it has settled on one. Without them the bench
+   * never re-plans.
+   */
+  @SuppressWarnings("unchecked")
+  private static List<Cell> warps(Map<String, Object> root, Path file) throws IOException {
+    Object raw = root.get("warps");
+    if (raw == null) {
+      return List.of();
+    }
+    if (!(raw instanceof List<?> list)) {
+      throw new IOException(file + ": warps must be a list of {x, y, z}");
+    }
+    List<Cell> warps = new ArrayList<>();
+    for (Object item : list) {
+      if (!(item instanceof Map<?, ?> map)) {
+        throw new IOException(file + ": a warp must be {x, y, z}");
+      }
+      warps.add(cell((Map<String, Object>) map, file));
+    }
+    return List.copyOf(warps);
+  }
+
+  /**
    * Chunks the scenario declares as ungenerated, packed as {@code (x &lt;&lt; 32) | z}.
    *
    * <p>Declared rather than achieved by capturing a region with holes in it. A live server does
@@ -495,7 +538,7 @@ public record Scenario(
     if (!(value instanceof List<?> list)) {
       return Set.of();
     }
-    Set<Long> chunks = new java.util.LinkedHashSet<>();
+    Set<Long> chunks = new LinkedHashSet<>();
     for (Object item : list) {
       String text = String.valueOf(item).trim();
       String[] parts = text.split(",");

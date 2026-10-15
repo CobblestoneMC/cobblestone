@@ -41,7 +41,7 @@ public final class RegionColumnBuilder {
    * The version of the rules this builds by: what each class is, how the fill splits regions, and
    * which contacts become portals. Stored columns built by any other version are rebuilt.
    */
-  public static final int CLASSIFIER_VERSION = 1;
+  public static final int CLASSIFIER_VERSION = 2;
 
   /**
    * Blocks of detour allowed regardless of distance, so a seed's immediate neighbours never split.
@@ -90,7 +90,6 @@ public final class RegionColumnBuilder {
   private byte[] regionClass = new byte[256];
   private int[] regionBox = new int[256 * 6];
   private float[] regionBreak = new float[256];
-  private boolean[] regionNavigable = new boolean[256];
   private int portalCount;
   private int[] portalA = new int[256];
   private int[] portalB = new int[256];
@@ -227,7 +226,6 @@ public final class RegionColumnBuilder {
         Arrays.copyOf(regionClass, regionCount),
         Arrays.copyOf(regionBox, regionCount * 6),
         Arrays.copyOf(regionBreak, regionCount),
-        Arrays.copyOf(regionNavigable, regionCount),
         Arrays.copyOf(portalA, portalCount),
         Arrays.copyOf(portalB, portalCount),
         Arrays.copyOf(portalDirected, portalCount),
@@ -268,15 +266,6 @@ public final class RegionColumnBuilder {
       breakSum += breakTime[cell];
     }
     regionBreak[id] = (float) (breakSum / 4096);
-    if (klass == RegionClass.WATER) {
-      // A surface only if something other than water sits on its top layer.
-      int above = from + 4096;
-      boolean navigable = above >= cls.length;
-      for (int i = 0; i < 256 && !navigable; i++) {
-        navigable = cls[above + i] != RegionClass.WATER.ordinal();
-      }
-      regionNavigable[id] = navigable;
-    }
   }
 
   /** Sorts every cell of the column scratch into a class, or {@code -1} for none. */
@@ -290,18 +279,17 @@ public final class RegionColumnBuilder {
         continue;
       }
       if (block.isWater()) {
-        cls[cell] = (byte) RegionClass.WATER.ordinal();
+        // The surface is where a boat floats: open to the air, as BoatMode wants it.
+        MinecraftBlock above = cell + 256 < volume ? blocks[cell + 256] : null;
+        boolean open = above == null || (above.isPassable() && !above.isWater());
+        cls[cell] = (byte) (open ? RegionClass.WATER_SURFACE : RegionClass.WATER).ordinal();
       } else if (block.isClimbable() || block.isScaffolding()) {
         cls[cell] = (byte) RegionClass.CLIMB.ordinal();
       } else if (block.isPassable()) {
         MinecraftBlock floor = cell >= 256 ? blocks[cell - 256] : null;
         MinecraftBlock head = cell + 256 < volume ? blocks[cell + 256] : null;
         boolean stands = floor != null && floor.isSolidTop() && (head == null || head.isPassable());
-        cls[cell] =
-            (byte)
-                (stands
-                    ? (floor.isSoulSand() ? RegionClass.SOUL : RegionClass.STAND).ordinal()
-                    : RegionClass.AIR.ordinal());
+        cls[cell] = (byte) (stands ? ground(floor) : RegionClass.AIR).ordinal();
       } else if (!block.isLava()) {
         double seconds = block.breakTimeSeconds();
         if (!Double.isInfinite(seconds)) {
@@ -323,6 +311,19 @@ public final class RegionColumnBuilder {
       }
       sectionClass[s] = uniform;
     }
+  }
+
+  /**
+   * The class of a cell a body stands in, by what it stands on.
+   *
+   * <p>Soul Speed works on soul sand and soul soil alike, but only soul sand drags a walker without
+   * it, which its speed factor says.
+   */
+  private static RegionClass ground(MinecraftBlock floor) {
+    if (!floor.boostsSoulSpeed()) {
+      return RegionClass.STAND;
+    }
+    return floor.speedFactor() < 1 ? RegionClass.SOUL_SAND : RegionClass.SOUL_SOIL;
   }
 
   /**
@@ -358,7 +359,6 @@ public final class RegionColumnBuilder {
       -Integer.MAX_VALUE
     };
     double breakSum = 0;
-    boolean navigable = false;
     while (head < tail) {
       int cell = queue[head];
       int walked = steps[head++];
@@ -367,10 +367,6 @@ public final class RegionColumnBuilder {
       int y = cell >> 8;
       RegionContacts.grow(box, chunkX * 16 + x, minY + y, chunkZ * 16 + z);
       breakSum += breakTime[cell];
-      if (klass == RegionClass.WATER && !navigable) {
-        // A surface: water with something other than water above it.
-        navigable = cell + 256 >= cls.length || cls[cell + 256] != RegionClass.WATER.ordinal();
-      }
       for (int[] h : HORIZONTAL) {
         int nx = x + h[0];
         int nz = z + h[1];
@@ -397,7 +393,6 @@ public final class RegionColumnBuilder {
     }
     System.arraycopy(box, 0, regionBox, id * 6, 6);
     regionBreak[id] = (float) (breakSum / tail);
-    regionNavigable[id] = navigable;
   }
 
   private int offer(
@@ -499,7 +494,7 @@ public final class RegionColumnBuilder {
 
   /** Whether a walking body can step into a cell of this class. */
   static boolean steppable(RegionClass klass) {
-    return klass.standing() || klass == RegionClass.WATER || klass == RegionClass.CLIMB;
+    return klass.standing() || klass.water() || klass == RegionClass.CLIMB;
   }
 
   /**
@@ -526,7 +521,7 @@ public final class RegionColumnBuilder {
   static boolean landing(RegionClass klass, int depth) {
     // One block down is a step, already joined by the step contacts.
     return (klass.standing() && depth >= 2 && depth <= MAX_DROP)
-        || klass == RegionClass.WATER
+        || klass.water()
         || (klass == RegionClass.CLIMB && depth <= MAX_DROP);
   }
 
@@ -536,12 +531,10 @@ public final class RegionColumnBuilder {
       regionClass = Arrays.copyOf(regionClass, size);
       regionBox = Arrays.copyOf(regionBox, size * 6);
       regionBreak = Arrays.copyOf(regionBreak, size);
-      regionNavigable = Arrays.copyOf(regionNavigable, size);
     }
     int id = regionCount++;
     regionClass[id] = (byte) klass.ordinal();
     regionBreak[id] = 0;
-    regionNavigable[id] = false;
     return id;
   }
 

@@ -11,10 +11,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.cobblestonemc.SearchObserver;
 
 /**
@@ -79,7 +82,7 @@ final class Sweep {
     // was first run), so every aggregate silently becomes a report on the easiest routes only.
     List<Scenario.Heuristic> heuristics =
         options.heuristic() == null
-            ? java.util.Arrays.stream(Scenario.Heuristic.values())
+            ? Arrays.stream(Scenario.Heuristic.values())
                 .filter(heuristic -> heuristic != Scenario.Heuristic.ZERO)
                 .toList()
             : List.of(options.heuristic());
@@ -129,7 +132,7 @@ final class Sweep {
             System.out.printf(
                 Locale.ROOT,
                 "point %s %s w=%.2f %s cost=%.3f expanded=%d columns=%d ms=%d ioMs=%d reads=%d"
-                    + " regionReads=%d coldReads=%d opened=%d closest=%.0f%s%n",
+                    + " regionReads=%d coldReads=%d opened=%d closest=%.0f legs=%d%s%n",
                 point.scenario(),
                 heuristic,
                 weight,
@@ -145,6 +148,7 @@ final class Sweep {
                 result.coldChunkReads(),
                 result.nodesOpened(),
                 result.closestBlocks(),
+                runner.lastLegs(),
                 breakdown == null ? "" : " " + breakdown);
           }
         }
@@ -158,8 +162,8 @@ final class Sweep {
   }
 
   private static void deleteTree(Path root) throws IOException {
-    try (java.util.stream.Stream<Path> paths = Files.walk(root)) {
-      for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
+    try (Stream<Path> paths = Files.walk(root)) {
+      for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
         Files.deleteIfExists(path);
       }
     }

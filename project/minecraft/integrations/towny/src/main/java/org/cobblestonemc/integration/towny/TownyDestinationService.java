@@ -15,6 +15,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.Function;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -87,7 +88,7 @@ final class TownyDestinationService implements DestinationService {
 
   /** A sub-tree keyed by a plot attribute (type or name); each leaf unions the matching plots. */
   private static PlatformDestinationTree<World, Vector3i> plots(
-      Town town, java.util.function.Function<TownBlock, String> attribute) {
+      Town town, Function<TownBlock, String> attribute) {
     DestinationTree tree = DestinationTree.builder().strict();
     Set<String> keys = new LinkedHashSet<>();
     for (TownBlock townBlock : town.getTownBlocks()) {

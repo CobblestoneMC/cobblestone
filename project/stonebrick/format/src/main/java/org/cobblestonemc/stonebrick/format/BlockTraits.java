@@ -85,8 +85,8 @@ public record BlockTraits(
   /** Bit index: this block is a pressure plate. */
   public static final int PRESSURE_PLATE = 13;
 
-  /** whether this is soul sand or soul soil, which drag unless the agent has Soul Speed. */
-  public static final int SOUL_SAND = 14;
+  /** Bit index: Soul Speed boots work on this block, as on soul sand and soul soil. */
+  public static final int SOUL_SPEED = 14;
 
   /** Bit index of the first of six {@code enterable} bits, one per {@link #DIRECTIONS} entry. */
   public static final int ENTERABLE = 16;

@@ -8,6 +8,7 @@
 package org.cobblestonemc.plugin.config;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -132,11 +133,7 @@ public interface Codec<V> {
         }
       }
       throw new IllegalArgumentException(
-          "expected one of "
-              + java.util.Arrays.toString(type.getEnumConstants())
-              + " but got '"
-              + raw
-              + "'");
+          "expected one of " + Arrays.toString(type.getEnumConstants()) + " but got '" + raw + "'");
     };
   }
 

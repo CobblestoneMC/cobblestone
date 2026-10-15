@@ -105,16 +105,15 @@ public interface MinecraftBlock {
   }
 
   /**
-   * Returns whether this block is soul sand or soul soil.
+   * Returns whether Soul Speed boots work on this block: soul sand and soul soil.
    *
-   * <p>Its own question rather than a reading of {@link #speedFactor()} because what it costs to
-   * cross depends on the agent: Soul Speed boots make it faster than ordinary ground, while honey
-   * -- which also slows -- has no such exception. The region layer needs to tell them apart to
-   * price either correctly.
+   * <p>Its own question rather than a reading of {@link #speedFactor()}, because the two are
+   * independent. Soul sand drags and soul soil does not, but Soul Speed makes both faster than
+   * ordinary ground; honey drags too, and Soul Speed does nothing for it.
    *
    * @return {@code true} for soul sand and soul soil
    */
-  default boolean isSoulSand() {
+  default boolean boostsSoulSpeed() {
     return false;
   }
 

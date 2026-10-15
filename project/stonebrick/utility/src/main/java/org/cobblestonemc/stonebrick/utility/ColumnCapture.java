@@ -7,9 +7,12 @@
 
 package org.cobblestonemc.stonebrick.utility;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.bukkit.ChunkSnapshot;
+import org.bukkit.Material;
 import org.bukkit.block.data.BlockData;
 import org.cobblestonemc.stonebrick.format.BlockTraits;
 import org.cobblestonemc.stonebrick.format.ChunkColumn;
@@ -56,7 +59,7 @@ final class ColumnCapture {
     for (int section = range[0]; section <= range[1]; section++) {
       // An empty section is all air, and the server can say so without us reading 4 096 blocks.
       if (snapshot.isSectionEmpty(section - minSection)) {
-        java.util.Arrays.fill(states, Sbc.AIR);
+        Arrays.fill(states, Sbc.AIR);
         traits.add(Sbc.AIR, AIR_TRAITS.get());
         column.cubeAtSection(section, states);
         continue;
@@ -102,14 +105,14 @@ final class ColumnCapture {
    * <p>Lazy because {@code createBlockData} needs a running server, and this class is loaded before
    * one is guaranteed to exist.
    */
-  private static final java.util.function.Supplier<BlockTraits> AIR_TRAITS =
-      new java.util.function.Supplier<>() {
+  private static final Supplier<BlockTraits> AIR_TRAITS =
+      new Supplier<>() {
         private BlockTraits value;
 
         @Override
         public synchronized BlockTraits get() {
           if (value == null) {
-            value = TraitCapture.of(org.bukkit.Material.AIR.createBlockData());
+            value = TraitCapture.of(Material.AIR.createBlockData());
           }
           return value;
         }

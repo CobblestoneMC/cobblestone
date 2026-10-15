@@ -8,6 +8,7 @@
 package org.cobblestonemc.stonebrick.platform;
 
 import java.util.ArrayDeque;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.List;
 import java.util.PriorityQueue;
@@ -50,8 +51,7 @@ public final class DeterministicScheduler
   /** Delayed work, ordered by due time then by submission, so ties are not left to the heap. */
   private final PriorityQueue<Delayed> timers =
       new PriorityQueue<>(
-          java.util.Comparator.comparingLong(Delayed::dueMillis)
-              .thenComparingLong(Delayed::sequence));
+          Comparator.comparingLong(Delayed::dueMillis).thenComparingLong(Delayed::sequence));
 
   private long nowMillis;
   private long sequence;

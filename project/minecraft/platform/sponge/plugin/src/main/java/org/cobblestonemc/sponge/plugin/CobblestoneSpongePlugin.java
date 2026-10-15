@@ -35,6 +35,7 @@ import org.cobblestonemc.sponge.api.CobblestoneCoreApi;
 import org.cobblestonemc.sponge.hologram.SpongeHolograms;
 import org.cobblestonemc.sponge.plugin.api.CobblestoneSpongeApi;
 import org.cobblestonemc.sponge.plugin.api.TrailNavigatorSettings;
+import org.jetbrains.annotations.Nullable;
 import org.spongepowered.api.Server;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.command.Command;
@@ -418,7 +419,7 @@ public final class CobblestoneSpongePlugin {
   }
 
   /** The heuristic setting last read, so a bad one is warned about once. */
-  private volatile @org.jetbrains.annotations.Nullable String lastHeuristicSetting;
+  private volatile @Nullable String lastHeuristicSetting;
 
   /**
    * Reads the configured heuristic, falling back to the default on anything unrecognised.
@@ -427,24 +428,23 @@ public final class CobblestoneSpongePlugin {
    * the other heuristic either -- the two behave differently enough that an operator would be
    * debugging the wrong thing. So it warns, loudly enough to find, and uses the default.
    */
-  private org.cobblestonemc.api.SearchSettings.Heuristic heuristicFrom(String configured) {
+  private SearchSettings.Heuristic heuristicFrom(String configured) {
     // Read for every search, so the warning below is said once per value rather than per search.
     String previous = lastHeuristicSetting;
     lastHeuristicSetting = configured;
     try {
-      return org.cobblestonemc.api.SearchSettings.Heuristic.valueOf(
-          configured.strip().toUpperCase(java.util.Locale.ROOT));
+      return SearchSettings.Heuristic.valueOf(configured.strip().toUpperCase(Locale.ROOT));
     } catch (IllegalArgumentException unknown) {
       if (configured.equals(previous)) {
-        return org.cobblestonemc.api.SearchSettings.DEFAULT_HEURISTIC;
+        return SearchSettings.DEFAULT_HEURISTIC;
       }
       logger.warn(
           "search.algorithm.heuristic is '"
               + configured
               + "', which is not a heuristic; using "
-              + org.cobblestonemc.api.SearchSettings.DEFAULT_HEURISTIC
+              + SearchSettings.DEFAULT_HEURISTIC
               + ". Valid values: RUNNING_AVERAGE, REGIONS");
-      return org.cobblestonemc.api.SearchSettings.DEFAULT_HEURISTIC;
+      return SearchSettings.DEFAULT_HEURISTIC;
     }
   }
 }

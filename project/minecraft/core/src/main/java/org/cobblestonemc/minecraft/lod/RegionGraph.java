@@ -82,7 +82,6 @@ public final class RegionGraph {
   private byte[] regionClass = new byte[1024];
   private int[] regionBox = new int[6 * 1024];
   private float[] regionBreak = new float[1024];
-  private boolean[] regionNavigable = new boolean[1024];
   private long[] regionColumn = new long[1024];
   private int[][] regionPortals = new int[1024][];
   private int[] regionPortalCount = new int[1024];
@@ -168,16 +167,6 @@ public final class RegionGraph {
    */
   public double breakTime(int region) {
     return regionBreak[region];
-  }
-
-  /**
-   * Returns whether a {@link RegionClass#WATER} region has a surface a boat floats on.
-   *
-   * @param region the region
-   * @return {@code true} if a boat can cross it
-   */
-  public boolean navigable(int region) {
-    return regionNavigable[region];
   }
 
   /**
@@ -318,8 +307,8 @@ public final class RegionGraph {
    */
   public long footprintBytes() {
     long bytes = columns.size() * 64L;
-    // Per region: class, box, break time, navigable, column, portal list header and count.
-    bytes += regionCount * (1L + 24 + 4 + 1 + 8 + 16 + 4);
+    // Per region: class, box, break time, column, portal list header and count.
+    bytes += regionCount * (1L + 24 + 4 + 8 + 16 + 4);
     for (int region = 0; region < regionCount; region++) {
       bytes += regionPortals[region].length * 4L;
     }
@@ -426,7 +415,6 @@ public final class RegionGraph {
       int id = newRegion(RegionClass.ALL[column.regionClass[r]], key);
       System.arraycopy(column.regionBox, r * 6, regionBox, id * 6, 6);
       regionBreak[id] = column.regionBreak[r];
-      regionNavigable[id] = column.regionNavigable[r];
     }
     int[] box = new int[6];
     for (int p = 0; p < column.portalA.length; p++) {
@@ -537,7 +525,6 @@ public final class RegionGraph {
       regionClass = Arrays.copyOf(regionClass, size);
       regionBox = Arrays.copyOf(regionBox, size * 6);
       regionBreak = Arrays.copyOf(regionBreak, size);
-      regionNavigable = Arrays.copyOf(regionNavigable, size);
       regionColumn = Arrays.copyOf(regionColumn, size);
       regionPortals = Arrays.copyOf(regionPortals, size);
       regionPortalCount = Arrays.copyOf(regionPortalCount, size);

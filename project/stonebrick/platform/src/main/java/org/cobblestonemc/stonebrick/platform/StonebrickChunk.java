@@ -11,6 +11,7 @@ import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.UnknownBlock;
 import org.cobblestonemc.stonebrick.format.BlockTraits;
+import org.cobblestonemc.stonebrick.format.CaptureFormatException;
 import org.cobblestonemc.stonebrick.format.ChunkColumn;
 import org.cobblestonemc.stonebrick.format.TraitTable;
 
@@ -50,7 +51,7 @@ final class StonebrickChunk implements MinecraftChunk {
    */
   static StonebrickChunk of(
       ChunkColumn column, TraitTable traits, String worldKey, MissingCaptureLog missing)
-      throws org.cobblestonemc.stonebrick.format.CaptureFormatException {
+      throws CaptureFormatException {
     BlockTraits[] resolved = traits.resolve(column.palette());
     StonebrickBlock[] blocks = new StonebrickBlock[resolved.length];
     for (int i = 0; i < resolved.length; i++) {

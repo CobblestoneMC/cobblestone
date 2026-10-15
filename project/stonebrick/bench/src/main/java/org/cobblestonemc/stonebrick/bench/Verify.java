@@ -15,7 +15,6 @@ import java.util.Locale;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.SearchObserver;
-import org.cobblestonemc.minecraft.lod.RegionCost;
 import org.cobblestonemc.minecraft.lod.RegionGraph;
 import org.cobblestonemc.minecraft.lod.RegionSearch;
 import org.cobblestonemc.stonebrick.format.CorpusLayout;
@@ -145,7 +144,7 @@ final class Verify {
                     capture.minY(scenario.world()),
                     capture.maxY(scenario.world())),
                 ScenarioRunner.REGION_DETOUR),
-            RegionCost.forMediums(loadout.mediums()),
+            loadout.cost(),
             scenario.destination(),
             path.get(0));
 

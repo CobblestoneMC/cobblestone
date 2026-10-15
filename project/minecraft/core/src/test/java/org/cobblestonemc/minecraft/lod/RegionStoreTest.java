@@ -132,7 +132,6 @@ class RegionStoreTest {
     assertArrayEquals(expected.regionClass, actual.regionClass);
     assertArrayEquals(expected.regionBox, actual.regionBox);
     assertArrayEquals(expected.regionBreak, actual.regionBreak);
-    assertArrayEquals(expected.regionNavigable, actual.regionNavigable);
     assertArrayEquals(expected.portalA, actual.portalA);
     assertArrayEquals(expected.portalB, actual.portalB);
     assertArrayEquals(expected.portalDirected, actual.portalDirected);
@@ -167,7 +166,7 @@ class RegionStoreTest {
   void aSearchOverStoredColumnsGivesTheSameAnswerAfterARestart(@TempDir Path root) {
     Cell goal = new Cell(0, 13, 0);
     Cell from = new Cell(150, 13, 40);
-    RegionCost walker = RegionCost.forMediums(RegionCost.survival());
+    RegionCost walker = RegionCost.forCapabilities(RegionCost.survival());
 
     Chunks chunks = new Chunks();
     RegionStore first = store(root);

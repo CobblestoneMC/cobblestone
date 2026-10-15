@@ -7,6 +7,8 @@
 
 package org.cobblestonemc.minecraft.lod;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -63,7 +65,7 @@ public final class RegionFiles {
   private static final int MAGIC = 0x43524731; // "CRG1"
 
   /** The layout of a file and of a column record. Bump it with any change to either. */
-  static final int FORMAT_VERSION = 1;
+  static final int FORMAT_VERSION = 2;
 
   /** Columns a file holds along each axis. */
   static final int SPAN = 32;
@@ -249,7 +251,7 @@ public final class RegionFiles {
     Path path = path(file);
     if (Files.exists(path)) {
       try (DataInputStream in =
-          new DataInputStream(new java.io.BufferedInputStream(Files.newInputStream(path)))) {
+          new DataInputStream(new BufferedInputStream(Files.newInputStream(path)))) {
         int count = header(in);
         long position = HEADER_BYTES;
         for (int i = 0; i < count; i++) {
@@ -275,7 +277,7 @@ public final class RegionFiles {
       return records;
     }
     try (DataInputStream in =
-        new DataInputStream(new java.io.BufferedInputStream(Files.newInputStream(path)))) {
+        new DataInputStream(new BufferedInputStream(Files.newInputStream(path)))) {
       int count = header(in);
       for (int i = 0; i < count; i++) {
         int at = in.readUnsignedShort();
@@ -303,7 +305,7 @@ public final class RegionFiles {
     Map<Integer, long[]> index = new HashMap<>();
     long position = HEADER_BYTES;
     try (DataOutputStream out =
-        new DataOutputStream(new java.io.BufferedOutputStream(Files.newOutputStream(temporary)))) {
+        new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(temporary)))) {
       out.writeInt(MAGIC);
       out.writeInt(FORMAT_VERSION);
       out.writeInt(RegionColumnBuilder.CLASSIFIER_VERSION);

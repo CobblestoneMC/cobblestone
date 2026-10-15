@@ -16,8 +16,10 @@ import org.cobblestonemc.minecraft.api.MinecraftStepType;
 /**
  * What crossing a region costs one agent, and which regions it can enter at all.
  *
- * <p>The only place the agent meets the {@link RegionGraph}. The graph says a region is water; this
- * says whether the agent swims it, boats it, or (with neither) cannot be there.
+ * <p>The only place the agent meets the {@link RegionGraph}. The graph says a region is a water
+ * surface; this says whether the agent boats it, swims it, or (with neither) cannot be there, by
+ * matching the agent's {@link Capability capabilities} against the ones the {@link RegionClass}
+ * lists and taking the cheapest.
  *
  * <p><b>Every rate is at least {@link #cheapest()} per block of straight-line distance.</b> The
  * backward search focuses itself with that bound, and a crossing priced below it would let the
@@ -33,7 +35,7 @@ public final class RegionCost {
    * into a fence, and the estimate has to be able to be wrong without making a solvable route
    * unreachable.
    */
-  public static final double FALLBACK_COST_PER_BLOCK = 2 * Medium.MINEABLE.baseCostPerBlock();
+  public static final double FALLBACK_COST_PER_BLOCK = 2 * Capability.MINE.baseCostPerBlock();
 
   /** {@code MovementCosts.WALK}, which a mining step pays on top of breaking. */
   private static final double MINE_WALK = 0.20;
@@ -41,60 +43,69 @@ public final class RegionCost {
   /** {@code MovementCosts.FALL_PER_BLOCK}, which a step down pays on top of breaking. */
   private static final double MINE_FALL = 0.18;
 
-  private final double walk;
-  private final double soul;
-  private final double swim;
-  private final double boat;
-  private final double climb;
-  private final double fly;
+  /** Per capability, by ordinal: the agent's rate per block, or {@code NaN} if it lacks it. */
+  private final double[] rates;
+
+  /**
+   * Per class, by ordinal: the agent's cheapest straight-line rate across it, or {@code NaN} if
+   * none of its capabilities cross it. Mining and boating are priced by shape rather than by a rate
+   * alone, and are left out.
+   */
+  private final double[] straight;
+
   private final boolean mine;
   private final double fallback;
   private final double cheapest;
 
-  private RegionCost(Set<Medium> available, Map<Medium, Double> costs, double fallback) {
-    this.walk = rate(available, costs, Medium.WALKABLE);
-    this.soul = rate(available, costs, Medium.SOUL_SAND);
-    this.swim = rate(available, costs, Medium.SWIMMABLE);
-    this.boat = rate(available, costs, Medium.BOATABLE);
-    this.climb = rate(available, costs, Medium.CLIMBABLE);
-    this.fly = rate(available, costs, Medium.FLYABLE);
-    this.mine = available.contains(Medium.MINEABLE);
+  private RegionCost(Set<Capability> available, Map<Capability, Double> costs, double fallback) {
+    this.rates = new double[Capability.ALL.length];
+    for (Capability capability : Capability.ALL) {
+      Double override = costs.get(capability);
+      rates[capability.ordinal()] =
+          !available.contains(capability)
+              ? Double.NaN
+              : override == null ? capability.baseCostPerBlock() : Math.max(0.01, override);
+    }
+    this.mine = available.contains(Capability.MINE);
     this.fallback = fallback;
+    this.straight = new double[RegionClass.ALL.length];
     double least = fallback;
-    for (double rate : new double[] {walk, soul, swim, boat, climb, fly}) {
-      if (!Double.isNaN(rate)) {
+    for (RegionClass klass : RegionClass.ALL) {
+      double best = Double.NaN;
+      for (Capability capability : Capability.ALL) {
+        double rate = rates[capability.ordinal()] * klass.factor(capability);
+        if (Double.isNaN(rate) || capability == Capability.MINE) {
+          continue;
+        }
         least = Math.min(least, rate);
+        if (capability != Capability.BOAT) {
+          best = Double.isNaN(best) ? rate : Math.min(best, rate);
+        }
       }
+      straight[klass.ordinal()] = best;
     }
     this.cheapest = least;
   }
 
-  private static double rate(Set<Medium> available, Map<Medium, Double> costs, Medium medium) {
-    if (!available.contains(medium)) {
-      return Double.NaN;
-    }
-    Double override = costs.get(medium);
-    return override == null ? medium.baseCostPerBlock() : Math.max(0.01, override);
-  }
-
   /**
-   * Creates a cost model for an agent with the given mediums.
+   * Creates a cost model for an agent with the given capabilities, at their base rates.
    *
    * @param available what the agent can do
    * @return the cost model
    */
-  public static RegionCost forMediums(Set<Medium> available) {
-    return forMediums(available, Map.of());
+  public static RegionCost forCapabilities(Set<Capability> available) {
+    return forCapabilities(available, Map.of());
   }
 
   /**
-   * Creates a cost model for an agent whose equipment changes what some terrain costs them.
+   * Creates a cost model for an agent whose equipment changes what some capabilities cost them.
    *
    * @param available what the agent can do
-   * @param costs per-block costs overriding {@link Medium#baseCostPerBlock()} where given
+   * @param costs per-block costs overriding {@link Capability#baseCostPerBlock()} where given
    * @return the cost model
    */
-  public static RegionCost forMediums(Set<Medium> available, Map<Medium, Double> costs) {
+  public static RegionCost forCapabilities(
+      Set<Capability> available, Map<Capability, Double> costs) {
     return new RegionCost(available, costs, FALLBACK_COST_PER_BLOCK);
   }
 
@@ -106,55 +117,82 @@ public final class RegionCost {
    * @return the cost model
    */
   public static RegionCost forPlayer(CobblestonePlayer player, Set<MinecraftStepType> excluded) {
-    return forMediums(mediumsFor(player, excluded));
+    return forCapabilities(capabilitiesFor(player, excluded), ratesFor(player));
   }
 
   /**
-   * Returns the mediums a player can use, given what an operator has excluded.
+   * Returns the capabilities a player has, given what an operator has excluded.
    *
-   * <p>The one place a {@link CobblestonePlayer} becomes mediums, so the estimate and the fine
-   * search cannot disagree about what a player is able to do. A medium the exclusions forbid is
+   * <p>The one place a {@link CobblestonePlayer} becomes capabilities, so the estimate and the fine
+   * search cannot disagree about what a player is able to do. A capability the exclusions forbid is
    * dropped: leaving it in prices routes the search is not allowed to take, and the estimate then
    * steers toward paths it can never find. Public so the benchmark derives its agents here too.
    *
    * @param player the navigating player
    * @param excluded the step types an operator has turned off
-   * @return the mediums
+   * @return the capabilities
    */
-  public static Set<Medium> mediumsFor(CobblestonePlayer player, Set<MinecraftStepType> excluded) {
-    EnumSet<Medium> mediums = EnumSet.copyOf(survival());
+  public static Set<Capability> capabilitiesFor(
+      CobblestonePlayer player, Set<MinecraftStepType> excluded) {
+    EnumSet<Capability> capabilities = EnumSet.copyOf(survival());
     if (excluded.contains(MinecraftStepType.MINE)) {
-      mediums.remove(Medium.MINEABLE);
+      capabilities.remove(Capability.MINE);
     }
     if (excluded.contains(MinecraftStepType.SWIM)) {
-      mediums.remove(Medium.SWIMMABLE);
+      capabilities.remove(Capability.SWIM);
     }
     if (excluded.contains(MinecraftStepType.WALK)) {
-      // Soul sand is walked on, so it goes with walking.
-      mediums.remove(Medium.WALKABLE);
-      mediums.remove(Medium.SOUL_SAND);
+      capabilities.remove(Capability.WALK);
+    } else if (player.soulSpeedLevel() > 0) {
+      // Soul Speed is a way of walking, so it goes with walking.
+      capabilities.add(Capability.SOUL_SPEED);
     }
     if (excluded.contains(MinecraftStepType.CLIMB)) {
-      mediums.remove(Medium.CLIMBABLE);
+      capabilities.remove(Capability.CLIMB);
     }
     if (!excluded.contains(MinecraftStepType.FLY) && (player.canFly() || player.canGlide())) {
-      mediums.add(Medium.FLYABLE);
+      capabilities.add(Capability.FLY);
     }
     if (!excluded.contains(MinecraftStepType.BOAT)
         && (player.hasBoatInInventory() || player.isInBoat())) {
-      mediums.add(Medium.BOATABLE);
+      capabilities.add(Capability.BOAT);
     }
-    return mediums;
+    return capabilities;
   }
 
   /**
-   * Returns the mediums a plain survival player has: everything but flight and boats.
+   * Returns the rates a player's equipment sets for their capabilities, where it differs from the
+   * base: Soul Speed, by the level of the boots.
    *
-   * @return the default medium set
+   * @param player the navigating player
+   * @return the rates, by capability
    */
-  public static Set<Medium> survival() {
-    return EnumSet.of(
-        Medium.WALKABLE, Medium.SOUL_SAND, Medium.SWIMMABLE, Medium.CLIMBABLE, Medium.MINEABLE);
+  public static Map<Capability, Double> ratesFor(CobblestonePlayer player) {
+    int level = player.soulSpeedLevel();
+    if (level <= 0) {
+      return Map.of();
+    }
+    return Map.of(
+        Capability.SOUL_SPEED, Capability.WALK.baseCostPerBlock() / soulSpeedFactor(level));
+  }
+
+  /**
+   * How much faster Soul Speed boots of a level walk on the blocks they work on, mirroring {@code
+   * MovementCosts.soulSpeedFactor}: the enchantment adds {@code 0.03 * (1 + 0.35 * level)} to a
+   * base movement speed of 0.1, and lifts soul sand's drag.
+   */
+  private static double soulSpeedFactor(int level) {
+    return 1 + 0.3 * (1 + 0.35 * level);
+  }
+
+  /**
+   * Returns the capabilities a plain survival player has: everything but flight, boats and Soul
+   * Speed.
+   *
+   * @return the default capability set
+   */
+  public static Set<Capability> survival() {
+    return EnumSet.of(Capability.WALK, Capability.SWIM, Capability.CLIMB, Capability.MINE);
   }
 
   /**
@@ -170,21 +208,16 @@ public final class RegionCost {
    * @return {@code true} if usable
    */
   public boolean usable(RegionClass klass) {
-    return switch (klass) {
-      case STAND -> has(walk) || has(fly);
-      case SOUL -> has(soul) || has(walk) || has(fly);
-      case WATER -> has(swim) || has(boat);
-      case CLIMB -> has(climb) || has(fly);
-      case AIR -> has(fly);
-      case SOLID -> true;
-    };
+    return klass == RegionClass.SOLID
+        || has(straight[klass.ordinal()])
+        || has(rate(Capability.BOAT) * klass.factor(Capability.BOAT));
   }
 
   /**
-   * Returns the seconds to cross a region in a straight line from one point to another.
+   * Returns the seconds to cross a region in a straight line from one point to another, by the
+   * cheapest capability the agent has for it.
    *
    * @param klass the region's class
-   * @param navigable whether a water region has a boat surface
    * @param breakTime the region's mean break time, for rock
    * @param fx where the crossing starts, X
    * @param fy where the crossing starts, Y
@@ -196,7 +229,6 @@ public final class RegionCost {
    */
   public double traverse(
       RegionClass klass,
-      boolean navigable,
       double breakTime,
       double fx,
       double fy,
@@ -208,29 +240,24 @@ public final class RegionCost {
     double dy = ty - fy;
     double dz = tz - fz;
     double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    return switch (klass) {
-      case STAND -> least(walk, fly) * length;
-      // Soul sand at the agent's own rate for it, which Soul Speed makes cheaper than ground.
-      case SOUL -> least(has(soul) ? soul : walk, fly) * length;
-      case WATER -> {
-        if (navigable && has(boat)) {
-          // A boat crosses the surface; anything vertical in the crossing is swum.
-          double across = Math.sqrt(dx * dx + dz * dz);
-          double up = Math.abs(dy);
-          double swum = has(swim) ? swim : boat;
-          yield Math.min(boat * across + swum * up, has(swim) ? swim * length : Double.MAX_VALUE);
-        }
-        yield (has(swim) ? swim : fallback) * length;
-      }
-      case CLIMB -> least(climb, fly) * length;
-      case AIR -> (has(fly) ? fly : fallback) * length;
+    if (klass == RegionClass.SOLID) {
       // At least one block, however short the line: the two portals of a one-block wall sit face
       // to face, and a crossing priced by the distance between them would dig it for free.
-      case SOLID ->
-          mine && breakTime > 0
-              ? Math.max(mining(breakTime, dx, dy, dz), breakTime + MINE_FALL)
-              : fallback * Math.max(1, length);
-    };
+      return mine && breakTime > 0
+          ? Math.max(mining(breakTime, dx, dy, dz), breakTime + MINE_FALL)
+          : fallback * Math.max(1, length);
+    }
+    double rate = straight[klass.ordinal()];
+    double cost = (has(rate) ? rate : fallback) * length;
+    double boat = rate(Capability.BOAT) * klass.factor(Capability.BOAT);
+    if (has(boat)) {
+      // A boat crosses the surface; anything vertical in the crossing, where a surface steps down
+      // a fall of water, is swum.
+      double across = Math.sqrt(dx * dx + dz * dz);
+      double up = Math.abs(dy) * (has(rate) ? rate : boat);
+      cost = Math.min(has(rate) ? cost : Double.MAX_VALUE, boat * across + up);
+    }
+    return cost;
   }
 
   /**
@@ -270,11 +297,8 @@ public final class RegionCost {
     return !Double.isNaN(rate);
   }
 
-  /** The lower of two rates, either of which may be unavailable ({@code NaN}). */
-  private double least(double a, double b) {
-    if (!has(a)) {
-      return has(b) ? b : fallback;
-    }
-    return has(b) ? Math.min(a, b) : a;
+  /** The agent's rate for a capability, or {@code NaN} if it lacks it. */
+  private double rate(Capability capability) {
+    return rates[capability.ordinal()];
   }
 }

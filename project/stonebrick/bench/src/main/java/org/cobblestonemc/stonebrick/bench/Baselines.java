@@ -12,8 +12,11 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.jetbrains.annotations.Nullable;
 import org.yaml.snakeyaml.Yaml;
@@ -100,7 +103,7 @@ public final class Baselines {
   }
 
   private static Map<String, String> strings(Object node) {
-    Map<String, String> values = new java.util.LinkedHashMap<>();
+    Map<String, String> values = new LinkedHashMap<>();
     if (node instanceof Map<?, ?> map) {
       for (Map.Entry<?, ?> entry : map.entrySet()) {
         values.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
@@ -111,7 +114,7 @@ public final class Baselines {
 
   @SuppressWarnings("unchecked")
   private static Map<String, Number> numbers(Object node) {
-    Map<String, Number> values = new java.util.LinkedHashMap<>();
+    Map<String, Number> values = new LinkedHashMap<>();
     if (node instanceof Map<?, ?> map) {
       for (Map.Entry<String, Object> entry : ((Map<String, Object>) map).entrySet()) {
         if (entry.getValue() instanceof Number number) {
@@ -141,7 +144,7 @@ public final class Baselines {
     StringBuilder json = new StringBuilder();
     json.append("{\n");
     json.append("  \"scenario\": \"").append(result.scenario()).append("\",\n");
-    json.append("  \"acceptedAt\": \"").append(java.time.LocalDate.now()).append("\",\n");
+    json.append("  \"acceptedAt\": \"").append(LocalDate.now()).append("\",\n");
     json.append("  \"commit\": \"").append(commit).append("\",\n");
     json.append("  \"outcome\": \"").append(result.outcome()).append("\",\n");
     // Strings, not numbers: these identify what was measured rather than measure it.
@@ -173,7 +176,7 @@ public final class Baselines {
       json.append("    \"").append(entry.getKey()).append("\": ");
       Number value = entry.getValue();
       if (value instanceof Double || value instanceof Float) {
-        json.append(String.format(java.util.Locale.ROOT, "%.4f", value.doubleValue()));
+        json.append(String.format(Locale.ROOT, "%.4f", value.doubleValue()));
       } else {
         json.append(value.longValue());
       }

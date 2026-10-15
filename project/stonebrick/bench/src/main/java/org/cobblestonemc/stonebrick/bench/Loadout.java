@@ -19,7 +19,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
-import org.cobblestonemc.minecraft.lod.Medium;
+import org.cobblestonemc.minecraft.lod.Capability;
 import org.cobblestonemc.minecraft.lod.RegionCost;
 import org.cobblestonemc.stonebrick.platform.StonebrickPlayer;
 import org.yaml.snakeyaml.Yaml;
@@ -70,16 +70,25 @@ public record Loadout(
   }
 
   /**
-   * Returns the mediums this loadout can use.
+   * Returns the capabilities this loadout has.
    *
    * <p>Here rather than beside each caller so the heuristic and the verification both price the
-   * same agent the same way. A medium the loadout's exclusions forbid is dropped, or the estimate
-   * would price a route the fine search is not allowed to take.
+   * same agent the same way. A capability the loadout's exclusions forbid is dropped, or the
+   * estimate would price a route the fine search is not allowed to take.
    *
-   * @return the mediums
+   * @return the capabilities
    */
-  public java.util.Set<Medium> mediums() {
-    return RegionCost.mediumsFor(player(), excludedModes);
+  public Set<Capability> capabilities() {
+    return RegionCost.capabilitiesFor(player(), excludedModes);
+  }
+
+  /**
+   * Returns what crossing the terrain costs this loadout, as production prices it.
+   *
+   * @return the cost model
+   */
+  public RegionCost cost() {
+    return RegionCost.forPlayer(player(), excludedModes);
   }
 
   /**
@@ -93,6 +102,7 @@ public record Loadout(
         .canGlide(agent.canGlide())
         .hasBoat(agent.hasBoat())
         .inBoat(agent.inBoat())
+        .soulSpeed(agent.soulSpeed())
         .permissions(agent.permissions())
         .build();
   }
@@ -172,6 +182,7 @@ public record Loadout(
             flag(body, "canGlide"),
             flag(body, "hasBoat"),
             flag(body, "inBoat"),
+            body.get("soulSpeed") instanceof Number level ? level.intValue() : 0,
             Set.copyOf(strings(body.get("permissions")))),
         Set.copyOf(excluded),
         Set.copyOf(strings(body.get("only"))));

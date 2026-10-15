@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.stonebrick.platform;
 
+import java.util.Arrays;
 import org.cobblestonemc.minecraft.Direction;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.stonebrick.format.BlockTraits;
@@ -41,7 +42,7 @@ final class StonebrickBlock implements MinecraftBlock {
 
   private static int[] resolveFaces() {
     int[] faces = new int[Direction.values().length];
-    java.util.Arrays.fill(faces, -1);
+    Arrays.fill(faces, -1);
     for (int i = 0; i < BlockTraits.DIRECTIONS.length; i++) {
       faces[Direction.valueOf(BlockTraits.DIRECTIONS[i]).ordinal()] = i;
     }
@@ -124,8 +125,8 @@ final class StonebrickBlock implements MinecraftBlock {
   }
 
   @Override
-  public boolean isSoulSand() {
-    return traits.has(BlockTraits.SOUL_SAND);
+  public boolean boostsSoulSpeed() {
+    return traits.has(BlockTraits.SOUL_SPEED);
   }
 
   @Override

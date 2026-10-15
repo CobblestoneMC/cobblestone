@@ -8,6 +8,7 @@
 package org.cobblestonemc.minecraft.lod;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -426,7 +427,7 @@ public final class RegionStore {
                   });
               removed.addAll(removing);
             }
-            throw new java.io.UncheckedIOException(failed);
+            throw new UncheckedIOException(failed);
           }
         },
         disk);

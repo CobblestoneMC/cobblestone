@@ -39,6 +39,7 @@ import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
+import org.cobblestonemc.minecraft.api.RegionSource;
 import org.cobblestonemc.paper.PaperNavigationServiceImpl;
 import org.cobblestonemc.paper.plugin.api.NavigatorFactory;
 import org.cobblestonemc.plugin.Permissions;
@@ -78,9 +79,6 @@ final class NavigateCommand {
           .maxCellsVisited(4000)
           .maxWallClockMillis(1500L)
           .heuristicWeight(2.0)
-          // A few blocks back to the trail: the region layer's chunk reads would cost more than
-          // the search.
-          .heuristic(SearchSettings.Heuristic.RUNNING_AVERAGE)
           .build();
 
   private NavigateCommand() {}
@@ -405,7 +403,9 @@ final class NavigateCommand {
                   GUIDE_SETTINGS,
                   flags.excludedModes(),
                   flags.excludedWorlds(),
-                  flags.excludedDimensions()))
+                  flags.excludedDimensions(),
+                  // A few blocks back to the trail, through chunks the player has loaded.
+                  RegionSource.LOADED))
           .future()
           .handle(NavigateCommand::convertUpdateResult);
     };
@@ -435,7 +435,9 @@ final class NavigateCommand {
                   searchSettings.get(),
                   flags.excludedModes(),
                   flags.excludedWorlds(),
-                  flags.excludedDimensions()));
+                  flags.excludedDimensions(),
+                  // A few blocks back to the trail, through chunks the player has loaded.
+                  RegionSource.LOADED));
       searches.track(uuid, handle);
       return handle
           .future()

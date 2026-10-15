@@ -30,6 +30,7 @@ import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
+import org.cobblestonemc.minecraft.api.RegionSource;
 import org.cobblestonemc.plugin.Permissions;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
 import org.cobblestonemc.plugin.api.NavigatorSettings;
@@ -55,6 +56,7 @@ import org.cobblestonemc.sponge.SpongeNavigationServiceImpl;
 import org.spongepowered.api.command.Command;
 import org.spongepowered.api.command.CommandCompletion;
 import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.parameter.CommandContext;
 import org.spongepowered.api.command.parameter.Parameter;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.util.Tristate;
@@ -81,9 +83,6 @@ final class NavigateCommand {
           .maxCellsVisited(4000)
           .maxWallClockMillis(1500L)
           .heuristicWeight(2.0)
-          // A few blocks back to the trail: the region layer's chunk reads would cost more than
-          // the search.
-          .heuristic(SearchSettings.Heuristic.RUNNING_AVERAGE)
           .build();
 
   private NavigateCommand() {}
@@ -139,8 +138,7 @@ final class NavigateCommand {
   }
 
   /** The words the player has typed, in order, gathered from the per-word parameters. */
-  private static List<String> typedWords(
-      org.spongepowered.api.command.parameter.CommandContext context) {
+  private static List<String> typedWords(CommandContext context) {
     List<String> words = new ArrayList<>();
     for (Parameter.Key<String> key : WORD_KEYS) {
       context.one(key).ifPresent(words::add);
@@ -418,7 +416,9 @@ final class NavigateCommand {
                   GUIDE_SETTINGS,
                   flags.excludedModes(),
                   flags.excludedWorlds(),
-                  flags.excludedDimensions()))
+                  flags.excludedDimensions(),
+                  // A few blocks back to the trail, through chunks the player has loaded.
+                  RegionSource.LOADED))
           .future()
           .handle(NavigateCommand::convertUpdateResult);
     };
@@ -497,9 +497,7 @@ final class NavigateCommand {
    * before it are readable from the context.
    */
   private static List<CommandCompletion> complete(
-      org.spongepowered.api.command.parameter.CommandContext context,
-      String input,
-      SpongeIntegrationRegistry integrations) {
+      CommandContext context, String input, SpongeIntegrationRegistry integrations) {
     Optional<ServerPlayer> player = context.cause().first(ServerPlayer.class);
     if (player.isEmpty()) {
       return List.of();

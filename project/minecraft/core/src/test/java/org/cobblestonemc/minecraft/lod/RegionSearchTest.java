@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.EnumSet;
 import java.util.Set;
+import java.util.function.Predicate;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.MinecraftBlock;
@@ -90,19 +91,20 @@ class RegionSearchTest {
     return y <= GROUND ? STONE : AIR;
   }
 
-  private static RegionSearch search(Terrain terrain, Set<Medium> mediums, Cell goal, Cell from) {
+  private static RegionSearch search(
+      Terrain terrain, Set<Capability> capabilities, Cell goal, Cell from) {
     return new RegionSearch(
-        new RegionGraph(new World(terrain)), RegionCost.forMediums(mediums), goal, from);
+        new RegionGraph(new World(terrain)), RegionCost.forCapabilities(capabilities), goal, from);
   }
 
-  private static Set<Medium> walker() {
+  private static Set<Capability> walker() {
     return RegionCost.survival();
   }
 
-  private static Set<Medium> walkerWithoutPickaxe() {
-    Set<Medium> mediums = EnumSet.copyOf(RegionCost.survival());
-    mediums.remove(Medium.MINEABLE);
-    return mediums;
+  private static Set<Capability> walkerWithoutPickaxe() {
+    Set<Capability> capabilities = EnumSet.copyOf(RegionCost.survival());
+    capabilities.remove(Capability.MINE);
+    return capabilities;
   }
 
   @Test
@@ -112,7 +114,7 @@ class RegionSearchTest {
     RegionSearch search = search(RegionSearchTest::flat, walker(), goal, from);
 
     double estimate = search.costToGoal(from);
-    double straight = from.distance(goal) * Medium.WALKABLE.baseCostPerBlock();
+    double straight = from.distance(goal) * Capability.WALK.baseCostPerBlock();
 
     assertNull(search.takePending());
     // Section-sized regions priced in straight lines, crossing at the points the route does: a
@@ -185,8 +187,8 @@ class RegionSearchTest {
         };
     Cell goal = new Cell(300, GROUND, 4);
     Cell from = new Cell(0, GROUND, 4);
-    Set<Medium> boater = EnumSet.copyOf(RegionCost.survival());
-    boater.add(Medium.BOATABLE);
+    Set<Capability> boater = EnumSet.copyOf(RegionCost.survival());
+    boater.add(Capability.BOAT);
 
     double boat = search(river, boater, goal, from).costToGoal(from);
     double swim = search(river, walker(), goal, from).costToGoal(from);
@@ -216,7 +218,7 @@ class RegionSearchTest {
     Cell from = new Cell(400, FEET, 0);
     World world = new World(RegionSearchTest::flat);
     RegionSearch search =
-        new RegionSearch(new RegionGraph(world), RegionCost.forMediums(walker()), goal, from);
+        new RegionSearch(new RegionGraph(world), RegionCost.forCapabilities(walker()), goal, from);
 
     search.costToGoal(from);
 
@@ -237,11 +239,11 @@ class RegionSearchTest {
           boolean gate = x == 160 && z >= -2 && z <= 2;
           return (westOrEast || northOrSouth) && !gate ? BEDROCK : flat(x, y, z);
         };
-    java.util.function.Predicate<Cell> inside =
+    Predicate<Cell> inside =
         cell -> cell.x() > 100 && cell.x() < 160 && cell.z() > -30 && cell.z() < 30;
     Cell from = new Cell(60, FEET, 0);
     Cell nearest = new Cell(101, FEET, 0);
-    RegionCost cost = RegionCost.forMediums(walker());
+    RegionCost cost = RegionCost.forCapabilities(walker());
 
     double toPoint =
         new RegionSearch(new RegionGraph(new World(town)), cost, nearest, from).costToGoal(from);

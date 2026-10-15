@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -32,7 +34,7 @@ import org.jetbrains.annotations.Nullable;
  * lets the benchmark platform read a capture with no server and no third-party jar present.
  *
  * <pre>
- *   #stonebrick-traits 1
+ *   #stonebrick-traits 2
  *   #state	bits	breakTimeSeconds	speedFactor	damagePerSecond
  *   minecraft:air	0x3f0000	Infinity	1.0	0.0
  * </pre>
@@ -47,12 +49,11 @@ public final class TraitTable {
    * and a search that never boards one. Refusing to read an old table is the only way that failure
    * gets noticed.
    *
-   * <p>Held at 1 while nothing has shipped: a capture is machine-local and regenerable, so a change
-   * to the bits is answered by deleting the corpus and re-capturing rather than by growing a
-   * version history. ⚠️ That only works if the corpus really is deleted -- a table left behind from
-   * before such a change carries this same header and will be read as current.
+   * <p>Bump it when a bit is added or a platform changes what it answers for a block, and {@code
+   * captureCorpus} re-captures every table written before. Version 2: soul sand and soul soil
+   * answer the Soul Speed bit, and soul soil no longer drags.
    */
-  private static final String HEADER = "#stonebrick-traits 1";
+  private static final String HEADER = "#stonebrick-traits 2";
 
   private static final String COLUMNS =
       "#state\tbits\tbreakTimeSeconds\tspeedFactor\tdamagePerSecond";
@@ -161,7 +162,7 @@ public final class TraitTable {
           .append('\n');
     }
     byte[] encoded = text.toString().getBytes(StandardCharsets.UTF_8);
-    if (Files.exists(path) && java.util.Arrays.equals(Files.readAllBytes(path), encoded)) {
+    if (Files.exists(path) && Arrays.equals(Files.readAllBytes(path), encoded)) {
       return false;
     }
     Path parent = path.getParent();
@@ -193,7 +194,7 @@ public final class TraitTable {
               + " so it is refused rather than used. Regenerate it with:"
               + "  ./gradlew captureCorpus -PacceptMinecraftEula=true");
     }
-    Map<String, BlockTraits> traits = new java.util.HashMap<>();
+    Map<String, BlockTraits> traits = new HashMap<>();
     for (int i = 1; i < lines.size(); i++) {
       String line = lines.get(i);
       if (line.isEmpty() || line.charAt(0) == '#') {
@@ -234,7 +235,7 @@ public final class TraitTable {
   /** Accumulates traits, keeping the first description of any state. */
   public static final class Builder {
 
-    private final Map<String, BlockTraits> traits = new java.util.HashMap<>();
+    private final Map<String, BlockTraits> traits = new HashMap<>();
 
     private Builder() {}
 

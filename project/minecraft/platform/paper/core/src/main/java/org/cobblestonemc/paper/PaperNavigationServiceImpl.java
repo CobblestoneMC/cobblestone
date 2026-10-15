@@ -243,7 +243,15 @@ public final class PaperNavigationServiceImpl
             chunks, agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
     HeuristicStrategy heuristic =
         MinecraftHeuristics.forPlayer(
-            behavior, chunks, agent, originPosition.cell(), settings, regionStores);
+            behavior,
+            chunks,
+            agent,
+            originPosition.cell(),
+            settings,
+            regionStores,
+            () ->
+                new ChunkProvider(
+                    platform, ChunkProviderSettings.defaults(ChunkLoadPolicy.LOADED_ONLY)));
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
         gatherTransitions(

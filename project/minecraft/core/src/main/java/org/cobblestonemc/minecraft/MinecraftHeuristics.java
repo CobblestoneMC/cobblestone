@@ -7,11 +7,13 @@
 
 package org.cobblestonemc.minecraft;
 
+import java.util.function.Supplier;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.Heuristics;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
+import org.cobblestonemc.minecraft.api.RegionSource;
 import org.cobblestonemc.minecraft.lod.RegionCost;
 import org.cobblestonemc.minecraft.lod.RegionGraph;
 import org.cobblestonemc.minecraft.lod.RegionHeuristic;
@@ -47,7 +49,7 @@ public final class MinecraftHeuristics {
       CobblestonePlayer agent,
       Cell origin,
       MinecraftSearchSettings settings) {
-    return forPlayer(behavior, chunks, agent, origin, settings, null);
+    return forPlayer(behavior, chunks, agent, origin, settings, null, () -> chunks);
   }
 
   /**
@@ -65,7 +67,9 @@ public final class MinecraftHeuristics {
    * terrain that gets classified is the terrain the search actually asks about.
    *
    * <p>With stores, terrain any earlier search built — before the last restart too, if they keep it
-   * on disk — is read back rather than built again. Without, each solve builds its own.
+   * on disk — is read back rather than built again. Without, each solve builds its own. A search
+   * whose settings ask for {@link RegionSource#LOADED} terrain uses no stores, and builds its own
+   * from {@code loadedChunks}, which never reads a chunk from disk.
    *
    * @param behavior how the player moves
    * @param chunks where the search reads blocks from
@@ -73,6 +77,8 @@ public final class MinecraftHeuristics {
    * @param origin where the search starts
    * @param settings the search settings, which select the heuristic and the excluded modes
    * @param stores the server's region stores, or {@code null} for each solve's own
+   * @param loadedChunks makes a source of only the chunks the server has loaded, for a search that
+   *     asks for {@link RegionSource#LOADED} terrain; called only then
    * @return the heuristic strategy
    */
   public static HeuristicStrategy forPlayer(
@@ -81,21 +87,26 @@ public final class MinecraftHeuristics {
       CobblestonePlayer agent,
       Cell origin,
       MinecraftSearchSettings settings,
-      @Nullable RegionStores stores) {
+      @Nullable RegionStores stores,
+      Supplier<ChunkSource> loadedChunks) {
     return switch (settings.settings().heuristic()) {
       case RUNNING_AVERAGE -> Heuristics.runningAverage(behavior.cheapestCostPerBlock());
-      case REGIONS ->
-          new RegionHeuristic(
-              target ->
-                  // The domain of a Tier-3 target region is always the world that leg runs in; the
-                  // cast is the price of HeuristicStrategy being domain-agnostic.
-                  new WorldChunkColumns(
-                      chunks, (MinecraftWorld) target.domain(), target.nearestBoundaryCell(origin)),
-              stores == null ? null : target -> stores.of((MinecraftWorld) target.domain()),
-              RegionCost.forPlayer(agent, settings.excludedModes()),
-              RegionGraph.DEFAULT_DETOUR_RATIO,
-              behavior.cheapestCostPerBlock(),
-              false);
+      case REGIONS -> {
+        boolean loaded = settings.regionSource() == RegionSource.LOADED;
+        ChunkSource terrain = loaded ? loadedChunks.get() : chunks;
+        RegionStores shared = loaded ? null : stores;
+        yield new RegionHeuristic(
+            target ->
+                // The domain of a Tier-3 target region is always the world that leg runs in; the
+                // cast is the price of HeuristicStrategy being domain-agnostic.
+                new WorldChunkColumns(
+                    terrain, (MinecraftWorld) target.domain(), target.nearestBoundaryCell(origin)),
+            shared == null ? null : target -> shared.of((MinecraftWorld) target.domain()),
+            RegionCost.forPlayer(agent, settings.excludedModes()),
+            RegionGraph.DEFAULT_DETOUR_RATIO,
+            behavior.cheapestCostPerBlock(),
+            false);
+      }
     };
   }
 }

@@ -12,11 +12,16 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import org.cobblestonemc.api.TraversalState;
 import org.junit.jupiter.api.Test;
 
@@ -29,8 +34,8 @@ class Tier2SearchTest {
    */
   private static final Scheduler DIRECT_SCHEDULER =
       new Scheduler() {
-        private final java.util.concurrent.ScheduledExecutorService timer =
-            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
+        private final ScheduledExecutorService timer =
+            Executors.newSingleThreadScheduledExecutor(
                 runnable -> {
                   Thread thread = new Thread(runnable, "tier2-test-timer");
                   thread.setDaemon(true);
@@ -48,7 +53,7 @@ class Tier2SearchTest {
         }
 
         @Override
-        public java.util.concurrent.ExecutorService asyncExecutor() {
+        public ExecutorService asyncExecutor() {
           return timer;
         }
       };
@@ -248,8 +253,7 @@ class Tier2SearchTest {
    * A heuristic whose {@link SolveHeuristic#prepare} hands out futures from {@code waiting}, one
    * per call, until it runs out; after that it answers immediately. Estimates are zero.
    */
-  private static HeuristicStrategy preparing(
-      java.util.function.Supplier<CompletableFuture<Void>> waiting) {
+  private static HeuristicStrategy preparing(Supplier<CompletableFuture<Void>> waiting) {
     return new HeuristicStrategy() {
       @Override
       public double estimate(Cell from, DomainRegion<?> target, TraversalState state) {
@@ -290,7 +294,7 @@ class Tier2SearchTest {
    */
   @Test
   void parksOnAnEstimateUntilItIsReadyThenSolves() {
-    java.util.ArrayDeque<CompletableFuture<Void>> handedOut = new java.util.ArrayDeque<>();
+    ArrayDeque<CompletableFuture<Void>> handedOut = new ArrayDeque<>();
     boolean[] ready = {false};
     HeuristicStrategy heuristic =
         preparing(
@@ -376,7 +380,7 @@ class Tier2SearchTest {
             };
           }
         };
-    java.util.List<Cell> closed = new java.util.ArrayList<>();
+    List<Cell> closed = new ArrayList<>();
     SearchObserver observer =
         new SearchObserver() {
           @Override

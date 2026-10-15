@@ -8,16 +8,22 @@ The fine search (`Tier2Search`) needs, for every cell it opens, an estimate of w
 the route costs. RUNNING_AVERAGE extrapolates from the steps already taken, which knows nothing of
 the terrain ahead. REGIONS reads the terrain ahead.
 
-- **Regions.** Each chunk column is classed cell by cell (stand, soul, water, climb, air, solid) and
-  flood-filled into connected regions, one class each, within each 16³ section. A region is split
+- **Regions.** Each chunk column is classed cell by cell (stand, soul sand, soul soil, water, water
+  surface, climb, air, solid) and flood-filled into connected regions, one class each, within each
+  16³ section. A region is split
   where walking inside it would bend more than 1.5x its straight line (Manhattan against
   Manhattan), so pricing a crossing as a straight line stays honest. Uniform sections skip the fill.
 - **Portals.** Every contact between two regions, as one box: faces touching, a walking step up
   or down, and falls of up to 3 blocks (32 into water), which are one-way. Inside a column they are
   built with it; across columns they are built per search at the seams.
-- **Agent-independent.** The graph knows terrain, not travellers. `RegionCost` prices each class
-  for an agent and says whether it is usable. Rock is always usable, at the mining rate with a
-  pickaxe and at a fallback rate without, so the graph stays connected.
+- **Agent-independent.** The graph knows terrain, not travellers. An agent is a set of
+  `Capability`s (walk, Soul Speed, swim, boat, climb, fly, mine), each with a rate per block. A
+  `RegionClass` lists the capabilities that cross it and the factor it puts on each: soul sand
+  multiplies walking by 2.5 and leaves Soul Speed alone, and only a water surface takes a boat.
+  `RegionCost` crosses each region by the agent's cheapest capability for it. A kind of terrain
+  earns its own class only when some capability crosses it at a different rate. Rock is always
+  usable, at the mining rate with a pickaxe and at a fallback rate without, so the graph stays
+  connected.
 - **Search.** Reverse Resumable A*: a backward search from the destination, focused on the fine
   search's origin, resumed only when a question needs it. A settled portal knows its true cost to
   the destination over the graph, so answers are final when given. Each portal's label carries
@@ -28,6 +34,9 @@ the terrain ahead. REGIONS reads the terrain ahead.
   the river.
 - **Weight.** The estimate is used as it is, under the search weight, 1.7 by default. The weight
   eases to 1 over the last 64 blocks before the target.
+- **Where the terrain comes from.** By default, the server's region stores. A search can instead
+  ask for `RegionSource.LOADED`: columns built for it alone from the chunks the server has loaded,
+  never read from disk or kept. The path back to a trail does this.
 
 ## Storage
 - **One `RegionStore` per world,** shared by every search and agent: memory (128 MB default,

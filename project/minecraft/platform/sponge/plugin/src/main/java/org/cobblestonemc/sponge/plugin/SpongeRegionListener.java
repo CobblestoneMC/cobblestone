@@ -25,7 +25,7 @@ import org.spongepowered.math.vector.Vector3i;
 
 /**
  * Keeps the region summaries honest, and gets them made early: the Sponge counterpart of the Paper
- * plugin's {@code RegionListener}.
+ * plugin's {@code PaperRegionListener}.
  *
  * <p>Sponge reports every block change through one event, after it happened, so a single listener
  * covers what Paper needs a dozen for: each changed block forgets its chunk's summary, to be made

@@ -9,7 +9,10 @@ package org.cobblestonemc.stonebrick.bench;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
@@ -22,10 +25,13 @@ import org.cobblestonemc.Heuristics;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.SingleDestination;
+import org.cobblestonemc.SolveHeuristic;
+import org.cobblestonemc.Transition;
 import org.cobblestonemc.api.FailureReason;
 import org.cobblestonemc.api.NavigationResult;
 import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.api.SearchSettings;
+import org.cobblestonemc.api.TraversalState;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
@@ -34,13 +40,22 @@ import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
+import org.cobblestonemc.minecraft.lod.RegionColumnBuilder;
+import org.cobblestonemc.minecraft.lod.RegionCost;
+import org.cobblestonemc.minecraft.lod.RegionFiles;
+import org.cobblestonemc.minecraft.lod.RegionGraph;
+import org.cobblestonemc.minecraft.lod.RegionHeuristic;
+import org.cobblestonemc.minecraft.lod.RegionSearch;
+import org.cobblestonemc.minecraft.lod.RegionStore;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
+import org.cobblestonemc.stonebrick.format.CaptureDirectory;
 import org.cobblestonemc.stonebrick.format.CorpusLayout;
 import org.cobblestonemc.stonebrick.platform.Capture;
 import org.cobblestonemc.stonebrick.platform.DeterministicScheduler;
 import org.cobblestonemc.stonebrick.platform.StonebrickPlatformApi;
 import org.cobblestonemc.stonebrick.platform.StonebrickPlayer;
 import org.cobblestonemc.stonebrick.platform.StonebrickSolve;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Runs one scenario, once, and reports what it cost.
@@ -223,17 +238,95 @@ public final class ScenarioRunner {
             new Position<>(scenario.origin(), world),
             new SingleDestination<>(target),
             behavior,
+            warps(scenario, world),
             List.of(),
-            List.of(),
-            heuristicFor(
-                scenario,
-                behavior,
-                chunks,
-                player,
-                new MinecraftSearchSettings(settings, excluded, Set.of(), Set.of()),
-                platform),
+            legs.counting(
+                heuristicFor(
+                    scenario,
+                    behavior,
+                    chunks,
+                    player,
+                    new MinecraftSearchSettings(settings, excluded, Set.of(), Set.of()),
+                    platform)),
             settings,
             observer);
+  }
+
+  /** Teleports usable from anywhere in the world, as Essentials offers them. */
+  private static List<Transition<MinecraftStepPayload, MinecraftWorld>> warps(
+      Scenario scenario, MinecraftWorld world) {
+    List<Transition<MinecraftStepPayload, MinecraftWorld>> warps = new ArrayList<>();
+    for (Cell warp : scenario.warps()) {
+      warps.add(
+          new Warp(
+              new DomainRegion<>() {
+                @Override
+                public MinecraftWorld domain() {
+                  return world;
+                }
+
+                @Override
+                public boolean contains(Cell cell) {
+                  return true;
+                }
+
+                @Override
+                public Cell nearestBoundaryCell(Cell from) {
+                  return from;
+                }
+              },
+              new Position<>(warp, world)));
+    }
+    return warps;
+  }
+
+  /** A command teleport: {@code TELEPORT_COST_SECONDS} in the Essentials integration. */
+  private record Warp(DomainRegion<MinecraftWorld> origin, Position<MinecraftWorld> destination)
+      implements Transition<MinecraftStepPayload, MinecraftWorld> {
+
+    @Override
+    public double cost() {
+      return 3.0;
+    }
+
+    @Override
+    public MinecraftStepPayload payload() {
+      return MinecraftStepPayload.command("warp");
+    }
+  }
+
+  /** Counts the legs Tier 2 solved in the last run: one new solve of the heuristic each. */
+  private final LegCounter legs = new LegCounter();
+
+  /**
+   * Returns how many legs the last run's Tier 2 solved, which is more than one only when Tier 1 had
+   * routes to choose between.
+   *
+   * @return the legs solved
+   */
+  public int lastLegs() {
+    return legs.count;
+  }
+
+  /** Wraps a heuristic to count its solves. */
+  private static final class LegCounter {
+    private int count;
+
+    HeuristicStrategy counting(HeuristicStrategy delegate) {
+      count = 0;
+      return new HeuristicStrategy() {
+        @Override
+        public double estimate(Cell from, DomainRegion<?> target, TraversalState state) {
+          return delegate.estimate(from, target, state);
+        }
+
+        @Override
+        public SolveHeuristic newSolve(int windowWidth, DomainRegion<?> target) {
+          count++;
+          return delegate.newSolve(windowWidth, target);
+        }
+      };
+    }
   }
 
   /**
@@ -243,7 +336,7 @@ public final class ScenarioRunner {
    * gated, and recording them as a deterministic metric would imply a rigour they do not have. The
    * sweep prints them so the cost is at least visible.
    */
-  private @org.jetbrains.annotations.Nullable CaptureChunkColumns lastRegionColumns;
+  private @Nullable CaptureChunkColumns lastRegionColumns;
 
   /**
    * Returns how many chunk columns the last run's region layer read.
@@ -254,8 +347,7 @@ public final class ScenarioRunner {
     return lastRegionColumns == null ? 0 : lastRegionColumns.chunkColumns();
   }
 
-  private org.cobblestonemc.minecraft.lod.@org.jetbrains.annotations.Nullable RegionHeuristic
-      lastRegionHeuristic;
+  private @Nullable RegionHeuristic lastRegionHeuristic;
 
   /**
    * Returns where the last run's region layer spent its time and memory, or {@code null} if it did
@@ -267,7 +359,7 @@ public final class ScenarioRunner {
    *
    * @return the breakdown, as {@code key=value} pairs
    */
-  public @org.jetbrains.annotations.Nullable String lastRegionBreakdown() {
+  public @Nullable String lastRegionBreakdown() {
     if (lastRegionColumns == null || lastRegionHeuristic == null) {
       return null;
     }
@@ -279,7 +371,7 @@ public final class ScenarioRunner {
     long regions = 0;
     long portals = 0;
     long expansions = 0;
-    for (org.cobblestonemc.minecraft.lod.RegionSearch search : lastRegionHeuristic.searches()) {
+    for (RegionSearch search : lastRegionHeuristic.searches()) {
       queries += search.queries();
       searchNanos += search.searchNanos();
       expansions += search.expansions();
@@ -289,11 +381,11 @@ public final class ScenarioRunner {
       regions += search.graph().regions();
       portals += search.graph().portals();
     }
-    org.cobblestonemc.minecraft.lod.RegionStore.Stats store = lastRegionStore.stats();
+    RegionStore.Stats store = lastRegionStore.stats();
     long fetchNanos = lastRegionColumns.fetchNanos();
 
     return String.format(
-        java.util.Locale.ROOT,
+        Locale.ROOT,
         "readMs=%.1f buildMs=%.1f diskMs=%.1f placeMs=%.1f seamMs=%.1f searchMs=%.1f queries=%d"
             + " settled=%d built=%d fromDisk=%d diskKB=%d regions=%d portals=%d graphKB=%d"
             + " storeKB=%d",
@@ -333,17 +425,16 @@ public final class ScenarioRunner {
    *
    * @param directory the cache directory, or {@code null}
    */
-  public void regionCache(@org.jetbrains.annotations.Nullable Path directory) {
+  public void regionCache(@Nullable Path directory) {
     if (lastRegionStore != null) {
       lastRegionStore.close().join(); // released, so the directory can be deleted
     }
     this.regionCache = directory;
   }
 
-  private org.cobblestonemc.minecraft.lod.@org.jetbrains.annotations.Nullable RegionStore
-      lastRegionStore;
+  private org.cobblestonemc.minecraft.lod.@Nullable RegionStore lastRegionStore;
 
-  private @org.jetbrains.annotations.Nullable Path regionCache;
+  private @Nullable Path regionCache;
 
   /**
    * The detour a region may hold before the fill splits it, from {@code -Dregions.detour}; a tuning
@@ -351,9 +442,7 @@ public final class ScenarioRunner {
    */
   static final double REGION_DETOUR =
       Double.parseDouble(
-          System.getProperty(
-              "regions.detour",
-              String.valueOf(org.cobblestonemc.minecraft.lod.RegionGraph.DEFAULT_DETOUR_RATIO)));
+          System.getProperty("regions.detour", String.valueOf(RegionGraph.DEFAULT_DETOUR_RATIO)));
 
   /**
    * Builds the estimate the scenario asked for.
@@ -389,29 +478,27 @@ public final class ScenarioRunner {
     // One store for the run, on this thread: a cold start, or a restart over a cache on disk.
     MinecraftWorld world = platform.world(scenario.world());
     lastRegionStore =
-        new org.cobblestonemc.minecraft.lod.RegionStore(
+        new RegionStore(
             world.minY(),
             world.maxY(),
             REGION_DETOUR,
             Long.MAX_VALUE,
             regionCache == null
                 ? null
-                : new org.cobblestonemc.minecraft.lod.RegionFiles(
+                : new RegionFiles(
                     regionCache.resolve(
-                        org.cobblestonemc.minecraft.lod.RegionFiles.directoryName(
-                            scenario.capture() + "-" + scenario.world())),
-                    org.cobblestonemc.minecraft.lod.RegionColumnBuilder.columnMinY(world.minY()),
-                    org.cobblestonemc.minecraft.lod.RegionColumnBuilder.sections(
-                        world.minY(), world.maxY()),
+                        RegionFiles.directoryName(scenario.capture() + "-" + scenario.world())),
+                    RegionColumnBuilder.columnMinY(world.minY()),
+                    RegionColumnBuilder.sections(world.minY(), world.maxY()),
                     REGION_DETOUR),
             Runnable::run,
             Runnable::run);
-    org.cobblestonemc.minecraft.lod.RegionStore store = lastRegionStore;
+    RegionStore store = lastRegionStore;
     lastRegionHeuristic =
-        new org.cobblestonemc.minecraft.lod.RegionHeuristic(
+        new RegionHeuristic(
             region -> columns,
             region -> store,
-            org.cobblestonemc.minecraft.lod.RegionCost.forPlayer(player, settings.excludedModes()),
+            RegionCost.forPlayer(player, settings.excludedModes()),
             REGION_DETOUR,
             behavior.cheapestCostPerBlock(),
             true);
@@ -429,20 +516,18 @@ public final class ScenarioRunner {
    */
   private static Map<String, String> configurationOf(Scenario scenario, Path captureRoot)
       throws IOException {
-    Map<String, String> configuration = new java.util.LinkedHashMap<>();
+    Map<String, String> configuration = new LinkedHashMap<>();
     configuration.put("heuristic", scenario.heuristic().name());
     configuration.put(
         "heuristicWeight",
-        String.format(java.util.Locale.ROOT, "%.2f", scenario.settings().heuristicWeight()));
+        String.format(Locale.ROOT, "%.2f", scenario.settings().heuristicWeight()));
     configuration.put("maxCellsVisited", String.valueOf(scenario.settings().maxCellsVisited()));
     configuration.put("io", scenario.io().toString());
     configuration.put(
         "capture",
         scenario.capture()
             + "@"
-            + org.cobblestonemc.stonebrick.format.CaptureDirectory.at(captureRoot)
-                .readMeta()
-                .getOrDefault("capturedAt", "unknown"));
+            + CaptureDirectory.at(captureRoot).readMeta().getOrDefault("capturedAt", "unknown"));
     return configuration;
   }
 
@@ -454,7 +539,7 @@ public final class ScenarioRunner {
       case NavigationResult.Failure<Position<MinecraftWorld>, MinecraftStepPayload> failure ->
           failure.reason() == FailureReason.NO_ROUTE
               ? "no_route"
-              : failure.reason().name().toLowerCase(java.util.Locale.ROOT);
+              : failure.reason().name().toLowerCase(Locale.ROOT);
       case NavigationResult.Error<Position<MinecraftWorld>, MinecraftStepPayload> ignored ->
           "error";
     };

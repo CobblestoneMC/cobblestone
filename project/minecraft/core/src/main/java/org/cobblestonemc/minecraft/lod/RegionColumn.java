@@ -10,6 +10,7 @@ package org.cobblestonemc.minecraft.lod;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.Arrays;
 
 /**
  * One chunk column, built: which region every cell belongs to, the regions, and the portals that
@@ -51,7 +52,6 @@ public final class RegionColumn {
   final int[] regionBox;
 
   final float[] regionBreak;
-  final boolean[] regionNavigable;
 
   final int[] portalA;
   final int[] portalB;
@@ -70,7 +70,6 @@ public final class RegionColumn {
       byte[] regionClass,
       int[] regionBox,
       float[] regionBreak,
-      boolean[] regionNavigable,
       int[] portalA,
       int[] portalB,
       boolean[] portalDirected,
@@ -84,7 +83,6 @@ public final class RegionColumn {
     this.regionClass = regionClass;
     this.regionBox = regionBox;
     this.regionBreak = regionBreak;
-    this.regionNavigable = regionNavigable;
     this.portalA = portalA;
     this.portalB = portalB;
     this.portalDirected = portalDirected;
@@ -102,7 +100,7 @@ public final class RegionColumn {
    */
   static RegionColumn empty(int chunkX, int chunkZ, int minY, int sections) {
     int[] uniform = new int[sections];
-    java.util.Arrays.fill(uniform, NONE);
+    Arrays.fill(uniform, NONE);
     return new RegionColumn(
         chunkX,
         chunkZ,
@@ -113,7 +111,6 @@ public final class RegionColumn {
         new byte[0],
         new int[0],
         new float[0],
-        new boolean[0],
         new int[0],
         new int[0],
         new boolean[0],
@@ -203,7 +200,6 @@ public final class RegionColumn {
       out.writeByte(regionClass[r]);
       writeBox(out, regionBox, r);
       out.writeFloat(regionBreak[r]);
-      out.writeBoolean(regionNavigable[r]);
     }
     out.writeInt(portalA.length);
     for (int p = 0; p < portalA.length; p++) {
@@ -245,7 +241,6 @@ public final class RegionColumn {
     byte[] regionClass = new byte[regions];
     int[] regionBox = new int[regions * 6];
     float[] regionBreak = new float[regions];
-    boolean[] regionNavigable = new boolean[regions];
     int ox = chunkX * 16;
     int oz = chunkZ * 16;
     for (int r = 0; r < regions; r++) {
@@ -255,7 +250,6 @@ public final class RegionColumn {
       }
       readBox(in, regionBox, r, ox, minY, oz);
       regionBreak[r] = in.readFloat();
-      regionNavigable[r] = in.readBoolean();
     }
     int portals = in.readInt();
     if (portals < 0) {
@@ -284,7 +278,6 @@ public final class RegionColumn {
         regionClass,
         regionBox,
         regionBreak,
-        regionNavigable,
         portalA,
         portalB,
         portalDirected,

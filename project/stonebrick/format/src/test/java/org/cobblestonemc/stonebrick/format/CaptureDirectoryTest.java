@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,7 @@ class CaptureDirectoryTest {
     CaptureDirectory capture = CaptureDirectory.at(dir);
     List<String> keys = List.of("a.b:c.d", "a:b.c.d", "myplugin:worlds/nether_expansion");
     String[] states = new String[Sbc.CUBE_VOLUME];
-    java.util.Arrays.fill(states, Sbc.AIR);
+    Arrays.fill(states, Sbc.AIR);
     for (String key : keys) {
       ChunkColumnCodec.write(
           ChunkColumn.builder(0, 0, -4).cubeAtSection(0, states).build(),
@@ -80,7 +81,7 @@ class CaptureDirectoryTest {
   void columnsAreListedAndCounted(@TempDir Path dir) throws Exception {
     CaptureDirectory capture = CaptureDirectory.at(dir);
     String[] states = new String[Sbc.CUBE_VOLUME];
-    java.util.Arrays.fill(states, Sbc.AIR);
+    Arrays.fill(states, Sbc.AIR);
     for (int x = 0; x < 3; x++) {
       ChunkColumn column = ChunkColumn.builder(x, -1, -4).cubeAtSection(0, states).build();
       ChunkColumnCodec.write(column, capture.column("minecraft:overworld", x, -1));

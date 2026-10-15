@@ -58,14 +58,14 @@ import org.cobblestonemc.paper.WorldWrapper;
  * <p>Everything here runs at {@link EventPriority#MONITOR} and ignores cancelled events: it reacts
  * to what happened, never to what was attempted.
  */
-final class RegionListener implements Listener {
+final class PaperRegionListener implements Listener {
 
   private final RegionStores stores;
   private final WorldWrapper worlds;
   private final boolean buildOnLoad;
   private final LoadedChunks chunks;
 
-  RegionListener(
+  PaperRegionListener(
       RegionStores stores, WorldWrapper worlds, LoadedChunks chunks, boolean buildOnLoad) {
     this.stores = stores;
     this.worlds = worlds;

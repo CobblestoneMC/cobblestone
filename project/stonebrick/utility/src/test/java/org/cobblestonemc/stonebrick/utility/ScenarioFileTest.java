@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -134,8 +135,8 @@ class ScenarioFileTest {
     assertEquals(null, ScenarioFile.worldOf(file, "lake"));
 
     assertFalse(ScenarioFile.hasTags(file, OVERWORLD, "river"));
-    ScenarioFile.tag(file, OVERWORLD, "river", java.util.List.of("surface"));
-    ScenarioFile.tag(file, OVERWORLD, "river", java.util.List.of("surface", "no-pickaxe"));
+    ScenarioFile.tag(file, OVERWORLD, "river", List.of("surface"));
+    ScenarioFile.tag(file, OVERWORLD, "river", List.of("surface", "no-pickaxe"));
     assertTrue(ScenarioFile.hasTags(file, OVERWORLD, "river"));
 
     String text = Files.readString(file);

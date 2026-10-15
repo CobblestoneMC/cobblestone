@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.minecraft.lod;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,8 +29,8 @@ import org.jetbrains.annotations.Nullable;
  * those pieces, priced continuously from the cell asked about.
  *
  * <p>It replaced a heuristic that summarized each 16³ section as one node priced from how much of
- * it each medium covered. That could not tell whether the open half of a section reached the other
- * side, and measured at a quarter to a half of the true cost underground.
+ * it each kind of terrain covered. That could not tell whether the open half of a section reached
+ * the other side, and measured at a quarter to a half of the true cost underground.
  *
  * <p><b>Answers are final when given.</b> {@link RegionSearch} only answers once nothing left on
  * its frontier could undercut the answer, so a cell asked about twice gets the same number, and the
@@ -51,7 +52,7 @@ public final class RegionHeuristic implements HeuristicStrategy {
   private final double detourRatio;
   private final double tierOneRate;
   private final boolean keepSearches;
-  private final List<RegionSearch> searches = new java.util.ArrayList<>();
+  private final List<RegionSearch> searches = new ArrayList<>();
 
   /**
    * Creates a heuristic over a single terrain source.
@@ -103,7 +104,7 @@ public final class RegionHeuristic implements HeuristicStrategy {
    * @param detourRatio the fill's detour ratio, for a store of each solve's own
    * @param tierOneRate the least the agent can pay per block by any movement at all, which Tier 1
    *     prices unsolved legs with: lower than {@link RegionCost#cheapest()} for an agent who can
-   *     ride or fall, since the region layer prices neither as a medium
+   *     ride or fall, since the region layer prices neither as a capability
    * @param keepSearches whether to keep every solve's search for {@link #searches()}, which holds
    *     each one's graph for the strategy's life; for measuring, never on a server
    */

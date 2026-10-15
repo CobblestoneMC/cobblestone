@@ -12,7 +12,7 @@ import org.cobblestonemc.api.SearchSettings;
 
 /**
  * Search settings for a Minecraft search: the platform-independent {@link SearchSettings} plus
- * Minecraft-specific exclusions.
+ * Minecraft-specific exclusions, and where the estimate reads its terrain.
  *
  * @param settings the platform-independent search settings
  * @param excludedModes step types the route may not use
@@ -20,12 +20,30 @@ import org.cobblestonemc.api.SearchSettings;
  *     "minecraft:the_nether"})
  * @param excludedDimensions lower-case dimension types the route may not pass through ({@code
  *     overworld}, {@code nether}, {@code end} or {@code custom})
+ * @param regionSource where the {@code REGIONS} heuristic gets its terrain
  */
 public record MinecraftSearchSettings(
     SearchSettings settings,
     Set<MinecraftStepType> excludedModes,
     Set<String> excludedWorlds,
-    Set<String> excludedDimensions) {
+    Set<String> excludedDimensions,
+    RegionSource regionSource) {
+
+  /**
+   * Creates settings whose estimate reads the server's region stores.
+   *
+   * @param settings the platform-independent search settings
+   * @param excludedModes step types the route may not use
+   * @param excludedWorlds keys of worlds the route may not pass through
+   * @param excludedDimensions lower-case dimension types the route may not pass through
+   */
+  public MinecraftSearchSettings(
+      SearchSettings settings,
+      Set<MinecraftStepType> excludedModes,
+      Set<String> excludedWorlds,
+      Set<String> excludedDimensions) {
+    this(settings, excludedModes, excludedWorlds, excludedDimensions, RegionSource.STORED);
+  }
 
   /**
    * The default settings, with nothing excluded.
