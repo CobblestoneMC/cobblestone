@@ -493,12 +493,17 @@ final class Tier2Search<T, D extends Domain> {
           return; // path still has unconfirmed cells; a verdict will wake us
         }
       }
+      if (pendingEstimates.get() > 0) {
+        // Wait, as for a mode's blocks, rather than expand around the gap. A node parked on its
+        // estimate is off the open set, and the search pressing on without it is exploring in an
+        // order no estimate chose: under weight it can reach the goal by whatever route happened
+        // to be priced first. Measured, that turned a 155-second cave route into a 442-second one
+        // the moment the disk was not free, while the same run with every chunk in hand was fine.
+        return; // the estimate's future will wake us
+      }
       if (open.isEmpty()) {
         if (pendingChecks.get() > 0) {
           return; // nothing to expand, but a pending verdict may yet repair; wait
-        }
-        if (pendingEstimates.get() > 0) {
-          return; // every candidate is waiting on its estimate; the future will wake us
         }
         logger.debug("Failed: open set is empty; {}", stats());
         result.complete(new Tier2Result.Failed<>(Tier2Result.FailureOutcome.UNREACHABLE));
