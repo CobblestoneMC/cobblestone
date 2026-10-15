@@ -14,6 +14,7 @@ navigator.
 | --- | --- | --- |
 | `cobblestone.navigate` | allow | `/navigate`, `/cobblestone trips`, `/cobblestone cancel` |
 | `cobblestone.location` | allow | `/cobblestone location set/unset/list` for personal locations |
+| `cobblestone.hud` | allow | `/cobblestone hud` |
 | `cobblestone.navigator` | allow | Parent of the per-navigator nodes |
 | `cobblestone.admin.location.global` | op | Creating and deleting global locations |
 | `cobblestone.admin.reload` | op | `/cobblestone reload` |
@@ -37,9 +38,21 @@ Each destination has a canonical address, which maps to a node under `cobbleston
 | --- | --- |
 | `cobblestone location private home` | `cobblestone.navigate.cobblestone.location.private.home` |
 | `cobblestone death` | `cobblestone.navigate.cobblestone.death` |
+| `cobblestone respawn` | `cobblestone.navigate.cobblestone.respawn` |
+| `cobblestone spawn` | `cobblestone.navigate.cobblestone.spawn` |
+| `cobblestone surface` | `cobblestone.navigate.cobblestone.surface` |
+| `cobblestone target` | `cobblestone.navigate.cobblestone.target` |
+| `cobblestone coordinates block` | `cobblestone.navigate.cobblestone.coordinates.block` |
+| `cobblestone coordinates surface` | `cobblestone.navigate.cobblestone.coordinates.surface` |
+| `cobblestone mount` | `cobblestone.navigate.cobblestone.mount` |
+| `cobblestone pet Rex` | `cobblestone.navigate.cobblestone.pet.Rex` |
 | `cobblestone player Steve` | `cobblestone.navigate.cobblestone.player.Steve` |
 | `towny town riverwood home` | `cobblestone.navigate.towny.town.riverwood.home` |
 | `citizens npc Blacksmith` | `cobblestone.navigate.citizens.npc.Blacksmith` |
+
+Values typed after a destination are not part of its address, so
+`/nav coordinates block 100 64 -200` checks `cobblestone.navigate.cobblestone.coordinates.block`
+whatever the coordinates are.
 
 The first segment is the lower-cased name of the owning plugin. Integrations register under the
 plugin they integrate with (`towny`, `citizens`, `essentials`, `betonquest`, …), not under the
@@ -97,7 +110,7 @@ Integrations offer a teleport as a route step only when the player may run the c
 ### Provider permissions
 
 A provider may attach additional required permissions to a destination
-(`MinecraftDestination#permissions`). The player must hold all of them. Cobblestone's own
+(`DestinationLeaf#permissions`). The player must hold all of them. Cobblestone's own
 destinations declare none.
 
 ## Navigator nodes

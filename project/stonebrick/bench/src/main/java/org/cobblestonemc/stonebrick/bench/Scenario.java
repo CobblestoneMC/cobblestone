@@ -63,7 +63,13 @@ public record Scenario(
     Set<Long> ungenerated,
     Heuristic heuristic) {
 
-  /** Which estimate the fine search runs on. */
+  /**
+   * Which estimate the fine search runs on.
+   *
+   * <p>Production's estimates, plus {@link #ZERO}. Each production constant names its {@link
+   * SearchSettings.Heuristic}, and the runner builds it through the same factory a server does, so
+   * a new estimate needs a constant here and nothing else in the bench.
+   */
   public enum Heuristic {
     /**
      * No estimate at all, turning the search into Dijkstra.
@@ -71,16 +77,31 @@ public record Scenario(
      * <p>Not for production: it expands everything. It is the only way to get a route's <i>true</i>
      * optimal cost, which is what {@code bench verify} measures the region estimates against.
      */
-    ZERO,
+    ZERO(null),
 
-    /** The previous production heuristic: remaining distance times the recent per-block cost. */
-    RUNNING_AVERAGE,
+    /** Remaining distance times the recent per-block cost. */
+    RUNNING_AVERAGE(SearchSettings.Heuristic.RUNNING_AVERAGE),
 
     /**
      * A backward search over connected terrain regions, resumed as the fine search asks.
      * Production's default, and so the bench's.
      */
-    REGIONS
+    REGIONS(SearchSettings.Heuristic.REGIONS);
+
+    private final SearchSettings.@org.jetbrains.annotations.Nullable Heuristic production;
+
+    Heuristic(SearchSettings.@org.jetbrains.annotations.Nullable Heuristic production) {
+      this.production = production;
+    }
+
+    /**
+     * Returns the production heuristic this runs, or {@code null} for {@link #ZERO}.
+     *
+     * @return the production heuristic
+     */
+    public SearchSettings.@org.jetbrains.annotations.Nullable Heuristic production() {
+      return production;
+    }
   }
 
   /** Which corpus a scenario belongs to. */
@@ -256,6 +277,59 @@ public record Scenario(
   }
 
   /**
+   * Returns this scenario started somewhere else.
+   *
+   * <p>For asking what a route costs from partway along it, which is what verifying a cost-to-goal
+   * estimate needs.
+   *
+   * @param cell where to start
+   * @return the variant
+   */
+  public Scenario withOrigin(Cell cell) {
+    return new Scenario(
+        id,
+        description,
+        tags,
+        tier,
+        capture,
+        world,
+        cell,
+        destination,
+        destinationRadius,
+        settings,
+        io,
+        onMissingCapture,
+        expectedOutcome,
+        ungenerated,
+        heuristic);
+  }
+
+  /**
+   * Returns this scenario run under different limits.
+   *
+   * @param limits the limits to run under
+   * @return the variant
+   */
+  public Scenario withLimits(SearchLimits limits) {
+    return new Scenario(
+        id,
+        description,
+        tags,
+        tier,
+        capture,
+        world,
+        origin,
+        destination,
+        destinationRadius,
+        limits,
+        io,
+        onMissingCapture,
+        expectedOutcome,
+        ungenerated,
+        heuristic);
+  }
+
+  /**
    * Returns this scenario run at a different heuristic weight.
    *
    * @param weight the weight to run at
@@ -320,59 +394,6 @@ public record Scenario(
         destinationRadius,
         settings,
         profile,
-        onMissingCapture,
-        expectedOutcome,
-        ungenerated,
-        heuristic);
-  }
-
-  /**
-   * Returns this scenario started somewhere else.
-   *
-   * <p>For asking what a route costs from partway along it, which is what verifying a cost-to-goal
-   * estimate needs.
-   *
-   * @param cell where to start
-   * @return the variant
-   */
-  public Scenario withOrigin(Cell cell) {
-    return new Scenario(
-        id,
-        description,
-        tags,
-        tier,
-        capture,
-        world,
-        cell,
-        destination,
-        destinationRadius,
-        settings,
-        io,
-        onMissingCapture,
-        expectedOutcome,
-        ungenerated,
-        heuristic);
-  }
-
-  /**
-   * Returns this scenario run under different limits.
-   *
-   * @param limits the limits to run under
-   * @return the variant
-   */
-  public Scenario withLimits(SearchLimits limits) {
-    return new Scenario(
-        id,
-        description,
-        tags,
-        tier,
-        capture,
-        world,
-        origin,
-        destination,
-        destinationRadius,
-        limits,
-        io,
         onMissingCapture,
         expectedOutcome,
         ungenerated,

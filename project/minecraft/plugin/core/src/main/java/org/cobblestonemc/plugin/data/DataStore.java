@@ -10,7 +10,7 @@ package org.cobblestonemc.plugin.data;
 /**
  * Abstract persistence for Cobblestone's plugin state, backed by a pluggable store the admin
  * selects in config. The abstraction lives in the plugin layer because persistence is only relevant
- * when Cobblestone runs as a plugin — the core navigation library is standalone. (design/06)
+ * when Cobblestone runs as a plugin — the core navigation library is standalone.
  *
  * <p>Only the DAOs whose subsystems have landed are exposed here; rail/highway segment and
  * player-preference DAOs join {@link #locations()} and {@link #portalTransitions()} as those
@@ -41,6 +41,13 @@ public interface DataStore {
   DeathLocationDao deaths();
 
   /**
+   * Returns the mount DAO (the mount each player last rode).
+   *
+   * @return the mount DAO
+   */
+  MountDao mounts();
+
+  /**
    * Returns the portal-transition DAO (end portals: region → point).
    *
    * @return the portal-transition DAO
@@ -60,6 +67,13 @@ public interface DataStore {
    * @return the end-gateway DAO
    */
   GatewayDao gateways();
+
+  /**
+   * Returns the player-preferences DAO.
+   *
+   * @return the player-preferences DAO
+   */
+  PlayerPreferencesDao playerPreferences();
 
   /**
    * Closes the store and releases its resources. Idempotent; safe to call even if {@link #init()}

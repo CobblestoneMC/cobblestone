@@ -4,9 +4,11 @@
 # identity: regenerating against a different one produces different terrain. captureCorpus pins the
 # Paper build. Even pinned, decorations differ between generations, so a capture is not
 # byte-reproducible and baselines are tied to the capture they measured.
+# paperSha256 pins the jar itself: captureCorpus refuses a download that does not match it.
 seed: 8450468245224589493
 minecraftVersion: "26.2"
 paperBuild: 129
+paperSha256: "b1d8f6bfa1b6101fa8e947b53041cb3bdf5540e7b83b6547ca19ba7edefeb083"
 
 # Captures that cannot come from a seed, because they were built by hand. These are committed as
 # .sbc data rather than regenerated; they are small, and there is no other way to get them back.

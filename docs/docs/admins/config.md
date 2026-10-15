@@ -55,6 +55,8 @@ name, without extension, in the plugin's data folder.
 | `trips.max_active_per_player` | `3` | live |
 | `trips.live_interval_ticks` | `100` | live |
 | `trips.recalculate_distance` | `32` | live |
+| `trips.hud` | `true` | live |
+| `trips.holograms` | `true` | live |
 
 - **`max_active_per_player`**: Maximum concurrent trips per player.
 - **`live_interval_ticks`**: Interval between re-searches for live trips. Live re-searches are the
@@ -62,6 +64,18 @@ name, without extension, in the plugin's data folder.
 - **`recalculate_distance`**: Distance in blocks a player may stray before the route is
   recomputed. Below this distance, a guide path back to the trail is drawn instead. `0` disables
   recomputation.
+- **`hud`**: Shows each player's active trips in a HUD with the time left on each. Players can
+  hide it for themselves with `/cobblestone hud off`. While shown, a player is given a scoreboard
+  of their own, so they do not see the server's main scoreboard (its sidebar, or teams it uses for
+  name colors). Turn this off if another plugin relies on that. It is never shown on Folia, which
+  has no scoreboard API.
+- **`holograms`**: Floats a label naming each trip over its trail (or the guide back to it), a
+  few blocks ahead of the player, once they have stood still for a second; the labels go away as
+  soon as they move. Hitting a label cancels its trip. This is the default; a plugin starting a
+  trip can turn its label on or off. Labels are entities. On Paper they are seen only by their
+  player and never saved. On Sponge, whose API can't hide an entity from other players, **everyone
+  nearby sees them** (only the owner's hit does anything); any left behind by a crash are removed
+  when their chunk loads.
 
 ## `search`
 
@@ -94,8 +108,7 @@ limit; a manual `/navigate` always runs.
   faster with routes at most this factor longer than optimal.
 - **`tier1_unsolved_pessimism`**: Cost multiplier for route legs that have not yet been solved.
   `1.0` disables it.
-- **`running_average_width`**: Window size of the running-average heuristic. Only used with
-  `heuristic: RUNNING_AVERAGE`.
+- **`running_average_width`**: Window size of the running-average heuristic.
 
 ### `search.chunks`
 

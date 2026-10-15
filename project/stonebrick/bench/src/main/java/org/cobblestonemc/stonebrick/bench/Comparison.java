@@ -98,8 +98,17 @@ public final class Comparison {
           result.scenario(), Status.DEGENERATE, result.missingCaptureReport(), List.of());
     }
     if (baseline == null) {
+      // What it measured, so a first run is a report rather than a list of names.
       return new Verdict(
-          result.scenario(), Status.NEW, "no baseline yet; accept it to start tracking", List.of());
+          result.scenario(),
+          Status.NEW,
+          String.format(
+              java.util.Locale.ROOT,
+              "%s, %,d expanded, cost %.2f; no baseline yet",
+              result.outcome(),
+              result.nodesExpanded(),
+              result.pathCost()),
+          List.of());
     }
 
     if (!baseline.configuration().equals(result.configuration())) {

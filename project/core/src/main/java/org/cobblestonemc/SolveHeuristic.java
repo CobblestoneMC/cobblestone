@@ -82,7 +82,7 @@ public interface SolveHeuristic {
    *
    * <p>The search parks the node rather than guessing. Offering it with a placeholder and
    * correcting later would put it on the open set at the wrong priority, and A* would expand it in
-   * the wrong order -- the one thing the ordering is for.
+   * the wrong order — the one thing the ordering is for.
    *
    * @param from the cell being estimated
    * @return a future completing when the estimate is available, or {@code null} if it is available

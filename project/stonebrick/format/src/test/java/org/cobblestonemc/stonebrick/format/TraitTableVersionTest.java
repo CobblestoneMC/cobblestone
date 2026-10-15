@@ -21,9 +21,9 @@ import org.junit.jupiter.api.io.TempDir;
  * A trait table written against different trait bits must be refused, not read.
  *
  * <p>The failure this prevents is silent. Adding a bit changes what every existing row means
- * without changing how any of them parse, so an old table reads cleanly and answers wrongly — soul
- * sand that does not know it is soul sand, and a coarse layer that prices a whole biome as ordinary
- * ground. Nothing downstream can notice that.
+ * without changing how any of them parse, so an old table reads cleanly and answers wrongly — water
+ * that does not know a boat can ride it, and a search that never boards one. Nothing downstream can
+ * notice that.
  */
 class TraitTableVersionTest {
 
@@ -48,13 +48,13 @@ class TraitTableVersionTest {
   void aTableThisBuildWroteIsReadBack(@TempDir Path dir) throws Exception {
     Path file = dir.resolve(TraitTable.FILE_NAME);
     TraitTable.builder()
-        .add("minecraft:soul_sand", BlockTraits.builder().set(BlockTraits.SOUL_SAND, true).build())
+        .add("minecraft:water", BlockTraits.builder().set(BlockTraits.SUPPORTS_BOAT, true).build())
         .build()
         .write(file);
 
     TraitTable read = TraitTable.read(file);
 
-    assertTrue(read.asMap().get("minecraft:soul_sand").has(BlockTraits.SOUL_SAND));
+    assertTrue(read.asMap().get("minecraft:water").has(BlockTraits.SUPPORTS_BOAT));
     assertEquals(1, read.asMap().size());
   }
 }

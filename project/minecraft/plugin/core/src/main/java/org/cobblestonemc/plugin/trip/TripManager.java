@@ -13,6 +13,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.plugin.api.Navigator;
 
@@ -32,6 +34,7 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
   private final MinecraftScheduler<E> scheduler;
   private final int maxActivePerPlayer;
   private final Map<UUID, List<Trip<E, P, L>>> byPlayer = new ConcurrentHashMap<>();
+  private volatile Consumer<P> onChange = player -> {};
 
   /**
    * Creates a trip manager.
@@ -45,11 +48,21 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
   }
 
   /**
+   * Sets the callback run whenever a player's active trips change. It runs under this manager's
+   * lock, so it should only hand work off.
+   *
+   * @param onChange receives the player whose trips changed
+   */
+  public void onChange(Consumer<P> onChange) {
+    this.onChange = onChange;
+  }
+
+  /**
    * Starts a trip, unless the player is already at their trip limit.
    *
    * @param player the guided player's id
    * @param navigator the navigator to drive
-   * @param destination the destination label (for the listing and same-destination replacement)
+   * @param label the destination label (for the listing and same-destination replacement)
    * @param liveSearch the re-search behavior (used for both live loops and stray recalculation);
    *     may be {@code null} to disable re-searching entirely
    * @param guideSearch the short-range guide search for off-trail drift; may be {@code null}
@@ -57,14 +70,41 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
    * @param liveIntervalMillis the delay between periodic re-searches, in milliseconds
    * @return the started trip, or empty if the player is at their limit
    */
-  public synchronized Optional<Trip<E, P, L>> start(
+  public Optional<Trip<E, P, L>> start(
       P player,
       Navigator<L> navigator,
-      String destination,
+      TripLabel label,
       LiveSearch<L> liveSearch,
       GuideSearch<L> guideSearch,
       boolean live,
       long liveIntervalMillis) {
+    return start(player, navigator, label, liveSearch, guideSearch, live, liveIntervalMillis, null);
+  }
+
+  /**
+   * Starts a trip, unless the player is already at their trip limit.
+   *
+   * @param player the guided player's id
+   * @param navigator the navigator to drive
+   * @param label the destination label (for the listing and same-destination replacement)
+   * @param liveSearch the re-search behavior (used for both live loops and stray recalculation);
+   *     may be {@code null} to disable re-searching entirely
+   * @param guideSearch the short-range guide search for off-trail drift; may be {@code null}
+   * @param live whether to also re-search periodically (a "live" trip)
+   * @param liveIntervalMillis the delay between periodic re-searches, in milliseconds
+   * @param targetExists polled about once a second; the trip ends once it returns {@code false}.
+   *     May be {@code null} for a target that cannot vanish
+   * @return the started trip, or empty if the player is at their limit
+   */
+  public synchronized Optional<Trip<E, P, L>> start(
+      P player,
+      Navigator<L> navigator,
+      TripLabel label,
+      LiveSearch<L> liveSearch,
+      GuideSearch<L> guideSearch,
+      boolean live,
+      long liveIntervalMillis,
+      BooleanSupplier targetExists) {
     List<Trip<E, P, L>> active = byPlayer.computeIfAbsent(player.uuid(), key -> new ArrayList<>());
     if (active.size() >= maxActivePerPlayer) {
       return Optional.empty();
@@ -73,7 +113,7 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
         new Trip<>(
             player,
             nextId(active),
-            destination,
+            label,
             navigator,
             scheduler,
             TICK_PERIOD,
@@ -81,9 +121,11 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
             liveSearch,
             guideSearch,
             live,
-            liveIntervalMillis);
+            liveIntervalMillis,
+            targetExists);
     active.add(trip);
     trip.start();
+    onChange.accept(player);
     return Optional.of(trip);
   }
 
@@ -179,8 +221,9 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
    */
   public synchronized void stopAll(UUID player) {
     List<Trip<E, P, L>> active = byPlayer.remove(player);
-    if (active != null) {
+    if (active != null && !active.isEmpty()) {
       active.forEach(Trip::stop);
+      onChange.accept(active.getFirst().player());
     }
   }
 
@@ -201,11 +244,11 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
 
   private synchronized void untrack(Trip<E, P, L> trip) {
     List<Trip<E, P, L>> active = byPlayer.get(trip.player().uuid());
-    if (active != null) {
-      active.remove(trip);
+    if (active != null && active.remove(trip)) {
       if (active.isEmpty()) {
         byPlayer.remove(trip.player().uuid());
       }
+      onChange.accept(trip.player());
     }
   }
 }

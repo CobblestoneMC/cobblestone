@@ -7,12 +7,15 @@
 
 package org.cobblestonemc.paper.plugin;
 
+import io.papermc.paper.ServerBuildInfo;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import java.util.logging.Level;
+import net.kyori.adventure.key.Key;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.plugin.ServicePriority;
@@ -23,6 +26,7 @@ import org.cobblestonemc.minecraft.lod.RegionStores;
 import org.cobblestonemc.paper.PaperNavigationServiceImpl;
 import org.cobblestonemc.paper.api.NavigationService;
 import org.cobblestonemc.paper.api.SearchModificationRegistrar;
+import org.cobblestonemc.paper.hologram.PaperHolograms;
 import org.cobblestonemc.paper.plugin.api.IntegrationRegistrar;
 import org.cobblestonemc.paper.plugin.api.TrailNavigatorSettings;
 import org.cobblestonemc.paper.plugin.api.TripService;
@@ -31,6 +35,8 @@ import org.cobblestonemc.plugin.config.ConfigManager;
 import org.cobblestonemc.plugin.data.DataStore;
 import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.DataStores;
+import org.cobblestonemc.plugin.hologram.TrailLabelManager;
+import org.cobblestonemc.plugin.hud.TripHud;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchGate;
 import org.cobblestonemc.plugin.search.SearchRegistry;
@@ -49,7 +55,10 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
   private PaperNavigationServiceImpl platformApi;
   private DataStore dataStore;
   private TripManager<Entity, PaperTripAgent, Location> tripManager;
+  private TripHud<Entity, PaperTripAgent, Location> tripHud;
+  private PaperHolograms holograms;
   private PaperMetrics metrics;
+  private PaperMountListener mountListener;
   private RegionStores regionStores;
   private io.papermc.paper.threadedregions.scheduler.ScheduledTask regionFlush;
   private final SearchRegistry<Location> searchRegistry = new SearchRegistry<>();
@@ -74,7 +83,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     }
 
     // The transition registry is owned by the plugin; the platform API only reads from / registers
-    // into it (design/05). Both are reachable to other plugins via the registered plugin API.
+    // into it. Both are reachable to other plugins via the registered plugin API.
     this.platformApi =
         new PaperNavigationServiceImpl(
             this,
@@ -108,7 +117,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             .runAtFixedRate(
                 this, task -> regionStores.flush(), flushSeconds, flushSeconds, TimeUnit.SECONDS);
 
-    PaperIntegrationRegistry integrationRegistry = new PaperIntegrationRegistry();
+    PaperIntegrationRegistry integrationRegistry =
+        new PaperIntegrationRegistry(platformApi.regions());
     getServer()
         .getServicesManager()
         .register(NavigationService.class, this.platformApi, this, ServicePriority.Normal);
@@ -123,43 +133,77 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
         .getServicesManager()
         .register(IntegrationRegistrar.class, integrationRegistry, this, ServicePriority.Normal);
 
-    // Locations are surfaced to searches like any third-party provider — via the same registration
-    // helper an integration would use.
-    integrationRegistry.registerDestinations(
+    Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
+    Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), logger);
+
+    // Cobblestone's own destinations sit under its key like an integration's, but are written in
+    // its own terms rather than adapted from the integration API.
+    integrationRegistry.registerProvider(
         this,
-        new CobblestoneDestinationSource(
-            dataStore.locations(), dataStore.deaths(), () -> config.get(keys.deathsTrack)));
+        new BuiltInDestinations(
+            dataStore.locations(),
+            dataStore.deaths(),
+            dataStore.mounts(),
+            platformApi.scheduler(),
+            platformApi.regions(),
+            () -> config.get(keys.deathsTrack),
+            messages));
     // Each player's last death is recorded so they can navigate back to it.
     getServer()
         .getPluginManager()
         .registerEvents(
-            new DeathListener(
+            new PaperDeathListener(
                 dataStore.deaths(), platformApi.scheduler(), () -> config.get(keys.deathsTrack)),
             this);
-
-    Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
-    Messages messages = new Messages(defaultLocale, config.get(keys.messagesShowPrefix), logger);
+    // So are their last mount, and when each of their pets was tamed (to number same-named pets).
+    mountListener = new PaperMountListener(dataStore.mounts(), platformApi.scheduler());
+    getServer().getPluginManager().registerEvents(mountListener, this);
+    getServer().getPluginManager().registerEvents(new PaperPetListener(), this);
 
     // Trips tick on the platform scheduler (Folia-safe region tasks); the default trail navigator
     // is
     // registered as a service so it is discovered like any third-party navigator.
     this.tripManager =
         new TripManager<>(platformApi.scheduler(), config.get(keys.tripsMaxActivePerPlayer));
+    // Each trail floats its trip's name over itself while the player stands still; hitting it
+    // cancels the trip.
+    this.holograms = new PaperHolograms(this);
+    getServer().getPluginManager().registerEvents(holograms, this);
+    TrailLabelManager<Entity, PaperTripAgent, Location> trailLabels =
+        new TrailLabelManager<>(
+            tripManager, platformApi.scheduler(), messages, new PaperHologramPlatform(holograms));
     integrationRegistry.registerNavigator(
         this,
         TrailNavigatorSettings.NAVIGATOR_ID,
-        new PaperTrailNavigatorFactory(config, keys, messages));
+        new PaperTrailNavigatorFactory(config, keys, messages, trailLabels));
+
+    // Folia has no scoreboard API.
+    boolean folia = isFolia();
+    if (folia && config.get(keys.tripsHud)) {
+      getLogger().info("The trip HUD is unavailable on Folia.");
+    }
+    this.tripHud =
+        new TripHud<>(
+            tripManager,
+            platformApi.scheduler(),
+            messages,
+            dataStore.playerPreferences(),
+            () -> !folia && config.get(keys.tripsHud),
+            agent -> new PaperHudDisplay(agent.player()),
+            logger);
+    tripManager.onChange(tripHud::refresh);
+    getServer().getOnlinePlayers().forEach(player -> tripHud.load(player.getUniqueId()));
 
     // Discovered vanilla portals are surfaced to searches as an internal transition provider, and
     // learned from player teleports by the portal listener.
     platformApi.register(
         this,
-        new PortalSearchModificationService(
+        new PaperPortalSearchModificationService(
             dataStore.portalTransitions(), dataStore.endReturnPortals(), dataStore.gateways()));
     getServer()
         .getPluginManager()
         .registerEvents(
-            new PortalListener(
+            new PaperPortalListener(
                 dataStore.portalTransitions(),
                 dataStore.endReturnPortals(),
                 dataStore.gateways(),
@@ -179,7 +223,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
 
     getServer()
         .getPluginManager()
-        .registerEvents(new CobblestoneListener(tripManager, searchRegistry), this);
+        .registerEvents(new CobblestoneListener(tripManager, searchRegistry, tripHud), this);
     // Keep the chunk cache honest: a block changing evicts the snapshot it belongs to.
     // When another plugin disables, drop everything it registered into our registries.
     getServer()
@@ -229,6 +273,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                           dataStore.locations(),
                           dataStore.portalTransitions(),
                           tripManager,
+                          tripHud,
                           searchRegistry),
                       "Cobblestone admin and utility commands",
                       List.of("stone"));
@@ -260,13 +305,23 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     getLogger().info("Cobblestone enabled.");
   }
 
+  private static boolean isFolia() {
+    return ServerBuildInfo.buildInfo().isBrandCompatible(Key.key("papermc", "folia"));
+  }
+
   @Override
   public void onDisable() {
     if (metrics != null) {
       metrics.shutdown();
     }
+    if (tripHud != null) {
+      tripHud.closeAll();
+    }
     if (tripManager != null) {
-      tripManager.stopEverything();
+      tripManager.stopEverything(); // also clears the trails' labels
+    }
+    if (holograms != null) {
+      holograms.removeAll();
     }
     if (platformApi != null) {
       // Cancels in-flight searches and stops the search worker pool.
@@ -280,6 +335,13 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
       regionStores.close();
     }
     getServer().getServicesManager().unregisterAll(this);
+    if (mountListener != null) {
+      try {
+        mountListener.saveLoaded();
+      } catch (RuntimeException e) {
+        getLogger().log(Level.WARNING, "Could not save where loaded mounts are", e);
+      }
+    }
     if (dataStore != null) {
       dataStore.close();
     }

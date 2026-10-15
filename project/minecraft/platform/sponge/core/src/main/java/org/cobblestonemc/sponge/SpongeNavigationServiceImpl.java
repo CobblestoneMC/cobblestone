@@ -24,25 +24,27 @@ import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.HeuristicStrategy;
-import org.cobblestonemc.ModesProvider;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.Restriction;
+import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.minecraft.ChunkFetch;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
+import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
+import org.cobblestonemc.minecraft.ChunkSource;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
-import org.cobblestonemc.minecraft.api.WorldRegion;
 import org.cobblestonemc.minecraft.lod.RegionStores;
-import org.cobblestonemc.minecraft.modes.MinecraftModes;
+import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 import org.cobblestonemc.minecraft.registry.OwnedRegistry;
 import org.cobblestonemc.sponge.api.BoxWorldRegion;
 import org.cobblestonemc.sponge.api.BreakChecker;
@@ -55,6 +57,7 @@ import org.jetbrains.annotations.Nullable;
 import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockState;
+import org.spongepowered.api.data.value.Value;
 import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.item.ItemTypes;
@@ -62,7 +65,6 @@ import org.spongepowered.api.item.inventory.ItemStack;
 import org.spongepowered.api.item.inventory.Slot;
 import org.spongepowered.api.world.server.ServerLocation;
 import org.spongepowered.api.world.server.ServerWorld;
-import org.spongepowered.math.vector.Vector3i;
 import org.spongepowered.plugin.PluginContainer;
 
 /**
@@ -81,6 +83,7 @@ public final class SpongeNavigationServiceImpl
   private final SpongePlatformApi platform;
   private final ChunkProviderSettings chunkSettings;
   private final CobblestoneApi core;
+  private final SpongeRegions regions = new SpongeRegions(this);
 
   private final Map<String, MinecraftWorld> worldCache = new ConcurrentHashMap<>();
   private final OwnedRegistry<SearchModificationService> searchModifiers = new OwnedRegistry<>();
@@ -156,7 +159,7 @@ public final class SpongeNavigationServiceImpl
       ServerPlayer player, ServerLocation destination, MinecraftSearchSettings settings) {
     DomainRegion<MinecraftWorld> region =
         new CellRegion<>(SpongeConversions.cell(destination), wrap(destination.world()));
-    return search(player, new SingleDestination<>(region), settings);
+    return search(player, new SingleDestination<>(region), settings, newChunkSource());
   }
 
   @Override
@@ -167,31 +170,42 @@ public final class SpongeNavigationServiceImpl
       MinecraftSearchSettings settings) {
     BoxWorldRegion region = BoxWorldRegion.of(location1, location2);
     return search(
-        player, new SingleDestination<>(SpongeConversions.region(region, this)), settings);
+        player,
+        new SingleDestination<>(SpongeConversions.region(region, this)),
+        settings,
+        newChunkSource());
   }
 
   /**
-   * Begins a search toward a plugin-provided {@link Destination} (e.g. a resolved location), which
-   * may span several regions/endpoints. Used by the {@code /navigate} command; not on the public
-   * native façade because it speaks Sponge's {@link WorldRegion} type.
+   * Begins a search toward a {@link Destination} the {@code /navigate} command resolved, which may
+   * span several regions/endpoints. Not on the public native façade, because it speaks the search's
+   * own region type: make those with {@link #regions()}.
+   *
+   * <p>The destination's regions are read once, here, on the calling thread, and made for this
+   * search: a region that reads blocks reads them through the search's own chunk source.
    *
    * @param player the navigating player
-   * @param destination the goal, as one or more world regions
+   * @param destination the goal, as one or more regions
    * @param settings the search limits and knobs
    * @return a handle to the in-flight search, yielding native-located steps
    */
   public SearchHandle<ServerLocation, MinecraftStepPayload> navigatePlayerToDestination(
       ServerPlayer player,
-      Destination<WorldRegion<ServerWorld, Vector3i>> destination,
+      Destination<RegionFactory> destination,
       MinecraftSearchSettings settings) {
-    List<DomainRegion<MinecraftWorld>> regions = new ArrayList<>();
-    for (WorldRegion<ServerWorld, Vector3i> region : destination.regions()) {
-      if (region.world() == null) {
-        continue; // world unloaded or target gone; skip rather than NPE
-      }
-      regions.add(SpongeConversions.region(region, this));
-    }
-    return search(player, () -> regions, settings);
+    ChunkProvider chunks = newChunkSource();
+    List<DomainRegion<MinecraftWorld>> regions =
+        destination.regions().stream().map(region -> region.create(chunks)).toList();
+    return search(player, () -> regions, settings, chunks);
+  }
+
+  /**
+   * Returns the factory for the regions {@link #navigatePlayerToDestination} takes.
+   *
+   * @return the region factory
+   */
+  public SpongeRegions regions() {
+    return regions;
   }
 
   /**
@@ -203,6 +217,18 @@ public final class SpongeNavigationServiceImpl
    */
   public Position<MinecraftWorld> position(ServerLocation location) {
     return new Position<>(SpongeConversions.cell(location), wrap(location.world()));
+  }
+
+  /**
+   * Whether the chunk at a block may have been generated. False only when it is known not to have
+   * been; while the world's existing chunks are still being indexed (once, on first use), the
+   * answer is true. Server thread only.
+   *
+   * @param location the block
+   * @return whether its chunk may exist
+   */
+  public boolean mayBeGenerated(ServerLocation location) {
+    return platform.mayExist(location.world(), location.blockX() >> 4, location.blockZ() >> 4);
   }
 
   /**
@@ -241,29 +267,35 @@ public final class SpongeNavigationServiceImpl
     return searchModifiers.purge(owner);
   }
 
+  /**
+   * The chunk cache for one search, shared by everything in it that reads blocks and dropped with
+   * it; see {@link ChunkProvider}.
+   */
+  private ChunkProvider newChunkSource() {
+    return new ChunkProvider(platform, chunkSettings);
+  }
+
   private SearchHandle<ServerLocation, MinecraftStepPayload> search(
       ServerPlayer player,
       Destination<DomainRegion<MinecraftWorld>> destination,
-      MinecraftSearchSettings settings) {
+      MinecraftSearchSettings settings,
+      ChunkSource chunks) {
     logger.debug("Search triggered for player {} to destination {}", player.name(), destination);
-    CobblestonePlayer agent = new SpongePlayer(player);
-    ServerLocation origin = player.serverLocation();
+    ServerLocation origin = originOf(player);
     Position<MinecraftWorld> originPosition =
         new Position<>(SpongeConversions.cell(origin), wrap(origin.world()));
     // One snapshot of the registered modifiers drives all three influences on this search.
     Collection<SearchModificationService> modifiers = searchModifiers.map().values();
-    org.cobblestonemc.minecraft.BreakChecker<CobblestonePlayer> breakChecker =
-        buildBreakChecker(modifiers, player);
-    List<Restriction<CobblestonePlayer, MinecraftWorld>> restrictions =
-        buildRestrictions(modifiers, player);
-    // Read the pearl count now, on the server thread; the provider closes over it and is invoked
-    // per
-    // leg on worker threads, where it must not touch the Sponge player.
-    ModesProvider<CobblestonePlayer, MinecraftStepPayload, MinecraftWorld> modes =
-        MinecraftModes.providerFor(
-            agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
+    org.cobblestonemc.minecraft.BreakChecker breakChecker = buildBreakChecker(modifiers, player);
+    List<Restriction<MinecraftWorld>> restrictions = buildRestrictions(modifiers, player);
+    // Built on the server thread: it reads the Sponge player, which worker threads must not touch.
+    CobblestonePlayer agent = new SpongePlayer(player);
+    MinecraftMovementBehavior behavior =
+        MinecraftMovementBehavior.forPlayer(
+            chunks, agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
     HeuristicStrategy heuristic =
-        MinecraftHeuristics.forPlayer(agent, originPosition.cell(), settings, regionStores);
+        MinecraftHeuristics.forPlayer(
+            behavior, chunks, agent, originPosition.cell(), settings, regionStores);
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
         gatherTransitions(
@@ -273,14 +305,14 @@ public final class SpongeNavigationServiceImpl
                     core.navigate(
                         logger,
                         scheduler,
-                        agent,
                         originPosition,
                         destination,
-                        modes,
+                        behavior,
                         gathered,
                         restrictions,
                         heuristic,
-                        settings.settings()));
+                        settings.settings(),
+                        SearchObserver.none()));
     return new SpongeSearchHandle(handleFuture);
   }
 
@@ -322,7 +354,7 @@ public final class SpongeNavigationServiceImpl
   /**
    * Composes every modifier's break checker into one; a block is breakable only if all permit it.
    */
-  private org.cobblestonemc.minecraft.BreakChecker<CobblestonePlayer> buildBreakChecker(
+  private org.cobblestonemc.minecraft.BreakChecker buildBreakChecker(
       Collection<SearchModificationService> modifiers, ServerPlayer player) {
     List<BreakChecker> checkers = new ArrayList<>();
     for (SearchModificationService modifier : modifiers) {
@@ -332,10 +364,10 @@ public final class SpongeNavigationServiceImpl
       }
     }
     if (checkers.isEmpty()) {
-      return null; // no constraint: the mining mode attaches no restriction future at all
+      return null; // no constraint
     }
     UUID playerId = player.uniqueId();
-    return (agent, cell, world, block) -> {
+    return (cell, world, block) -> {
       Optional<ServerPlayer> online = Sponge.server().player(playerId);
       Optional<ServerWorld> serverWorld =
           Sponge.server().worldManager().world(ResourceKey.resolve(world.key()));
@@ -353,7 +385,7 @@ public final class SpongeNavigationServiceImpl
   }
 
   /** One composite passability restriction; a cell is impassable if any modifier bars entry. */
-  private List<Restriction<CobblestonePlayer, MinecraftWorld>> buildRestrictions(
+  private List<Restriction<MinecraftWorld>> buildRestrictions(
       Collection<SearchModificationService> modifiers, ServerPlayer player) {
     List<PassChecker> checkers = new ArrayList<>();
     for (SearchModificationService modifier : modifiers) {
@@ -366,8 +398,8 @@ public final class SpongeNavigationServiceImpl
       return List.of(); // no constraint: Tier-2 skips restriction filtering entirely
     }
     UUID playerId = player.uniqueId();
-    Restriction<CobblestonePlayer, MinecraftWorld> restriction =
-        (agent, cell, domain) -> {
+    Restriction<MinecraftWorld> restriction =
+        (cell, domain) -> {
           Optional<ServerPlayer> online = Sponge.server().player(playerId);
           Optional<ServerWorld> serverWorld =
               Sponge.server().worldManager().world(ResourceKey.resolve(domain.key()));
@@ -383,6 +415,24 @@ public final class SpongeNavigationServiceImpl
           return FutureOr.from(anyFalse(results));
         };
     return List.of(restriction);
+  }
+
+  /**
+   * Where a search for {@code player} starts. A player in a boat starts from the boat's block: the
+   * water or ice it floats on, which is one below the boat when it sits on top of it.
+   */
+  private static ServerLocation originOf(ServerPlayer player) {
+    Optional<Entity> vehicle = player.vehicle().map(Value::get);
+    if (vehicle.isEmpty() || !SpongePlayer.isBoat(vehicle.get().type())) {
+      return player.serverLocation();
+    }
+    ServerLocation at = vehicle.get().serverLocation();
+    ServerLocation below = at.sub(0, 1, 0);
+    if (!new SpongeBlock(at.block()).supportsBoat()
+        && new SpongeBlock(below.block()).supportsBoat()) {
+      return below;
+    }
+    return at;
   }
 
   /** Counts the ender pearls in the player's inventory (read on the server thread). */
@@ -435,7 +485,6 @@ public final class SpongeNavigationServiceImpl
 
   @Override
   public MinecraftWorld wrap(ServerWorld world) {
-    return worldCache.computeIfAbsent(
-        world.key().asString(), key -> new SpongeWorld(world, platform, chunkSettings));
+    return worldCache.computeIfAbsent(world.key().asString(), key -> new SpongeWorld(world));
   }
 }

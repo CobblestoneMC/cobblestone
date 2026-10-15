@@ -179,11 +179,7 @@ class BenchPipelineTest {
     Baselines.accept(
         baselines, runner.run(scenario, Loadout.fallback(), SearchObserver.none()), "testsha");
 
-    Scenario other =
-        scenario.withHeuristic(
-            scenario.heuristic() == Scenario.Heuristic.REGIONS
-                ? Scenario.Heuristic.RUNNING_AVERAGE
-                : Scenario.Heuristic.REGIONS);
+    Scenario other = scenario.withHeuristicWeight(scenario.settings().heuristicWeight() + 1.0);
     Comparison.Verdict verdict =
         Comparison.compare(
             runner.run(other, Loadout.fallback(), SearchObserver.none()),

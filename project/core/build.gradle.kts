@@ -1,4 +1,4 @@
-// core — the two-tier search algorithm over the core-api abstractions. (design/03)
+// core — the two-tier search algorithm over the core-api abstractions.
 plugins {
     id("cobblestone.java-conventions")
 }

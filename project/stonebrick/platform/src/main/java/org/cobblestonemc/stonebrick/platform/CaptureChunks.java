@@ -66,10 +66,10 @@ public final class CaptureChunks {
    *
    * <p>⚠️ The distinction matters. A <em>search</em> reading past the edge of the capture is
    * degenerate — it has hit a fabricated wall and its result describes a world that does not exist.
-   * The <em>coarse profiler</em> reading past the edge is not: it is a Dijkstra spreading outward
+   * The <em>region layer</em> reading past the edge is not: its backward search spreads outward
    * from the destination, it is expected to reach further than the fine search ever will, and it
    * already treats an unprofilable section as unknown and falls back. Sharing one log would have
-   * every coarse run declare itself degenerate.
+   * every region run declare itself degenerate.
    *
    * @param capture the capture
    * @param column the decoded column

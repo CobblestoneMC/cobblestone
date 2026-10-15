@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
@@ -26,24 +27,30 @@ import org.cobblestonemc.api.NavigationResult;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.api.SearchSettings;
+import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
-import org.cobblestonemc.minecraft.api.WorldRegion;
 import org.cobblestonemc.plugin.Permissions;
-import org.cobblestonemc.plugin.api.MinecraftDestination;
+import org.cobblestonemc.plugin.api.DestinationLeaf;
 import org.cobblestonemc.plugin.api.NavigatorSettings;
-import org.cobblestonemc.plugin.api.PlatformDestinationTree;
+import org.cobblestonemc.plugin.api.OptionValues;
 import org.cobblestonemc.plugin.api.TripOutcome;
+import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.command.FlagParser;
 import org.cobblestonemc.plugin.command.NavigationFlags;
+import org.cobblestonemc.plugin.destination.DestinationDetails;
+import org.cobblestonemc.plugin.destination.DestinationNode;
 import org.cobblestonemc.plugin.destination.DestinationResolver;
 import org.cobblestonemc.plugin.destination.NavigationPermissions;
+import org.cobblestonemc.plugin.destination.NavigationTarget;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
+import org.cobblestonemc.plugin.message.Message0;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchGate;
 import org.cobblestonemc.plugin.search.SearchRegistry;
 import org.cobblestonemc.plugin.trip.GuideSearch;
 import org.cobblestonemc.plugin.trip.LiveSearch;
+import org.cobblestonemc.plugin.trip.TripLabel;
 import org.cobblestonemc.sponge.SpongeNavigationServiceImpl;
 import org.spongepowered.api.command.Command;
 import org.spongepowered.api.command.CommandCompletion;
@@ -52,8 +59,6 @@ import org.spongepowered.api.command.parameter.Parameter;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.util.Tristate;
 import org.spongepowered.api.world.server.ServerLocation;
-import org.spongepowered.api.world.server.ServerWorld;
-import org.spongepowered.math.vector.Vector3i;
 
 /**
  * The {@code /navigate} (alias {@code /nav}) command: parse flags, resolve the destination through
@@ -64,8 +69,8 @@ import org.spongepowered.math.vector.Vector3i;
 final class NavigateCommand {
 
   // How many words /navigate accepts. Each word is its own parameter (see #build), so this is a
-  // hard cap: a destination address plus a flag or two fits comfortably.
-  private static final int MAX_WORDS = 8;
+  // hard cap: a destination address with its options, plus a flag or two, fits comfortably.
+  private static final int MAX_WORDS = 12;
   // One key per word position. Distinct keys, all read back in order, so every word lands in the
   // same parse context — which is what lets tab-completion see the words typed before the cursor.
   private static final List<Parameter.Key<String>> WORD_KEYS = wordKeys();
@@ -187,14 +192,14 @@ final class NavigateCommand {
       return;
     }
 
-    DestinationResolver.Resolution<ServerWorld, Vector3i> resolution =
+    DestinationResolver.Resolution<NavigationTarget> resolution =
         DestinationResolver.resolve(
             destinationRoots(integrations, player),
             parsed.destination(),
             player::hasPermission,
             canNavigate(player));
     if (resolution
-        instanceof DestinationResolver.Ambiguous<ServerWorld, Vector3i>(List<List<String>> addrs)) {
+        instanceof DestinationResolver.Ambiguous<NavigationTarget>(List<List<String>> addrs)) {
       messages.send(
           player,
           locale,
@@ -202,10 +207,15 @@ final class NavigateCommand {
           formatAddresses(addrs));
       return;
     }
+    if (resolution instanceof DestinationResolver.InvalidOptions<NavigationTarget> invalid) {
+      sendUsage(player, locale, messages, invalid);
+      return;
+    }
     if (!(resolution
         instanceof
-        DestinationResolver.Resolved<ServerWorld, Vector3i>(
-            MinecraftDestination<ServerWorld, Vector3i> destination,
+        DestinationResolver.Resolved<NavigationTarget>(
+            DestinationLeaf<NavigationTarget> leaf,
+            OptionValues values,
             List<String> address))) {
       messages.send(
           player,
@@ -214,18 +224,42 @@ final class NavigateCommand {
           String.join(" ", parsed.destination()));
       return;
     }
+    // Built only now, on the player's own thread, which may read the world around them.
+    Validity<NavigationTarget> built;
+    try {
+      built = leaf.build(values);
+    } catch (RuntimeException e) {
+      // Most likely an integration's leaf; the address's first key names the plugin.
+      log.error(
+          "navigate {} -> {}: building the destination failed",
+          e,
+          player.name(),
+          String.join(" ", address));
+      messages.send(player, locale, CobblestoneMessages.NAVIGATE_ERROR);
+      return;
+    }
+    NavigationTarget destination;
+    switch (built) {
+      case Validity.Invalid<NavigationTarget>(Component reason) -> {
+        player.sendMessage(reason);
+        return;
+      }
+      case Validity.Valid<NavigationTarget>(NavigationTarget valid) -> destination = valid;
+    }
 
     boolean live =
         switch (flags.liveness()) {
           case LIVE -> true;
           case NO_LIVE -> false;
-          case DEFAULT -> destination.isMobile();
+          case DEFAULT -> destination.mobile();
         };
     startSearch(
         player,
         locale,
-        String.join(" ", address),
+        TripLabel.address(address),
+        DestinationDetails.hover(address, destination),
         destination.destination(),
+        destination::exists,
         flags,
         live,
         navigationService,
@@ -241,8 +275,10 @@ final class NavigateCommand {
   private static void startSearch(
       ServerPlayer player,
       Locale locale,
-      String label,
-      Destination<WorldRegion<ServerWorld, Vector3i>> destination,
+      TripLabel tripLabel,
+      Component hover,
+      Destination<RegionFactory> destination,
+      BooleanSupplier targetExists,
       NavigationFlags flags,
       boolean live,
       SpongeNavigationServiceImpl navigationService,
@@ -253,6 +289,7 @@ final class NavigateCommand {
       Supplier<SearchSettings> searchSettings,
       CobblestoneLogger log,
       Messages messages) {
+    String label = tripLabel.text();
     UUID uuid = player.uniqueId();
     long startNanos = System.nanoTime();
     gate.beginForced(uuid);
@@ -260,7 +297,12 @@ final class NavigateCommand {
         navigationService.navigatePlayerToDestination(
             player, destination, searchSettingsFor(searchSettings, flags));
     searches.track(uuid, handle);
-    messages.send(player, locale, CobblestoneMessages.NAVIGATE_SEARCHING);
+    // Hovering shows where the search is headed — for a fixed place, its coordinates, so the player
+    // can still get there by hand if no route turns up.
+    player.sendMessage(
+        messages
+            .render(locale, CobblestoneMessages.NAVIGATE_SEARCHING)
+            .hoverEvent(HoverEvent.showText(hover)));
 
     handle
         .future()
@@ -277,7 +319,7 @@ final class NavigateCommand {
               }
               if (result
                   instanceof NavigationResult.Failure<ServerLocation, MinecraftStepPayload> f) {
-                sendFailure(player, locale, messages, f.reason());
+                sendFailure(player, locale, messages, f.reason(), hover);
                 return;
               }
               if (result
@@ -289,7 +331,7 @@ final class NavigateCommand {
                     .start(
                         player,
                         path,
-                        label,
+                        tripLabel,
                         settings,
                         liveSearch(
                             player,
@@ -300,7 +342,8 @@ final class NavigateCommand {
                             gate,
                             searchSettings),
                         guideSearch(player, flags, navigationService),
-                        live)
+                        live,
+                        targetExists)
                     .whenComplete(
                         (outcome, tripError) ->
                             reportTrip(
@@ -335,7 +378,7 @@ final class NavigateCommand {
 
   private static LiveSearch<ServerLocation> liveSearch(
       ServerPlayer player,
-      Destination<WorldRegion<ServerWorld, Vector3i>> destination,
+      Destination<RegionFactory> destination,
       NavigationFlags flags,
       SpongeNavigationServiceImpl navigationService,
       SearchRegistry<ServerLocation> searches,
@@ -434,13 +477,13 @@ final class NavigateCommand {
    * that registered it. The owner is the root key rather than something the provider picks, so two
    * plugins that both offer a {@code warp} level stay tellable apart.
    */
-  private static Map<String, PlatformDestinationTree<ServerWorld, Vector3i>> destinationRoots(
+  private static Map<String, DestinationNode<NavigationTarget>> destinationRoots(
       SpongeIntegrationRegistry integrations, ServerPlayer player) {
-    Map<String, PlatformDestinationTree<ServerWorld, Vector3i>> roots = new TreeMap<>();
+    Map<String, DestinationNode<NavigationTarget>> roots = new TreeMap<>();
     for (var provider : integrations.destinationProviders().entrySet()) {
-      PlatformDestinationTree<ServerWorld, Vector3i> root = provider.getValue().provide(player);
+      DestinationNode<NavigationTarget> root = provider.getValue().provide(player);
       // An empty root would be offered as a token that leads nowhere — drop it instead.
-      if (root == null || (root.subTrees().isEmpty() && root.destinations().isEmpty())) {
+      if (root == null || (root.subTrees().isEmpty() && root.leaves().isEmpty())) {
         continue;
       }
       roots.put(provider.getKey(), root);
@@ -467,11 +510,21 @@ final class NavigateCommand {
     if (!input.isEmpty() && !tokens.isEmpty() && tokens.getLast().equals(input)) {
       tokens.removeLast();
     }
-    tokens.add(input); // the (possibly empty) word being typed
+    List<String> destinationTokens;
+    if (input.equals("-")) {
+      // Not yet a flag or a negative number: offer an option's negative values.
+      destinationTokens = new ArrayList<>(FlagParser.destinationTokens(tokens));
+      destinationTokens.add(input);
+    } else if (FlagParser.isFlag(input)) {
+      return List.of(); // a flag is being typed, not a destination word
+    } else {
+      tokens.add(input); // the (possibly empty) word being typed
+      destinationTokens = FlagParser.destinationTokens(tokens);
+    }
     List<String> suggestions =
         DestinationResolver.suggest(
             destinationRoots(integrations, player.get()),
-            FlagParser.destinationTokens(tokens),
+            destinationTokens,
             player.get()::hasPermission,
             canNavigate(player.get()));
     List<CommandCompletion> completions = new ArrayList<>();
@@ -481,18 +534,41 @@ final class NavigateCommand {
     return completions;
   }
 
+  /** Reports a failed search, with the same hover as the "Searching…" line that preceded it. */
   private static void sendFailure(
-      ServerPlayer player, Locale locale, Messages messages, FailureReason reason) {
-    switch (reason) {
-      case NO_ROUTE, DESTINATION_UNREACHABLE ->
-          messages.send(player, locale, CobblestoneMessages.NAVIGATE_NO_ROUTE);
-      case LIMIT_EXCEEDED ->
-          messages.send(player, locale, CobblestoneMessages.NAVIGATE_LIMIT_EXCEEDED);
-      case TIMED_OUT -> messages.send(player, locale, CobblestoneMessages.NAVIGATE_TIMED_OUT);
-      case CANCELLED -> {
-        /* silent: the player asked for it */
-      }
-      default -> messages.send(player, locale, CobblestoneMessages.NAVIGATE_ERROR);
+      ServerPlayer player,
+      Locale locale,
+      Messages messages,
+      FailureReason reason,
+      Component hover) {
+    Message0 message =
+        switch (reason) {
+          case NO_ROUTE, DESTINATION_UNREACHABLE -> CobblestoneMessages.NAVIGATE_NO_ROUTE;
+          case LIMIT_EXCEEDED -> CobblestoneMessages.NAVIGATE_LIMIT_EXCEEDED;
+          case TIMED_OUT -> CobblestoneMessages.NAVIGATE_TIMED_OUT;
+          case CANCELLED -> null; // silent: the player asked for it
+          default -> CobblestoneMessages.NAVIGATE_ERROR;
+        };
+    if (message != null) {
+      player.sendMessage(messages.render(locale, message).hoverEvent(HoverEvent.showText(hover)));
+    }
+  }
+
+  private static void sendUsage(
+      ServerPlayer player,
+      Locale locale,
+      Messages messages,
+      DestinationResolver.InvalidOptions<NavigationTarget> invalid) {
+    String usage = DestinationResolver.usage(invalid.address(), invalid.options());
+    if (invalid.invalidToken() == null) {
+      messages.send(player, locale, CobblestoneMessages.NAVIGATE_DESTINATION_USAGE, usage);
+    } else {
+      messages.send(
+          player,
+          locale,
+          CobblestoneMessages.NAVIGATE_OPTION_INVALID,
+          invalid.invalidToken(),
+          usage);
     }
   }
 

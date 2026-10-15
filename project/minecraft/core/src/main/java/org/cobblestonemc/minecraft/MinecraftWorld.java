@@ -7,18 +7,15 @@
 
 package org.cobblestonemc.minecraft;
 
-import org.cobblestonemc.Cell;
 import org.cobblestonemc.Domain;
-import org.cobblestonemc.FutureOr;
 
 /**
  * A Minecraft world — the single concrete {@link Domain} type for the Minecraft embedder.
  * Dimensions are distinguished by {@link #environment()}, never by subtyping (so the {@code D}
  * generic stays a single type across a search).
  *
- * <p>A world is also the block-access handle a mode uses: {@link #blockAt(Cell, Cell)} returns a
- * {@link FutureOr} that is immediate on a cache hit and pending on a miss (the platform's chunk
- * provider backs it). Equality/hash are by the world's namespaced {@link #key()}.
+ * <p>A world only names a place: its blocks are read through a search's {@link ChunkSource}, never
+ * through the world itself. Equality/hash are by the world's namespaced {@link #key()}.
  */
 public interface MinecraftWorld extends Domain {
 
@@ -35,31 +32,6 @@ public interface MinecraftWorld extends Domain {
    * @return the environment
    */
   Environment environment();
-
-  /**
-   * Returns the block at {@code cell}, possibly pending on a chunk fetch. An unavailable cell
-   * (chunk not loaded under the configured policy) resolves to an impassable "unknown" block.
-   *
-   * @param cell the cell
-   * @param destination the destination of whatever this process is moving in, for readahead
-   * @return the block, immediate or pending
-   */
-  FutureOr<MinecraftBlock> blockAt(Cell cell, Cell destination);
-
-  /**
-   * Returns the snapshot of the chunk containing {@code cell}, possibly pending on a fetch.
-   *
-   * <p>This is the bulk form of {@link #blockAt}: a caller wanting many blocks around one point
-   * resolves the handful of chunks they fall in and indexes the snapshots directly, rather than
-   * paying the provider's per-block lookup a few hundred times per expansion. Local coordinates are
-   * {@code x & 15} and {@code z & 15}; a {@code y} outside {@link #minY()}..{@link #maxY()} has no
-   * block and the caller must treat it as unknown.
-   *
-   * @param cell a cell in the wanted chunk
-   * @param destination the destination of whatever this process is moving in, for readahead
-   * @return the chunk snapshot, immediate or pending
-   */
-  FutureOr<MinecraftChunk> chunkAt(Cell cell, Cell destination);
 
   /** The vanilla dimension kinds, plus a catch-all for custom/modded dimensions. */
   enum Environment {

@@ -32,7 +32,10 @@ Navigate back to it from anywhere:
 ```
 
 Cobblestone reports `Searching for a route...`, then `Success!` once a route is found. Hover over
-the message to see the search time and estimated travel time. The trip ends automatically when you
+`Success!` to see the search time and estimated travel time. Hover over `Searching for a route...`,
+or over the error if no route is found, to see the destination's address. For a fixed place, such
+as a saved location, your death location or a set of coordinates, the coordinates are shown too,
+so you can still find your way there by hand. The trip ends automatically when you
 arrive within two blocks of the destination.
 
 ## The trail
@@ -45,7 +48,7 @@ The trail renders only the next segment of the route, brightest at the point to 
   entering a portal, or running a command. Cobblestone highlights the location and sends a
   message. Command prompts, such as `Run /warp market.`, can be clicked.
 - **Ending.** A trip ends on arrival, on `/stone cancel`, or on disconnect. Death does not end a
-  trip.
+  trip. A trip to a pet or mount ends if it dies, and a trip to a player ends if they log off.
 
 ## Destinations
 
@@ -66,7 +69,80 @@ plugins installed on the server.
 /nav death
 ```
 
-Your most recent death location. Admins may disable this destination.
+Your most recent death location. Admins may disable this destination. If you have not died since it
+was enabled, you are told so.
+
+### Respawn point
+
+```
+/nav respawn
+```
+
+Where you will respawn: your bed, a charged respawn anchor, or a point set by `/spawnpoint`. If you
+have none, you are told so.
+
+### World spawn
+
+```
+/nav spawn
+```
+
+Where you respawn if you have no respawn point of your own. The server has one, normally in the
+overworld.
+
+### Surface
+
+```
+/nav surface
+```
+
+The nearest place open to the sky. The route heads upward, so it is the quickest way out of a cave
+or a mine. Water, leaves and glass count as a roof. If you are already open to the sky, you are
+told so instead.
+
+### Target
+
+```
+/nav target
+```
+
+The block you are looking at, up to 256 blocks away: the open space in front of it, or the ground
+below that if it is the side of a wall. Water counts as something to look at, unless you are
+underwater; grass and flowers are looked through.
+
+### Coordinates
+
+```
+/nav coordinates block 100 64 -200                 # a block in this world
+/nav coordinates block 100 64 -200 world_nether    # a block in another world
+/nav coordinates surface 100 -200                  # the open-sky spot at x=100, z=-200
+```
+
+Whole numbers only. The world is optional and defaults to the one you are in. Tab completion offers
+your own coordinates. The word `coordinates` is always required, so `/nav surface` still means the
+nearest open sky. Coordinates in terrain that has never been generated are refused.
+
+### Mount
+
+```
+/nav mount
+/nav horse
+```
+
+The tamed horse, donkey, mule, llama or camel you last rode. `horse` is another name for it, for
+any of these. The route is recomputed periodically as it moves while it is loaded, and otherwise
+heads to where it was last seen. If it dies, the trip ends, and there is no mount to go back to
+until you ride another.
+
+### Pets
+
+```
+/nav pet Rex
+```
+
+Your named, tamed animals that are currently loaded. Pets that share a name are numbered by when
+they were tamed: `Rex`, `Rex-2`, … The route is recomputed periodically as the pet moves, and the
+trip ends if the pet dies.
 
 ### Players
 
@@ -74,7 +150,8 @@ Your most recent death location. Admins may disable this destination.
 /nav player Steve
 ```
 
-Online players only. The route is recomputed periodically as the target moves.
+Online players only. The route is recomputed periodically as the target moves, and the trip ends
+if they log off.
 
 ### Worlds
 
@@ -109,8 +186,9 @@ may be omitted as long as the remainder identifies exactly one destination:
 /nav home
 ```
 
-The final word is always required. Some levels, such as town and NPC names, are marked strict by
-their provider and are also required.
+The destination's own name is always required. Some levels, such as town and NPC names, are marked
+strict by their provider and are also required. A destination that takes values, such as
+`coordinates`, takes them after its name; they are never part of the address.
 
 If the input matches more than one destination, the candidates are listed:
 
@@ -163,9 +241,30 @@ Up to three trips may run at once by default.
 /stone trips              # list active trips
 /stone cancel <id>        # cancel one trip
 /stone cancel all         # cancel all trips and pending searches
+/stone hud [on|off]       # show or hide your trip HUD
 ```
 
 `/stone cancel` with no argument is equivalent to `all`.
+
+While you have trips, a HUD on the right of the screen lists each one with its estimated time left,
+updated every second:
+
+```
+Trips
+home - 3m 24s
+caves - 48s
+```
+
+Each trip is named by the shortest part of its address that tells it apart from your other trips.
+`/stone hud` with no argument switches it on or off; your choice is remembered.
+
+To tell several trails apart, stand still for a second: a few blocks ahead of you, the name of
+each trip appears over its trail (or the guide back to it), named the same way as in the HUD. With
+one trip to a player named Steve it reads `Steve`; add a trip to a town also named Steve and they
+read `player Steve` and `town Steve`. A label only appears where you can see it, and the labels go
+away as soon as you move, so they stay out of your way while you follow the trail. **Hit a label to
+cancel that trip.** On Sponge servers, other players nearby can see your labels too, but only you
+can cancel your trips with them.
 
 ## Errors
 
@@ -176,6 +275,8 @@ Up to three trips may run at once by default.
 | `The search took too long and was stopped.` | The search reached its time limit. |
 | `No destination matches ...` | No destination has that name. |
 | `That destination is ambiguous; be more specific: ...` | Add a word from the full address. |
+| `Usage: /navigate ...` | The destination takes values; type them as shown. |
+| `... is not valid there. Usage: /navigate ...` | One of the values could not be read. |
 | `You already have too many active trips; cancel one first.` | Cancel a trip with `/stone cancel`. |
 | `You don't have permission to do that.` | The destination or navigator is restricted. |
 

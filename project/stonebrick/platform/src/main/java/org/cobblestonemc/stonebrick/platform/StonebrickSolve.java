@@ -15,26 +15,29 @@ import org.cobblestonemc.CobblestoneApi;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.HeuristicStrategy;
-import org.cobblestonemc.Heuristics;
-import org.cobblestonemc.ModesProvider;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.Restriction;
+import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.Transition;
 import org.cobblestonemc.api.NavigationResult;
 import org.cobblestonemc.api.SearchSettings;
+import org.cobblestonemc.minecraft.ChunkProvider;
+import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
-import org.cobblestonemc.minecraft.modes.MinecraftModes;
+import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 
 /**
- * Runs one search over a capture — the single entry point a benchmark, a test, or the visualizer's
- * recorder uses.
+ * Runs one search over a capture, configured the way the plugin configures one.
  *
- * <p>It exists so that every consumer configures a search the same way. A benchmark whose harness
- * assembled modes slightly differently from the plugin's would be measuring a search nobody runs,
- * and the difference would be invisible in the numbers.
+ * <p>Modes and heuristic come from the same factories Paper and Sponge use, so a search run here is
+ * a search a server would run. A harness that assembled them slightly differently would be
+ * measuring a search nobody runs, and the difference would be invisible in the numbers. The bench
+ * assembles its own search only because it also varies the loadout's excluded modes and attaches an
+ * observer; this is for tests and other one-off callers.
  */
 public final class StonebrickSolve {
 
@@ -110,36 +113,32 @@ public final class StonebrickSolve {
       DomainRegion<MinecraftWorld> target,
       SearchSettings settings,
       List<? extends Transition<MinecraftStepPayload, MinecraftWorld>> transitions,
-      List<? extends Restriction<StonebrickPlayer, MinecraftWorld>> restrictions) {
-    ModesProvider<
-            org.cobblestonemc.minecraft.CobblestonePlayer, MinecraftStepPayload, MinecraftWorld>
-        modes = MinecraftModes.providerFor(player, Set.<MinecraftStepType>of(), null, 0);
+      List<? extends Restriction<MinecraftWorld>> restrictions) {
+    // A chunk cache of the search's own, as in production: how it hits and misses is part of what
+    // the benchmark measures.
+    ChunkProvider chunks = new ChunkProvider(platform, platform.settings());
+    MinecraftMovementBehavior behavior =
+        MinecraftMovementBehavior.forPlayer(chunks, player, Set.<MinecraftStepType>of());
     HeuristicStrategy heuristic =
-        Heuristics.runningAverage(
-            MinecraftModes.cheapestCostPerBlock(player, Set.<MinecraftStepType>of()));
+        MinecraftHeuristics.forPlayer(
+            behavior,
+            chunks,
+            player,
+            origin.cell(),
+            new MinecraftSearchSettings(settings, Set.of(), Set.of(), Set.of()));
     return CobblestoneApi.load()
         .navigate(
             logger,
             scheduler,
-            player,
             origin,
             new SingleDestination<>(target),
-            castModes(modes),
+            behavior,
             transitions,
             restrictions,
             heuristic,
-            settings)
+            settings,
+            SearchObserver.none())
         .future();
-  }
-
-  @SuppressWarnings("unchecked")
-  private static ModesProvider<StonebrickPlayer, MinecraftStepPayload, MinecraftWorld> castModes(
-      ModesProvider<
-              org.cobblestonemc.minecraft.CobblestonePlayer, MinecraftStepPayload, MinecraftWorld>
-          modes) {
-    // A mode only ever reads its agent, so a provider built for the interface serves any
-    // implementation of it. The cast is what the platform façades do for the same reason.
-    return (ModesProvider<StonebrickPlayer, MinecraftStepPayload, MinecraftWorld>) (Object) modes;
   }
 
   /**

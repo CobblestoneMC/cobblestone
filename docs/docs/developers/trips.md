@@ -30,7 +30,11 @@ player strays and end on arrival. `TripService` starts trips programmatically.
         .navigate(player, objectiveLocation, NavigatorSettings.defaults(), "Lost Lantern");
     ```
 
-This runs the search and starts the trip. The label is displayed in `/cobblestone trips`.
+This runs the search and starts the trip. Every trip needs a label. It names the trip in
+`/cobblestone trips` and in the player's trip HUD, where it is shown exactly as given. Keep it
+short, and make it tell your own trips apart: unlike a `/navigate` address, Cobblestone cannot
+shorten or disambiguate it. The label is also the trip's identity. Starting another trip for the
+same player with the same label replaces the first one, which suits a quest objective that moves.
 
 ## Outcomes
 
@@ -58,7 +62,7 @@ tripService.navigate(player, objective, NavigatorSettings.defaults(), "Lost Lant
 An overload accepts only a failure callback:
 
 ```java
-tripService.navigate(player, objective, NavigatorSettings.defaults(),
+tripService.navigate(player, objective, NavigatorSettings.defaults(), "Lost Lantern",
     reason -> player.sendMessage("No route: " + reason));
 ```
 
@@ -83,6 +87,7 @@ values fall back to the server configuration.
         .particles(List.of(Particle.DUST))
         .colors(List.of(Color.fromRGB(0xFFD54F), Color.fromRGB(0x4FC3F7)))
         .highlightParticles(List.of(Particle.END_ROD))
+        .showLabel(false) // no floating name over the trail for this trip
         .build();
 
     tripService.navigate(player, objective, settings, "Lost Lantern");
@@ -99,10 +104,14 @@ values fall back to the server configuration.
         .particles(List.of(ParticleTypes.DUST.get()))
         .colors(List.of(Color.ofRgb(0xFFD54F), Color.ofRgb(0x4FC3F7)))
         .highlightParticles(List.of(ParticleTypes.END_ROD.get()))
+        .showLabel(false) // no floating name over the trail for this trip
         .build();
 
     tripService.navigate(player, objective, settings, "Lost Lantern");
     ```
+
+`showLabel` decides whether the trip's name floats over its trail while the player stands still
+(where hitting it cancels the trip). Unset, it follows the server's `trips.holograms` config.
 
 To use another navigator, build settings for its id:
 
@@ -126,7 +135,7 @@ To render a path from a search you ran (see [Searching](searching.md)):
     handle.future().thenAccept(result -> {
       if (result instanceof NavigationResult.Success<Location, MinecraftStepPayload> success) {
         CobblestonePaperApi.tripService()
-            .startTrip(player, success.path(), NavigatorSettings.defaults());
+            .startTrip(player, success.path(), NavigatorSettings.defaults(), "Lost Lantern");
       }
     });
     ```
@@ -140,7 +149,7 @@ To render a path from a search you ran (see [Searching](searching.md)):
     handle.future().thenAccept(result -> {
       if (result instanceof NavigationResult.Success<ServerLocation, MinecraftStepPayload> success) {
         CobblestoneSpongeApi.tripService()
-            .startTrip(player, success.path(), NavigatorSettings.defaults());
+            .startTrip(player, success.path(), NavigatorSettings.defaults(), "Lost Lantern");
       }
     });
     ```
@@ -149,7 +158,8 @@ Trips started this way are not live. Use `navigate` for trips that re-search.
 
 ## Lifecycle
 
-Programmatic trips appear in `/cobblestone trips`, count toward `trips.max_active_per_player`, and
-can be cancelled by the player. Do not restart a trip the player has cancelled.
+Programmatic trips appear in `/cobblestone trips` and the trip HUD, count toward
+`trips.max_active_per_player`, and can be cancelled by the player. Do not restart a trip the player
+has cancelled.
 
 Trips end on arrival, cancellation, or disconnect.

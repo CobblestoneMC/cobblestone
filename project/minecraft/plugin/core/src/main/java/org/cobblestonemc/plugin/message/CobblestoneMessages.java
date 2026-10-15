@@ -122,6 +122,50 @@ public final class CobblestoneMessages {
   public static final Message1 NAVIGATE_DESTINATION_NOT_FOUND =
       Message1.error("command.navigate.destination_not_found");
 
+  /**
+   * Shown when a destination's options are missing or extra ({@code {0}} = how to type it, e.g.
+   * {@code cobblestone coordinates block <x> <y> <z> [world]}).
+   */
+  public static final Message1 NAVIGATE_DESTINATION_USAGE =
+      Message1.error("command.navigate.destination_usage");
+
+  /**
+   * Shown when one of a destination's options does not parse ({@code {0}} = the token, {@code {1}}
+   * = how to type the destination).
+   */
+  public static final Message2 NAVIGATE_OPTION_INVALID =
+      Message2.error("command.navigate.option_invalid");
+
+  /** Shown for {@code /navigate surface} when the player is already open to the sky. */
+  public static final Message0 NAVIGATE_ALREADY_ON_SURFACE =
+      Message0.error("command.navigate.already_on_surface");
+
+  /** Shown for {@code /navigate death} when no death of the player's is on record. */
+  public static final Message0 NAVIGATE_NO_DEATH = Message0.error("command.navigate.no_death");
+
+  /** Shown for {@code /navigate mount} when the player has not ridden one, or it has died. */
+  public static final Message0 NAVIGATE_NO_MOUNT = Message0.error("command.navigate.no_mount");
+
+  /** Shown for {@code /navigate respawn} when the player has no bed, anchor or spawn point. */
+  public static final Message0 NAVIGATE_NO_RESPAWN = Message0.error("command.navigate.no_respawn");
+
+  /**
+   * Shown for {@code /navigate target} when the player is not looking at a block in range ({@code
+   * {0}} = the range, in blocks).
+   */
+  public static final Message1 NAVIGATE_NO_TARGET = Message1.error("command.navigate.no_target");
+
+  /**
+   * Shown for coordinates above or below the world ({@code {0}} = the lowest y, {@code {1}} = the
+   * highest, {@code {2}} = the world).
+   */
+  public static final Message3 NAVIGATE_OUTSIDE_WORLD =
+      Message3.error("command.navigate.outside_world");
+
+  /** Shown for coordinates in terrain that has never been generated. */
+  public static final Message0 NAVIGATE_UNGENERATED =
+      Message0.error("command.navigate.ungenerated");
+
   /** Shown when the destination is ambiguous ({@code {0}} = the candidate paths). */
   public static final Message1 NAVIGATE_DESTINATION_AMBIGUOUS =
       Message1.error("command.navigate.destination_ambiguous");
@@ -169,6 +213,19 @@ public final class CobblestoneMessages {
 
   /** Shown when the player has no active trips. */
   public static final Message0 TRIPS_NONE = Message0.info("command.cobblestone.trips.none");
+
+  /** Confirms the player's HUD is shown. */
+  public static final Message0 HUD_SHOWN = Message0.success("command.cobblestone.hud.shown");
+
+  /** Confirms the player's HUD is hidden. */
+  public static final Message0 HUD_HIDDEN = Message0.success("command.cobblestone.hud.hidden");
+
+  /** Shown when the server has the trip HUD turned off. */
+  public static final Message0 HUD_UNAVAILABLE =
+      Message0.error("command.cobblestone.hud.unavailable");
+
+  /** Confirms a trip was cancelled by hitting its label ({@code {0}} = the label's text). */
+  public static final Message1 HOLOGRAM_CANCELED = Message1.success("hologram.canceled");
 
   /** Confirms the discovered-portal cache was cleared ({@code {0}} = how many were removed). */
   public static final Message1 PORTALS_CLEARED =

@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.plugin.trip;
 
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
@@ -24,9 +25,12 @@ import org.cobblestonemc.plugin.api.Navigator;
  */
 public final class Trip<E, P extends TripAgent<E>, L> {
 
+  /** About how often, in server ticks, a trip checks that its target still exists. */
+  static final long EXISTENCE_CHECK_TICKS = 20L;
+
   private final P player;
   private final int id;
-  private final String destination;
+  private final TripLabel label;
   private final Navigator<L> navigator;
   private final MinecraftScheduler<E> scheduler;
   private final long periodTicks;
@@ -35,14 +39,17 @@ public final class Trip<E, P extends TripAgent<E>, L> {
   private final GuideSearch<L> guideSearch;
   private final boolean live;
   private final long liveIntervalMillis;
+  private final BooleanSupplier targetExists;
+  private final long existenceCheckEvery;
 
   private ScheduledTaskHandle handle;
+  private long ticksSinceExistenceCheck;
   private volatile boolean stopped;
 
   Trip(
       P player,
       int id,
-      String destination,
+      TripLabel label,
       Navigator<L> navigator,
       MinecraftScheduler<E> scheduler,
       long periodTicks,
@@ -50,10 +57,11 @@ public final class Trip<E, P extends TripAgent<E>, L> {
       LiveSearch<L> liveSearch,
       GuideSearch<L> guideSearch,
       boolean live,
-      long liveIntervalMillis) {
+      long liveIntervalMillis,
+      BooleanSupplier targetExists) {
     this.player = player;
     this.id = id;
-    this.destination = destination;
+    this.label = label;
     this.navigator = navigator;
     this.scheduler = scheduler;
     this.periodTicks = periodTicks;
@@ -62,6 +70,8 @@ public final class Trip<E, P extends TripAgent<E>, L> {
     this.guideSearch = guideSearch;
     this.live = live;
     this.liveIntervalMillis = liveIntervalMillis;
+    this.targetExists = targetExists;
+    this.existenceCheckEvery = Math.max(1L, EXISTENCE_CHECK_TICKS / Math.max(1L, periodTicks));
   }
 
   void start() {
@@ -114,7 +124,7 @@ public final class Trip<E, P extends TripAgent<E>, L> {
     if (stopped) {
       return;
     }
-    if (navigator.isComplete()) {
+    if (navigator.isComplete() || targetVanished()) {
       stop();
       onEnd.accept(this); // ask the manager to untrack us
       return;
@@ -126,6 +136,18 @@ public final class Trip<E, P extends TripAgent<E>, L> {
     if (guideSearch != null) {
       navigator.consumeGuideRequest().ifPresent(this::runGuideSearch);
     }
+  }
+
+  /**
+   * Whether the target has stopped existing, checked only every {@link #EXISTENCE_CHECK_TICKS} or
+   * so, since the check may look the target up.
+   */
+  private boolean targetVanished() {
+    if (targetExists == null || ++ticksSinceExistenceCheck < existenceCheckEvery) {
+      return false;
+    }
+    ticksSinceExistenceCheck = 0;
+    return !targetExists.getAsBoolean();
   }
 
   private void runGuideSearch(L target) {
@@ -187,7 +209,16 @@ public final class Trip<E, P extends TripAgent<E>, L> {
    * @return the destination label
    */
   public String destination() {
-    return destination;
+    return label.text();
+  }
+
+  /**
+   * Returns this trip's full label, including the destination address it was built from, if any.
+   *
+   * @return the label
+   */
+  public TripLabel label() {
+    return label;
   }
 
   /**

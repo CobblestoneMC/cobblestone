@@ -9,19 +9,23 @@ package org.cobblestonemc.paper.plugin;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.BooleanSupplier;
 import net.kyori.adventure.audience.Audience;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.World;
-import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
+import org.cobblestonemc.plugin.hologram.TrailLabels;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.navigator.AbstractTrailNavigator;
+import org.cobblestonemc.plugin.navigator.TrailBlock;
+import org.cobblestonemc.plugin.navigator.TrailSmoother;
 import org.cobblestonemc.plugin.navigator.Vec3;
 
 /**
@@ -49,8 +53,10 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
       List<Color> palette,
       double density,
       int recalcDistance,
-      Messages messages) {
-    super(bufferCells, density, recalcDistance, messages, player.locale());
+      Messages messages,
+      TrailLabels<Location> labels,
+      BooleanSupplier showLabel) {
+    super(bufferCells, density, recalcDistance, messages, player.locale(), labels, showLabel);
     this.player = player;
     this.particles = List.copyOf(particleTypes);
     this.highlightParticles = List.copyOf(highlightParticleTypes);
@@ -60,6 +66,11 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
       dusts.add(new Particle.DustOptions(color, DUST_SIZE));
     }
     setPath(path);
+  }
+
+  @Override
+  protected UUID playerId() {
+    return player.getUniqueId();
   }
 
   @Override
@@ -84,6 +95,11 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
     // Y is raised by 0.9 instead of 0.5 so it's in the center of the player's body-ish.
     return new Vec3(
         location.getBlockX() + 0.5, location.getBlockY() + 0.9, location.getBlockZ() + 0.5);
+  }
+
+  @Override
+  protected Location location(Vec3 point) {
+    return new Location(player.getWorld(), point.x(), point.y(), point.z());
   }
 
   @Override
@@ -131,12 +147,11 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
   }
 
   @Override
-  protected boolean solidAt(int blockX, int blockY, int blockZ) {
+  protected TrailSmoother.BlockProbe blockProbe() {
     World world = player.getWorld();
     if (world == null) {
-      return false;
+      return (x, y, z) -> TrailBlock.UNLOADED;
     }
-    Block block = world.getBlockAt(blockX, blockY, blockZ);
-    return Bukkit.isOwnedByCurrentRegion(block) && block.getType().isSolid();
+    return new PaperWorldProbe(world);
   }
 }

@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
+import org.cobblestonemc.minecraft.ChunkSource;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 
@@ -23,6 +24,7 @@ import org.cobblestonemc.minecraft.MinecraftWorld;
  */
 public final class WorldChunkColumns implements RegionGraph.ChunkColumns {
 
+  private final ChunkSource chunks;
   private final MinecraftWorld world;
   private final Cell destination;
   private final Map<Long, FutureOr<MinecraftChunk>> columns = new ConcurrentHashMap<>();
@@ -30,10 +32,13 @@ public final class WorldChunkColumns implements RegionGraph.ChunkColumns {
   /**
    * Creates a source over a world.
    *
+   * @param chunks the search\'s own chunk source, which the region layer reads through like
+   *     everything else in the search
    * @param world the world to read
    * @param destination where the solve is heading, the chunk provider's hint for how hard to try
    */
-  public WorldChunkColumns(MinecraftWorld world, Cell destination) {
+  public WorldChunkColumns(ChunkSource chunks, MinecraftWorld world, Cell destination) {
+    this.chunks = chunks;
     this.world = world;
     this.destination = destination;
   }
@@ -52,7 +57,7 @@ public final class WorldChunkColumns implements RegionGraph.ChunkColumns {
             chunkX * 16,
             Math.max(world.minY(), Math.min(world.maxY(), destination.y())),
             chunkZ * 16);
-    FutureOr<MinecraftChunk> chunk = world.chunkAt(anchor, destination);
+    FutureOr<MinecraftChunk> chunk = chunks.chunk(anchor, world, destination);
     // A read that fails is a column that cannot be known; left failed, it would park the search on
     // a future that is forever done and never usable.
     FutureOr<MinecraftChunk> settled =

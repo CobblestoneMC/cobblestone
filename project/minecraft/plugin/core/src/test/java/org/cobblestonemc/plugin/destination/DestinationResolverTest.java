@@ -9,20 +9,22 @@ package org.cobblestonemc.plugin.destination;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import net.kyori.adventure.text.Component;
-import org.cobblestonemc.api.Destination;
-import org.cobblestonemc.minecraft.api.WorldRegion;
-import org.cobblestonemc.plugin.api.MinecraftDestination;
-import org.cobblestonemc.plugin.api.PlatformDestinationTree;
+import org.cobblestonemc.plugin.api.DestinationLeaf;
+import org.cobblestonemc.plugin.api.DestinationOption;
+import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.destination.DestinationResolver.Ambiguous;
+import org.cobblestonemc.plugin.destination.DestinationResolver.InvalidOptions;
 import org.cobblestonemc.plugin.destination.DestinationResolver.NotFound;
 import org.cobblestonemc.plugin.destination.DestinationResolver.Resolution;
 import org.cobblestonemc.plugin.destination.DestinationResolver.Resolved;
@@ -31,14 +33,14 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Addressing (promotion, ambiguity, strict levels, case), permissions, laziness, and tab-completion
- * for the resolver. Tests use arbitrary world/vector types; the resolver never inspects them.
+ * for the resolver. Leaves build plain strings; the resolver never inspects what they build.
  */
 class DestinationResolverTest {
 
   private static final Predicate<String> ALL = permission -> true;
   private static final Predicate<List<String>> ANY = address -> true;
 
-  /** Counts how many destinations the walk actually built — the cost we care about bounding. */
+  /** Counts how many leaves were built — which the resolver itself must never do. */
   private int destinationsBuilt;
 
   /** Counts how many sub-tree nodes the walk actually built. */
@@ -65,12 +67,12 @@ class DestinationResolverTest {
             List.of("warp", "spawn"),
             List.of("mco", "spawn"),
             List.of("spawn"))) {
-      Resolution<String, Integer> resolution = resolve(roots, args);
+      Resolution<String> resolution = resolve(roots, args);
       assertInstanceOf(Resolved.class, resolution, args.toString());
       // Whichever form was typed, the canonical address comes back for messages and permissions.
       assertEquals(
           List.of("mco", "warp", "spawn"),
-          ((Resolved<String, Integer>) resolution).address(),
+          ((Resolved<String>) resolution).address(),
           args.toString());
     }
   }
@@ -107,12 +109,12 @@ class DestinationResolverTest {
   void ambiguousPromotionForcesFullerPath() {
     var roots = roots(node("location").leaf("home"), node("essentials").leaf("home"));
 
-    Resolution<String, Integer> ambiguous = resolve(roots, List.of("home"));
+    Resolution<String> ambiguous = resolve(roots, List.of("home"));
     assertInstanceOf(Ambiguous.class, ambiguous);
     // Alphabetical, not the order the roots happened to be registered in.
     assertEquals(
         List.of(List.of("essentials", "home"), List.of("location", "home")),
-        ((Ambiguous<String, Integer>) ambiguous).addresses());
+        ((Ambiguous<String>) ambiguous).addresses());
 
     // Naming the provider disambiguates.
     assertInstanceOf(Resolved.class, resolve(roots, List.of("essentials", "home")));
@@ -133,14 +135,13 @@ class DestinationResolverTest {
     // Towny's shape: "towny resident" is the town itself, "towny resident home" its spawn.
     var roots = roots(node("towny").leaf("resident").sub(node("resident").leaf("home")));
 
-    Resolution<String, Integer> town = resolve(roots, List.of("towny", "resident"));
+    Resolution<String> town = resolve(roots, List.of("towny", "resident"));
     assertInstanceOf(Resolved.class, town);
-    assertEquals(List.of("towny", "resident"), ((Resolved<String, Integer>) town).address());
+    assertEquals(List.of("towny", "resident"), ((Resolved<String>) town).address());
 
-    Resolution<String, Integer> spawn = resolve(roots, List.of("towny", "resident", "home"));
+    Resolution<String> spawn = resolve(roots, List.of("towny", "resident", "home"));
     assertInstanceOf(Resolved.class, spawn);
-    assertEquals(
-        List.of("towny", "resident", "home"), ((Resolved<String, Integer>) spawn).address());
+    assertEquals(List.of("towny", "resident", "home"), ((Resolved<String>) spawn).address());
   }
 
   @Test
@@ -178,10 +179,10 @@ class DestinationResolverTest {
     var roots =
         roots(node("location").leaf("home"), node("essentials").leaf("home", "essentials.home"));
 
-    Resolution<String, Integer> resolution =
+    Resolution<String> resolution =
         DestinationResolver.resolve(roots, List.of("home"), permission -> false, ANY);
     assertInstanceOf(Resolved.class, resolution);
-    assertEquals(List.of("location", "home"), ((Resolved<String, Integer>) resolution).address());
+    assertEquals(List.of("location", "home"), ((Resolved<String>) resolution).address());
     // And the completion offers it, since it is no longer ambiguous.
     assertEquals(
         List.of("home", "location"),
@@ -202,15 +203,28 @@ class DestinationResolverTest {
   }
 
   @Test
-  void resolutionBuildsOnlyTheDestinationsItMatches() {
+  void resolutionLeavesBuildingToTheCaller() {
     Tree warps = node("warp");
     for (int i = 0; i < 40; i++) {
       warps.leaf("warp-" + i);
     }
     var roots = roots(node("mco").sub(warps));
 
-    assertInstanceOf(Resolved.class, resolve(roots, List.of("warp-3")));
-    assertEquals(1, destinationsBuilt, "only the destination whose key matched should be built");
+    Resolved<?> resolved = assertInstanceOf(Resolved.class, resolve(roots, List.of("warp-3")));
+    assertEquals(0, destinationsBuilt, "resolving reads only what the leaves say about themselves");
+    assertEquals("warp-3", built(resolved));
+    assertEquals(1, destinationsBuilt);
+  }
+
+  @Test
+  void suggestingNeverBuildsALeaf() {
+    var roots =
+        roots(node("cobblestone").leaf("surface").sub(node("coordinates").template("block")));
+
+    suggest(roots, List.of());
+    suggest(roots, List.of("coordinates", ""));
+    suggest(roots, List.of("coordinates", "block", "1", ""));
+    assertEquals(0, destinationsBuilt);
   }
 
   // -----------------------------------------------------------------------------------------
@@ -354,26 +368,210 @@ class DestinationResolverTest {
   }
 
   // -----------------------------------------------------------------------------------------
+  // Options
+  // -----------------------------------------------------------------------------------------
+
+  private static final DestinationOption<Integer> X = DestinationOption.integer("x", () -> 7);
+  private static final DestinationOption<Integer> Y = DestinationOption.integer("y", () -> 64);
+  private static final DestinationOption<Integer> Z = DestinationOption.integer("z", () -> -3);
+  private static final DestinationOption<String> WORLD =
+      DestinationOption.optional(
+          "world",
+          partial -> List.of("nether", "overworld"),
+          token ->
+              List.of("nether", "overworld").contains(token)
+                  ? Optional.of(token)
+                  : Optional.empty());
+
+  @Test
+  void resolvesADestinationFollowedByItsOptions() {
+    var roots = roots(node("cobblestone").template("coordinates"));
+
+    Resolved<?> resolved =
+        assertInstanceOf(Resolved.class, resolve(roots, List.of("coordinates", "1", "2", "-3")));
+    assertEquals(List.of("cobblestone", "coordinates"), resolved.address());
+    assertEquals("1 2 -3", built(resolved));
+
+    resolved =
+        assertInstanceOf(
+            Resolved.class,
+            resolve(roots, List.of("cobblestone", "coordinates", "1", "2", "3", "nether")));
+    assertEquals("1 2 3 nether", built(resolved));
+  }
+
+  @Test
+  void aStrictLevelKeepsATemplateApartFromALeafOfTheSameName() {
+    // "surface" is the nearest open sky; "coordinates surface <x> <z>" is one column's.
+    var roots =
+        roots(
+            node("cobblestone")
+                .leaf("surface")
+                .sub(node("coordinates").strict().template("surface").template("block")));
+
+    Resolved<?> nearest = assertInstanceOf(Resolved.class, resolve(roots, List.of("surface")));
+    assertEquals(List.of("cobblestone", "surface"), nearest.address());
+
+    Resolved<?> column =
+        assertInstanceOf(
+            Resolved.class, resolve(roots, List.of("coordinates", "surface", "1", "2", "3")));
+    assertEquals(List.of("cobblestone", "coordinates", "surface"), column.address());
+
+    assertInstanceOf(NotFound.class, resolve(roots, List.of("block", "1", "2", "3")));
+    assertInstanceOf(
+        Resolved.class, resolve(roots, List.of("coordinates", "block", "1", "2", "3")));
+  }
+
+  @Test
+  void reportsOptionsThatDoNotFit() {
+    var roots = roots(node("cobblestone").template("coordinates"));
+
+    for (List<String> args :
+        List.of(
+            List.of("coordinates"),
+            List.of("coordinates", "1", "2"),
+            List.of("coordinates", "1", "2", "3", "nether", "extra"))) {
+      InvalidOptions<?> invalid =
+          assertInstanceOf(InvalidOptions.class, resolve(roots, args), args.toString());
+      assertNull(invalid.invalidToken(), args.toString());
+      assertEquals(
+          "cobblestone coordinates <x> <y> <z> [world]",
+          DestinationResolver.usage(invalid.address(), invalid.options()));
+    }
+
+    InvalidOptions<?> invalid =
+        assertInstanceOf(
+            InvalidOptions.class, resolve(roots, List.of("coordinates", "1", "two", "3")));
+    assertEquals("two", invalid.invalidToken());
+    invalid =
+        assertInstanceOf(
+            InvalidOptions.class, resolve(roots, List.of("coordinates", "1", "2", "3", "moon")));
+    assertEquals("moon", invalid.invalidToken());
+  }
+
+  @Test
+  void optionsAreNeverPromotedPastTheirKey() {
+    // A destination named "1" next to a template: a lone "1" is the destination, and the template
+    // is only reached through its own key.
+    var roots = roots(node("cobblestone").template("coordinates").leaf("1"));
+
+    Resolved<?> resolved = assertInstanceOf(Resolved.class, resolve(roots, List.of("1")));
+    assertEquals(List.of("cobblestone", "1"), resolved.address());
+    assertInstanceOf(NotFound.class, resolve(roots, List.of("1", "2", "3")));
+  }
+
+  @Test
+  void aDestinationWithoutOptionsMustBeTheLastToken() {
+    var roots = roots(node("mco").leaf("spawn"));
+
+    assertInstanceOf(NotFound.class, resolve(roots, List.of("spawn", "1")));
+  }
+
+  @Test
+  void aMatchElsewhereWinsOverOptionsThatDoNotFit() {
+    // "coordinates home" does not fit the template, but names a real destination elsewhere.
+    var roots =
+        roots(
+            node("cobblestone").template("coordinates"),
+            node("other").sub(node("coordinates").leaf("home")));
+
+    Resolved<?> resolved =
+        assertInstanceOf(Resolved.class, resolve(roots, List.of("coordinates", "home")));
+    assertEquals(List.of("other", "coordinates", "home"), resolved.address());
+  }
+
+  @Test
+  void suggestsTheOptionBeingTyped() {
+    var roots = roots(node("cobblestone").template("coordinates"));
+
+    assertTrue(suggest(roots, List.of()).contains("coordinates"));
+    assertEquals(List.of("7"), suggest(roots, List.of("coordinates", "")));
+    assertEquals(List.of("64"), suggest(roots, List.of("cobblestone", "coordinates", "1", "")));
+    assertEquals(List.of("-3"), suggest(roots, List.of("coordinates", "1", "2", "-")));
+    assertEquals(
+        List.of("nether", "overworld"), suggest(roots, List.of("coordinates", "1", "2", "3", "")));
+    assertEquals(List.of("nether"), suggest(roots, List.of("coordinates", "1", "2", "3", "n")));
+    // Nothing after the last option, and nothing after one that does not parse.
+    assertEquals(List.of(), suggest(roots, List.of("coordinates", "1", "2", "3", "nether", "")));
+    assertEquals(List.of(), suggest(roots, List.of("coordinates", "one", "")));
+  }
+
+  @Test
+  void suggestsATemplateWhenItsKeyIsTypedInFull() {
+    var roots = roots(node("cobblestone").template("coordinates"));
+
+    assertEquals(List.of("coordinates"), suggest(roots, List.of("coord")));
+  }
+
+  @Test
+  void anAliasReachesItsDestinationUnderItsOwnKey() {
+    var roots = roots(node("cobblestone").leaf("mount").alias("horse", "mount"));
+
+    for (List<String> args :
+        List.of(List.of("horse"), List.of("HORSE"), List.of("cobblestone", "horse"))) {
+      Resolved<?> resolved = assertInstanceOf(Resolved.class, resolve(roots, args));
+      assertEquals(List.of("cobblestone", "mount"), resolved.address(), args.toString());
+    }
+    // The permission is the destination's own, whichever name was typed.
+    assertInstanceOf(
+        NotFound.class,
+        DestinationResolver.resolve(
+            roots,
+            List.of("horse"),
+            ALL,
+            address -> !address.equals(List.of("cobblestone", "mount"))));
+  }
+
+  @Test
+  void anAliasIsNotSuggested() {
+    var roots = roots(node("cobblestone").leaf("mount").alias("horse", "mount"));
+
+    assertEquals(List.of(), suggest(roots, List.of("hor")));
+    assertEquals(List.of("mount"), suggest(roots, List.of("cobblestone", "")));
+  }
+
+  @Test
+  void anAliasTakesItsDestinationsOptions() {
+    var roots = roots(node("cobblestone").template("coordinates").alias("xyz", "coordinates"));
+
+    Resolved<?> resolved =
+        assertInstanceOf(Resolved.class, resolve(roots, List.of("xyz", "1", "2", "3")));
+    assertEquals(List.of("cobblestone", "coordinates"), resolved.address());
+    assertEquals(List.of("64"), suggest(roots, List.of("xyz", "1", "")));
+  }
+
+  @Test
+  void anAliasMustNameALeafAndNotShadowAKey() {
+    DestinationNode.Builder<String> builder = DestinationNode.<String>builder().leaf("mount", null);
+    assertThrows(IllegalArgumentException.class, () -> builder.alias("horse", "pet"));
+    assertThrows(IllegalArgumentException.class, () -> builder.alias("mount", "mount"));
+  }
+
+  // -----------------------------------------------------------------------------------------
   // Fixtures
   // -----------------------------------------------------------------------------------------
 
-  private static Resolution<String, Integer> resolve(
-      Map<String, PlatformDestinationTree<String, Integer>> roots, List<String> args) {
+  private static Resolution<String> resolve(
+      Map<String, DestinationNode<String>> roots, List<String> args) {
     return DestinationResolver.resolve(roots, args, ALL, ANY);
   }
 
   private static List<String> suggest(
-      Map<String, PlatformDestinationTree<String, Integer>> roots, List<String> args) {
+      Map<String, DestinationNode<String>> roots, List<String> args) {
     return DestinationResolver.suggest(roots, args, ALL, ANY);
   }
 
-  private static Map<String, PlatformDestinationTree<String, Integer>> roots(Tree... trees) {
+  private static Map<String, DestinationNode<String>> roots(Tree... trees) {
     // Sorted, as the command builds it: root order must not depend on registration order.
-    Map<String, PlatformDestinationTree<String, Integer>> out = new TreeMap<>();
+    Map<String, DestinationNode<String>> out = new TreeMap<>();
     for (Tree tree : trees) {
       out.put(tree.key, tree.build());
     }
     return out;
+  }
+
+  private static Object built(Resolved<?> resolved) {
+    return assertInstanceOf(Validity.Valid.class, resolved.leaf().build(resolved.values()))
+        .destination();
   }
 
   private Tree node(String key) {
@@ -385,10 +583,10 @@ class DestinationResolverTest {
 
     private final String key;
     private boolean strict;
-    private final Map<String, Supplier<PlatformDestinationTree<String, Integer>>> subs =
+    private final Map<String, Supplier<? extends DestinationNode<String>>> subs =
         new LinkedHashMap<>();
-    private final Map<String, Supplier<MinecraftDestination<String, Integer>>> leaves =
-        new LinkedHashMap<>();
+    private final Map<String, DestinationLeaf<String>> leaves = new LinkedHashMap<>();
+    private final Map<String, String> aliases = new LinkedHashMap<>();
 
     private Tree(String key) {
       this.key = key;
@@ -402,12 +600,37 @@ class DestinationResolverTest {
     Tree leaf(String leafKey, String... permissions) {
       leaves.put(
           leafKey,
-          () -> {
-            destinationsBuilt++;
-            Destination<WorldRegion<String, Integer>> destination = List::of;
-            return new SimpleMinecraftDestination<>(
-                destination, Component.text(leafKey), List.of(permissions));
-          });
+          new DestinationLeaf.Simple<>(
+              List.of(permissions),
+              List.of(),
+              values -> {
+                destinationsBuilt++;
+                return Validity.valid(leafKey);
+              }));
+      return this;
+    }
+
+    /** A leaf taking {@code <x> <y> <z> [world]}, which builds into the values it was given. */
+    Tree template(String leafKey) {
+      leaves.put(
+          leafKey,
+          DestinationLeaf.withOptions(
+              List.of(X, Y, Z, WORLD),
+              values -> {
+                destinationsBuilt++;
+                return Validity.valid(
+                    values.get(X)
+                        + " "
+                        + values.get(Y)
+                        + " "
+                        + values.get(Z)
+                        + values.find(WORLD).map(world -> " " + world).orElse(""));
+              }));
+      return this;
+    }
+
+    Tree alias(String alias, String leafKey) {
+      aliases.put(alias, leafKey);
       return this;
     }
 
@@ -421,8 +644,8 @@ class DestinationResolverTest {
       return this;
     }
 
-    PlatformDestinationTree<String, Integer> build() {
-      return new SimplePlatformDestinationTree<>(strict, subs, leaves);
+    DestinationNode<String> build() {
+      return new DestinationNode.Simple<>(strict, subs, leaves, aliases);
     }
   }
 }

@@ -91,7 +91,7 @@ MinecraftSearchSettings settings = new MinecraftSearchSettings(
     SearchSettings.builder()
         .maxCellsVisited(50_000)      // cheaper than the server default
         .maxWallClockMillis(5_000L)
-        .heuristicWeight(3.0)         // faster than the default, less optimal
+        .heuristicWeight(2.0)         // faster, slightly suboptimal
         .build(),
     Set.of(MinecraftStepType.MINE),   // don't route through digging
     Set.of(),                         // excluded world keys

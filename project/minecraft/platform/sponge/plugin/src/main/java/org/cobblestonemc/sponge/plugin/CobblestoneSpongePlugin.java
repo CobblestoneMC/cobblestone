@@ -23,6 +23,8 @@ import org.cobblestonemc.plugin.config.ConfigManager;
 import org.cobblestonemc.plugin.data.DataStore;
 import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.DataStores;
+import org.cobblestonemc.plugin.hologram.TrailLabelManager;
+import org.cobblestonemc.plugin.hud.TripHud;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchGate;
 import org.cobblestonemc.plugin.search.SearchRegistry;
@@ -30,6 +32,7 @@ import org.cobblestonemc.plugin.trip.TripManager;
 import org.cobblestonemc.sponge.AnvilOfflineChunkSource;
 import org.cobblestonemc.sponge.SpongeNavigationServiceImpl;
 import org.cobblestonemc.sponge.api.CobblestoneCoreApi;
+import org.cobblestonemc.sponge.hologram.SpongeHolograms;
 import org.cobblestonemc.sponge.plugin.api.CobblestoneSpongeApi;
 import org.cobblestonemc.sponge.plugin.api.TrailNavigatorSettings;
 import org.spongepowered.api.Server;
@@ -40,6 +43,7 @@ import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.lifecycle.ConstructPluginEvent;
 import org.spongepowered.api.event.lifecycle.RegisterCommandEvent;
+import org.spongepowered.api.event.lifecycle.RegisterDataEvent;
 import org.spongepowered.api.event.lifecycle.StartedEngineEvent;
 import org.spongepowered.api.event.lifecycle.StoppingEngineEvent;
 import org.spongepowered.api.event.network.ServerSideConnectionEvent;
@@ -86,11 +90,15 @@ public final class CobblestoneSpongePlugin {
   private Messages messages;
   private SpongeIntegrationRegistry integrationRegistry;
   private TripManager<Entity, SpongeTripAgent, ServerLocation> tripManager;
+  private TripHud<Entity, SpongeTripAgent, ServerLocation> tripHud;
+  private SpongeHolograms holograms;
   private SpongeTripServiceImpl tripService;
   private SearchRegistry<ServerLocation> searchRegistry;
   private SearchGate searchGate;
   private Supplier<SearchSettings> searchSettings;
   private SpongeMetrics metrics;
+  private SpongePetListener petListener;
+  private SpongeMountListener mountListener;
 
   @Inject
   CobblestoneSpongePlugin(
@@ -107,6 +115,9 @@ public final class CobblestoneSpongePlugin {
   @Listener
   public void onConstructPlugin(ConstructPluginEvent event) {
     this.cobblestoneLogger = new Log4JCobblestoneLogger(logger);
+    // Created first: its data key must exist by the time RegisterDataEvent fires, even if the rest
+    // of startup fails below.
+    this.petListener = new SpongePetListener(container);
 
     Path configFile = configDir.resolve("config.yml");
     this.config = new ConfigManager(configFile, cobblestoneLogger);
@@ -180,22 +191,52 @@ public final class CobblestoneSpongePlugin {
 
     // The plugin-layer: the trip service (search-then-guide) and the integration registry,
     // published
-    // through CobblestonePluginAPI. Locations and the trail navigator are registered like any
-    // integration.
+    // through CobblestonePluginAPI. Cobblestone's destinations and trail navigator are registered
+    // under its own id, like an integration's.
     Locale defaultLocale = Locale.forLanguageTag(config.get(keys.localeDefault));
     this.messages =
         new Messages(defaultLocale, config.get(keys.messagesShowPrefix), cobblestoneLogger);
     this.tripManager =
         new TripManager<>(navigationService.scheduler(), config.get(keys.tripsMaxActivePerPlayer));
-    this.integrationRegistry = new SpongeIntegrationRegistry();
+    this.integrationRegistry = new SpongeIntegrationRegistry(navigationService.regions());
+    // Each trail floats its trip's name over itself while the player stands still; hitting it
+    // cancels the trip. SpongeAPI can't show an entity to one player only, so everyone nearby sees
+    // these labels.
+    this.holograms = new SpongeHolograms();
+    Sponge.eventManager().registerListeners(container, holograms);
+    TrailLabelManager<Entity, SpongeTripAgent, ServerLocation> trailLabels =
+        new TrailLabelManager<>(
+            tripManager,
+            navigationService.scheduler(),
+            messages,
+            new SpongeHologramPlatform(holograms));
     integrationRegistry.registerNavigator(
         container,
         TrailNavigatorSettings.NAVIGATOR_ID,
-        new SpongeTrailNavigatorFactory(config, keys, messages));
-    integrationRegistry.registerDestinations(
+        new SpongeTrailNavigatorFactory(config, keys, messages, trailLabels));
+    this.tripHud =
+        new TripHud<>(
+            tripManager,
+            navigationService.scheduler(),
+            messages,
+            dataStore.playerPreferences(),
+            () -> config.get(keys.tripsHud),
+            agent -> new SpongeHudDisplay(agent.player()),
+            cobblestoneLogger);
+    tripManager.onChange(tripHud::refresh);
+    // Cobblestone's own destinations sit under its id like an integration's, but are written in its
+    // own terms rather than adapted from the integration API.
+    integrationRegistry.registerProvider(
         container,
-        new CobblestoneDestinationService(
-            dataStore.locations(), dataStore.deaths(), () -> config.get(keys.deathsTrack)));
+        new BuiltInDestinations(
+            dataStore.locations(),
+            dataStore.deaths(),
+            dataStore.mounts(),
+            petListener,
+            navigationService.regions(),
+            navigationService::mayBeGenerated,
+            () -> config.get(keys.deathsTrack),
+            messages));
     // Each player's last death is recorded so they can navigate back to it.
     Sponge.eventManager()
         .registerListeners(
@@ -204,6 +245,10 @@ public final class CobblestoneSpongePlugin {
                 dataStore.deaths(),
                 navigationService.scheduler(),
                 () -> config.get(keys.deathsTrack)));
+    // So are their last mount, and when each of their pets was tamed (to number same-named pets).
+    mountListener = new SpongeMountListener(dataStore.mounts(), navigationService.scheduler());
+    Sponge.eventManager().registerListeners(container, mountListener);
+    Sponge.eventManager().registerListeners(container, petListener);
 
     // Keep the chunk cache honest: a block changing evicts the snapshot it belongs to.
 
@@ -269,6 +314,14 @@ public final class CobblestoneSpongePlugin {
     }
   }
 
+  /** Registers the custom data Cobblestone keeps on entities (when each pet was tamed). */
+  @Listener
+  public void onRegisterData(RegisterDataEvent event) {
+    if (petListener != null) {
+      petListener.onRegisterData(event);
+    }
+  }
+
   /** Registers the {@code /cobblestone} and {@code /navigate} commands. */
   @Listener
   public void onRegisterCommands(RegisterCommandEvent<Command.Parameterized> event) {
@@ -285,6 +338,7 @@ public final class CobblestoneSpongePlugin {
             dataStore.locations(),
             dataStore.portalTransitions(),
             tripManager,
+            tripHud,
             searchRegistry),
         "cobblestone",
         "stone");
@@ -303,7 +357,15 @@ public final class CobblestoneSpongePlugin {
         "nav");
   }
 
-  /** Stops a departing player's trips and in-flight searches. */
+  /** Loads a joining player's state. */
+  @Listener
+  public void onJoin(ServerSideConnectionEvent.Join event) {
+    if (tripHud != null) {
+      tripHud.load(event.player().uniqueId());
+    }
+  }
+
+  /** Tears down a departing player's state. */
   @Listener
   public void onDisconnect(ServerSideConnectionEvent.Disconnect event) {
     if (tripManager == null) {
@@ -312,7 +374,7 @@ public final class CobblestoneSpongePlugin {
     event
         .profile()
         .map(GameProfile::uuid)
-        .ifPresent(uuid -> LogoutCleanup.onLogout(uuid, tripManager, searchRegistry));
+        .ifPresent(uuid -> LogoutCleanup.onLogout(uuid, tripManager, searchRegistry, tripHud));
   }
 
   /** Tears down: stop the search workers, withdraw the core services, close the data store. */
@@ -321,8 +383,14 @@ public final class CobblestoneSpongePlugin {
     if (metrics != null) {
       metrics.shutdown();
     }
+    if (tripHud != null) {
+      tripHud.closeAll();
+    }
     if (tripManager != null) {
-      tripManager.stopEverything();
+      tripManager.stopEverything(); // also clears the trails' labels
+    }
+    if (holograms != null) {
+      holograms.removeAll();
     }
     if (navigationService != null) {
       navigationService.shutdown();
@@ -336,6 +404,13 @@ public final class CobblestoneSpongePlugin {
     }
     CobblestoneSpongeApi.uninstall();
     CobblestoneCoreApi.uninstall();
+    if (mountListener != null) {
+      try {
+        mountListener.saveLoaded();
+      } catch (RuntimeException e) {
+        logger.warn("Could not save where loaded mounts are", e);
+      }
+    }
     if (dataStore != null) {
       dataStore.close();
     }

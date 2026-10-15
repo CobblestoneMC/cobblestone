@@ -43,9 +43,9 @@ public final class TraitTable {
    * The header, carrying a version that is bumped whenever the trait bits change.
    *
    * <p>A new bit changes what every existing row means without changing how any of them parse, so a
-   * stale table reads cleanly and answers wrongly -- soul sand that does not know it is soul sand,
-   * and a coarse layer that prices a whole biome as ordinary ground. Refusing to read an old table
-   * is the only way that failure gets noticed.
+   * stale table reads cleanly and answers wrongly -- water that does not know a boat can ride it,
+   * and a search that never boards one. Refusing to read an old table is the only way that failure
+   * gets noticed.
    *
    * <p>Held at 1 while nothing has shipped: a capture is machine-local and regenerable, so a change
    * to the bits is answered by deleting the corpus and re-capturing rather than by growing a

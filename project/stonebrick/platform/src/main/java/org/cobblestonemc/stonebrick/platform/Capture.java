@@ -28,7 +28,7 @@ import org.jetbrains.annotations.Nullable;
  * deliberate. Holding the bytes takes the real disk out of the measurement loop, so the only IO
  * cost in a benchmark is the one the {@code IoProfile} injects — which is the point of having a
  * capture format at all. Decoding per fetch rather than caching decoded chunks mirrors what a live
- * server does, where every offline chunk read pays its own decode, and leaves the per-solve chunk
+ * server does, where every offline chunk read pays its own decode, and leaves the per-search chunk
  * cache to do the caching it is there to do.
  *
  * <p>A corpus capture is a few tens of megabytes of raw columns, so holding one is unremarkable;

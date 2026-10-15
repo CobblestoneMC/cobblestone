@@ -3,7 +3,7 @@
 #
 # Capabilities rather than mode lists, deliberately. Production derives its modes from what the
 # player is and carries (MinecraftModes#providerFor); naming the modes here directly would bypass
-# that derivation and hide a bug in it. The same capabilities also pick the coarse mediums.
+# that derivation and hide a bug in it.
 #
 # Players can mine unless a loadout says otherwise: nearly every real player carries a pickaxe. The
 # bench runs without a break checker, so an unconstrained MineMode will tunnel through anything.

@@ -24,27 +24,25 @@ import org.cobblestonemc.api.SearchSettings;
 public final class CobblestoneApiImpl implements CobblestoneApi {
 
   @Override
-  public <A extends Agent, T, D extends Domain> SearchHandle<Position<D>, T> navigate(
+  public <T, D extends Domain> SearchHandle<Position<D>, T> navigate(
       CobblestoneLogger logger,
       Scheduler scheduler,
-      A agent,
       Position<D> origin,
       Destination<DomainRegion<D>> destination,
-      ModesProvider<A, T, D> modes,
+      MovementBehavior<T, D> behavior,
       List<? extends Transition<T, D>> transitions,
-      List<? extends Restriction<A, D>> restrictions,
+      List<? extends Restriction<D>> restrictions,
       HeuristicStrategy heuristic,
       SearchSettings settings,
       SearchObserver observer) {
-    SearchImpl<A, T, D> search =
+    SearchImpl<T, D> search =
         new SearchImpl<>(
             logger,
             scheduler,
             heuristic,
-            agent,
             origin,
             destination,
-            modes,
+            behavior,
             transitions,
             restrictions,
             settings,

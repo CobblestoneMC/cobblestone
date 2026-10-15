@@ -10,9 +10,8 @@ package org.cobblestonemc.api;
 /**
  * Immutable, tunable limits and knobs for a single search.
  *
- * <p>Only the numeric knobs live here for now; the pluggable heuristic strategy is selected in the
- * {@code core} module (Phase 2), so it is not part of this API surface yet. Build instances with
- * {@link #builder()} or take {@link #defaults()}.
+ * <p>The heuristic is named here by {@link Heuristic}; the platform turns that name into a
+ * strategy. Build instances with {@link #builder()} or take {@link #defaults()}.
  */
 public final class SearchSettings {
 
@@ -172,7 +171,13 @@ public final class SearchSettings {
     return heuristic;
   }
 
-  /** Which estimate the fine search prices its remaining journey with. */
+  /**
+   * Which estimate the fine search prices its remaining journey with.
+   *
+   * <p>One value today. It is an enum so that a new estimate is a new constant here and a new
+   * branch where the platform builds its heuristic, and every platform and the benchmark pick it up
+   * from there.
+   */
   public enum Heuristic {
     /**
      * Remaining distance times the per-block cost of the last few steps.

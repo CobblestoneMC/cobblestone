@@ -17,8 +17,8 @@ import org.cobblestonemc.Cell;
 import org.cobblestonemc.CobblestoneApi;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.DomainRegion;
+import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.Heuristics;
-import org.cobblestonemc.ModesProvider;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.SingleDestination;
@@ -27,12 +27,14 @@ import org.cobblestonemc.api.NavigationResult;
 import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
+import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
-import org.cobblestonemc.minecraft.CobblestonePlayer;
+import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
-import org.cobblestonemc.minecraft.modes.MinecraftModes;
+import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 import org.cobblestonemc.stonebrick.format.CorpusLayout;
 import org.cobblestonemc.stonebrick.platform.Capture;
 import org.cobblestonemc.stonebrick.platform.DeterministicScheduler;
@@ -111,7 +113,7 @@ public final class ScenarioRunner {
 
       Counting counting = new Counting(observer);
       SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> handle =
-          start(scenario, loadout, world, player, scheduler, counting, platform);
+          start(scenario, loadout, platform, world, player, scheduler, counting);
 
       long startedAt = System.nanoTime();
       boolean settled = scheduler.drainUntil(() -> handle.future().isDone(), MAX_TASKS);
@@ -173,20 +175,20 @@ public final class ScenarioRunner {
   private SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> start(
       Scenario scenario,
       Loadout loadout,
+      StonebrickPlatformApi platform,
       MinecraftWorld world,
       StonebrickPlayer player,
       DeterministicScheduler scheduler,
-      SearchObserver observer,
-      StonebrickPlatformApi platform) {
+      SearchObserver observer) {
     // The exclusions come from the loadout, not from a constant. They used to be empty here, which
     // with a null break checker meant every scenario ran as a player free to tunnel through
     // anything -- one point in the space, and not the representative one.
     Set<MinecraftStepType> excluded = loadout.excludedModes();
-    ModesProvider<CobblestonePlayer, MinecraftStepPayload, MinecraftWorld> modes =
-        MinecraftModes.providerFor(player, excluded, null, 0);
-    @SuppressWarnings("unchecked")
-    ModesProvider<StonebrickPlayer, MinecraftStepPayload, MinecraftWorld> cast =
-        (ModesProvider<StonebrickPlayer, MinecraftStepPayload, MinecraftWorld>) (Object) modes;
+    // A chunk cache of the search's own, as in production: how it hits and misses is part of what
+    // the benchmark measures.
+    ChunkProvider chunks = new ChunkProvider(platform, platform.settings());
+    MinecraftMovementBehavior behavior =
+        MinecraftMovementBehavior.forPlayer(chunks, player, excluded);
 
     Cell goal = scenario.destination();
     int radius = scenario.destinationRadius();
@@ -198,22 +200,32 @@ public final class ScenarioRunner {
                 new Cell(goal.x() - radius, goal.y() - radius, goal.z() - radius),
                 new Cell(goal.x() + radius, goal.y() + radius, goal.z() + radius));
 
+    SearchSettings.Builder builder =
+        SearchSettings.builder()
+            .heuristicWeight(scenario.settings().heuristicWeight())
+            .maxCellsVisited(scenario.settings().maxCellsVisited())
+            .maxWallClockMillis(scenario.settings().maxWallClockMillis());
+    if (scenario.heuristic().production() != null) {
+      builder.heuristic(scenario.heuristic().production());
+    }
+    SearchSettings settings = builder.build();
     return CobblestoneApi.load()
         .navigate(
             logger,
             scheduler,
-            player,
             new Position<>(scenario.origin(), world),
             new SingleDestination<>(target),
-            cast,
+            behavior,
             List.of(),
             List.of(),
-            heuristicFor(scenario, loadout, player, excluded, platform),
-            SearchSettings.builder()
-                .heuristicWeight(scenario.settings().heuristicWeight())
-                .maxCellsVisited(scenario.settings().maxCellsVisited())
-                .maxWallClockMillis(scenario.settings().maxWallClockMillis())
-                .build(),
+            heuristicFor(
+                scenario,
+                behavior,
+                chunks,
+                player,
+                new MinecraftSearchSettings(settings, excluded, Set.of(), Set.of()),
+                platform),
+            settings,
             observer);
   }
 
@@ -339,61 +351,64 @@ public final class ScenarioRunner {
   /**
    * Builds the estimate the scenario asked for.
    *
-   * <p>Chosen per scenario rather than globally so heuristics can be compared over identical
-   * terrain, with identical settings, in one run of the suite — which is the only way a difference
-   * in expanded nodes means the heuristic rather than the world.
+   * <p>Chosen per scenario rather than globally so that two estimates can be compared over
+   * identical terrain, with identical settings, in one run of the suite — which is the only way a
+   * difference in expanded nodes means the heuristic rather than the world.
+   *
+   * <p>Every production estimate but REGIONS is built by {@link MinecraftHeuristics}, the same
+   * factory Paper and Sponge use. REGIONS is built here with the factory's parameters, but over the
+   * bench's own column source and store, so that a run can report what the region layer read, built
+   * and kept.
    */
-  private org.cobblestonemc.HeuristicStrategy heuristicFor(
+  private HeuristicStrategy heuristicFor(
       Scenario scenario,
-      Loadout loadout,
+      MinecraftMovementBehavior behavior,
+      ChunkProvider chunks,
       StonebrickPlayer player,
-      Set<MinecraftStepType> excluded,
+      MinecraftSearchSettings settings,
       StonebrickPlatformApi platform) {
     // Cleared first, so a run without the region layer does not report the last one's reads.
     lastRegionColumns = null;
     lastRegionHeuristic = null;
     lastRegionStore = null;
-    return switch (scenario.heuristic()) {
-      case ZERO -> Heuristics.zero();
-      case RUNNING_AVERAGE ->
-          Heuristics.runningAverage(MinecraftModes.cheapestCostPerBlock(player, excluded));
-      case REGIONS -> {
-        CaptureChunkColumns columns = new CaptureChunkColumns(platform, scenario.world());
-        lastRegionColumns = columns;
-        // One store for the run, on this thread: a cold start, or a restart over a cache on disk.
-        MinecraftWorld world = platform.world(scenario.world());
-        org.cobblestonemc.minecraft.lod.RegionColumnBuilder shape =
-            new org.cobblestonemc.minecraft.lod.RegionColumnBuilder(
-                world.minY(), world.maxY(), REGION_DETOUR);
-        lastRegionStore =
-            new org.cobblestonemc.minecraft.lod.RegionStore(
-                world.minY(),
-                world.maxY(),
-                REGION_DETOUR,
-                Long.MAX_VALUE,
-                regionCache == null
-                    ? null
-                    : new org.cobblestonemc.minecraft.lod.RegionFiles(
-                        regionCache.resolve(
-                            org.cobblestonemc.minecraft.lod.RegionFiles.directoryName(
-                                scenario.capture() + "-" + scenario.world())),
-                        shape.minY(),
-                        shape.sections(),
-                        REGION_DETOUR),
-                Runnable::run,
-                Runnable::run);
-        org.cobblestonemc.minecraft.lod.RegionStore store = lastRegionStore;
-        lastRegionHeuristic =
-            new org.cobblestonemc.minecraft.lod.RegionHeuristic(
-                region -> columns,
-                region -> store,
-                org.cobblestonemc.minecraft.lod.RegionCost.forPlayer(player, excluded),
-                REGION_DETOUR,
-                MinecraftModes.cheapestCostPerBlock(player, excluded),
-                true);
-        yield lastRegionHeuristic;
-      }
-    };
+    if (scenario.heuristic().production() == null) {
+      return Heuristics.zero();
+    }
+    if (scenario.heuristic() != Scenario.Heuristic.REGIONS) {
+      return MinecraftHeuristics.forPlayer(behavior, chunks, player, scenario.origin(), settings);
+    }
+    CaptureChunkColumns columns = new CaptureChunkColumns(platform, scenario.world());
+    lastRegionColumns = columns;
+    // One store for the run, on this thread: a cold start, or a restart over a cache on disk.
+    MinecraftWorld world = platform.world(scenario.world());
+    lastRegionStore =
+        new org.cobblestonemc.minecraft.lod.RegionStore(
+            world.minY(),
+            world.maxY(),
+            REGION_DETOUR,
+            Long.MAX_VALUE,
+            regionCache == null
+                ? null
+                : new org.cobblestonemc.minecraft.lod.RegionFiles(
+                    regionCache.resolve(
+                        org.cobblestonemc.minecraft.lod.RegionFiles.directoryName(
+                            scenario.capture() + "-" + scenario.world())),
+                    org.cobblestonemc.minecraft.lod.RegionColumnBuilder.columnMinY(world.minY()),
+                    org.cobblestonemc.minecraft.lod.RegionColumnBuilder.sections(
+                        world.minY(), world.maxY()),
+                    REGION_DETOUR),
+            Runnable::run,
+            Runnable::run);
+    org.cobblestonemc.minecraft.lod.RegionStore store = lastRegionStore;
+    lastRegionHeuristic =
+        new org.cobblestonemc.minecraft.lod.RegionHeuristic(
+            region -> columns,
+            region -> store,
+            org.cobblestonemc.minecraft.lod.RegionCost.forPlayer(player, settings.excludedModes()),
+            REGION_DETOUR,
+            behavior.cheapestCostPerBlock(),
+            true);
+    return lastRegionHeuristic;
   }
 
   /**

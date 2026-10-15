@@ -17,6 +17,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
@@ -36,11 +38,17 @@ class TripManagerTest {
     TestTripAgent player = new TestTripAgent(UUID.randomUUID());
 
     assertTrue(
-        manager.start(player, new FakeNavigator(), "dest", null, null, false, 0L).isPresent());
+        manager
+            .start(player, new FakeNavigator(), TripLabel.of("dest"), null, null, false, 0L)
+            .isPresent());
     assertTrue(
-        manager.start(player, new FakeNavigator(), "dest", null, null, false, 0L).isPresent());
+        manager
+            .start(player, new FakeNavigator(), TripLabel.of("dest"), null, null, false, 0L)
+            .isPresent());
     assertTrue(
-        manager.start(player, new FakeNavigator(), "dest", null, null, false, 0L).isEmpty(),
+        manager
+            .start(player, new FakeNavigator(), TripLabel.of("dest"), null, null, false, 0L)
+            .isEmpty(),
         "over limit");
     assertEquals(2, manager.trips(player.uuid()).size());
   }
@@ -53,7 +61,7 @@ class TripManagerTest {
     FakeNavigator navigator = new FakeNavigator();
     navigator.completeAfter = 2;
 
-    manager.start(player, navigator, "dest", null, null, false, 0L);
+    manager.start(player, navigator, TripLabel.of("dest"), null, null, false, 0L);
     assertTrue(navigator.started);
 
     scheduler.tickAll(); // 1st tick: not complete → tick()
@@ -78,7 +86,7 @@ class TripManagerTest {
     FakeNavigator navigator = new FakeNavigator();
     FakeLiveSearch live = new FakeLiveSearch();
 
-    manager.start(player, navigator, "dest", live, null, true, 100L);
+    manager.start(player, navigator, TripLabel.of("dest"), live, null, true, 100L);
     assertEquals(1, scheduler.delayedCount(), "first re-search scheduled");
 
     scheduler.runDelayedOnce(); // re-search → search completes → hot-swap → reschedule
@@ -99,9 +107,13 @@ class TripManagerTest {
     TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 3);
     TestTripAgent player = new TestTripAgent(UUID.randomUUID());
     Trip<Object, TestTripAgent, Object> first =
-        manager.start(player, new FakeNavigator(), "home", null, null, false, 0L).orElseThrow();
+        manager
+            .start(player, new FakeNavigator(), TripLabel.of("home"), null, null, false, 0L)
+            .orElseThrow();
     Trip<Object, TestTripAgent, Object> second =
-        manager.start(player, new FakeNavigator(), "caves", null, null, false, 0L).orElseThrow();
+        manager
+            .start(player, new FakeNavigator(), TripLabel.of("caves"), null, null, false, 0L)
+            .orElseThrow();
     assertEquals(1, first.id());
     assertEquals(2, second.id());
 
@@ -111,7 +123,9 @@ class TripManagerTest {
 
     // id 1 is free again and is reused for the next trip
     Trip<Object, TestTripAgent, Object> third =
-        manager.start(player, new FakeNavigator(), "home", null, null, false, 0L).orElseThrow();
+        manager
+            .start(player, new FakeNavigator(), TripLabel.of("home"), null, null, false, 0L)
+            .orElseThrow();
     assertEquals(1, third.id());
 
     assertEquals(
@@ -127,14 +141,79 @@ class TripManagerTest {
     TestTripAgent player = new TestTripAgent(UUID.randomUUID());
     FakeNavigator first = new FakeNavigator();
     FakeNavigator second = new FakeNavigator();
-    manager.start(player, first, "dest", null, null, false, 0L);
-    manager.start(player, second, "dest", null, null, false, 0L);
+    manager.start(player, first, TripLabel.of("dest"), null, null, false, 0L);
+    manager.start(player, second, TripLabel.of("dest"), null, null, false, 0L);
 
     manager.stopAll(player.uuid());
 
     assertTrue(first.stopped);
     assertTrue(second.stopped);
     assertTrue(manager.trips(player.uuid()).isEmpty());
+  }
+
+  @Test
+  void reportsEveryChangeToAPlayersTrips() {
+    RecordingScheduler scheduler = new RecordingScheduler();
+    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 3);
+    TestTripAgent player = new TestTripAgent(UUID.randomUUID());
+    List<TestTripAgent> changes = new ArrayList<>();
+    manager.onChange(changes::add);
+
+    FakeNavigator ending = new FakeNavigator();
+    ending.completeAfter = 0;
+    manager.start(player, ending, TripLabel.of("a"), null, null, false, 0L);
+    manager.start(player, new FakeNavigator(), TripLabel.of("b"), null, null, false, 0L);
+    manager.start(player, new FakeNavigator(), TripLabel.of("c"), null, null, false, 0L);
+    assertEquals(3, changes.size(), "one per start");
+
+    scheduler.tickAll(); // "a" completes
+    assertEquals(4, changes.size());
+    manager.cancel(player.uuid(), 2);
+    assertEquals(5, changes.size());
+    assertFalse(manager.cancel(player.uuid(), 2));
+    assertEquals(5, changes.size(), "nothing changed, nothing reported");
+    manager.stopAll(player.uuid());
+    assertEquals(6, changes.size());
+    manager.stopAll(player.uuid());
+    assertEquals(6, changes.size());
+    assertTrue(changes.stream().allMatch(player::equals));
+  }
+
+  @Test
+  void tripEndsOnceItsTargetStopsExisting() {
+    RecordingScheduler scheduler = new RecordingScheduler();
+    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 3);
+    TestTripAgent player = new TestTripAgent(UUID.randomUUID());
+    FakeNavigator navigator = new FakeNavigator();
+    AtomicBoolean exists = new AtomicBoolean(true);
+    AtomicInteger checks = new AtomicInteger();
+
+    manager.start(
+        player,
+        navigator,
+        TripLabel.of("pet"),
+        null,
+        null,
+        false,
+        0L,
+        () -> {
+          checks.incrementAndGet();
+          return exists.get();
+        });
+    for (int i = 0; i < 2 * Trip.EXISTENCE_CHECK_TICKS; i++) {
+      scheduler.tickAll();
+    }
+    assertEquals(2, checks.get(), "checked about once a second, not every tick");
+    assertEquals(1, manager.trips(player.uuid()).size());
+    assertFalse(navigator.stopped);
+
+    exists.set(false); // the pet died
+    for (int i = 0; i < Trip.EXISTENCE_CHECK_TICKS; i++) {
+      scheduler.tickAll();
+    }
+    assertTrue(navigator.stopped);
+    assertTrue(manager.trips(player.uuid()).isEmpty());
+    assertTrue(scheduler.handle.cancelled);
   }
 
   /** A navigator that reports complete after a set number of ticks. */

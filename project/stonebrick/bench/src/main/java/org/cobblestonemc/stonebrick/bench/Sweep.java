@@ -173,13 +173,12 @@ final class Sweep {
         System.out.printf(Locale.ROOT, "%n%s%n", current);
         System.out.printf(
             Locale.ROOT,
-            "  %-16s %6s %12s %10s %8s %8s%n",
+            "  %-16s %6s %12s %10s %8s%n",
             "heuristic",
             "w",
             "nodes",
             "cost",
-            "excess",
-            "columns");
+            "excess");
       }
       Double floor = best.get(point.scenario());
       String excess =
@@ -188,7 +187,7 @@ final class Sweep {
               : "-";
       System.out.printf(
           Locale.ROOT,
-          "  %-16s %6.2f %12d %10s %8s %8s%n",
+          "  %-16s %6.2f %12d %10s %8s%n",
           point.heuristic(),
           point.weight(),
           point.nodes(),

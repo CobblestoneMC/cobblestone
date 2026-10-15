@@ -126,7 +126,7 @@ class ChunkProviderTest {
     FakePlatform platform = new FakePlatform();
     ChunkProvider cp = provider(platform, settings());
 
-    // Sitting on the western border of chunk [0, 0] and heading east: modes read a block or two
+    // Sitting on the western border of chunk [0, 0] and heading east: searches read a block or two
     // back, so the chunk just behind is still worth having.
     cp.block(new Cell(0, 64, 8), world, EAST).future().join();
     assertEquals(1, platform.fetchCount(-1, 0));
@@ -161,9 +161,9 @@ class ChunkProviderTest {
   }
 
   /**
-   * The cache belongs to one solve and is sized to its frontier, so the least recently used chunk
-   * goes when a new one arrives. This is the only thing that evicts now: there is no staleness
-   * window and no invalidation, because nothing a solve caches outlives the solve.
+   * The cache belongs to one search and is size-bounded, so the least recently used chunk goes when
+   * a new one arrives. This is the only thing that evicts now: there is no staleness window and no
+   * invalidation, because nothing a search caches outlives the search.
    */
   @Test
   void theLeastRecentlyUsedChunkIsDroppedOnceTheCacheIsFull() {

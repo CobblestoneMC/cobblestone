@@ -28,6 +28,9 @@ public enum Permissions {
    */
   NAVIGATOR("cobblestone.navigator"),
 
+  /** Use of {@code /cobblestone hud}, to show or hide one's own trip HUD. Default allow. */
+  HUD("cobblestone.hud"),
+
   /** Use of {@code /cobblestone location}, for the player's own locations. Default allow. */
   LOCATION("cobblestone.location"),
 

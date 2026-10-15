@@ -31,48 +31,18 @@ public interface TripService {
   /**
    * Searches to {@code destination}, then starts a trip if a route is found. Non-blocking.
    *
-   * <p>{@code label} is the trip's stable identity: a fresh {@code navigate} with the same {@code
-   * label} <em>replaces</em> that player's previous trip rather than stacking a new one. Pass
-   * {@code null} to label the trip by its coordinates.
+   * <p>{@code label} is shown to the player as given, so keep it short and distinct. It is also the
+   * trip's identity: a fresh {@code navigate} with the same {@code label} <em>replaces</em> that
+   * player's previous trip, which suits a moving target like a quest objective.
    *
    * @param player the player to guide
    * @param destination where to route to
    * @param settings which navigator to display with, and its overrides
-   * @param label the stable trip identity, or {@code null} for a coordinate label
+   * @param label the trip's name and stable identity
    * @return the outcome, once the search completes and the trip is (or is not) started
    */
   CompletableFuture<TripOutcome> navigate(
       ServerPlayer player, ServerLocation destination, NavigatorSettings settings, String label);
-
-  /**
-   * {@link #navigate(ServerPlayer, ServerLocation, NavigatorSettings, String)} with a coordinate
-   * label.
-   *
-   * @param player the player to guide
-   * @param destination where to route to
-   * @param settings which navigator to display with, and its overrides
-   * @return the outcome, once the search completes and the trip is (or is not) started
-   */
-  default CompletableFuture<TripOutcome> navigate(
-      ServerPlayer player, ServerLocation destination, NavigatorSettings settings) {
-    return navigate(player, destination, settings, (String) null);
-  }
-
-  /**
-   * {@link #navigate(ServerPlayer, ServerLocation, NavigatorSettings)} with an error callback.
-   *
-   * @param player the player to guide
-   * @param destination where to route to
-   * @param settings which navigator to display with, and its overrides
-   * @param onError invoked (with the reason) if no route is found or the search fails
-   */
-  default void navigate(
-      ServerPlayer player,
-      ServerLocation destination,
-      NavigatorSettings settings,
-      Consumer<FailureReason> onError) {
-    reportFailure(navigate(player, destination, settings, (String) null), onError);
-  }
 
   /**
    * {@link #navigate(ServerPlayer, ServerLocation, NavigatorSettings, String)} with an error
@@ -81,7 +51,7 @@ public interface TripService {
    * @param player the player to guide
    * @param destination where to route to
    * @param settings which navigator to display with, and its overrides
-   * @param label the stable trip identity, or {@code null} for a coordinate label
+   * @param label the trip's name and stable identity
    * @param onError invoked (with the reason) if no route is found or the search fails
    */
   default void navigate(
@@ -109,10 +79,13 @@ public interface TripService {
    * @param player the player to guide
    * @param path the path to follow
    * @param settings which navigator to display with, and its overrides
+   * @param label the trip's name and stable identity, as for {@link #navigate(ServerPlayer,
+   *     ServerLocation, NavigatorSettings, String) navigate}
    * @return the outcome, once the trip is (or is not) started on the path's region thread
    */
   CompletableFuture<TripOutcome> startTrip(
       ServerPlayer player,
       Path<ServerLocation, MinecraftStepPayload> path,
-      NavigatorSettings settings);
+      NavigatorSettings settings,
+      String label);
 }

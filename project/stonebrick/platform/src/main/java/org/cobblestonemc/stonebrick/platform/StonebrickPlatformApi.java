@@ -37,7 +37,7 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
   private final MissingCaptureLog missing;
   private final Map<String, StonebrickWorld> worlds = new HashMap<>();
 
-  /** Reads made to fill the profile layer rather than to expand the search. */
+  /** Reads made to build the region layer rather than to expand the search. */
   private final java.util.concurrent.atomic.AtomicLong profileReads =
       new java.util.concurrent.atomic.AtomicLong();
 
@@ -74,8 +74,7 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
     for (String key : capture.worldKeys()) {
       worlds.put(
           key,
-          new StonebrickWorld(
-              this, settings, key, capture.minY(key), capture.maxY(key), capture.environment(key)));
+          new StonebrickWorld(key, capture.minY(key), capture.maxY(key), capture.environment(key)));
     }
   }
 
@@ -143,17 +142,17 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
   }
 
   /**
-   * Fetches a column for the profile layer.
+   * Fetches a column for the region layer.
    *
-   * <p><b>The same disk, deliberately.</b> Charging profile reads against the same {@link
+   * <p><b>The same disk, deliberately.</b> Charging these reads against the same {@link
    * SimulatedChunkIo} puts them in the same queue as the search's own, which is what a live server
-   * does: the coarse pass and the fine search contend for one set of channels, and their latency
-   * lands on the same virtual clock. Giving profiling its own free disk would make the layer look
+   * does: the region layer and the fine search contend for one set of channels, and their latency
+   * lands on the same virtual clock. Giving the region layer its own free disk would make it look
    * cheaper than it is, which is the thing worth measuring.
    *
    * <p>Its <em>missing</em>-capture accounting is separate, though, because reaching past the
-   * capture while profiling is expected -- the coarse search spreads outward -- and folding that
-   * into the search's log would have every coarse run declare itself degenerate.
+   * capture is expected of the region layer -- its backward search spreads outward -- and folding
+   * that into the search's log would have every region run declare itself degenerate.
    *
    * @param worldKey the world
    * @param chunkX the chunk X
@@ -181,8 +180,8 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
     }
     if (forProfile) {
       // Counted here rather than on entry: a column that is ungenerated or uncaptured returns
-      // above without touching the disk, and counting those would let the profile share exceed
-      // the total reads it is supposed to be part of.
+      // above without touching the disk, and counting those would let the region layer's share
+      // exceed the total reads it is supposed to be part of.
       profileReads.incrementAndGet();
     }
     // Decoding happens inside the read, after its modelled delay: a live server pays its decode as
@@ -227,12 +226,12 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
   }
 
   /**
-   * Returns how many of the reads were made to fill the profile layer.
+   * Returns how many of the reads were made to build the region layer.
    *
-   * <p>Reported apart from {@link #ioStats()} so the coarse layer's share of the disk is legible
+   * <p>Reported apart from {@link #ioStats()} so the region layer's share of the disk is legible
    * rather than buried in the search's total.
    *
-   * @return the profile read count
+   * @return the region layer's read count
    */
   public long profileReads() {
     return profileReads.get();

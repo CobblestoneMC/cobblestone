@@ -10,15 +10,14 @@ package org.cobblestonemc.plugin.navigator;
 import java.util.List;
 
 /**
- * The platform-neutral follow logic for a trail navigator: given the ordered path points and the
- * player's current position, decide how far along the trail the player has gotten.
+ * The platform-neutral follow logic for a trail navigator: given the trail's nodes and the player's
+ * current position, decide how far along the trail the player has gotten.
  *
- * <p>{@code points} are the step destinations, index-aligned with the path's steps, and {@code
- * foremost} is the index of the step the player still needs to complete (0 = the first step, not
- * yet done). Step {@code foremost} runs from {@code points[foremost - 1]} — or the passed {@code
- * origin} when {@code foremost == 0} — to {@code points[foremost]}; the player completes it by
- * projecting past that destination, and {@code foremost} advances. This tolerates a player cutting
- * corners — they still "complete" steps in order — without any exact-position tracking.
+ * <p>Node 0 is where the first step departs from (the player's start), and step {@code i} runs from
+ * node {@code i} to node {@code i + 1}. {@code foremost} is the index of the step the player still
+ * needs to complete (0 = the first step, not yet done); the player completes it by projecting past
+ * its destination, and {@code foremost} advances. This tolerates a player cutting corners — they
+ * still "complete" steps in order — without any exact-position tracking.
  */
 public final class TrailProgress {
 
@@ -27,18 +26,17 @@ public final class TrailProgress {
   /**
    * Advances the foremost index past every step the player has already projected beyond.
    *
-   * @param points the ordered step destinations (index-aligned with the path's steps)
-   * @param origin the position the first step departs from (the player's start)
+   * @param nodes the trail's nodes: the origin, then each step's destination
    * @param foremost the index of the step the player still needs to complete
    * @param player the player's current position
-   * @return the new foremost index (never below {@code foremost}; {@code points.size()} once every
-   *     step is complete)
+   * @return the new foremost index (never below {@code foremost}; {@code nodes.size() - 1} once
+   *     every step is complete)
    */
-  public static int advance(List<Vec3> points, Vec3 origin, int foremost, Vec3 player) {
+  public static int advance(List<Vec3> nodes, int foremost, Vec3 player) {
     int index = Math.max(0, foremost);
-    while (index < points.size()) {
-      Vec3 start = index == 0 ? origin : points.get(index - 1);
-      Vec3 segment = points.get(index).minus(start);
+    while (index + 1 < nodes.size()) {
+      Vec3 start = nodes.get(index);
+      Vec3 segment = nodes.get(index + 1).minus(start);
       double lengthSquared = segment.lengthSquared();
       // A zero-length segment (duplicate point / standing on the origin) is treated as passed.
       double projection =

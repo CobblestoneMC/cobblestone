@@ -154,7 +154,7 @@ final class PaperBlock implements MinecraftBlock {
   @Override
   public boolean isSoulSand() {
     // Not every block with a speed penalty: honey slows too, but Soul Speed does nothing for it,
-    // and the coarse layer prices these two by what the agent is wearing.
+    // and the region layer prices these two by what the agent is wearing.
     return material == Material.SOUL_SAND || material == Material.SOUL_SOIL;
   }
 

@@ -86,19 +86,6 @@ class LoadoutTest {
     return file;
   }
 
-  /**
-   * A player who may not dig still walks on soul sand. Production once dropped the medium alongside
-   * mining, which priced soul sand at the fallback rate for every non-digging player, and the bench
-   * kept its own derivation and never saw it.
-   */
-  @Test
-  void aPlayerWhoCannotDigStillCrossesSoulSand(@TempDir Path dir) throws Exception {
-    Loadout walker = Loadout.loadAll(write(dir, "walker:\n  excludedModes: [MINE, BOAT]\n")).get(0);
-
-    assertTrue(walker.mediums().contains(org.cobblestonemc.minecraft.lod.Medium.SOUL_SAND));
-    assertFalse(walker.mediums().contains(org.cobblestonemc.minecraft.lod.Medium.MINEABLE));
-  }
-
   @Test
   void aLoadoutWithNoBodyIsTheFullyCapableDefault(@TempDir Path dir) throws Exception {
     // `everything:` with nothing under it parses as a null value, which is a shape a hand-edited

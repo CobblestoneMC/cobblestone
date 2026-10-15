@@ -62,21 +62,20 @@ class Tier2SearchTest {
 
   /**
    * The deadline is tested inside the search loop, and the loop only runs when something wakes it.
-   * A mode whose blocks never arrive parks the search on a callback that never comes — so without a
-   * timer armed at the deadline the search waits forever instead of timing out. This reproduces
-   * that: a mode that returns a future nobody completes.
+   * A behavior whose blocks never arrive parks the search on a callback that never comes — so
+   * without a timer armed at the deadline the search waits forever instead of timing out. This
+   * reproduces that: a behavior that returns a future nobody completes.
    */
   @Test
   void aSearchParkedOnAFutureThatNeverCompletesStillTimesOut() throws Exception {
-    Mode<TestAgent, TestStep, TestDomain> neverCompletes =
-        (agent, from, domain, state, goal) -> FutureOr.ofFuture(new CompletableFuture<>());
+    MovementBehavior<TestStep, TestDomain> neverCompletes =
+        (from, domain, state, goal) -> FutureOr.ofFuture(new CompletableFuture<>());
 
-    Tier2Search<TestAgent, TestStep, TestDomain> search =
+    Tier2Search<TestStep, TestDomain> search =
         new Tier2Search<>(
             new TestCobblestoneLogger(),
-            new TestAgent(),
             virtualPath(new Cell(0, 0, 0), new Cell(3, 0, 0)),
-            List.of(neverCompletes),
+            neverCompletes,
             List.of(),
             Heuristics.zero(),
             1000,
@@ -109,8 +108,8 @@ class Tier2SearchTest {
   @Test
   void aMiningRouteWhoseVerdictsLandAfterTheGoalIsReachedStillSolves() {
     CompletableFuture<Boolean> allowed = new CompletableFuture<>();
-    Mode<TestAgent, TestStep, TestDomain> minedCorridor =
-        (agent, from, domain, state, goal) ->
+    MovementBehavior<TestStep, TestDomain> minedCorridor =
+        (from, domain, state, goal) ->
             FutureOr.of(
                 List.of(
                     new Movement<>(
@@ -121,12 +120,11 @@ class Tier2SearchTest {
                         state,
                         () -> FutureOr.from(allowed))));
 
-    Tier2Search<TestAgent, TestStep, TestDomain> search =
+    Tier2Search<TestStep, TestDomain> search =
         new Tier2Search<>(
             new TestCobblestoneLogger(),
-            new TestAgent(),
             virtualPath(new Cell(0, 0, 0), new Cell(2, 0, 0)),
-            List.of(minedCorridor),
+            minedCorridor,
             List.of(),
             Heuristics.zero(),
             1000,
@@ -154,8 +152,8 @@ class Tier2SearchTest {
   @Test
   void anEdgeCheckThatFailsIsTreatedAsAllowedRatherThanAwaitedForever() {
     CompletableFuture<Boolean> broken = new CompletableFuture<>();
-    Mode<TestAgent, TestStep, TestDomain> minedCorridor =
-        (agent, from, domain, state, goal) ->
+    MovementBehavior<TestStep, TestDomain> minedCorridor =
+        (from, domain, state, goal) ->
             FutureOr.of(
                 List.of(
                     new Movement<>(
@@ -166,12 +164,11 @@ class Tier2SearchTest {
                         state,
                         () -> FutureOr.from(broken))));
 
-    Tier2Search<TestAgent, TestStep, TestDomain> search =
+    Tier2Search<TestStep, TestDomain> search =
         new Tier2Search<>(
             new TestCobblestoneLogger(),
-            new TestAgent(),
             virtualPath(new Cell(0, 0, 0), new Cell(2, 0, 0)),
-            List.of(minedCorridor),
+            minedCorridor,
             List.of(),
             Heuristics.zero(),
             1000,
@@ -195,10 +192,10 @@ class Tier2SearchTest {
   /**
    * A repair that prunes a node must leave nothing pointing at it.
    *
-   * <p>Two repairs, in order. First a mode-restricted edge — a mining step an integration forbids —
-   * comes back barred, which strands the dead end it led to and prunes it; its parent survives and
-   * is outside the repaired subtree. Then the cell above that parent is barred, and the second
-   * repair walks the parent's children.
+   * <p>Two repairs, in order. First a movement-restricted edge — a mining step an integration
+   * forbids — comes back barred, which strands the dead end it led to and prunes it; its parent
+   * survives and is outside the repaired subtree. Then the cell above that parent is barred, and
+   * the second repair walks the parent's children.
    *
    * <p>The order matters: a repair that clears {@code bestParent} before pruning leaves the pruned
    * node in its old parent's child set, since the removal looks the parent up through exactly that
@@ -213,15 +210,14 @@ class Tier2SearchTest {
     // (0,0,0) → (1,0,0) → (2,0,0) → (3,0,0), the last step restricted; (3,0,0) goes nowhere.
     // The goal is out past the dead end, so the search never arrives and stays alive on its
     // outstanding checks while the two verdicts land one at a time.
-    Restriction<TestAgent, TestDomain> barOne =
-        (agent, cell, domain) ->
+    Restriction<TestDomain> barOne =
+        (cell, domain) ->
             cell.equals(new Cell(1, 0, 0)) ? FutureOr.ofFuture(cellBarred) : FutureOr.of(false);
-    Tier2Search<TestAgent, TestStep, TestDomain> search =
+    Tier2Search<TestStep, TestDomain> search =
         new Tier2Search<>(
             new TestCobblestoneLogger(),
-            new TestAgent(),
             virtualPath(new Cell(0, 0, 0), new Cell(9, 0, 0)),
-            List.of(new DeadEndMode(3, () -> FutureOr.ofFuture(deadEndBarred))),
+            new DeadEndBehavior(3, () -> FutureOr.ofFuture(deadEndBarred)),
             List.of(barOne),
             Heuristics.zero(),
             1000,
@@ -307,12 +303,11 @@ class Tier2SearchTest {
               return future;
             });
 
-    Tier2Search<TestAgent, TestStep, TestDomain> search =
+    Tier2Search<TestStep, TestDomain> search =
         new Tier2Search<>(
             new TestCobblestoneLogger(),
-            new TestAgent(),
             virtualPath(new Cell(0, 0, 0), new Cell(2, 0, 0)),
-            List.of(new CorridorMode(false)),
+            new CorridorBehavior(false),
             List.of(),
             heuristic,
             1000,
@@ -341,17 +336,16 @@ class Tier2SearchTest {
   /**
    * A heuristic that keeps handing back futures that are already done, without ever becoming able
    * to answer, must not wedge the search thread. Each retry parks and wakes at once; if the retries
-   * ran in one loop the deadline would never be checked and the solve would never finish. This is
-   * the shape a failed chunk read used to give the coarse heuristic.
+   * ran in one loop the deadline would never be checked and the solve would never finish. A failed
+   * chunk read under a terrain-reading heuristic takes exactly this shape.
    */
   @Test
   void anEstimateThatNeverBecomesReadyStillTimesOut() throws Exception {
-    Tier2Search<TestAgent, TestStep, TestDomain> search =
+    Tier2Search<TestStep, TestDomain> search =
         new Tier2Search<>(
             new TestCobblestoneLogger(),
-            new TestAgent(),
             virtualPath(new Cell(0, 0, 0), new Cell(3, 0, 0)),
-            List.of(new CorridorMode(false)),
+            new CorridorBehavior(false),
             List.of(),
             preparing(
                 () -> CompletableFuture.failedFuture(new IllegalStateException("read failed"))),
@@ -373,14 +367,13 @@ class Tier2SearchTest {
   }
 
   @Test
-  void immediateModeSolvesWithoutParking() {
-    CorridorMode mode = new CorridorMode(false);
-    Tier2Search<TestAgent, TestStep, TestDomain> search =
+  void immediateBehaviorSolvesWithoutParking() {
+    CorridorBehavior behavior = new CorridorBehavior(false);
+    Tier2Search<TestStep, TestDomain> search =
         new Tier2Search<>(
             new TestCobblestoneLogger(),
-            new TestAgent(),
             virtualPath(new Cell(0, 0, 0), new Cell(3, 0, 0)),
-            List.of(mode),
+            behavior,
             List.of(),
             Heuristics.zero(),
             1000,
@@ -403,13 +396,12 @@ class Tier2SearchTest {
 
   @Test
   void parksUntilBlocksArriveThenResumesToSolution() {
-    CorridorMode mode = new CorridorMode(true);
-    Tier2Search<TestAgent, TestStep, TestDomain> search =
+    CorridorBehavior behavior = new CorridorBehavior(true);
+    Tier2Search<TestStep, TestDomain> search =
         new Tier2Search<>(
             new TestCobblestoneLogger(),
-            new TestAgent(),
             virtualPath(new Cell(0, 0, 0), new Cell(2, 0, 0)),
-            List.of(mode),
+            behavior,
             List.of(),
             Heuristics.zero(),
             1000,
@@ -425,15 +417,15 @@ class Tier2SearchTest {
 
     // Parked on the first expansion's pending block — not done yet.
     assertFalse(future.isDone());
-    assertEquals(1, mode.pendingCount());
+    assertEquals(1, behavior.pendingCount());
 
     // Deliver the (0,0,0) blocks; the search resumes, expands (1,0,0), and parks again.
-    mode.releaseNext();
+    behavior.releaseNext();
     assertFalse(future.isDone());
-    assertEquals(1, mode.pendingCount());
+    assertEquals(1, behavior.pendingCount());
 
     // Deliver the (1,0,0) blocks; the search reaches (2,0,0) and completes.
-    mode.releaseNext();
+    behavior.releaseNext();
     assertTrue(future.isDone());
     Tier2Result<TestStep, TestDomain> result = future.getNow(null);
     assertInstanceOf(Tier2Result.Solved.class, result);
@@ -443,12 +435,11 @@ class Tier2SearchTest {
 
   @Test
   void reportsUnreachableWhenNoMovesAndNotAtTarget() {
-    Tier2Search<TestAgent, TestStep, TestDomain> search =
+    Tier2Search<TestStep, TestDomain> search =
         new Tier2Search<>(
             new TestCobblestoneLogger(),
-            new TestAgent(),
             virtualPath(new Cell(0, 0, 0), new Cell(5, 0, 0)),
-            List.of(),
+            (from, domain, state, goal) -> FutureOr.of(List.of()),
             List.of(),
             Heuristics.zero(),
             1000,
@@ -467,12 +458,11 @@ class Tier2SearchTest {
 
   @Test
   void startAlreadyInTargetSolvesWithZeroSteps() {
-    Tier2Search<TestAgent, TestStep, TestDomain> search =
+    Tier2Search<TestStep, TestDomain> search =
         new Tier2Search<>(
             new TestCobblestoneLogger(),
-            new TestAgent(),
             virtualPath(new Cell(7, 0, 0), new Cell(7, 0, 0)),
-            List.of(new CorridorMode(false)),
+            new CorridorBehavior(false),
             List.of(),
             Heuristics.zero(),
             1000,
@@ -494,14 +484,12 @@ class Tier2SearchTest {
   @Test
   void immediateRestrictionSeversPathAndReportsUnreachable() {
     // The corridor runs 0→1→2→3, but (2,0,0) is barred, so the target can never be reached.
-    Restriction<TestAgent, TestDomain> barTwo =
-        (agent, cell, domain) -> FutureOr.of(cell.equals(new Cell(2, 0, 0)));
-    Tier2Search<TestAgent, TestStep, TestDomain> search =
+    Restriction<TestDomain> barTwo = (cell, domain) -> FutureOr.of(cell.equals(new Cell(2, 0, 0)));
+    Tier2Search<TestStep, TestDomain> search =
         new Tier2Search<>(
             new TestCobblestoneLogger(),
-            new TestAgent(),
             virtualPath(new Cell(0, 0, 0), new Cell(3, 0, 0)),
-            List.of(new CorridorMode(false)),
+            new CorridorBehavior(false),
             List.of(barTwo),
             Heuristics.zero(),
             1000,
@@ -523,15 +511,14 @@ class Tier2SearchTest {
     // The corridor 0→1→2→3 is expanded optimistically past (2,0,0) while its verdict is pending;
     // when it returns impassable, the solve walls it off, re-solves, and finds no route.
     CompletableFuture<Boolean> gate = new CompletableFuture<>();
-    Restriction<TestAgent, TestDomain> barTwoWhenReady =
-        (agent, cell, domain) ->
+    Restriction<TestDomain> barTwoWhenReady =
+        (cell, domain) ->
             cell.equals(new Cell(2, 0, 0)) ? FutureOr.ofFuture(gate) : FutureOr.of(false);
-    Tier2Search<TestAgent, TestStep, TestDomain> search =
+    Tier2Search<TestStep, TestDomain> search =
         new Tier2Search<>(
             new TestCobblestoneLogger(),
-            new TestAgent(),
             virtualPath(new Cell(0, 0, 0), new Cell(3, 0, 0)),
-            List.of(new CorridorMode(false)),
+            new CorridorBehavior(false),
             List.of(barTwoWhenReady),
             Heuristics.zero(),
             1000,
@@ -558,15 +545,14 @@ class Tier2SearchTest {
     // so the repair must re-parent D to the retained (costlier) route through C rather than lose
     // it.
     CompletableFuture<Boolean> gate = new CompletableFuture<>();
-    Restriction<TestAgent, TestDomain> barB =
-        (agent, cell, domain) ->
+    Restriction<TestDomain> barB =
+        (cell, domain) ->
             cell.equals(new Cell(1, 0, 0)) ? FutureOr.ofFuture(gate) : FutureOr.of(false);
-    Tier2Search<TestAgent, TestStep, TestDomain> search =
+    Tier2Search<TestStep, TestDomain> search =
         new Tier2Search<>(
             new TestCobblestoneLogger(),
-            new TestAgent(),
             virtualPath(new Cell(0, 0, 0), new Cell(3, 0, 0)),
-            List.of(new DiamondMode()),
+            new DiamondBehavior(),
             List.of(barB),
             Heuristics.zero(),
             1000,
@@ -597,10 +583,10 @@ class Tier2SearchTest {
    * each); both reach {@code D(2,0,0)} — cheaply via B (1), dearly via C (3) — and {@code
    * D→G(3,0,0)} (1). Lets a test bar B and check D re-parents to the retained C route.
    */
-  private static final class DiamondMode implements Mode<TestAgent, TestStep, TestDomain> {
+  private static final class DiamondBehavior implements MovementBehavior<TestStep, TestDomain> {
     @Override
-    public FutureOr<Collection<Movement<TestStep>>> step(
-        TestAgent agent, Cell from, TestDomain domain, TraversalState state, Cell destination) {
+    public FutureOr<Collection<Movement<TestStep>>> movements(
+        Cell from, TestDomain domain, TraversalState state, Cell goal) {
       Collection<Movement<TestStep>> moves;
       if (from.equals(new Cell(0, 0, 0))) {
         moves =
@@ -622,16 +608,16 @@ class Tier2SearchTest {
 
   @Test
   void edgeRestrictionDropsOnlyThatEdgeAndReParents() {
-    // Same diamond, but the B→D edge carries a mode-scoped restriction future (breakability). No
+    // Same diamond, but the B→D edge carries a movement-scoped restriction future (breakability).
+    // No
     // cell
     // restrictions at all — so this exercises the Movement-carried edge path end to end.
     CompletableFuture<Boolean> gate = new CompletableFuture<>();
-    Tier2Search<TestAgent, TestStep, TestDomain> search =
+    Tier2Search<TestStep, TestDomain> search =
         new Tier2Search<>(
             new TestCobblestoneLogger(),
-            new TestAgent(),
             virtualPath(new Cell(0, 0, 0), new Cell(3, 0, 0)),
-            List.of(new RestrictableDiamondMode(gate)),
+            new RestrictableDiamondBehavior(gate),
             List.of(),
             Heuristics.zero(),
             1000,
@@ -670,12 +656,11 @@ class Tier2SearchTest {
     // A reaches D by three routes of rising cost (B:1, C:2, E:3), then D→G. Bar B→D and C→D.
     CompletableFuture<Boolean> barBd = new CompletableFuture<>();
     CompletableFuture<Boolean> barCd = new CompletableFuture<>();
-    Tier2Search<TestAgent, TestStep, TestDomain> search =
+    Tier2Search<TestStep, TestDomain> search =
         new Tier2Search<>(
             new TestCobblestoneLogger(),
-            new TestAgent(),
             virtualPath(new Cell(0, 0, 0), new Cell(3, 0, 0)),
-            List.of(new TridentMode(barBd, barCd)),
+            new TridentBehavior(barBd, barCd),
             List.of(),
             Heuristics.zero(),
             1000,
@@ -708,18 +693,19 @@ class Tier2SearchTest {
    * E(1,2,0)} (cost 1 each); all three reach {@code D(2,0,0)} at rising cost (1, 2, 3), and {@code
    * D→G(3,0,0)} (1). The two cheaper edges into D carry restriction futures.
    */
-  private static final class TridentMode implements Mode<TestAgent, TestStep, TestDomain> {
+  private static final class TridentBehavior implements MovementBehavior<TestStep, TestDomain> {
     private final CompletableFuture<Boolean> bdRestricted;
     private final CompletableFuture<Boolean> cdRestricted;
 
-    TridentMode(CompletableFuture<Boolean> bdRestricted, CompletableFuture<Boolean> cdRestricted) {
+    TridentBehavior(
+        CompletableFuture<Boolean> bdRestricted, CompletableFuture<Boolean> cdRestricted) {
       this.bdRestricted = bdRestricted;
       this.cdRestricted = cdRestricted;
     }
 
     @Override
-    public FutureOr<Collection<Movement<TestStep>>> step(
-        TestAgent agent, Cell from, TestDomain domain, TraversalState state, Cell destination) {
+    public FutureOr<Collection<Movement<TestStep>>> movements(
+        Cell from, TestDomain domain, TraversalState state, Cell goal) {
       Collection<Movement<TestStep>> moves;
       if (from.equals(new Cell(0, 0, 0))) {
         moves =
@@ -759,19 +745,20 @@ class Tier2SearchTest {
   }
 
   /**
-   * The {@link DiamondMode} graph, but with a restriction future attached to the {@code B→D} edge.
+   * The {@link DiamondBehavior} graph, but with a restriction future attached to the {@code B→D}
+   * edge.
    */
-  private static final class RestrictableDiamondMode
-      implements Mode<TestAgent, TestStep, TestDomain> {
+  private static final class RestrictableDiamondBehavior
+      implements MovementBehavior<TestStep, TestDomain> {
     private final CompletableFuture<Boolean> bdRestricted;
 
-    RestrictableDiamondMode(CompletableFuture<Boolean> bdRestricted) {
+    RestrictableDiamondBehavior(CompletableFuture<Boolean> bdRestricted) {
       this.bdRestricted = bdRestricted;
     }
 
     @Override
-    public FutureOr<Collection<Movement<TestStep>>> step(
-        TestAgent agent, Cell from, TestDomain domain, TraversalState state, Cell destination) {
+    public FutureOr<Collection<Movement<TestStep>>> movements(
+        Cell from, TestDomain domain, TraversalState state, Cell goal) {
       Collection<Movement<TestStep>> moves;
       if (from.equals(new Cell(0, 0, 0))) {
         moves =
@@ -803,14 +790,13 @@ class Tier2SearchTest {
   void pendingRestrictionParksThenResumesToSolution() {
     // An async verdict (not impassable, once resolved) parks the second phase until it completes.
     CompletableFuture<Boolean> verdict = new CompletableFuture<>();
-    Restriction<TestAgent, TestDomain> gated =
-        (agent, cell, domain) -> FutureOr.ofFuture(verdict.thenApply(ignored -> false));
-    Tier2Search<TestAgent, TestStep, TestDomain> search =
+    Restriction<TestDomain> gated =
+        (cell, domain) -> FutureOr.ofFuture(verdict.thenApply(ignored -> false));
+    Tier2Search<TestStep, TestDomain> search =
         new Tier2Search<>(
             new TestCobblestoneLogger(),
-            new TestAgent(),
             virtualPath(new Cell(0, 0, 0), new Cell(1, 0, 0)),
-            List.of(new CorridorMode(false)),
+            new CorridorBehavior(false),
             List.of(gated),
             Heuristics.zero(),
             1000,

@@ -33,6 +33,7 @@ import org.cobblestonemc.plugin.config.ConfigManager;
 import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.LocationDao;
 import org.cobblestonemc.plugin.data.PortalTransitionDao;
+import org.cobblestonemc.plugin.hud.TripHud;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchRegistry;
@@ -57,6 +58,7 @@ final class CobblestoneCommand {
    * @param locations the location DAO (for {@code location set/unset})
    * @param portals the portal-transition DAO (for {@code portals clear})
    * @param trips the trip manager (for {@code cancel}/{@code trips})
+   * @param hud the trip HUD (for {@code hud})
    * @param searches the search registry (for {@code cancel})
    * @return the command node
    */
@@ -68,6 +70,7 @@ final class CobblestoneCommand {
       LocationDao locations,
       PortalTransitionDao portals,
       TripManager<Entity, PaperTripAgent, Location> trips,
+      TripHud<Entity, PaperTripAgent, Location> hud,
       SearchRegistry<Location> searches) {
 
     var locationSubCommand =
@@ -163,6 +166,16 @@ final class CobblestoneCommand {
                 .requires(source -> source.getSender().hasPermission(Permissions.NAVIGATE.value()))
                 .executes(ctx -> trips(ctx.getSource().getSender(), messages, trips)))
         .then(
+            Commands.literal("hud")
+                .requires(source -> source.getSender().hasPermission(Permissions.HUD.value()))
+                .executes(ctx -> hud(ctx.getSource().getSender(), messages, hud, null))
+                .then(
+                    Commands.literal("on")
+                        .executes(ctx -> hud(ctx.getSource().getSender(), messages, hud, true)))
+                .then(
+                    Commands.literal("off")
+                        .executes(ctx -> hud(ctx.getSource().getSender(), messages, hud, false))))
+        .then(
             Commands.literal("portals")
                 .requires(source -> source.getSender().hasPermission(Permissions.PORTALS.value()))
                 .executes(ctx -> showHelp(ctx.getSource().getSender(), messages))
@@ -236,25 +249,27 @@ final class CobblestoneCommand {
   private static int showHelp(CommandSender sender, Messages messages) {
     Locale locale = localeOf(sender, messages);
     messages.send(sender, locale, CobblestoneMessages.HELP_HEADER);
-    CommandHelp.line(
+    PaperCommandHelp.line(
         sender, messages, locale, "/cobblestone reload", "command.cobblestone.help.reload");
-    CommandHelp.line(
+    PaperCommandHelp.line(
         sender,
         messages,
         locale,
         "/cobblestone cancel [id|all]",
         "command.cobblestone.help.cancel");
-    CommandHelp.line(
+    PaperCommandHelp.line(
         sender, messages, locale, "/cobblestone trips", "command.cobblestone.help.trips");
-    CommandHelp.line(
+    PaperCommandHelp.line(
+        sender, messages, locale, "/cobblestone hud [on|off]", "command.cobblestone.help.hud");
+    PaperCommandHelp.line(
         sender,
         messages,
         locale,
         "/cobblestone location set|unset|list <name> [-global]",
         "command.cobblestone.help.location");
-    CommandHelp.line(
+    PaperCommandHelp.line(
         sender, messages, locale, "/cobblestone portals clear", "command.cobblestone.help.portals");
-    CommandHelp.line(
+    PaperCommandHelp.line(
         sender,
         messages,
         locale,
@@ -384,6 +399,30 @@ final class CobblestoneCommand {
           trip.destination(),
           messages.formatDuration(locale, trip.remainingSeconds()));
     }
+    return Command.SINGLE_SUCCESS;
+  }
+
+  /**
+   * Shows or hides the caller's trip HUD; {@code show} is {@code null} to flip the current choice.
+   */
+  private static int hud(
+      CommandSender sender,
+      Messages messages,
+      TripHud<Entity, PaperTripAgent, Location> hud,
+      Boolean show) {
+    Locale locale = localeOf(sender, messages);
+    if (!(sender instanceof Player player)) {
+      messages.send(sender, locale, CobblestoneMessages.PLAYERS_ONLY);
+      return Command.SINGLE_SUCCESS;
+    }
+    if (!hud.available()) {
+      messages.send(player, locale, CobblestoneMessages.HUD_UNAVAILABLE);
+      return Command.SINGLE_SUCCESS;
+    }
+    boolean shown = show != null ? show : !hud.isShown(player.getUniqueId());
+    hud.setShown(new PaperTripAgent(player), shown);
+    messages.send(
+        player, locale, shown ? CobblestoneMessages.HUD_SHOWN : CobblestoneMessages.HUD_HIDDEN);
     return Command.SINGLE_SUCCESS;
   }
 

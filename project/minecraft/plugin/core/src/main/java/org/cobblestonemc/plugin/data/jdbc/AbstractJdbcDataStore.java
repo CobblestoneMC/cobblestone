@@ -25,6 +25,8 @@ import org.cobblestonemc.plugin.data.DeathLocationDao;
 import org.cobblestonemc.plugin.data.EndReturnPortalDao;
 import org.cobblestonemc.plugin.data.GatewayDao;
 import org.cobblestonemc.plugin.data.LocationDao;
+import org.cobblestonemc.plugin.data.MountDao;
+import org.cobblestonemc.plugin.data.PlayerPreferencesDao;
 import org.cobblestonemc.plugin.data.PortalTransitionDao;
 
 /**
@@ -48,9 +50,11 @@ public abstract class AbstractJdbcDataStore implements DataStore {
   private Connection connection;
   private LocationDao locationDao;
   private DeathLocationDao deathLocationDao;
+  private MountDao mountDao;
   private PortalTransitionDao portalTransitionDao;
   private EndReturnPortalDao endReturnPortalDao;
   private GatewayDao gatewayDao;
+  private PlayerPreferencesDao playerPreferencesDao;
 
   /**
    * Creates a store.
@@ -128,9 +132,11 @@ public abstract class AbstractJdbcDataStore implements DataStore {
       migrate();
       this.locationDao = new JdbcLocationDao(this);
       this.deathLocationDao = new JdbcDeathLocationDao(this);
+      this.mountDao = new JdbcMountDao(this);
       this.portalTransitionDao = new JdbcPortalTransitionDao(this);
       this.endReturnPortalDao = new JdbcEndReturnPortalDao(this);
       this.gatewayDao = new JdbcGatewayDao(this);
+      this.playerPreferencesDao = new JdbcPlayerPreferencesDao(this);
     } catch (ClassNotFoundException e) {
       throw new DataStoreException.NoDriver(driver(), e);
     } catch (SQLException e) {
@@ -155,6 +161,14 @@ public abstract class AbstractJdbcDataStore implements DataStore {
   }
 
   @Override
+  public MountDao mounts() {
+    if (mountDao == null) {
+      throw new IllegalStateException("DataStore.init() has not been called");
+    }
+    return mountDao;
+  }
+
+  @Override
   public PortalTransitionDao portalTransitions() {
     if (portalTransitionDao == null) {
       throw new IllegalStateException("DataStore.init() has not been called");
@@ -176,6 +190,14 @@ public abstract class AbstractJdbcDataStore implements DataStore {
       throw new IllegalStateException("DataStore.init() has not been called");
     }
     return gatewayDao;
+  }
+
+  @Override
+  public PlayerPreferencesDao playerPreferences() {
+    if (playerPreferencesDao == null) {
+      throw new IllegalStateException("DataStore.init() has not been called");
+    }
+    return playerPreferencesDao;
   }
 
   @Override

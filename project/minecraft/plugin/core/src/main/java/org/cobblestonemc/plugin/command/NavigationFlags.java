@@ -12,9 +12,7 @@ import org.cobblestonemc.minecraft.api.MinecraftStepType;
 
 /**
  * The resolved options a {@code /navigate} invocation carries, produced by {@link FlagParser}. The
- * {@link #excludedModes()} set feeds straight into {@code MinecraftModes.forPlayer(player,
- * excluded)}; the world/dimension exclusions and navigator/live choices are honored by the command
- * layer.
+ * world/dimension exclusions and navigator/live choices are honored by the command layer.
  *
  * @param excludedModes step types to leave out of the search (from {@code -no-mode}/{@code
  *     -no-fly}…)

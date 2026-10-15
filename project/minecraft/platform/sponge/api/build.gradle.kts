@@ -1,6 +1,6 @@
 // sponge-api — SpongeAPI developer façade (ServerPlayer, ServerLocation, …), compiled against the
 // API floor so one jar serves every Minecraft version Cobblestone supports. Nothing here is
-// version-specific; see settings.gradle.kts for how the Sponge modules are split. (design/05)
+// version-specific; see settings.gradle.kts for how the Sponge modules are split.
 plugins {
     id("cobblestone.publish-conventions")
 }
@@ -22,6 +22,8 @@ dependencies {
     api(project(":minecraft:minecraft-api"))
     // Provided by the server at runtime; Adventure comes bundled with Sponge.
     compileOnly(libs.sponge.api12)
+    // SpongeAPI's Adventure carries JetBrains annotations; without them javac warns on every class.
+    compileOnly("org.jetbrains:annotations:24.0.1")
 }
 
 mavenPublishing {

@@ -23,6 +23,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.entity.Boat;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -33,26 +34,28 @@ import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.HeuristicStrategy;
-import org.cobblestonemc.ModesProvider;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.Restriction;
+import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.minecraft.BreakChecker;
 import org.cobblestonemc.minecraft.ChunkFetch;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
+import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
+import org.cobblestonemc.minecraft.ChunkSource;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
-import org.cobblestonemc.minecraft.api.WorldRegion;
 import org.cobblestonemc.minecraft.lod.RegionStores;
-import org.cobblestonemc.minecraft.modes.MinecraftModes;
+import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 import org.cobblestonemc.minecraft.registry.OwnedRegistry;
 import org.cobblestonemc.paper.api.BoxWorldRegion;
 import org.cobblestonemc.paper.api.NavigationService;
@@ -61,7 +64,6 @@ import org.cobblestonemc.paper.api.SearchModificationRegistrar;
 import org.cobblestonemc.paper.api.SearchModificationService;
 import org.cobblestonemc.paper.api.Transition;
 import org.jetbrains.annotations.Nullable;
-import org.joml.Vector3i;
 
 public final class PaperNavigationServiceImpl
     implements NavigationService, SearchModificationRegistrar, WorldWrapper {
@@ -71,6 +73,7 @@ public final class PaperNavigationServiceImpl
   private final PaperPlatformApi platform;
   private final ChunkProviderSettings chunkSettings;
   private final CobblestoneApi core;
+  private final PaperRegions regions = new PaperRegions(this);
   private final Map<String, MinecraftWorld> worldCache = new ConcurrentHashMap<>();
   private final OwnedRegistry<SearchModificationService> searchModifiers = new OwnedRegistry<>();
   private volatile @Nullable RegionStores regionStores;
@@ -122,38 +125,48 @@ public final class PaperNavigationServiceImpl
       Player player, Location destination, MinecraftSearchSettings settings) {
     DomainRegion<MinecraftWorld> region =
         new CellRegion<>(PaperConversions.cell(destination), wrap(destination.getWorld()));
-    return search(player, new SingleDestination<>(region), settings);
+    return search(player, new SingleDestination<>(region), settings, newChunkSource());
   }
 
   @Override
   public SearchHandle<Location, MinecraftStepPayload> navigatePlayerToRegion(
       Player player, Location location1, Location location2, MinecraftSearchSettings settings) {
     BoxWorldRegion region = BoxWorldRegion.of(location1, location2);
-    return search(player, new SingleDestination<>(PaperConversions.region(region, this)), settings);
+    return search(
+        player,
+        new SingleDestination<>(PaperConversions.region(region, this)),
+        settings,
+        newChunkSource());
   }
 
   /**
-   * Begins a search toward a plugin-provided {@link Destination} (e.g. a resolved location), which
-   * may span several regions/endpoints. Used by the {@code /navigate} command; not on the public
-   * native façade because it speaks Paper's {@link WorldRegion} type.
+   * Begins a search toward a {@link Destination} the {@code /navigate} command resolved, which may
+   * span several regions/endpoints. Not on the public native façade, because it speaks the search's
+   * own region type: make those with {@link #regions()}.
+   *
+   * <p>The destination's regions are read once, here, on the calling thread, and made for this
+   * search: a region that reads blocks reads them through the search's own chunk source.
    *
    * @param player the navigating player
-   * @param destination the goal, as one or more world regions
+   * @param destination the goal, as one or more regions
    * @param settings the search limits and knobs
    * @return a handle to the in-flight search, yielding native-located steps
    */
   public SearchHandle<Location, MinecraftStepPayload> navigatePlayerToDestination(
-      Player player,
-      Destination<WorldRegion<World, Vector3i>> destination,
-      MinecraftSearchSettings settings) {
-    List<DomainRegion<MinecraftWorld>> regions = new ArrayList<>();
-    for (WorldRegion<World, Vector3i> region : destination.regions()) {
-      if (region.world() == null) {
-        continue; // world unloaded or target gone; skip rather than NPE
-      }
-      regions.add(PaperConversions.region(region, this));
-    }
-    return search(player, () -> regions, settings);
+      Player player, Destination<RegionFactory> destination, MinecraftSearchSettings settings) {
+    ChunkProvider chunks = newChunkSource();
+    List<DomainRegion<MinecraftWorld>> regions =
+        destination.regions().stream().map(region -> region.create(chunks)).toList();
+    return search(player, () -> regions, settings, chunks);
+  }
+
+  /**
+   * Returns the factory for the regions {@link #navigatePlayerToDestination} takes.
+   *
+   * @return the region factory
+   */
+  public PaperRegions regions() {
+    return regions;
   }
 
   /**
@@ -203,26 +216,34 @@ public final class PaperNavigationServiceImpl
     searchModifiers.purge(owner);
   }
 
+  /**
+   * The chunk cache for one search, shared by everything in it that reads blocks and dropped with
+   * it; see {@link ChunkProvider}.
+   */
+  private ChunkProvider newChunkSource() {
+    return new ChunkProvider(platform, chunkSettings);
+  }
+
   private SearchHandle<Location, MinecraftStepPayload> search(
       Player player,
       Destination<DomainRegion<MinecraftWorld>> destination,
-      MinecraftSearchSettings settings) {
-    CobblestonePlayer agent = new PaperPlayer(player);
-    Location origin = player.getLocation();
+      MinecraftSearchSettings settings,
+      ChunkSource chunks) {
+    Location origin = originOf(player);
     Position<MinecraftWorld> originPosition =
         new Position<>(PaperConversions.cell(origin), wrap(origin.getWorld()));
     // One snapshot of the registered modifiers drives all three influences on this search.
     Collection<SearchModificationService> modifiers = searchModifiers.map().values();
-    BreakChecker<CobblestonePlayer> breakChecker = buildBreakChecker(modifiers, player);
-    List<Restriction<CobblestonePlayer, MinecraftWorld>> restrictions =
-        buildRestrictions(modifiers, player);
-    // Read the pearl count now, on the calling (server) thread; the provider closes over it and is
-    // invoked per leg on worker threads, where it must not touch the Bukkit player.
-    ModesProvider<CobblestonePlayer, MinecraftStepPayload, MinecraftWorld> modes =
-        MinecraftModes.providerFor(
-            agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
+    BreakChecker breakChecker = buildBreakChecker(modifiers, player, chunks);
+    List<Restriction<MinecraftWorld>> restrictions = buildRestrictions(modifiers, player);
+    // Built on the server thread: it reads the Bukkit player, which worker threads must not touch.
+    CobblestonePlayer agent = new PaperPlayer(player);
+    MinecraftMovementBehavior behavior =
+        MinecraftMovementBehavior.forPlayer(
+            chunks, agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
     HeuristicStrategy heuristic =
-        MinecraftHeuristics.forPlayer(agent, originPosition.cell(), settings, regionStores);
+        MinecraftHeuristics.forPlayer(
+            behavior, chunks, agent, originPosition.cell(), settings, regionStores);
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
         gatherTransitions(
@@ -232,14 +253,14 @@ public final class PaperNavigationServiceImpl
                     core.navigate(
                         logger,
                         scheduler,
-                        agent,
                         originPosition,
                         destination,
-                        modes,
+                        behavior,
                         gathered,
                         restrictions,
                         heuristic,
-                        settings.settings()));
+                        settings.settings(),
+                        SearchObserver.none()));
     return new PaperSearchHandle(handleFuture);
   }
 
@@ -282,8 +303,8 @@ public final class PaperNavigationServiceImpl
   /**
    * Composes every modifier's break checker into one; a block is breakable only if all permit it.
    */
-  private BreakChecker<CobblestonePlayer> buildBreakChecker(
-      Collection<SearchModificationService> modifiers, Player player) {
+  private BreakChecker buildBreakChecker(
+      Collection<SearchModificationService> modifiers, Player player, ChunkSource chunks) {
     List<org.cobblestonemc.paper.api.BreakChecker> checkers = new ArrayList<>();
     for (SearchModificationService modifier : modifiers) {
       org.cobblestonemc.paper.api.BreakChecker checker = modifier.computeBreakChecker(player);
@@ -292,22 +313,19 @@ public final class PaperNavigationServiceImpl
       }
     }
     if (checkers.isEmpty()) {
-      return null; // no constraint: the mining mode attaches no restriction future at all
+      return null; // no constraint
     }
     UUID playerId = player.getUniqueId();
-    return (agent, cell, world, block) -> {
+    return (cell, world, block) -> {
       Player online = Bukkit.getPlayer(playerId);
       World bukkitWorld = bukkitWorld(world.key());
       if (online == null || bukkitWorld == null) {
         return CompletableFuture.completedFuture(true); // cannot evaluate; do not block mining
       }
       Location location = new Location(bukkitWorld, cell.x(), cell.y(), cell.z());
-      // Checkers are promised the block's real state, which the block a mode read cannot give them;
-      // see LazyBlockData. The chunk is a cache hit, since the mining mode has just read this
-      // block,
-      // and whether it was snapshotted from memory or read off disk makes no difference here.
-      return world
-          .chunkAt(cell, cell)
+      // Checkers are promised the block's real state; see LazyBlockData.
+      return chunks
+          .chunk(cell, world, cell)
           .toFuture()
           .thenCompose(
               chunk -> {
@@ -328,7 +346,7 @@ public final class PaperNavigationServiceImpl
   }
 
   /** One composite passability restriction; a cell is impassable if any modifier bars entry. */
-  private List<Restriction<CobblestonePlayer, MinecraftWorld>> buildRestrictions(
+  private List<Restriction<MinecraftWorld>> buildRestrictions(
       Collection<SearchModificationService> modifiers, Player player) {
     List<PassChecker> checkers = new ArrayList<>();
     for (SearchModificationService modifier : modifiers) {
@@ -341,8 +359,8 @@ public final class PaperNavigationServiceImpl
       return List.of(); // no constraint: Tier-2 skips restriction filtering entirely
     }
     UUID playerId = player.getUniqueId();
-    Restriction<CobblestonePlayer, MinecraftWorld> restriction =
-        (agent, cell, domain) -> {
+    Restriction<MinecraftWorld> restriction =
+        (cell, domain) -> {
           Player online = Bukkit.getPlayer(playerId);
           World bukkitWorld = bukkitWorld(domain.key());
           if (online == null || bukkitWorld == null) {
@@ -356,6 +374,23 @@ public final class PaperNavigationServiceImpl
           return FutureOr.from(anyFalse(results));
         };
     return List.of(restriction);
+  }
+
+  /**
+   * Where a search for {@code player} starts. A player in a boat starts from the boat's block: the
+   * water or ice it floats on, which is one below the boat when it sits on top of it.
+   */
+  private static Location originOf(Player player) {
+    if (!(player.getVehicle() instanceof Boat boat)) {
+      return player.getLocation();
+    }
+    Location at = boat.getLocation();
+    Location below = at.clone().subtract(0, 1, 0);
+    if (!new PaperBlock(at.getBlock().getBlockData()).supportsBoat()
+        && new PaperBlock(below.getBlock().getBlockData()).supportsBoat()) {
+      return below;
+    }
+    return at;
   }
 
   /** Counts the ender pearls in the player's inventory (read on the server thread). */
@@ -412,7 +447,6 @@ public final class PaperNavigationServiceImpl
 
   @Override
   public MinecraftWorld wrap(World world) {
-    return worldCache.computeIfAbsent(
-        world.getKey().asString(), key -> new PaperWorld(world, platform, chunkSettings));
+    return worldCache.computeIfAbsent(world.getKey().asString(), key -> new PaperWorld(world));
   }
 }

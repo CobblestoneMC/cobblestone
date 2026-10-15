@@ -97,17 +97,6 @@ public final class SpongeTripServiceImpl
     return factory.create(player, path, settings);
   }
 
-  @Override
-  protected String describe(ServerLocation location) {
-    return location.world().key().asString()
-        + " "
-        + location.blockX()
-        + ","
-        + location.blockY()
-        + ","
-        + location.blockZ();
-  }
-
   private NavigatorFactory navigatorFactory(String id) {
     NavigatorFactory factory = integrations.navigator(id);
     return factory != null ? factory : integrations.navigator(TrailNavigatorSettings.NAVIGATOR_ID);

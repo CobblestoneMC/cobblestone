@@ -14,10 +14,17 @@ import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
 
 /**
- * An in-memory {@link MinecraftWorld} for mode tests. Cells default to air; set blocks with the
- * builder. Every block is served immediately (no parking), exercising the cache-hit path.
+ * An in-memory {@link MinecraftWorld} for tests. Cells default to air; set blocks with the builder.
+ * Its blocks are read through {@link #CHUNKS}, which serves every one immediately (no parking),
+ * exercising the cache-hit path.
  */
 public final class TestWorld implements MinecraftWorld {
+
+  /**
+   * Reads any {@link TestWorld}'s own blocks. Only for {@link TestWorld}s; any other world fails.
+   */
+  public static final ChunkSource CHUNKS =
+      (cell, world, destination) -> FutureOr.of(((TestWorld) world).chunk(cell));
 
   private final String key;
   private final Map<Cell, MinecraftBlock> grid;
@@ -52,17 +59,11 @@ public final class TestWorld implements MinecraftWorld {
     return Environment.OVERWORLD;
   }
 
-  @Override
-  public FutureOr<MinecraftBlock> blockAt(Cell cell, Cell previous) {
-    return FutureOr.of(grid.getOrDefault(cell, air));
-  }
-
-  @Override
-  public FutureOr<MinecraftChunk> chunkAt(Cell cell, Cell previous) {
+  private MinecraftChunk chunk(Cell cell) {
     int baseX = (cell.x() >> 4) << 4;
     int baseZ = (cell.z() >> 4) << 4;
-    return FutureOr.of(
-        (localX, y, localZ) -> grid.getOrDefault(new Cell(baseX + localX, y, baseZ + localZ), air));
+    return (localX, y, localZ) ->
+        grid.getOrDefault(new Cell(baseX + localX, y, baseZ + localZ), air);
   }
 
   @Override

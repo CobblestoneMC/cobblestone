@@ -7,10 +7,12 @@
 
 package org.cobblestonemc.plugin.trip;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.api.FailureReason;
@@ -97,9 +99,6 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
   protected abstract Navigator<L> createNavigator(
       P player, Path<L, MinecraftStepPayload> path, NavigatorSettings settings);
 
-  /** A short human label for a location (its world and block coordinates). */
-  protected abstract String describe(L location);
-
   // --- shared flow ----------------------------------------------------------
 
   /**
@@ -108,11 +107,12 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
    * @param player the player to guide
    * @param destination where to route to
    * @param settings which navigator to display with, and its overrides
-   * @param label the stable trip identity, or {@code null} for a coordinate label
+   * @param label the trip's name and stable identity
    * @return the outcome, once the search completes and the trip is (or is not) started
    */
   public CompletableFuture<TripOutcome> navigate(
       P player, L destination, NavigatorSettings settings, String label) {
+    Objects.requireNonNull(label, "label");
     UUID uuid = uuid(player);
     gate.beginForced(uuid);
     SearchHandle<L, MinecraftStepPayload> handle = navigate(player, destination, defaults());
@@ -139,7 +139,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
                     start(
                             player,
                             v.path(),
-                            label != null ? label : describe(destination),
+                            TripLabel.of(label),
                             settings,
                             liveSearch(player, destination),
                             guideSearch(player),
@@ -161,11 +161,13 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
    * @param player the player to guide
    * @param path the path to follow
    * @param settings which navigator to display with, and its overrides
+   * @param label the trip's name and stable identity
    * @return the outcome, once the trip is (or is not) started on the path's region thread
    */
   public CompletableFuture<TripOutcome> startTrip(
-      P player, Path<L, MinecraftStepPayload> path, NavigatorSettings settings) {
-    return start(player, path, describe(path), settings, null, null, false);
+      P player, Path<L, MinecraftStepPayload> path, NavigatorSettings settings, String label) {
+    Objects.requireNonNull(label, "label");
+    return start(player, path, TripLabel.of(label), settings, null, null, false);
   }
 
   /**
@@ -185,11 +187,38 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
   public CompletableFuture<TripOutcome> start(
       P player,
       Path<L, MinecraftStepPayload> path,
-      String label,
+      TripLabel label,
       NavigatorSettings settings,
       LiveSearch<L> liveSearch,
       GuideSearch<L> guideSearch,
       boolean live) {
+    return start(player, path, label, settings, liveSearch, guideSearch, live, null);
+  }
+
+  /**
+   * As {@link #start(Object, Path, TripLabel, NavigatorSettings, LiveSearch, GuideSearch,
+   * boolean)}, for a target that may stop existing partway, which ends the trip.
+   *
+   * @param player the player to guide
+   * @param path the route to follow (its first step's world/region owns the trip)
+   * @param label the destination label (for the trip listing and same-destination replacement)
+   * @param settings which navigator to display with, and its per-trip overrides
+   * @param liveSearch the re-search behavior, or {@code null} to disable re-searching
+   * @param guideSearch the short-range off-trail guide search, or {@code null}
+   * @param live whether to also re-search periodically
+   * @param targetExists polled about once a second on the trip's thread; the trip ends once it
+   *     returns {@code false}. {@code null} for a target that cannot vanish
+   * @return the outcome, completed once the trip is (or is not) started on the region thread
+   */
+  public CompletableFuture<TripOutcome> start(
+      P player,
+      Path<L, MinecraftStepPayload> path,
+      TripLabel label,
+      NavigatorSettings settings,
+      LiveSearch<L> liveSearch,
+      GuideSearch<L> guideSearch,
+      boolean live,
+      BooleanSupplier targetExists) {
     CompletableFuture<TripOutcome> outcome = new CompletableFuture<>();
     L origin = path.steps().isEmpty() ? null : path.steps().getFirst().position();
     Position<MinecraftWorld> originPosition = origin == null ? null : position(origin);
@@ -199,7 +228,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
       return outcome;
     }
     // Re-navigating to a place you already have a trip for replaces it rather than piling on.
-    trips.cancelByDestination(uuid(player), label);
+    trips.cancelByDestination(uuid(player), label.text());
     scheduler()
         .runAtPosition(
             originPosition,
@@ -217,7 +246,8 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
                       liveSearch,
                       guideSearch,
                       live,
-                      liveIntervalMillis);
+                      liveIntervalMillis,
+                      targetExists);
               outcome.complete(
                   trip.map(
                           started ->
@@ -273,12 +303,5 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
 
   private MinecraftSearchSettings defaults() {
     return new MinecraftSearchSettings(searchSettings.get(), Set.of(), Set.of(), Set.of());
-  }
-
-  /** Labels an already-computed path by its final step's position. */
-  protected final String describe(Path<L, MinecraftStepPayload> path) {
-    return path.steps().isEmpty()
-        ? "path"
-        : describe(path.steps().get(path.steps().size() - 1).position());
   }
 }
