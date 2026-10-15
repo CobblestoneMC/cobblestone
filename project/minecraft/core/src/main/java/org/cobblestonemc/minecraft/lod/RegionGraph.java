@@ -243,6 +243,17 @@ public final class RegionGraph {
   }
 
   /**
+   * Returns one bound of a region's box.
+   *
+   * @param region the region
+   * @param bound 0–2 the minimum X, Y, Z and 3–5 the maximum
+   * @return the bound, in world coordinates
+   */
+  public int regionBound(int region, int bound) {
+    return regionBox[region * 6 + bound];
+  }
+
+  /**
    * Returns how many portals the graph holds; every portal index is below this.
    *
    * @return the portal count

@@ -224,4 +224,36 @@ class RegionSearchTest {
     // goal. A disc would read on the order of 2,000 columns.
     assertTrue(world.read < 400, "the search should not flood the world: " + world.read);
   }
+
+  @Test
+  void anAreaDestinationIsReachedByItsNearestEntranceNotItsNearestEdge() {
+    // A walled town, x 100..160 and z -30..30, in bedrock: its only gate is on the east side, away
+    // from a traveller coming from the west. The nearest cell of the town is just inside the west
+    // wall, but the town is reached the moment the gate is passed.
+    Terrain town =
+        (x, y, z) -> {
+          boolean westOrEast = (x == 100 || x == 160) && z >= -30 && z <= 30;
+          boolean northOrSouth = (z == -30 || z == 30) && x >= 100 && x <= 160;
+          boolean gate = x == 160 && z >= -2 && z <= 2;
+          return (westOrEast || northOrSouth) && !gate ? BEDROCK : flat(x, y, z);
+        };
+    java.util.function.Predicate<Cell> inside =
+        cell -> cell.x() > 100 && cell.x() < 160 && cell.z() > -30 && cell.z() < 30;
+    Cell from = new Cell(60, FEET, 0);
+    Cell nearest = new Cell(101, FEET, 0);
+    RegionCost cost = RegionCost.forMediums(walker());
+
+    double toPoint =
+        new RegionSearch(new RegionGraph(new World(town)), cost, nearest, from).costToGoal(from);
+    double toArea =
+        new RegionSearch(new RegionGraph(new World(town)), cost, nearest, from, inside)
+            .costToGoal(from);
+
+    double around = (Math.hypot(40, 31) + 60 + Math.hypot(1, 31)) * 0.2;
+    assertTrue(
+        toArea < toPoint - 8,
+        "arriving through the gate should not pay to cross the town: " + toArea + " vs " + toPoint);
+    assertTrue(
+        toArea >= around * 0.8, "the walls are still walls: " + toArea + " vs around " + around);
+  }
 }

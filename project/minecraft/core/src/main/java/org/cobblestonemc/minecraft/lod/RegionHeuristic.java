@@ -180,7 +180,8 @@ public final class RegionHeuristic implements HeuristicStrategy {
       if (search == null) {
         // Seeded at the first cell asked about, which is the solve's start: the search focuses on
         // it, and the goal cell worth aiming at depends on where the route begins.
-        search = new RegionSearch(graph, cost, target.nearestBoundaryCell(from), from);
+        search =
+            new RegionSearch(graph, cost, target.nearestBoundaryCell(from), from, target::contains);
         searches.add(search);
       }
       return search;

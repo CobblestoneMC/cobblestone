@@ -7,8 +7,14 @@
 
 package org.cobblestonemc.minecraft.lod;
 
+import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
 import org.cobblestonemc.Cell;
 import org.jetbrains.annotations.Nullable;
 
@@ -59,6 +65,23 @@ public final class RegionSearch {
   /** The goal's region, once found: {@link RegionGraph#NONE} if it has none the agent can use. */
   private int goalRegion = Integer.MIN_VALUE;
 
+  /**
+   * How many regions the flood through a destination may look at. A destination is usually a point
+   * or a building; a whole town is thousands of regions, and its nearest parts are what an estimate
+   * needs.
+   */
+  static final int MAX_DESTINATION_REGIONS = 4096;
+
+  /** Whether a cell is part of the destination. */
+  private final Predicate<Cell> inside;
+
+  /** Every region seeded as arrived, with the point inside the destination it is priced to. */
+  private final Map<Integer, double[]> arrivals = new HashMap<>();
+
+  private final ArrayDeque<Integer> flood = new ArrayDeque<>();
+  private int goalSeed = RegionGraph.NONE;
+  private final Set<Integer> flooded = new HashSet<>();
+
   private long expansions;
   private long queries;
   private long queryNanos;
@@ -74,11 +97,31 @@ public final class RegionSearch {
    * @param origin where the fine search starts
    */
   public RegionSearch(RegionGraph graph, RegionCost cost, Cell goal, Cell origin) {
+    this(graph, cost, goal, origin, goal::equals);
+  }
+
+  /**
+   * Creates a search seeded at a destination that may be an area, and focused on the origin.
+   *
+   * <p>The search starts from every region inside the destination that connects to {@code goal},
+   * the destination's nearest cell to the origin: a town a river enters from the far side is
+   * reached by the river, and an estimate measured to the nearest edge alone would steer the fine
+   * search away from it.
+   *
+   * @param graph the terrain
+   * @param cost the agent
+   * @param goal the destination's cell nearest the origin
+   * @param origin where the fine search starts
+   * @param inside whether a cell is part of the destination
+   */
+  public RegionSearch(
+      RegionGraph graph, RegionCost cost, Cell goal, Cell origin, Predicate<Cell> inside) {
     this.graph = graph;
     this.cost = cost;
     this.goal = goal;
     this.origin = origin;
     this.cheapest = cost.cheapest();
+    this.inside = inside;
   }
 
   /**
@@ -178,10 +221,14 @@ public final class RegionSearch {
     // A ceiling, so a region the graph cannot reach does not send the search across the world to
     // prove it: past the price of tunnelling straight there, no answer is worth more search.
     double answer = cell.distance(goal) * cost.fallback();
-    if (region == goalRegion) {
+    double[] arrival = arrivals.get(region);
+    if (arrival != null) {
       answer =
-          Math.min(
-              answer, cross(region, cell.x(), cell.y(), cell.z(), goal.x(), goal.y(), goal.z()));
+          inside.test(cell)
+              ? 0
+              : Math.min(
+                  answer,
+                  cross(region, cell.x(), cell.y(), cell.z(), arrival[0], arrival[1], arrival[2]));
     }
     int portals = graph.portalCount(region);
     for (int i = 0; i < portals; i++) {
@@ -244,32 +291,70 @@ public final class RegionSearch {
   }
 
   /**
-   * Seeds the search with the goal's region.
+   * Seeds the search with the destination: the goal's region, and every region the destination
+   * holds that connects to it.
+   *
+   * <p>A flood outward from the goal's region, through regions of any class, keeping each usable
+   * region whose middle is inside the destination; resumed where it left off when it has to wait
+   * for terrain. For a destination that is one cell, only the goal's region.
    *
    * @return a future to wait on, or {@code null} once seeded
    */
   private @Nullable CompletableFuture<Void> seed() {
-    CompletableFuture<Void> waiting = completing(goal.x(), goal.z());
-    if (waiting != null) {
-      return waiting;
-    }
-    int region = usableRegionNear(goal.x(), goal.y(), goal.z());
-    if (region != RegionGraph.NONE) {
-      waiting = completingRegion(region);
+    if (flooded.isEmpty()) {
+      CompletableFuture<Void> waiting = completing(goal.x(), goal.z());
       if (waiting != null) {
         return waiting;
       }
-      grow();
+      int region = usableRegionNear(goal.x(), goal.y(), goal.z());
+      if (region == RegionGraph.NONE) {
+        goalRegion = RegionGraph.NONE;
+        return null;
+      }
+      flooded.add(region);
+      flood.add(region);
+      arrivals.put(region, new double[] {goal.x(), goal.y(), goal.z()});
+      goalSeed = region;
+    }
+    while (!flood.isEmpty() && flooded.size() < MAX_DESTINATION_REGIONS) {
+      int region = flood.peek();
+      CompletableFuture<Void> waiting = completingRegion(region);
+      if (waiting != null) {
+        return waiting;
+      }
+      flood.poll();
       int portals = graph.portalCount(region);
       for (int i = 0; i < portals; i++) {
         int portal = graph.portal(region, i);
-        if (!enters(portal, region)) {
+        int other = graph.portalA(portal) == region ? graph.portalB(portal) : graph.portalA(portal);
+        if (!flooded.add(other)) {
           continue;
         }
-        reach(portal, region, 0, -1, goal.x(), goal.y(), goal.z());
+        double mx = (graph.regionBound(other, 0) + graph.regionBound(other, 3)) / 2.0;
+        double my = graph.regionBound(other, 1);
+        double mz = (graph.regionBound(other, 2) + graph.regionBound(other, 5)) / 2.0;
+        if (!inside.test(new Cell((int) Math.floor(mx), (int) my, (int) Math.floor(mz)))) {
+          continue; // outside: the flood stops at the destination's edge
+        }
+        flood.add(other);
+        if (usable(other)) {
+          arrivals.put(other, new double[] {mx, my, mz});
+        }
       }
     }
-    goalRegion = region;
+    grow();
+    for (Map.Entry<Integer, double[]> arrival : arrivals.entrySet()) {
+      int region = arrival.getKey();
+      double[] at = arrival.getValue();
+      int portals = graph.portalCount(region);
+      for (int i = 0; i < portals; i++) {
+        int portal = graph.portal(region, i);
+        if (enters(portal, region)) {
+          reach(portal, region, 0, -1, at[0], at[1], at[2]);
+        }
+      }
+    }
+    goalRegion = goalSeed;
     return null;
   }
 
