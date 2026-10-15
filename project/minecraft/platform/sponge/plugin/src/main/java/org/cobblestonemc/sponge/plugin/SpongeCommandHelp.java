@@ -18,9 +18,9 @@ import org.cobblestonemc.plugin.message.Messages;
  * color, followed by a localized description. Keeps the literal command out of the translation
  * bundle, which only carries the human-readable descriptions.
  */
-final class CommandHelp {
+final class SpongeCommandHelp {
 
-  private CommandHelp() {}
+  private SpongeCommandHelp() {}
 
   /**
    * Sends one help line to an audience.

@@ -47,7 +47,7 @@ import org.spongepowered.math.vector.Vector3d;
  *
  * <p>Block reads happen on the server thread (in the event); persistence runs off-thread.
  */
-final class PortalListener {
+final class SpongePortalListener {
 
   private final PortalTransitionDao portals;
   private final EndReturnPortalDao endReturns;
@@ -57,7 +57,7 @@ final class PortalListener {
   private final DoubleSupplier cost;
   private final BooleanSupplier enabled;
 
-  PortalListener(
+  SpongePortalListener(
       PortalTransitionDao portals,
       EndReturnPortalDao endReturns,
       GatewayDao gateways,
