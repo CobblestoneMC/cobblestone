@@ -340,7 +340,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
   private NavigationTarget mount(MountLocation mount) {
     // Follows the mount while it is loaded, so live trips track it; otherwise heads to where it
     // was last seen.
-    TrackedEntity tracked = new TrackedEntity(mount.mount(), scheduler);
+    PaperTrackedEntity tracked = new PaperTrackedEntity(mount.mount(), scheduler);
     return NavigationTarget.builder(
             MOUNT_KEY,
             () ->

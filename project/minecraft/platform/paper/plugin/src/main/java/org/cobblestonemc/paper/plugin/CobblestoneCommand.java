@@ -249,27 +249,27 @@ final class CobblestoneCommand {
   private static int showHelp(CommandSender sender, Messages messages) {
     Locale locale = localeOf(sender, messages);
     messages.send(sender, locale, CobblestoneMessages.HELP_HEADER);
-    CommandHelp.line(
+    PaperCommandHelp.line(
         sender, messages, locale, "/cobblestone reload", "command.cobblestone.help.reload");
-    CommandHelp.line(
+    PaperCommandHelp.line(
         sender,
         messages,
         locale,
         "/cobblestone cancel [id|all]",
         "command.cobblestone.help.cancel");
-    CommandHelp.line(
+    PaperCommandHelp.line(
         sender, messages, locale, "/cobblestone trips", "command.cobblestone.help.trips");
-    CommandHelp.line(
+    PaperCommandHelp.line(
         sender, messages, locale, "/cobblestone hud [on|off]", "command.cobblestone.help.hud");
-    CommandHelp.line(
+    PaperCommandHelp.line(
         sender,
         messages,
         locale,
         "/cobblestone location set|unset|list <name> [-global]",
         "command.cobblestone.help.location");
-    CommandHelp.line(
+    PaperCommandHelp.line(
         sender, messages, locale, "/cobblestone portals clear", "command.cobblestone.help.portals");
-    CommandHelp.line(
+    PaperCommandHelp.line(
         sender,
         messages,
         locale,

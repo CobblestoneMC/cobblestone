@@ -19,9 +19,9 @@ import org.cobblestonemc.plugin.message.Messages;
  * the literal command out of the translation bundle, which only carries the human-readable
  * descriptions.
  */
-final class CommandHelp {
+final class PaperCommandHelp {
 
-  private CommandHelp() {}
+  private PaperCommandHelp() {}
 
   /**
    * Sends one help line to a sender.

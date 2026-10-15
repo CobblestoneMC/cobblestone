@@ -56,7 +56,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
   private TripHud<Entity, PaperTripAgent, Location> tripHud;
   private PaperHolograms holograms;
   private PaperMetrics metrics;
-  private MountListener mountListener;
+  private PaperMountListener mountListener;
   private final SearchRegistry<Location> searchRegistry = new SearchRegistry<>();
 
   @Override
@@ -124,11 +124,11 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     getServer()
         .getPluginManager()
         .registerEvents(
-            new DeathListener(
+            new PaperDeathListener(
                 dataStore.deaths(), platformApi.scheduler(), () -> config.get(keys.deathsTrack)),
             this);
     // So is their last mount.
-    mountListener = new MountListener(dataStore.mounts(), platformApi.scheduler());
+    mountListener = new PaperMountListener(dataStore.mounts(), platformApi.scheduler());
     getServer().getPluginManager().registerEvents(mountListener, this);
 
     // Trips tick on the platform scheduler (Folia-safe region tasks); the default trail navigator
@@ -169,12 +169,12 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     // learned from player teleports by the portal listener.
     platformApi.register(
         this,
-        new PortalSearchModificationService(
+        new PaperPortalSearchModificationService(
             dataStore.portalTransitions(), dataStore.endReturnPortals(), dataStore.gateways()));
     getServer()
         .getPluginManager()
         .registerEvents(
-            new PortalListener(
+            new PaperPortalListener(
                 dataStore.portalTransitions(),
                 dataStore.endReturnPortals(),
                 dataStore.gateways(),

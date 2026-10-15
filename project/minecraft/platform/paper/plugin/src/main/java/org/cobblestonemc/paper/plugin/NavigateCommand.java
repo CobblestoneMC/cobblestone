@@ -117,22 +117,23 @@ final class NavigateCommand {
   private static int navHelp(CommandSender sender, Messages messages) {
     Locale locale = localeOf(sender, messages);
     messages.send(sender, locale, CobblestoneMessages.NAVIGATE_HELP_HEADER);
-    CommandHelp.line(
+    PaperCommandHelp.line(
         sender,
         messages,
         locale,
         "/navigate <destination...>",
         "command.navigate.help.destination");
-    CommandHelp.line(
+    PaperCommandHelp.line(
         sender, messages, locale, "-navigator <id>", "command.navigate.help.navigator");
-    CommandHelp.line(sender, messages, locale, "-no-mode <mode>", "command.navigate.help.no_mode");
-    CommandHelp.line(
+    PaperCommandHelp.line(
+        sender, messages, locale, "-no-mode <mode>", "command.navigate.help.no_mode");
+    PaperCommandHelp.line(
         sender,
         messages,
         locale,
         "-no-world <world> / -no-dimension <dim>",
         "command.navigate.help.no_world");
-    CommandHelp.line(sender, messages, locale, "-live", "command.navigate.help.live");
+    PaperCommandHelp.line(sender, messages, locale, "-live", "command.navigate.help.live");
     return Command.SINGLE_SUCCESS;
   }
 

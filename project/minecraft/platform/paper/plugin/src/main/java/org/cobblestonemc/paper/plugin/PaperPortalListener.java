@@ -45,7 +45,7 @@ import org.cobblestonemc.plugin.data.PortalTransitionDao;
  *
  * <p>Block reads happen on the server thread (in the event); persistence runs off-thread.
  */
-final class PortalListener implements Listener {
+final class PaperPortalListener implements Listener {
 
   private final PortalTransitionDao portals;
   private final EndReturnPortalDao endReturns;
@@ -55,7 +55,7 @@ final class PortalListener implements Listener {
   private final DoubleSupplier cost;
   private final BooleanSupplier enabled;
 
-  PortalListener(
+  PaperPortalListener(
       PortalTransitionDao portals,
       EndReturnPortalDao endReturns,
       GatewayDao gateways,
