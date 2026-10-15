@@ -170,6 +170,18 @@ minecraft:overworld:
     origin: { x: 788, y: 72, z: 55 }
     destination: { x: 850, y: 63, z: -869 }
 
+  mountain-box:
+    capture: mountain-box
+    tier: LOCAL
+    io: zero
+    origin: { x: 522, y: 63, z: -318 }
+    destination:
+      x: 492
+      y: 69
+      z: -270
+      box: { from: { x: 507, y: 65, z: -285 }, to: { x: 478, y: 73, z: -255 } }
+    tags: [surface, no-pickaxe]
+
   mountain-peaks:
     capture: mountain-peaks
     tier: LOCAL
@@ -185,6 +197,14 @@ minecraft:overworld:
     io: zero
     origin: { x: 761, y: 163, z: -67 }
     destination: { x: 619, y: 146, z: -235 }
+
+  mountain-point:
+    capture: mountain-point
+    tier: LOCAL
+    io: zero
+    origin: { x: 522, y: 63, z: -318 }
+    destination: { x: 507, y: 65, z: -285 }
+    tags: [surface, no-pickaxe]
 
   ocean:
     capture: ocean

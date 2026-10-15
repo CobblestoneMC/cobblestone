@@ -59,7 +59,7 @@ project(":minecraft:platform:sponge-latest:plugin").name = "sponge-latest-plugin
 include(":minecraft:platform:sponge-1_21_1:plugin")
 project(":minecraft:platform:sponge-1_21_1:plugin").name = "sponge-1_21_1-plugin"
 
-// Stonebrick — the benchmarking and visual-debugging platform (designs/stonebrick.md). None of it
+// Stonebrick — the benchmarking and visual-debugging platform (stonebrick/README.md). None of it
 // ships: `format` is the .sbc capture codec, `utility` is a Paper plugin that writes captures, and
 // the rest read them back to run and visualize searches without a server.
 include(":stonebrick:format")

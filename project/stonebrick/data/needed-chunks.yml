@@ -247,3 +247,13 @@ the_nether/short-nether:
   from: { x: 71, y: 85, z: -42 }
   to: { x: 120, y: 99, z: -30 }
   radiusChunks: 4
+overworld/mountain-box:
+  world: minecraft:overworld
+  from: { x: 522, y: 63, z: -318 }
+  to: { x: 492, y: 69, z: -270 }
+  radiusChunks: 5
+overworld/mountain-point:
+  world: minecraft:overworld
+  from: { x: 522, y: 63, z: -318 }
+  to: { x: 507, y: 65, z: -285 }
+  radiusChunks: 6

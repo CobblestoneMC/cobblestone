@@ -4,7 +4,7 @@
 //
 // This is the ONE stonebrick module allowed to depend on :paper-core. It runs only on a live
 // server, and it needs the real PaperBlock so that captured traits are byte-for-byte what
-// production computes rather than a second implementation that can drift (designs/stonebrick.md §4).
+// production computes rather than a second implementation that can drift (See README.md.).
 // Every other stonebrick module stays pure Java with no server on its classpath; the capture
 // directory is the one-way boundary between them.
 plugins {

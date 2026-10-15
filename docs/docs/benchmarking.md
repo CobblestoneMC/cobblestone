@@ -7,8 +7,8 @@ description: Measuring the search against real Minecraft terrain with Stonebrick
 
 Stonebrick runs the search against terrain captured from a real Minecraft world, without a server,
 and reports what each route cost. Runs are deterministic, so a number that moves means the
-algorithm changed. The design is in
-[`designs/stonebrick.md`](https://github.com/CobblestoneMC/cobblestone/blob/main/designs/stonebrick.md).
+algorithm changed. How it is built is in
+[`project/stonebrick/README.md`](https://github.com/CobblestoneMC/cobblestone/blob/main/project/stonebrick/README.md).
 
 | File in `project/stonebrick/data/` | What | Committed |
 | --- | --- | --- |
