@@ -257,3 +257,18 @@ overworld/mountain-point:
   from: { x: 522, y: 63, z: -318 }
   to: { x: 507, y: 65, z: -285 }
   radiusChunks: 6
+overworld/overland-warps:
+  world: minecraft:overworld
+  from: { x: -880, y: 86, z: 60 }
+  to: { x: 1120, y: 65, z: -40 }
+  radiusChunks: 16
+the_nether/nether-warps:
+  world: minecraft:the_nether
+  from: { x: 286, y: 83, z: -75 }
+  to: { x: 1250, y: 64, z: 380 }
+  radiusChunks: 16
+the_nether/nether-roof-trap:
+  world: minecraft:the_nether
+  from: { x: 286, y: 83, z: -75 }
+  to: { x: 1250, y: 64, z: 380 }
+  radiusChunks: 16
