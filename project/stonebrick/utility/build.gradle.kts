@@ -1,5 +1,6 @@
 // stonebrick-utility — the Paper plugin that captures world data into the .sbc format the benchmark
-// corpus is built from. Development tooling: it is never shipped and nothing depends on it.
+// corpus is built from, and checks new scenarios against the bench. Development tooling: it is
+// never shipped and nothing depends on it.
 //
 // This is the ONE stonebrick module allowed to depend on :paper-core. It runs only on a live
 // server, and it needs the real PaperBlock so that captured traits are byte-for-byte what
@@ -26,10 +27,18 @@ repositories {
 
 dependencies {
     implementation(project(":stonebrick:stonebrick-format"))
+    // The bench, to check a scenario in game exactly as the bench will run it.
+    implementation(project(":stonebrick:stonebrick-bench"))
     implementation(project(":minecraft:platform:paper:paper-core"))
     compileOnly(libs.paper.api)
     compileOnly(libs.adventure.api)
     compileOnly("org.jetbrains:annotations:24.0.1")
+}
+
+// The corpus's loadouts, so a check runs the same travellers the bench does; copied out beside
+// the scenarios on first start, where they can be edited.
+tasks.processResources {
+    from("../data/agents.yml")
 }
 
 tasks.shadowJar {

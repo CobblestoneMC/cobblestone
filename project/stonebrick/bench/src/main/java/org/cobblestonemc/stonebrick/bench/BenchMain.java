@@ -25,6 +25,7 @@ import org.cobblestonemc.SearchObserver;
  *   bench list                                                   show the corpus
  *   bench sweep    [--heuristic h] [--weights 1.5,2.0] [--io p] [--warm]   the nodes-versus-cost curve
  *   bench verify   [--scenario id] [--agent a]                    estimates against Dijkstra's cost
+ *   bench check    [--scenario id]                                 can the bench use a new scenario?
  * </pre>
  *
  * <p>Exits non-zero when a gated metric moved, so CI fails on an unexplained change. That failure
@@ -68,6 +69,24 @@ public final class BenchMain {
 
     switch (options.command()) {
       case "list" -> list(scenarios, loadouts);
+      case "check" -> {
+        boolean usable = true;
+        for (Scenario scenario : scenarios) {
+          try {
+            usable &=
+                ScenarioCheck.run(
+                    options.corpusRoot(),
+                    scenario,
+                    loadouts,
+                    capsule -> requireCaptured(options.corpusRoot(), scenario, capsule),
+                    System.out::println);
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+          }
+        }
+        System.exit(usable ? 0 : 1);
+      }
       case "accept" -> accept(scenarios, loadouts, options);
       case "run" -> System.exit(run(scenarios, loadouts, options) ? 0 : 1);
       case "sweep" ->
@@ -78,9 +97,42 @@ public final class BenchMain {
               new ScenarioRunner(options.corpusRoot(), new QuietLogger()));
       default -> {
         System.out.println(
-            "Unknown command '" + options.command() + "'. Try run, sweep, accept, list or verify.");
+            "Unknown command '"
+                + options.command()
+                + "'. Try run, sweep, accept, list, check or verify.");
         System.exit(2);
       }
+    }
+  }
+
+  /**
+   * The terrain a check needs, from the command line: here there is no server to capture with, so
+   * the corpus must already hold it.
+   */
+  private static void requireCaptured(Path corpusRoot, Scenario scenario, NeededChunks capsule)
+      throws IOException {
+    org.cobblestonemc.stonebrick.format.CaptureDirectory capture =
+        org.cobblestonemc.stonebrick.format.CorpusLayout.at(corpusRoot).capture(scenario.capture());
+    int minX = (Math.min(capsule.from().x(), capsule.to().x()) >> 4) - capsule.radiusChunks();
+    int maxX = (Math.max(capsule.from().x(), capsule.to().x()) >> 4) + capsule.radiusChunks();
+    int minZ = (Math.min(capsule.from().z(), capsule.to().z()) >> 4) - capsule.radiusChunks();
+    int maxZ = (Math.max(capsule.from().z(), capsule.to().z()) >> 4) + capsule.radiusChunks();
+    int missing = 0;
+    for (int x = minX; x <= maxX; x++) {
+      for (int z = minZ; z <= maxZ; z++) {
+        if (capsule.covers(x, z)
+            && !java.nio.file.Files.exists(capture.column(capsule.world(), x, z))) {
+          missing++;
+        }
+      }
+    }
+    if (missing > 0) {
+      throw new IOException(
+          missing
+              + " chunks of "
+              + scenario.id()
+              + " are not captured; run  ./gradlew captureCorpus -PacceptMinecraftEula=true"
+              + "  and check again, or check it in game with /stonebrick check");
     }
   }
 
@@ -322,7 +374,7 @@ public final class BenchMain {
   }
 
   /** Logs nothing: the search's own debug output would bury the report. */
-  private static final class QuietLogger extends CobblestoneLogger {
+  static final class QuietLogger extends CobblestoneLogger {
     @Override
     public void trace(String message, Object... args) {}
 

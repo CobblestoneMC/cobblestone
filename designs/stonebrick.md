@@ -236,13 +236,19 @@ Lives at `project/stonebrick/utility`, applies `cobblestone.paper-plugin-convent
 
 ### Commands
 
-All under one root, `/stonebrick`:
+All under one root, `/stonebrick` (or `/sb`):
 
 ```
 /stonebrick copy <x1> <z1> <x2> <z2> [options]     capture a chunk rectangle
 /stonebrick copy here <radiusChunks> [options]
 /stonebrick estimate <same args as copy>           size/file-count report; captures nothing
-/stonebrick mark <scenario> origin|dest            stamp your position into a scenario stub
+/stonebrick mark <scenario> origin|dest [<x> <y|surface> <z> [world]]
+                                                   stamp a position into a scenario stub, and
+                                                   say what stands there; tags it once both ends are in
+/stonebrick tag <scenario> <tags...>               set the tags, which pick the loadouts
+/stonebrick check <scenario> [--generate]          capture its terrain, run every loadout, and run
+                                                   Dijkstra: can the bench, and verify, use it?
+/stonebrick probe <x> <z> [world]                  where a body would stand in that column
 /stonebrick traits [capture]                       rebuild traits.tsv from the capture's own palettes
 /stonebrick status | /stonebrick cancel
 ```

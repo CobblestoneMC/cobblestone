@@ -28,7 +28,13 @@ public final class StonebrickUtilityPlugin extends JavaPlugin {
   @Override
   public void onEnable() {
     UtilityState state = new UtilityState(getDataFolder().toPath().resolve("out"));
-    UtilityCommand command = new UtilityCommand(this, state);
+    ScenarioChecker checker = new ScenarioChecker(this, state);
+    try {
+      checker.installLoadouts();
+    } catch (java.io.IOException e) {
+      getLogger().warning("Could not write the loadouts for /stonebrick check: " + e.getMessage());
+    }
+    UtilityCommand command = new UtilityCommand(this, state, checker);
     getLifecycleManager()
         .registerEventHandler(
             LifecycleEvents.COMMANDS,

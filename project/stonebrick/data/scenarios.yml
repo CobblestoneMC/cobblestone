@@ -1,5 +1,5 @@
 # Benchmark scenarios, grouped by the world they touch and then by name.
-# Positions are written by /stonebrick mark; everything else is edited by hand.
+# Positions and tags are written by /stonebrick mark and /stonebrick tag; the rest by hand.
 
 minecraft:overworld:
   along-river:

@@ -41,7 +41,7 @@ final class ScenarioFile {
   private static final String HEADER =
       """
       # Benchmark scenarios, grouped by the world they touch and then by name.
-      # Positions are written by /stonebrick mark; everything else is edited by hand.
+      # Positions and tags are written by /stonebrick mark and /stonebrick tag; the rest by hand.
       """;
 
   // A literal newline rather than the platform separator: this file is committed, and a CRLF
@@ -83,6 +83,89 @@ final class ScenarioFile {
 
     write(file, worlds);
     return created;
+  }
+
+  /**
+   * Sets a scenario's tags, which decide the loadouts the bench runs on it.
+   *
+   * @param file the scenarios file
+   * @param world the world key the scenario is filed under
+   * @param name the scenario's name within its world
+   * @param tags the tags
+   * @throws IOException if the file cannot be read or written, or has no such scenario
+   */
+  static void tag(Path file, String world, String name, List<String> tags) throws IOException {
+    Map<String, Map<String, List<String>>> worlds = read(file);
+    List<String> body = worlds.getOrDefault(world, Map.of()).get(name);
+    if (body == null) {
+      throw new IOException("no scenario '" + name + "' in " + world);
+    }
+    replaceOrAppend(body, "    tags:", "    tags: [" + String.join(", ", tags) + "]");
+    write(file, worlds);
+  }
+
+  /**
+   * Returns whether a scenario has its tags set.
+   *
+   * @param file the scenarios file
+   * @param world the world key
+   * @param name the scenario's name within its world
+   * @return {@code true} if it has a tags line
+   * @throws IOException if the file cannot be read
+   */
+  static boolean hasTags(Path file, String world, String name) throws IOException {
+    List<String> body = read(file).getOrDefault(world, Map.of()).get(name);
+    return body != null && body.stream().anyMatch(line -> line.startsWith("    tags:"));
+  }
+
+  /**
+   * Returns a scenario's marked position.
+   *
+   * @param file the scenarios file
+   * @param world the world key
+   * @param name the scenario's name within its world
+   * @param which {@code origin} or {@code dest}
+   * @return the block x, y and z, or {@code null} if it is not marked
+   * @throws IOException if the file cannot be read
+   */
+  static int @org.jetbrains.annotations.Nullable [] position(
+      Path file, String world, String name, String which) throws IOException {
+    List<String> body = read(file).getOrDefault(world, Map.of()).get(name);
+    if (body == null) {
+      return null;
+    }
+    String prefix = "    " + (which.equals("origin") ? "origin" : "destination") + ":";
+    for (String line : body) {
+      if (line.startsWith(prefix)) {
+        java.util.regex.Matcher m =
+            java.util.regex.Pattern.compile("x:\\s*(-?\\d+),\\s*y:\\s*(-?\\d+),\\s*z:\\s*(-?\\d+)")
+                .matcher(line);
+        if (m.find()) {
+          return new int[] {
+            Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3))
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Returns the world a scenario is filed under.
+   *
+   * @param file the scenarios file
+   * @param name the scenario's name
+   * @return the world key, or {@code null} if no world has it
+   * @throws IOException if the file cannot be read
+   */
+  static @org.jetbrains.annotations.Nullable String worldOf(Path file, String name)
+      throws IOException {
+    for (Map.Entry<String, Map<String, List<String>>> world : read(file).entrySet()) {
+      if (world.getValue().containsKey(name)) {
+        return world.getKey();
+      }
+    }
+    return null;
   }
 
   private static void replaceOrAppend(List<String> body, String prefix, String line) {

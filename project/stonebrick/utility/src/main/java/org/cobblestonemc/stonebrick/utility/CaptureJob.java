@@ -86,6 +86,8 @@ final class CaptureJob {
   private final AtomicInteger inFlight = new AtomicInteger();
   private final AtomicBoolean cancelled = new AtomicBoolean();
   private final AtomicBoolean finished = new AtomicBoolean();
+  private final java.util.concurrent.CompletableFuture<Void> done =
+      new java.util.concurrent.CompletableFuture<>();
 
   private final long startedAt = System.currentTimeMillis();
   private long lastReportAt = startedAt;
@@ -146,6 +148,19 @@ final class CaptureJob {
   /** Returns whether the job has stopped, for any reason. */
   boolean isFinished() {
     return finished.get();
+  }
+
+  /**
+   * Returns a future completed once the job has stopped and its trait table and metadata are
+   * written, which is when its columns can be read.
+   */
+  java.util.concurrent.CompletableFuture<Void> done() {
+    return done;
+  }
+
+  /** Returns how many chunks could not be captured. */
+  int failures() {
+    return failed.get();
   }
 
   /** Asks the job to stop; already-issued chunk loads still complete and are written. */
@@ -272,10 +287,10 @@ final class CaptureJob {
       return;
     }
     lastReportAt = now;
-    int done = completed.get();
+    int captured = completed.get();
     long elapsed = now - startedAt;
-    String eta = done == 0 ? "?" : ((elapsed * (total - done) / done) / 1000) + "s";
-    progress.accept("  %d/%d chunks, ETA %s".formatted(done, total, eta));
+    String eta = captured == 0 ? "?" : ((elapsed * (total - captured) / captured) / 1000) + "s";
+    progress.accept("  %d/%d chunks, ETA %s".formatted(captured, total, eta));
   }
 
   private void finish() {
@@ -303,6 +318,8 @@ final class CaptureJob {
                         .formatted(table.size(), capture.traitTable().getFileName()));
               } catch (IOException e) {
                 progress.accept("Failed to finish the capture: " + e.getMessage());
+              } finally {
+                done.complete(null);
               }
             });
   }

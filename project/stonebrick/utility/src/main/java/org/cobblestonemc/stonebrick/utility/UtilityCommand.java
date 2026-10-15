@@ -15,6 +15,8 @@ import io.papermc.paper.command.brigadier.Commands;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
 import java.util.function.Consumer;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
@@ -24,11 +26,14 @@ import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
+import org.cobblestonemc.Cell;
+import org.cobblestonemc.stonebrick.bench.NeededChunks;
 import org.cobblestonemc.stonebrick.format.CaptureDirectory;
+import org.cobblestonemc.stonebrick.format.CorpusLayout;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The {@code /stonebrick} command tree.
+ * The {@code /stonebrick} command tree, also {@code /sb}.
  *
  * <p>Named for what it does rather than for Cobblestone: capturing world data into a benchmark
  * format has nothing to do with navigation, and a developer running this on a test server should
@@ -50,10 +55,12 @@ final class UtilityCommand {
 
   private final Plugin plugin;
   private final UtilityState state;
+  private final ScenarioChecker checker;
 
-  UtilityCommand(Plugin plugin, UtilityState state) {
+  UtilityCommand(Plugin plugin, UtilityState state, ScenarioChecker checker) {
     this.plugin = plugin;
     this.state = state;
+    this.checker = checker;
   }
 
   /**
@@ -72,22 +79,46 @@ final class UtilityCommand {
             Commands.literal("mark")
                 .then(
                     Commands.argument("scenario", StringArgumentType.word())
+                        .then(markEnd("origin"))
+                        .then(markEnd("dest"))))
+        .then(
+            Commands.literal("tag")
+                .then(
+                    Commands.argument("scenario", StringArgumentType.word())
                         .then(
-                            Commands.literal("origin")
+                            Commands.argument("tags", StringArgumentType.greedyString())
                                 .executes(
                                     ctx ->
-                                        mark(
+                                        tag(
                                             ctx.getSource().getSender(),
-                                            StringArgumentType.getString(ctx, "scenario"),
-                                            "origin")))
+                                            scenarioArg(ctx),
+                                            StringArgumentType.getString(ctx, "tags"))))))
+        .then(
+            Commands.literal("check")
+                .then(
+                    Commands.argument("scenario", StringArgumentType.word())
+                        .executes(
+                            ctx -> check(ctx.getSource().getSender(), scenarioArg(ctx), false))
                         .then(
-                            Commands.literal("dest")
+                            Commands.literal("--generate")
                                 .executes(
                                     ctx ->
-                                        mark(
-                                            ctx.getSource().getSender(),
-                                            StringArgumentType.getString(ctx, "scenario"),
-                                            "dest")))))
+                                        check(
+                                            ctx.getSource().getSender(), scenarioArg(ctx), true)))))
+        .then(
+            Commands.literal("probe")
+                .then(
+                    Commands.argument("x", IntegerArgumentType.integer())
+                        .then(
+                            Commands.argument("z", IntegerArgumentType.integer())
+                                .executes(ctx -> probe(ctx, null))
+                                .then(
+                                    Commands.argument("world", StringArgumentType.greedyString())
+                                        .executes(
+                                            ctx ->
+                                                probe(
+                                                    ctx,
+                                                    StringArgumentType.getString(ctx, "world")))))))
         .then(
             Commands.literal("traits")
                 .executes(ctx -> traits(ctx.getSource().getSender(), null))
@@ -374,41 +405,183 @@ final class UtilityCommand {
     return com.mojang.brigadier.Command.SINGLE_SUCCESS;
   }
 
-  private int mark(CommandSender sender, String scenario, String which) {
+  /**
+   * The {@code origin} or {@code dest} branch of {@code mark}: where the player stands, or given
+   * coordinates, which is how the console marks. A Y of {@code surface} stands on the ground there.
+   */
+  private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> markEnd(
+      String which) {
+    return Commands.literal(which)
+        .executes(ctx -> markHere(ctx.getSource().getSender(), scenarioArg(ctx), which))
+        .then(
+            Commands.argument("x", IntegerArgumentType.integer())
+                .then(
+                    Commands.argument("y", StringArgumentType.word())
+                        .suggests(
+                            (ctx, builder) -> {
+                              if ("surface".startsWith(builder.getRemainingLowerCase())) {
+                                builder.suggest("surface");
+                              }
+                              return builder.buildFuture();
+                            })
+                        .then(
+                            Commands.argument("z", IntegerArgumentType.integer())
+                                .executes(ctx -> markAt(ctx, which, null))
+                                .then(
+                                    Commands.argument("world", StringArgumentType.greedyString())
+                                        .executes(
+                                            ctx ->
+                                                markAt(
+                                                    ctx,
+                                                    which,
+                                                    StringArgumentType.getString(
+                                                        ctx, "world")))))));
+  }
+
+  private static String scenarioArg(
+      com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+    return StringArgumentType.getString(ctx, "scenario");
+  }
+
+  private int markHere(CommandSender sender, String scenario, String which) {
     if (!(sender instanceof Player player)) {
-      return fail(sender, "`mark` records where you are standing, so it needs a player.");
+      return fail(
+          sender,
+          "From the console, give coordinates: mark <scenario> "
+              + which
+              + " <x> <y|surface> <z> [world]");
     }
     Location at = player.getLocation();
-    Path file =
-        org.cobblestonemc.stonebrick.format.CorpusLayout.at(state.outputRoot())
-            .root()
-            .resolve(ScenarioFile.FILE_NAME);
+    return mark(
+        sender, scenario, which, at.getWorld(), at.getBlockX(), at.getBlockY(), at.getBlockZ());
+  }
+
+  private int markAt(
+      com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
+      String which,
+      @Nullable String worldKey) {
+    CommandSender sender = ctx.getSource().getSender();
+    World world = resolveWorld(sender, worldKey);
+    if (world == null) {
+      return fail(
+          sender, "Name a world: mark <scenario> " + which + " <x> <y|surface> <z> <world>");
+    }
+    int x = IntegerArgumentType.getInteger(ctx, "x");
+    int z = IntegerArgumentType.getInteger(ctx, "z");
+    String rawY = StringArgumentType.getString(ctx, "y");
+    int y;
+    if (rawY.equalsIgnoreCase("surface")) {
+      y = Endpoint.standingY(world, x, z);
+    } else {
+      try {
+        y = Integer.parseInt(rawY);
+      } catch (NumberFormatException e) {
+        return fail(sender, "Y is a number or 'surface', not '" + rawY + "'.");
+      }
+    }
+    return mark(sender, scenarioArg(ctx), which, world, x, y, z);
+  }
+
+  /**
+   * Records one end of a scenario and says what is there.
+   *
+   * <p>Once both ends are marked it also says how far apart they are and how much terrain that
+   * means capturing, and tags a scenario that has no tags yet by where its ends are, since the tags
+   * decide which loadouts the bench runs on it.
+   */
+  private int mark(
+      CommandSender sender, String scenario, String which, World world, int x, int y, int z) {
+    Path file = scenariosFile();
+    String worldKey = world.getKey().asString();
+    Consumer<String> report = reporter(sender);
+    String otherEnd = which.equals("origin") ? "dest" : "origin";
     try {
-      boolean created =
-          ScenarioFile.mark(
-              file,
-              scenario,
-              which,
-              at.getWorld().getKey().asString(),
-              at.getBlockX(),
-              at.getBlockY(),
-              at.getBlockZ());
-      reporter(sender)
-          .accept(
-              "%s %s of '%s' at %d, %d, %d in %s"
-                  .formatted(
-                      created ? "Created" : "Marked",
-                      which,
-                      scenario,
-                      at.getBlockX(),
-                      at.getBlockY(),
-                      at.getBlockZ(),
-                      at.getWorld().getKey()));
-      reporter(sender).accept("  " + file);
+      boolean created = ScenarioFile.mark(file, scenario, which, worldKey, x, y, z);
+      report.accept(
+          "%s %s of '%s' in %s"
+              .formatted(created ? "Created" : "Marked", which, scenario, worldKey));
+      Endpoint end = Endpoint.at(world, x, y, z);
+      end.describe(which).forEach(report);
+
+      int[] other = ScenarioFile.position(file, worldKey, scenario, otherEnd);
+      if (other == null) {
+        report.accept("  Now mark the " + otherEnd + ".");
+        return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+      }
+      Endpoint far = Endpoint.at(world, other[0], other[1], other[2]);
+      double dx = far.x() - x;
+      double dy = far.y() - y;
+      double dz = far.z() - z;
+      int chunks =
+          new NeededChunks(
+                  worldKey,
+                  new Cell(x, y, z),
+                  new Cell(far.x(), far.y(), far.z()),
+                  NeededChunks.INITIAL_RADIUS)
+              .chunkCount();
+      report.accept(
+          "  %.0f blocks apart (%.0f across, %+.0f up); about %,d chunks to capture to start with"
+              .formatted(
+                  Math.sqrt(dx * dx + dy * dy + dz * dz),
+                  Math.sqrt(dx * dx + dz * dz),
+                  which.equals("origin") ? dy : -dy,
+                  chunks));
+      if (!ScenarioFile.hasTags(file, worldKey, scenario)) {
+        String tag =
+            end.suggestedTag().equals("underground") || far.suggestedTag().equals("underground")
+                ? "underground"
+                : end.suggestedTag();
+        ScenarioFile.tag(file, worldKey, scenario, List.of(tag));
+        report.accept(
+            "  Tagged [%s]; change it with /stonebrick tag %s <tags>, e.g. to add no-pickaxe."
+                .formatted(tag, scenario));
+      }
+      report.accept("  Next: /stonebrick check " + scenario);
     } catch (IOException e) {
       return fail(sender, "Could not write the mark: " + e.getMessage());
     }
     return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+  }
+
+  private int tag(CommandSender sender, String scenario, String raw) {
+    Path file = scenariosFile();
+    List<String> tags = Arrays.stream(raw.split("[,\\s]+")).filter(t -> !t.isBlank()).toList();
+    try {
+      String world = ScenarioFile.worldOf(file, scenario);
+      if (world == null) {
+        return fail(sender, "No scenario '" + scenario + "'; mark it first.");
+      }
+      ScenarioFile.tag(file, world, scenario, tags);
+      reporter(sender).accept("Tagged '%s' %s".formatted(scenario, tags));
+    } catch (IOException e) {
+      return fail(sender, "Could not tag it: " + e.getMessage());
+    }
+    return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+  }
+
+  private int check(CommandSender sender, String scenario, boolean generate) {
+    return checker.start(scenario, generate, reporter(sender))
+        ? com.mojang.brigadier.Command.SINGLE_SUCCESS
+        : 0;
+  }
+
+  /** Says where a body would stand in a column, and what is there: for picking ends from afar. */
+  private int probe(
+      com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, @Nullable String key) {
+    CommandSender sender = ctx.getSource().getSender();
+    World world = resolveWorld(sender, key);
+    if (world == null) {
+      return fail(sender, "Name a world: probe <x> <z> <world>");
+    }
+    int x = IntegerArgumentType.getInteger(ctx, "x");
+    int z = IntegerArgumentType.getInteger(ctx, "z");
+    int y = Endpoint.standingY(world, x, z);
+    Endpoint.at(world, x, y, z).describe("standing at").forEach(reporter(sender));
+    return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+  }
+
+  private Path scenariosFile() {
+    return CorpusLayout.at(state.outputRoot()).root().resolve(ScenarioFile.FILE_NAME);
   }
 
   private int traits(CommandSender sender, @Nullable String captureName) {
@@ -472,8 +645,14 @@ final class UtilityCommand {
   private int help(CommandSender sender) {
     sender.sendMessage(Component.text("/stonebrick copy <x1> <z1> <x2> <z2> [options]"));
     sender.sendMessage(Component.text("/stonebrick copy here <radiusChunks> [options]"));
-    sender.sendMessage(Component.text("/stonebrick estimate … — same arguments, captures nothing"));
-    sender.sendMessage(Component.text("/stonebrick mark <scenario> origin|dest"));
+    sender.sendMessage(
+        Component.text("/stonebrick estimate ...: same arguments, captures nothing"));
+    sender.sendMessage(
+        Component.text("/stonebrick mark <scenario> origin|dest [<x> <y|surface> <z> [world]]"));
+    sender.sendMessage(Component.text("/stonebrick tag <scenario> <tags...>"));
+    sender.sendMessage(
+        Component.text("/stonebrick check <scenario> [--generate]: can the bench use it?"));
+    sender.sendMessage(Component.text("/stonebrick probe <x> <z> [world]: where would you stand?"));
     sender.sendMessage(Component.text("/stonebrick traits [capture]"));
     sender.sendMessage(Component.text("/stonebrick status | /stonebrick cancel"));
     sender.sendMessage(

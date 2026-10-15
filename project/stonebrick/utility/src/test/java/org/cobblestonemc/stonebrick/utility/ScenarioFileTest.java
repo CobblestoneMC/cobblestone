@@ -121,4 +121,25 @@ class ScenarioFileTest {
     assertTrue(Capsule.contains(5, 5, 5, 5, 2, 7, 5));
     assertFalse(Capsule.contains(5, 5, 5, 5, 2, 8, 5));
   }
+
+  @Test
+  void positionsAndTagsReadBackAndTagsReplace(@TempDir Path dir) throws Exception {
+    Path file = dir.resolve(ScenarioFile.FILE_NAME);
+    ScenarioFile.mark(file, "river", "origin", OVERWORLD, -1, 2, -3);
+
+    assertArrayEquals(
+        new int[] {-1, 2, -3}, ScenarioFile.position(file, OVERWORLD, "river", "origin"));
+    assertEquals(null, ScenarioFile.position(file, OVERWORLD, "river", "dest"));
+    assertEquals(OVERWORLD, ScenarioFile.worldOf(file, "river"));
+    assertEquals(null, ScenarioFile.worldOf(file, "lake"));
+
+    assertFalse(ScenarioFile.hasTags(file, OVERWORLD, "river"));
+    ScenarioFile.tag(file, OVERWORLD, "river", java.util.List.of("surface"));
+    ScenarioFile.tag(file, OVERWORLD, "river", java.util.List.of("surface", "no-pickaxe"));
+    assertTrue(ScenarioFile.hasTags(file, OVERWORLD, "river"));
+
+    String text = Files.readString(file);
+    assertEquals(1, text.lines().filter(line -> line.contains("tags:")).count(), text);
+    assertTrue(text.contains("tags: [surface, no-pickaxe]"), text);
+  }
 }
