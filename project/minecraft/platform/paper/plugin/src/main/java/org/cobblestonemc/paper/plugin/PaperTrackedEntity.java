@@ -27,14 +27,14 @@ import org.cobblestonemc.minecraft.MinecraftScheduler;
  *
  * <p>Nothing is looked up on construction, since destinations are built while tab-completing.
  */
-final class TrackedEntity {
+final class PaperTrackedEntity {
 
   private final UUID uuid;
   private final MinecraftScheduler<Entity> scheduler;
   private volatile Entity lastSeen;
   private volatile Location lastLocation;
 
-  TrackedEntity(UUID uuid, MinecraftScheduler<Entity> scheduler) {
+  PaperTrackedEntity(UUID uuid, MinecraftScheduler<Entity> scheduler) {
     this.uuid = uuid;
     this.scheduler = scheduler;
   }

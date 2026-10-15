@@ -34,7 +34,7 @@ import org.cobblestonemc.plugin.data.PortalTransitionDao;
  * per-player (the routed player's respawn location); end gateways are block&nbsp;&rarr;&nbsp;point.
  * Worlds unloaded since discovery are skipped until they return.
  */
-public final class PortalSearchModificationService implements SearchModificationService {
+public final class PaperPortalSearchModificationService implements SearchModificationService {
 
   private static final MinecraftStepPayload PORTAL_PAYLOAD = MinecraftStepPayload.portal();
 
@@ -49,7 +49,7 @@ public final class PortalSearchModificationService implements SearchModification
    * @param endReturns the End &rarr; overworld portal DAO (destination resolved per-player)
    * @param gateways the end-gateway (block &rarr; point) DAO
    */
-  public PortalSearchModificationService(
+  public PaperPortalSearchModificationService(
       PortalTransitionDao portals, EndReturnPortalDao endReturns, GatewayDao gateways) {
     this.portals = portals;
     this.endReturns = endReturns;
