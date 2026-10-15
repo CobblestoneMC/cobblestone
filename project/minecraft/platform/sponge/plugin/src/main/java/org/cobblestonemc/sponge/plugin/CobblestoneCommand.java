@@ -166,31 +166,31 @@ final class CobblestoneCommand {
     Audience audience = ctx.cause().audience();
     Locale locale = localeOf(ctx, messages);
     messages.send(audience, locale, CobblestoneMessages.HELP_HEADER);
-    SpongeCommandHelp.line(
+    CommandHelp.line(
         audience, messages, locale, "/cobblestone reload", "command.cobblestone.help.reload");
-    SpongeCommandHelp.line(
+    CommandHelp.line(
         audience,
         messages,
         locale,
         "/cobblestone cancel [id|all]",
         "command.cobblestone.help.cancel");
-    SpongeCommandHelp.line(
+    CommandHelp.line(
         audience, messages, locale, "/cobblestone trips", "command.cobblestone.help.trips");
-    SpongeCommandHelp.line(
+    CommandHelp.line(
         audience, messages, locale, "/cobblestone hud [on|off]", "command.cobblestone.help.hud");
-    SpongeCommandHelp.line(
+    CommandHelp.line(
         audience,
         messages,
         locale,
         "/cobblestone location set|unset|list <name> [-global]",
         "command.cobblestone.help.location");
-    SpongeCommandHelp.line(
+    CommandHelp.line(
         audience,
         messages,
         locale,
         "/cobblestone portals clear",
         "command.cobblestone.help.portals");
-    SpongeCommandHelp.line(
+    CommandHelp.line(
         audience,
         messages,
         locale,
