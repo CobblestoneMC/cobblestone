@@ -106,6 +106,89 @@ final class UtilityCommand {
                                         check(
                                             ctx.getSource().getSender(), scenarioArg(ctx), true)))))
         .then(
+            Commands.literal("pieces")
+                .then(
+                    Commands.argument("x", IntegerArgumentType.integer())
+                        .then(
+                            Commands.argument("z", IntegerArgumentType.integer())
+                                .executes(ctx -> pieces(ctx, null))
+                                .then(
+                                    Commands.argument("world", StringArgumentType.greedyString())
+                                        .executes(
+                                            ctx ->
+                                                pieces(
+                                                    ctx,
+                                                    StringArgumentType.getString(ctx, "world")))))))
+        .then(
+            Commands.literal("find")
+                .then(
+                    Commands.argument("block", StringArgumentType.word())
+                        .then(
+                            Commands.argument("x", IntegerArgumentType.integer())
+                                .then(
+                                    Commands.argument("z", IntegerArgumentType.integer())
+                                        .executes(ctx -> find(ctx, 48, null))
+                                        .then(
+                                            Commands.argument(
+                                                    "radius", IntegerArgumentType.integer(1, 256))
+                                                .executes(
+                                                    ctx ->
+                                                        find(
+                                                            ctx,
+                                                            IntegerArgumentType.getInteger(
+                                                                ctx, "radius"),
+                                                            null))
+                                                .then(
+                                                    Commands.argument(
+                                                            "world",
+                                                            StringArgumentType.greedyString())
+                                                        .executes(
+                                                            ctx ->
+                                                                find(
+                                                                    ctx,
+                                                                    IntegerArgumentType.getInteger(
+                                                                        ctx, "radius"),
+                                                                    StringArgumentType.getString(
+                                                                        ctx, "world")))))))))
+        .then(
+            Commands.literal("span")
+                .then(
+                    Commands.argument("biome", StringArgumentType.word())
+                        .then(
+                            Commands.argument("x", IntegerArgumentType.integer())
+                                .then(
+                                    Commands.argument("y", IntegerArgumentType.integer())
+                                        .then(
+                                            Commands.argument("z", IntegerArgumentType.integer())
+                                                .executes(ctx -> span(ctx, 300, null))
+                                                .then(
+                                                    Commands.argument(
+                                                            "length",
+                                                            IntegerArgumentType.integer(16, 4096))
+                                                        .executes(
+                                                            ctx ->
+                                                                span(
+                                                                    ctx,
+                                                                    IntegerArgumentType.getInteger(
+                                                                        ctx, "length"),
+                                                                    null))
+                                                        .then(
+                                                            Commands.argument(
+                                                                    "world",
+                                                                    StringArgumentType
+                                                                        .greedyString())
+                                                                .executes(
+                                                                    ctx ->
+                                                                        span(
+                                                                            ctx,
+                                                                            IntegerArgumentType
+                                                                                .getInteger(
+                                                                                    ctx, "length"),
+                                                                            StringArgumentType
+                                                                                .getString(
+                                                                                    ctx,
+                                                                                    "world"))))))))))
+        .then(
             Commands.literal("probe")
                 .then(
                     Commands.argument("x", IntegerArgumentType.integer())
@@ -575,9 +658,264 @@ final class UtilityCommand {
     }
     int x = IntegerArgumentType.getInteger(ctx, "x");
     int z = IntegerArgumentType.getInteger(ctx, "z");
+    Consumer<String> report = reporter(sender);
     int y = Endpoint.standingY(world, x, z);
-    Endpoint.at(world, x, y, z).describe("standing at").forEach(reporter(sender));
+    Endpoint.at(world, x, y, z).describe("standing at").forEach(report);
+    List<Integer> levels =
+        Endpoint.standingLevels(world, x, z, world.getMinHeight(), world.getMaxHeight());
+    report.accept(
+        "  every level to stand at: "
+            + String.join(", ", levels.stream().limit(24).map(String::valueOf).toList())
+            + (levels.size() > 24 ? ", ..." : ""));
+    for (org.bukkit.generator.structure.GeneratedStructure structure :
+        world.getChunkAt(x >> 4, z >> 4).getStructures()) {
+      org.bukkit.util.BoundingBox box = structure.getBoundingBox();
+      report.accept(
+          "  structure %s: %d pieces in %s"
+              .formatted(structureName(structure), structure.getPieces().size(), box(box)));
+    }
     return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+  }
+
+  /**
+   * Lists the pieces of the structures at a column, nearest first, each with a place to stand in
+   * it: for putting a scenario's end inside a mineshaft corridor or a stronghold room.
+   */
+  private int pieces(
+      com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, @Nullable String key) {
+    CommandSender sender = ctx.getSource().getSender();
+    World world = resolveWorld(sender, key);
+    if (world == null) {
+      return fail(sender, "Name a world: pieces <x> <z> <world>");
+    }
+    int x = IntegerArgumentType.getInteger(ctx, "x");
+    int z = IntegerArgumentType.getInteger(ctx, "z");
+    Consumer<String> report = reporter(sender);
+    var structures = world.getChunkAt(x >> 4, z >> 4).getStructures();
+    if (structures.isEmpty()) {
+      return fail(sender, "No structure reaches the chunk at " + x + ", " + z + ".");
+    }
+    for (org.bukkit.generator.structure.GeneratedStructure structure : structures) {
+      report.accept(
+          "%s, %d pieces:".formatted(structureName(structure), structure.getPieces().size()));
+      structure.getPieces().stream()
+          .map(org.bukkit.generator.structure.StructurePiece::getBoundingBox)
+          .sorted(
+              java.util.Comparator.comparingDouble(
+                  b -> Math.hypot(b.getCenterX() - x, b.getCenterZ() - z)))
+          .limit(12)
+          .forEach(
+              b -> {
+                int[] stand = standIn(world, b);
+                report.accept(
+                    "  %s  stand at %s"
+                        .formatted(
+                            box(b),
+                            stand == null
+                                ? "nowhere along its middle"
+                                : stand[0] + " " + stand[1] + " " + stand[2]));
+              });
+    }
+    return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+  }
+
+  /**
+   * Finds a straight line of a given length that stays inside a biome, near a point.
+   *
+   * <p>{@code /locate biome} finds where a biome begins, which is its edge; a route drawn from
+   * there leaves it as often as not. This reads the world's biome noise on a grid, without
+   * generating a single chunk, and tries lines from points across the area in sixteen directions,
+   * keeping the one most fully inside the biome, nearest the point on a tie. The Y matters for cave
+   * biomes, which only exist underground.
+   */
+  private int span(
+      com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
+      int length,
+      @Nullable String key) {
+    CommandSender sender = ctx.getSource().getSender();
+    World world = resolveWorld(sender, key);
+    if (world == null) {
+      return fail(sender, "Name a world: span <biome> <x> <y> <z> <length> <world>");
+    }
+    String name = StringArgumentType.getString(ctx, "biome").toLowerCase(java.util.Locale.ROOT);
+    int x = IntegerArgumentType.getInteger(ctx, "x");
+    int y = IntegerArgumentType.getInteger(ctx, "y");
+    int z = IntegerArgumentType.getInteger(ctx, "z");
+    org.bukkit.generator.BiomeProvider biomes = world.vanillaBiomeProvider();
+    final int step = 8;
+    final int around = 768;
+    final int reach = around + length;
+    int cells = 2 * reach / step + 1;
+    boolean[][] inside = new boolean[cells][cells];
+    for (int i = 0; i < cells; i++) {
+      for (int j = 0; j < cells; j++) {
+        org.bukkit.block.Biome biome =
+            biomes.getBiome(world, x - reach + i * step, y, z - reach + j * step);
+        inside[i][j] = biome.getKey().getKey().equals(name);
+      }
+    }
+    double best = -1;
+    double bestDistance = Double.MAX_VALUE;
+    int[] line = null;
+    int samples = Math.max(2, length / step);
+    for (int sx = x - around; sx <= x + around; sx += 32) {
+      for (int sz = z - around; sz <= z + around; sz += 32) {
+        if (!inside[(sx - x + reach) / step][(sz - z + reach) / step]) {
+          continue;
+        }
+        for (int d = 0; d < 16; d++) {
+          double angle = Math.PI * 2 * d / 16;
+          int ex = sx + (int) Math.round(Math.cos(angle) * length);
+          int ez = sz + (int) Math.round(Math.sin(angle) * length);
+          int hits = 0;
+          for (int k = 0; k <= samples; k++) {
+            int px = sx + (ex - sx) * k / samples;
+            int pz = sz + (ez - sz) * k / samples;
+            int i = Math.floorDiv(px - x + reach, step);
+            int j = Math.floorDiv(pz - z + reach, step);
+            if (i >= 0 && j >= 0 && i < cells && j < cells && inside[i][j]) {
+              hits++;
+            }
+          }
+          double share = hits / (double) (samples + 1);
+          double distance = Math.hypot(sx - x, sz - z);
+          if (share > best + 1e-9 || (Math.abs(share - best) <= 1e-9 && distance < bestDistance)) {
+            best = share;
+            bestDistance = distance;
+            line = new int[] {sx, sz, ex, ez};
+          }
+        }
+      }
+    }
+    if (line == null) {
+      return fail(
+          sender, "No " + name + " within " + around + " blocks of " + x + ", " + z + " at Y " + y);
+    }
+    reporter(sender)
+        .accept(
+            "%.0f%% of the line %d %d -> %d %d is %s (%.0f from the point)"
+                .formatted(100 * best, line[0], line[1], line[2], line[3], name, bestDistance));
+    return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+  }
+
+  /**
+   * Lists the nearest blocks whose name contains a word, each with a place to stand beside it:
+   * {@code _bed} for the inside of a house, {@code bookshelf} for a stronghold's library, {@code
+   * sculk} for an ancient city. Reads chunk snapshots rather than blocks one at a time, so a wide
+   * search costs little.
+   */
+  private int find(
+      com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
+      int radius,
+      @Nullable String key) {
+    CommandSender sender = ctx.getSource().getSender();
+    World world = resolveWorld(sender, key);
+    if (world == null) {
+      return fail(sender, "Name a world: find <block> <x> <z> <radius> <world>");
+    }
+    String word = StringArgumentType.getString(ctx, "block").toLowerCase(java.util.Locale.ROOT);
+    int x = IntegerArgumentType.getInteger(ctx, "x");
+    int z = IntegerArgumentType.getInteger(ctx, "z");
+    record Hit(int x, int y, int z, String name, double distance) {}
+    List<Hit> hits = new java.util.ArrayList<>();
+    for (int cx = (x - radius) >> 4; cx <= (x + radius) >> 4; cx++) {
+      for (int cz = (z - radius) >> 4; cz <= (z + radius) >> 4; cz++) {
+        org.bukkit.ChunkSnapshot snapshot = world.getChunkAt(cx, cz).getChunkSnapshot();
+        for (int y = world.getMinHeight(); y < world.getMaxHeight(); y++) {
+          for (int dx = 0; dx < 16; dx++) {
+            for (int dz = 0; dz < 16; dz++) {
+              org.bukkit.Material type = snapshot.getBlockType(dx, y, dz);
+              if (!type.isAir() && type.getKey().getKey().contains(word)) {
+                int bx = (cx << 4) + dx;
+                int bz = (cz << 4) + dz;
+                double distance = Math.hypot(bx - x, bz - z);
+                if (distance <= radius) {
+                  hits.add(new Hit(bx, y, bz, type.getKey().getKey(), distance));
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    Consumer<String> report = reporter(sender);
+    if (hits.isEmpty()) {
+      return fail(sender, "No block named like '" + word + "' within " + radius + ".");
+    }
+    hits.sort(java.util.Comparator.comparingDouble(Hit::distance));
+    report.accept("%,d blocks like '%s'; the nearest:".formatted(hits.size(), word));
+    java.util.Set<String> shown = new java.util.HashSet<>();
+    for (Hit hit : hits) {
+      if (shown.size() >= 8) {
+        break;
+      }
+      // One line per spot, not per block: a bed is two blocks, a bookshelf wall dozens.
+      if (!shown.add((hit.x() >> 2) + "," + (hit.y() >> 2) + "," + (hit.z() >> 2))) {
+        continue;
+      }
+      String stand = "nowhere beside it";
+      for (int[] side : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+        List<Integer> levels =
+            Endpoint.standingLevels(
+                world, hit.x() + side[0], hit.z() + side[1], hit.y() - 1, hit.y() + 1);
+        if (!levels.isEmpty()) {
+          stand = (hit.x() + side[0]) + " " + levels.get(0) + " " + (hit.z() + side[1]);
+          break;
+        }
+      }
+      report.accept(
+          "  %s at %d %d %d, %.0f away; stand at %s"
+              .formatted(hit.name(), hit.x(), hit.y(), hit.z(), hit.distance(), stand));
+    }
+    return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+  }
+
+  /**
+   * Finds a place to stand inside a piece, along the middle of its longer side: a corridor's middle
+   * column can be a support beam, but somewhere along it is floor.
+   */
+  private static int @Nullable [] standIn(World world, org.bukkit.util.BoundingBox b) {
+    int minY = (int) b.getMinY();
+    int maxY = (int) b.getMaxY() + 1;
+    boolean alongX = b.getWidthX() >= b.getWidthZ();
+    int cx = (int) Math.floor(b.getCenterX());
+    int cz = (int) Math.floor(b.getCenterZ());
+    int from = alongX ? (int) b.getMinX() : (int) b.getMinZ();
+    int to = alongX ? (int) b.getMaxX() : (int) b.getMaxZ();
+    int middle = (from + to) / 2;
+    for (int offset = 0; offset <= (to - from) / 2 + 1; offset++) {
+      for (int sign : new int[] {1, -1}) {
+        int at = middle + sign * offset;
+        if (at < from || at > to) {
+          continue;
+        }
+        int x = alongX ? at : cx;
+        int z = alongX ? cz : at;
+        List<Integer> levels = Endpoint.standingLevels(world, x, z, minY, maxY);
+        if (!levels.isEmpty()) {
+          return new int[] {x, levels.get(levels.size() - 1), z};
+        }
+      }
+    }
+    return null;
+  }
+
+  private static String structureName(org.bukkit.generator.structure.GeneratedStructure structure) {
+    return String.valueOf(
+        io.papermc.paper.registry.RegistryAccess.registryAccess()
+            .getRegistry(io.papermc.paper.registry.RegistryKey.STRUCTURE)
+            .getKey(structure.getStructure()));
+  }
+
+  private static String box(org.bukkit.util.BoundingBox box) {
+    return "%d %d %d .. %d %d %d"
+        .formatted(
+            (int) box.getMinX(),
+            (int) box.getMinY(),
+            (int) box.getMinZ(),
+            (int) box.getMaxX(),
+            (int) box.getMaxY(),
+            (int) box.getMaxZ());
   }
 
   private Path scenariosFile() {
@@ -653,6 +991,12 @@ final class UtilityCommand {
     sender.sendMessage(
         Component.text("/stonebrick check <scenario> [--generate]: can the bench use it?"));
     sender.sendMessage(Component.text("/stonebrick probe <x> <z> [world]: where would you stand?"));
+    sender.sendMessage(
+        Component.text("/stonebrick pieces <x> <z> [world]: a structure's pieces, to stand in"));
+    sender.sendMessage(
+        Component.text("/stonebrick find <block> <x> <z> [radius] [world]: blocks to stand by"));
+    sender.sendMessage(
+        Component.text("/stonebrick span <biome> <x> <y> <z> [length] [world]: a line inside it"));
     sender.sendMessage(Component.text("/stonebrick traits [capture]"));
     sender.sendMessage(Component.text("/stonebrick status | /stonebrick cancel"));
     sender.sendMessage(

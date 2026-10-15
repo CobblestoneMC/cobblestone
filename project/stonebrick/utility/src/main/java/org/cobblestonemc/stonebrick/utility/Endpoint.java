@@ -74,6 +74,16 @@ record Endpoint(
    */
   static int standingY(World world, int x, int z) {
     int top = world.getHighestBlockYAt(x, z, HeightMap.MOTION_BLOCKING_NO_LEAVES);
+    // On water the surface is the top of the water, where a swimmer or a boat is, not the seabed.
+    int wet = world.getHighestBlockYAt(x, z, HeightMap.WORLD_SURFACE);
+    if (!world.hasCeiling() && world.getBlockAt(x, wet, z).getType() == Material.WATER) {
+      return wet;
+    }
+    if (world.hasCeiling()) {
+      // The nether's highest block is its bedrock roof, and standing on that is not what anyone
+      // marking the surface of the nether means: start under the roof instead.
+      top = Math.min(top, world.getLogicalHeight() - 6);
+    }
     for (int y = top + 1; y > world.getMinHeight(); y--) {
       if (standable(
           world.getBlockAt(x, y - 1, z),
@@ -85,8 +95,39 @@ record Endpoint(
     return top + 1;
   }
 
+  /**
+   * Finds every place a body can stand in a column, top down: the surface, and every cave floor and
+   * structure floor beneath it. Must be called on the server thread.
+   *
+   * @param world the world
+   * @param x the block X
+   * @param z the block Z
+   * @param minY the lowest feet Y to look at
+   * @param maxY the highest feet Y to look at
+   * @return the feet Ys, highest first
+   */
+  static List<Integer> standingLevels(World world, int x, int z, int minY, int maxY) {
+    List<Integer> levels = new ArrayList<>();
+    int low = Math.max(minY, world.getMinHeight() + 1);
+    int high = Math.min(maxY, world.getMaxHeight() - 2);
+    for (int y = high; y >= low; y--) {
+      if (standable(
+          world.getBlockAt(x, y - 1, z),
+          world.getBlockAt(x, y, z),
+          world.getBlockAt(x, y + 1, z))) {
+        levels.add(y);
+      }
+    }
+    return levels;
+  }
+
   private static boolean standable(Block ground, Block feet, Block head) {
-    return ground.getType().isSolid() && feet.isPassable() && head.isPassable();
+    // Lava is passable, and the floor of a lava lake is solid; nobody means to stand there.
+    return ground.getType().isSolid()
+        && feet.isPassable()
+        && head.isPassable()
+        && feet.getType() != Material.LAVA
+        && head.getType() != Material.LAVA;
   }
 
   /** Whether this end is underwater. */
@@ -109,7 +150,8 @@ record Endpoint(
     return switch (environment) {
       case NETHER -> "nether";
       case THE_END -> "end";
-      default -> depth() > 4 ? "underground" : "surface";
+      // Twelve, not zero: a roof is cover too, and the inside of a house is not a cave.
+      default -> depth() > 12 ? "underground" : "surface";
     };
   }
 
@@ -125,11 +167,13 @@ record Endpoint(
         switch (environment) {
           case NETHER, THE_END -> "";
           default ->
-              depth() > 0
-                  ? String.format(Locale.ROOT, ", %d below the surface", depth())
-                  : depth() < 0
-                      ? String.format(Locale.ROOT, ", %d above the ground", -depth())
-                      : "";
+              inWater()
+                  ? ", in water"
+                  : depth() > 0
+                      ? String.format(Locale.ROOT, ", under %d blocks of cover", depth())
+                      : depth() < 0
+                          ? String.format(Locale.ROOT, ", %d above the ground", -depth())
+                          : "";
         };
     lines.add(
         String.format(

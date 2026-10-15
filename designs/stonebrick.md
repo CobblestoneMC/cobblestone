@@ -249,6 +249,10 @@ All under one root, `/stonebrick` (or `/sb`):
 /stonebrick check <scenario> [--generate]          capture its terrain, run every loadout, and run
                                                    Dijkstra: can the bench, and verify, use it?
 /stonebrick probe <x> <z> [world]                  where a body would stand in that column
+/stonebrick pieces <x> <z> [world]                 a structure's pieces there, each with a place to stand
+/stonebrick find <block> <x> <z> [radius] [world]  nearest blocks named like it (_bed, bookshelf, sculk)
+/stonebrick span <biome> <x> <y> <z> [length]      a straight line that stays inside a biome, from the
+                                                   biome noise, without generating chunks
 /stonebrick traits [capture]                       rebuild traits.tsv from the capture's own palettes
 /stonebrick status | /stonebrick cancel
 ```
