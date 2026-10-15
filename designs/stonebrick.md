@@ -15,7 +15,7 @@ design as written, and where the build departed from it the commit history says 
 - Tier 2 at L0 only: first as section profiles (`SectionProfile`, `CoarseSearch`,
   `CoarseHeuristic`), since replaced by a region graph (`RegionGraph`, `RegionSearch`,
   `RegionHeuristic`), wired into Paper and Sponge as the default
-  (`search.algorithm.heuristic: REGIONS`). See `coarse-profile-ideas.md`.
+  (`search.algorithm.heuristic: REGIONS`). See `regions.md`.
 
 **Not built**
 - The visualizer (§9), and the deletion of `:core-test` and `:playground` (§1.1).
