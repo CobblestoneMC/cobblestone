@@ -45,6 +45,8 @@ import org.jetbrains.annotations.Nullable;
  * @param missingChunks every chunk read outside the capture, packed as {@code (x << 32) | z}
  * @param configuration what was measured: the heuristic, weight, limits, IO model and the exact
  *     capture. Two runs are only comparable when these agree
+ * @param closestBlocks how near the search came, in straight-line blocks from the nearest cell it
+ *     settled to the destination: 0 when it arrived, and for a failed run, how far short it fell
  */
 public record RunResult(
     String scenario,
@@ -63,7 +65,8 @@ public record RunResult(
     long peakHeapBytes,
     @Nullable String missingCaptureReport,
     java.util.Set<Long> missingChunks,
-    Map<String, String> configuration) {
+    Map<String, String> configuration,
+    double closestBlocks) {
 
   /**
    * Returns whether this run produced a number worth comparing.

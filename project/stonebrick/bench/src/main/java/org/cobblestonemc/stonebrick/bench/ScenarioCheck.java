@@ -20,15 +20,21 @@ import org.cobblestonemc.SearchObserver;
 /**
  * Says whether a new scenario is worth keeping, while whoever picked it is still standing there.
  *
- * <p>A scenario is only useful if the bench can measure it, and that is not visible from the two
- * points. Its terrain has to be captured, and the capture has to be wide enough for the routes the
- * searches actually take. Each loadout should solve it, and the route should be hard enough that
- * the heuristics differ. And {@code verify} needs Dijkstra's true optimum, which costs far more
- * than a solve and is out of reach on a long or open route. All of that is found out here, the way
- * the bench itself would.
+ * <p><b>A scenario is turned away only if the bench cannot measure it</b>: when the terrain the
+ * routes need cannot be captured. A heuristic failing is not a reason, it is a result. A failed run
+ * still says how near it came and how many nodes it spent getting there, and when every heuristic
+ * fails, the one that came closer did better.
  *
- * <p><b>The capture grows until the searches stay inside it</b>, exactly as {@code bench run} grows
- * {@code needed-chunks.yml}: whatever a run read beyond its capture is what the capture lacks.
+ * <p><b>The capture grows until every route that arrives stays inside it</b>, as {@code bench run}
+ * grows {@code needed-chunks.yml}: whatever an arriving run read beyond its capture is what the
+ * capture lacks. A failed run's wandering does not grow it. A search that gives up has often read
+ * in every direction, and chasing that would capture a field; its reads past the edge are walls to
+ * it, which it would have given up at anyway.
+ *
+ * <p>Everything else is reported, not judged: whether each heuristic arrives, at what cost, how
+ * close a failure came, whether the route is too easy to tell heuristics apart, and whether {@code
+ * verify} can reach Dijkstra's true optimum, which costs far more than a solve and is out of reach
+ * on a long or open route.
  *
  * <p><b>Dijkstra is the same fine search with no heuristic at weight 1</b>, priced by the same
  * movement modes as production, so its cost is the true optimum under the costs the game is
@@ -144,6 +150,9 @@ public final class ScenarioCheck {
                 loadout,
                 SearchObserver.none());
         for (RunResult result : List.of(regions, average)) {
+          if (!result.outcome().equals("success")) {
+            continue; // its wandering is not terrain the route needs
+          }
           for (long packed : result.missingChunks()) {
             grown = grown.including((int) (packed >> 32), (int) packed);
           }
@@ -171,9 +180,9 @@ public final class ScenarioCheck {
     }
     if (!contained) {
       out.accept(
-          "  ! The searches still leave the capture after "
+          "  ! Routes that arrive still leave the capture after "
               + MAX_ROUNDS
-              + " rounds. The route may be much longer than the line between its ends.");
+              + " rounds: the capture cannot keep up with the route.");
     }
 
     out.accept("  Loadout             REGIONS                          RUNNING_AVERAGE");
@@ -189,16 +198,30 @@ public final class ScenarioCheck {
 
     List<String> warnings = new ArrayList<>();
     boolean usable = contained;
-    List<String> unsolved =
+    boolean anyArrived =
         rows.stream()
-            .filter(row -> !row.regions().outcome().equals("success"))
-            .map(row -> row.loadout().name())
-            .toList();
-    if (unsolved.size() == rows.size()) {
-      warnings.add("REGIONS solves it for no loadout. Is the destination reachable at all?");
-      usable = false;
-    } else if (!unsolved.isEmpty()) {
-      warnings.add("REGIONS does not solve it for " + String.join(", ", unsolved) + ".");
+            .anyMatch(
+                row ->
+                    row.regions().outcome().equals("success")
+                        || row.average().outcome().equals("success"));
+    if (!anyArrived) {
+      warnings.add(
+          "No search arrived for any loadout. Still measurable, by how close each came; but check"
+              + " that the destination can be reached.");
+    }
+    for (Row row : rows) {
+      for (RunResult failed : List.of(row.regions(), row.average())) {
+        if (!failed.outcome().equals("success") && !failed.missingChunks().isEmpty()) {
+          warnings.add(
+              String.format(
+                  Locale.ROOT,
+                  "%s for %s wandered %,d chunks past the capture before giving up; those are"
+                      + " walls to it.",
+                  failed.configuration().getOrDefault("heuristic", "a search"),
+                  row.loadout().name(),
+                  failed.missingChunks().size()));
+        }
+      }
     }
     if (rows.stream()
         .allMatch(
@@ -264,13 +287,21 @@ public final class ScenarioCheck {
     for (String warning : warnings) {
       out.accept("  ! " + warning);
     }
-    out.accept(usable ? "  Usable." : "  Not usable as it stands.");
+    out.accept(
+        usable
+            ? "  Usable."
+            : "  Not usable as it stands: the terrain its routes need could not be captured.");
     return usable;
   }
 
   private static String summary(RunResult result) {
     if (!result.outcome().equals("success")) {
-      return String.format(Locale.ROOT, "%s, %,d nodes", result.outcome(), result.nodesExpanded());
+      return String.format(
+          Locale.ROOT,
+          "%s, %,d nodes, %.0f blocks short",
+          result.outcome(),
+          result.nodesExpanded(),
+          result.closestBlocks());
     }
     return String.format(
         Locale.ROOT,

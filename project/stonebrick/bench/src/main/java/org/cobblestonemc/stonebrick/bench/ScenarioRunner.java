@@ -111,7 +111,7 @@ public final class ScenarioRunner {
 
       StonebrickPlayer player = loadout.player();
 
-      Counting counting = new Counting(observer);
+      Counting counting = new Counting(observer, scenario.destination());
       SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> handle =
           start(scenario, loadout, platform, world, player, scheduler, counting);
 
@@ -168,7 +168,8 @@ public final class ScenarioRunner {
           runtime.totalMemory() - runtime.freeMemory(),
           missing,
           platform.missing().chunks(),
-          configuration);
+          configuration,
+          result instanceof NavigationResult.Success<?, ?> ? 0.0 : counting.closest());
     }
   }
 
@@ -463,11 +464,22 @@ public final class ScenarioRunner {
   private static final class Counting implements SearchObserver {
 
     private final SearchObserver delegate;
+    private final Cell destination;
     final AtomicLong opened = new AtomicLong();
     final AtomicLong closed = new AtomicLong();
 
-    Counting(SearchObserver delegate) {
+    /** The least straight-line distance to the destination of any cell settled, squared. */
+    private volatile long closestSquared = Long.MAX_VALUE;
+
+    Counting(SearchObserver delegate, Cell destination) {
       this.delegate = delegate;
+      this.destination = destination;
+    }
+
+    /** How near the search came: from the nearest cell it settled to the destination, in blocks. */
+    double closest() {
+      long squared = closestSquared;
+      return squared == Long.MAX_VALUE ? Double.NaN : Math.sqrt(squared);
     }
 
     @Override
@@ -479,6 +491,13 @@ public final class ScenarioRunner {
     @Override
     public void closed(Cell cell, double cost, double estimatedTotalCost) {
       closed.incrementAndGet();
+      long dx = cell.x() - destination.x();
+      long dy = cell.y() - destination.y();
+      long dz = cell.z() - destination.z();
+      long squared = dx * dx + dy * dy + dz * dz;
+      if (squared < closestSquared) {
+        closestSquared = squared;
+      }
       delegate.closed(cell, cost, estimatedTotalCost);
     }
 
