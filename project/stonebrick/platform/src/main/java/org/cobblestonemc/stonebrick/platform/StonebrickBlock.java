@@ -27,8 +27,8 @@ final class StonebrickBlock implements MinecraftBlock {
   /**
    * {@link BlockTraits#DIRECTIONS} resolved to this build's {@link Direction} constants, by name.
    *
-   * <p>By name rather than by ordinal for the same reason the copier resolves it that way: the
-   * capture is a wire format written months earlier, and binding its face order to an enum's
+   * <p>By name rather than by ordinal for the same reason the utility plugin resolves it that way:
+   * the capture is a wire format written months earlier, and binding its face order to an enum's
    * current ordering would silently reinterpret every partial block the day a constant moved.
    */
   private static final int[] FACE_OF_DIRECTION = resolveFaces();

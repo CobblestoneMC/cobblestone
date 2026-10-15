@@ -52,6 +52,8 @@ exactly. Captures and baselines therefore stay on your machine.
 | `run` | Run everything and compare against your baselines; fails if a gated metric moved |
 | `accept` | Run everything and record the results as your baselines |
 | `sweep` | Run at several heuristic weights and print nodes against path cost |
+| `check` | Say whether a scenario can be benchmarked: each heuristic's result, and Dijkstra's optimum |
+| `path` | Print the cells of the route each loadout's search found |
 
 A first `run` has no baselines, and prints each result's outcome, expansions and path cost. That is
 the current state of the search.
@@ -87,12 +89,24 @@ time. Wall time and heap are reported but never fail a run.
 
 ## Adding a scenario
 
-1. Add an entry to `scenarios.yml`, by hand or with `/copier mark <name> origin|dest` while standing
-   in the seeded world.
-2. `run --scenario <id>`. If the search reached past the captured terrain, `needed-chunks.yml` grows
-   to cover it.
-3. Re-run `captureCorpus`, then `run` again, until nothing is missing.
-4. Commit `scenarios.yml` and `needed-chunks.yml`.
+The utility plugin (`project/stonebrick/utility`, `/stonebrick` or `/sb`) picks and checks
+scenarios on a server running the seeded world.
+
+1. Find the ends. `/sb probe <x> <z>` says where a body stands in a column and which structures are
+   there; `/sb pieces <x> <z>` lists a structure's pieces with a place to stand in each; `/sb find
+   <block> <x> <z>` finds blocks such as `_bed` or `bookshelf`; `/sb span <biome> <x> <y> <z>`
+   finds a straight line that stays inside a biome.
+2. Mark them: `/sb mark <name> origin` and `/sb mark <name> dest` where you stand, or give
+   coordinates (`surface` for a Y stands on the ground there). The scenario is tagged by where its
+   ends are; change that with `/sb tag <name> <tags>`. For a destination that is an area, add
+   `box: { from: {...}, to: {...} }` to its `destination` by hand.
+3. `/sb check <name>` (add `--generate` on a world that may generate chunks). It captures the
+   terrain, widening the capture until every route that arrives stays inside it, runs each
+   heuristic under each loadout and Dijkstra, and reports how each did: the cost, how close a
+   failed run came, and how far each is from the optimum. A scenario is unusable only when the
+   terrain its routes need cannot be captured; a heuristic failing is a result, not a reason.
+4. Copy the scenario's entries from the plugin's `out/scenarios.yml` and `out/needed-chunks.yml` into
+   `scenarios.yml` and `needed-chunks.yml`, run `captureCorpus`, and commit both files.
 
 ## Adding a heuristic
 

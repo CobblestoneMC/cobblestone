@@ -62,8 +62,8 @@ public final class Sbc {
   /**
    * Returns the index within a cube's block array for the given cube-local coordinates.
    *
-   * <p>Y-major, then Z, then X — the same ordering Minecraft's own section arrays use, so a copier
-   * walking a chunk section in its native order writes sequentially.
+   * <p>Y-major, then Z, then X — the same ordering Minecraft's own section arrays use, so a capture
+   * tool walking a chunk section in its native order writes sequentially.
    *
    * @param x 0–15
    * @param y 0–15

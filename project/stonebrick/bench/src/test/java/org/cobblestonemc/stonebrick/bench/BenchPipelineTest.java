@@ -150,7 +150,8 @@ class BenchPipelineTest {
             real.peakHeapBytes(),
             null,
             java.util.Set.of(),
-            real.configuration());
+            real.configuration(),
+            real.closestBlocks());
 
     Comparison.Verdict verdict =
         Comparison.compare(changed, Baselines.read(baselines, scenario.runId(Loadout.fallback())));
@@ -217,7 +218,8 @@ class BenchPipelineTest {
             real.peakHeapBytes() * 3,
             null,
             java.util.Set.of(),
-            real.configuration());
+            real.configuration(),
+            real.closestBlocks());
 
     assertEquals(
         Comparison.Status.MATCH,

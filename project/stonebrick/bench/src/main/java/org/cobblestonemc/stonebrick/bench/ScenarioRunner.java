@@ -111,7 +111,7 @@ public final class ScenarioRunner {
 
       StonebrickPlayer player = loadout.player();
 
-      Counting counting = new Counting(observer);
+      Counting counting = new Counting(observer, scenario.destination());
       SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> handle =
           start(scenario, loadout, platform, world, player, scheduler, counting);
 
@@ -167,7 +167,8 @@ public final class ScenarioRunner {
           runtime.totalMemory() - runtime.freeMemory(),
           missing,
           platform.missing().chunks(),
-          configuration);
+          configuration,
+          result instanceof NavigationResult.Success<?, ?> ? 0.0 : counting.closest());
     }
   }
 
@@ -191,13 +192,19 @@ public final class ScenarioRunner {
 
     Cell goal = scenario.destination();
     int radius = scenario.destinationRadius();
-    DomainRegion<MinecraftWorld> target =
-        radius <= 0
-            ? StonebrickSolve.at(world, goal)
-            : StonebrickSolve.box(
-                world,
-                new Cell(goal.x() - radius, goal.y() - radius, goal.z() - radius),
-                new Cell(goal.x() + radius, goal.y() + radius, goal.z() + radius));
+    DomainRegion<MinecraftWorld> target;
+    if (scenario.destinationBox() != null) {
+      target =
+          StonebrickSolve.box(world, scenario.destinationBox()[0], scenario.destinationBox()[1]);
+    } else if (radius > 0) {
+      target =
+          StonebrickSolve.box(
+              world,
+              new Cell(goal.x() - radius, goal.y() - radius, goal.z() - radius),
+              new Cell(goal.x() + radius, goal.y() + radius, goal.z() + radius));
+    } else {
+      target = StonebrickSolve.at(world, goal);
+    }
 
     SearchSettings.Builder builder =
         SearchSettings.builder()
@@ -295,11 +302,22 @@ public final class ScenarioRunner {
   private static final class Counting implements SearchObserver {
 
     private final SearchObserver delegate;
+    private final Cell destination;
     final AtomicLong opened = new AtomicLong();
     final AtomicLong closed = new AtomicLong();
 
-    Counting(SearchObserver delegate) {
+    /** The least squared straight-line distance to the destination of any cell settled. */
+    private volatile long closestSquared = Long.MAX_VALUE;
+
+    Counting(SearchObserver delegate, Cell destination) {
       this.delegate = delegate;
+      this.destination = destination;
+    }
+
+    /** How near the search came: from the nearest cell it settled to the destination, in blocks. */
+    double closest() {
+      long squared = closestSquared;
+      return squared == Long.MAX_VALUE ? Double.NaN : Math.sqrt(squared);
     }
 
     @Override
@@ -311,6 +329,13 @@ public final class ScenarioRunner {
     @Override
     public void closed(Cell cell, double cost, double estimatedTotalCost) {
       closed.incrementAndGet();
+      long dx = cell.x() - destination.x();
+      long dy = cell.y() - destination.y();
+      long dz = cell.z() - destination.z();
+      long squared = dx * dx + dy * dy + dz * dz;
+      if (squared < closestSquared) {
+        closestSquared = squared;
+      }
       delegate.closed(cell, cost, estimatedTotalCost);
     }
 

@@ -106,7 +106,7 @@ class TraitTableTest {
 
     // The message has to name the state and say what to do; this fires long after the capture.
     assertTrue(thrown.getMessage().contains(WATER), thrown.getMessage());
-    assertTrue(thrown.getMessage().contains("/copier traits"), thrown.getMessage());
+    assertTrue(thrown.getMessage().contains("/stonebrick traits"), thrown.getMessage());
   }
 
   @Test

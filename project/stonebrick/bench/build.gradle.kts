@@ -37,7 +37,7 @@ tasks.named<JavaExec>("run") {
 tasks.register<JavaExec>("captureCorpus") {
     group = "stonebrick"
     description = "Generates missing corpus captures from the seeded world (needs -PacceptMinecraftEula=true)"
-    dependsOn(":stonebrick:stonebrick-copier:shadowJar")
+    dependsOn(":stonebrick:stonebrick-utility:shadowJar")
     mainClass = "org.cobblestonemc.stonebrick.bench.CorpusProvisioner"
     classpath = sourceSets["main"].runtimeClasspath
 
@@ -60,8 +60,8 @@ tasks.register<JavaExec>("captureCorpus") {
 
     val corpusRoot = layout.projectDirectory.dir("../data")
     val workDir = layout.buildDirectory.dir("corpus-server")
-    val copierJar =
-        project(":stonebrick:stonebrick-copier").layout.buildDirectory.file("libs/StonebrickCopier-${project.version}.jar")
+    val utilityJar =
+        project(":stonebrick:stonebrick-utility").layout.buildDirectory.file("libs/StonebrickUtility-${project.version}.jar")
 
     doFirst { workDir.get().asFile.mkdirs() }
     argumentProviders.add(
@@ -69,7 +69,7 @@ tasks.register<JavaExec>("captureCorpus") {
             listOf(
                 corpusRoot.asFile.absolutePath,
                 workDir.get().asFile.absolutePath,
-                copierJar.get().asFile.absolutePath,
+                utilityJar.get().asFile.absolutePath,
                 (project.findProperty("acceptMinecraftEula") ?: "false").toString(),
                 serverJavaPath(),
             )

@@ -20,7 +20,7 @@ import org.jetbrains.annotations.Nullable;
 /**
  * Maps every block state a capture contains to the traits a search reads from it.
  *
- * <p>One table per capture directory, written by the copier from the platform's real block
+ * <p>One table per capture directory, written by the utility plugin from the platform's real block
  * implementation — so a benchmark's blocks answer exactly as a live server's would, with no second
  * trait table to drift out of step.
  *
@@ -128,7 +128,7 @@ public final class TraitTable {
             "the trait table does not describe '"
                 + state
                 + "'; it is stale against this capture's block data. Regenerate it with"
-                + " /copier traits on a server of the captured version.");
+                + " /stonebrick traits on a server of the captured version.");
       }
       resolved[i] = found;
     }
