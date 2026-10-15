@@ -61,10 +61,11 @@ public final class ScenarioCheck {
   /**
    * Roughly what one visited cell holds, to keep Dijkstra inside the heap.
    *
-   * <p>Deliberately generous: running out of memory would take the server down with it, and a
-   * smaller budget only means a route is reported as too big a little early.
+   * <p>Per cell visited, which is fewer than the cells held open: in open air Dijkstra holds
+   * several open for each one it visits. Deliberately generous, since a smaller budget only means a
+   * route is reported as too big a little early.
    */
-  static final long BYTES_PER_CELL = 800;
+  static final long BYTES_PER_CELL = 2_000;
 
   /** Fewer nodes than this for every heuristic and loadout, and the route tells nothing apart. */
   static final long EASY_NODES = 300;
@@ -228,14 +229,26 @@ public final class ScenarioCheck {
             budget,
             budget < DIJKSTRA_CELLS ? ", less than verify's because of the heap" : ""));
     for (Row row : rows) {
-      RunResult dijkstra =
-          runner.run(
-              scenario
-                  .withHeuristic(Scenario.Heuristic.ZERO)
-                  .withHeuristicWeight(1.0)
-                  .withLimits(new Scenario.SearchLimits(1.0, (int) budget, DIJKSTRA_MILLIS)),
-              row.loadout(),
-              SearchObserver.none());
+      RunResult dijkstra;
+      try {
+        dijkstra =
+            runner.run(
+                scenario
+                    .withHeuristic(Scenario.Heuristic.ZERO)
+                    .withHeuristicWeight(1.0)
+                    .withLimits(new Scenario.SearchLimits(1.0, (int) budget, DIJKSTRA_MILLIS)),
+                row.loadout(),
+                SearchObserver.none());
+      } catch (OutOfMemoryError tooBig) {
+        // Its whole search is garbage the moment this unwinds, so there is room again for the
+        // next loadout; and running out is itself the answer.
+        out.accept(
+            String.format(
+                Locale.ROOT,
+                "    %-17s ran out of memory: verify cannot measure this route from its start",
+                row.loadout().name()));
+        continue;
+      }
       out.accept("    " + dijkstraLine(row, dijkstra));
       if (dijkstra.outcome().equals("success") && !dijkstra.missingChunks().isEmpty()) {
         warnings.add(

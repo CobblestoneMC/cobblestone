@@ -26,6 +26,7 @@ import org.cobblestonemc.SearchObserver;
  *   bench sweep    [--heuristic h] [--weights 1.5,2.0] [--io p] [--warm]   the nodes-versus-cost curve
  *   bench verify   [--scenario id] [--agent a]                    estimates against Dijkstra's cost
  *   bench check    [--scenario id]                                 can the bench use a new scenario?
+ *   bench path     [--scenario id] [--agent a]                    the cells of the route found
  * </pre>
  *
  * <p>Exits non-zero when a gated metric moved, so CI fails on an unexplained change. That failure
@@ -69,6 +70,37 @@ public final class BenchMain {
 
     switch (options.command()) {
       case "list" -> list(scenarios, loadouts);
+      case "path" -> {
+        ScenarioRunner runner = new ScenarioRunner(options.corpusRoot(), new QuietLogger());
+        for (Scenario scenario : scenarios) {
+          for (Loadout loadout : loadouts) {
+            if (!loadout.appliesTo(scenario)) {
+              continue;
+            }
+            List<org.cobblestonemc.Cell> cells = new ArrayList<>();
+            RunResult result =
+                runner.run(
+                    applyOverrides(scenario, options),
+                    loadout,
+                    new SearchObserver() {
+                      @Override
+                      public void solved(List<org.cobblestonemc.Cell> path) {
+                        cells.addAll(path);
+                      }
+                    });
+            System.out.printf(
+                Locale.ROOT,
+                "%s: %s, cost %.2f, %d cells%n",
+                scenario.runId(loadout),
+                result.outcome(),
+                result.pathCost(),
+                cells.size());
+            for (org.cobblestonemc.Cell cell : cells) {
+              System.out.printf(Locale.ROOT, "  %d %d %d%n", cell.x(), cell.y(), cell.z());
+            }
+          }
+        }
+      }
       case "check" -> {
         boolean usable = true;
         for (Scenario scenario : scenarios) {
