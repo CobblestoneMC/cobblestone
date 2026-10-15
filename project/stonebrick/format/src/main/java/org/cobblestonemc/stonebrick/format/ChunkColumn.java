@@ -191,7 +191,7 @@ public final class ChunkColumn {
   /**
    * Accumulates cubes into a column.
    *
-   * <p>Not thread-safe; a copier builds one column at a time on one thread.
+   * <p>Not thread-safe; a capture tool builds one column at a time on one thread.
    */
   public static final class Builder {
 
@@ -258,7 +258,8 @@ public final class ChunkColumn {
     /**
      * Returns the index this column's palette holds for {@code state}, adding it if new.
      *
-     * <p>For a copier that builds {@link Cube}s itself rather than handing over string arrays.
+     * <p>For a capture tool that builds {@link Cube}s itself rather than handing over string
+     * arrays.
      *
      * @param state the block state string
      * @return the palette index

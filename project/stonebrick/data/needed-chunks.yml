@@ -112,3 +112,148 @@ the_nether/vertical-small-down:
   from: { x: -168, y: 92, z: 181 }
   to: { x: -174, y: 34, z: 197 }
   radiusChunks: 10
+overworld/ancient-city:
+  world: minecraft:overworld
+  from: { x: 1534, y: -47, z: -1739 }
+  to: { x: 1713, y: -51, z: -1664 }
+  radiusChunks: 4
+overworld/badlands:
+  world: minecraft:overworld
+  from: { x: 5504, y: 75, z: -5448 }
+  to: { x: 5504, y: 81, z: -5748 }
+  radiusChunks: 4
+overworld/desert-cactus:
+  world: minecraft:overworld
+  from: { x: 2288, y: 70, z: 2840 }
+  to: { x: 2403, y: 62, z: 3117 }
+  radiusChunks: 4
+overworld/dripstone-caves:
+  world: minecraft:overworld
+  from: { x: -19, y: 12, z: 26 }
+  to: { x: 134, y: 27, z: 22 }
+  radiusChunks: 13
+overworld/frozen-ocean:
+  world: minecraft:overworld
+  from: { x: 2608, y: 62, z: 216 }
+  to: { x: 2808, y: 62, z: 216 }
+  radiusChunks: 4
+overworld/long-cave:
+  world: minecraft:overworld
+  from: { x: 331, y: 23, z: -7 }
+  to: { x: -38, y: -8, z: -43 }
+  radiusChunks: 7
+overworld/long-ocean:
+  world: minecraft:overworld
+  from: { x: 1728, y: 62, z: -384 }
+  to: { x: 1728, y: 62, z: 1116 }
+  radiusChunks: 6
+overworld/long-overland:
+  world: minecraft:overworld
+  from: { x: -880, y: 86, z: 60 }
+  to: { x: 1120, y: 65, z: -40 }
+  radiusChunks: 16
+overworld/lush-caves:
+  world: minecraft:overworld
+  from: { x: -177, y: 8, z: -141 }
+  to: { x: -287, y: -21, z: -10 }
+  radiusChunks: 8
+overworld/mineshaft:
+  world: minecraft:overworld
+  from: { x: 220, y: -47, z: 255 }
+  to: { x: 322, y: -52, z: 342 }
+  radiusChunks: 4
+overworld/short-forest:
+  world: minecraft:overworld
+  from: { x: 398, y: 63, z: 84 }
+  to: { x: 440, y: 62, z: 120 }
+  radiusChunks: 4
+overworld/short-hill:
+  world: minecraft:overworld
+  from: { x: 272, y: 62, z: 304 }
+  to: { x: 336, y: 72, z: 330 }
+  radiusChunks: 4
+overworld/short-river:
+  world: minecraft:overworld
+  from: { x: 2, y: 64, z: -43 }
+  to: { x: 60, y: 62, z: -15 }
+  radiusChunks: 4
+overworld/snowy-slopes:
+  world: minecraft:overworld
+  from: { x: 1456, y: 129, z: -1960 }
+  to: { x: 1244, y: 106, z: -2172 }
+  radiusChunks: 6
+overworld/stronghold:
+  world: minecraft:overworld
+  from: { x: 1638, y: -25, z: -204 }
+  to: { x: 1678, y: -22, z: -118 }
+  radiusChunks: 5
+overworld/swamp:
+  world: minecraft:overworld
+  from: { x: 1008, y: 62, z: -744 }
+  to: { x: 1220, y: 62, z: -532 }
+  radiusChunks: 4
+overworld/trial-chambers:
+  world: minecraft:overworld
+  from: { x: -334, y: -24, z: 269 }
+  to: { x: -234, y: -31, z: 280 }
+  radiusChunks: 20
+overworld/village-plains:
+  world: minecraft:overworld
+  from: { x: -880, y: 86, z: 60 }
+  to: { x: -788, y: 97, z: 8 }
+  radiusChunks: 9
+overworld/village-river:
+  world: minecraft:overworld
+  from: { x: -152, y: 64, z: 761 }
+  to: { x: -287, y: 64, z: 816 }
+  radiusChunks: 4
+overworld/village-short:
+  world: minecraft:overworld
+  from: { x: -828, y: 93, z: 11 }
+  to: { x: -788, y: 97, z: 7 }
+  radiusChunks: 8
+the_end/end-islands:
+  world: minecraft:the_end
+  from: { x: -1830, y: 59, z: 80 }
+  to: { x: -1568, y: 62, z: 80 }
+  radiusChunks: 16
+the_nether/basalt-deltas:
+  world: minecraft:the_nether
+  from: { x: -60, y: 57, z: -50 }
+  to: { x: -150, y: 56, z: -150 }
+  radiusChunks: 7
+the_nether/bastion:
+  world: minecraft:the_nether
+  from: { x: -350, y: 46, z: 215 }
+  to: { x: -300, y: 36, z: 260 }
+  radiusChunks: 4
+the_nether/long-nether:
+  world: minecraft:the_nether
+  from: { x: 286, y: 83, z: -75 }
+  to: { x: 1250, y: 64, z: 380 }
+  radiusChunks: 16
+the_nether/nether-forest:
+  world: minecraft:the_nether
+  from: { x: -34, y: 65, z: 131 }
+  to: { x: -34, y: 81, z: 331 }
+  radiusChunks: 12
+the_nether/nether-fortress:
+  world: minecraft:the_nether
+  from: { x: -597, y: 74, z: -465 }
+  to: { x: -517, y: 83, z: -352 }
+  radiusChunks: 6
+the_nether/short-nether:
+  world: minecraft:the_nether
+  from: { x: 71, y: 85, z: -42 }
+  to: { x: 120, y: 99, z: -30 }
+  radiusChunks: 4
+overworld/mountain-box:
+  world: minecraft:overworld
+  from: { x: 522, y: 63, z: -318 }
+  to: { x: 492, y: 69, z: -270 }
+  radiusChunks: 5
+overworld/mountain-point:
+  world: minecraft:overworld
+  from: { x: 522, y: 63, z: -318 }
+  to: { x: 507, y: 65, z: -285 }
+  radiusChunks: 6

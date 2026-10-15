@@ -1,0 +1,12 @@
+name: StonebrickUtility
+version: '$projectVersion'
+description: Captures world data into the Stonebrick benchmark format. Development tooling.
+author: whimxiqal
+main: org.cobblestonemc.stonebrick.utility.StonebrickUtilityPlugin
+api-version: '1.21'
+folia-supported: false
+
+permissions:
+  stonebrick.utility:
+    description: "Use of /stonebrick"
+    default: op

@@ -68,7 +68,7 @@ public final class Capture {
           root
               + " has no "
               + org.cobblestonemc.stonebrick.format.TraitTable.FILE_NAME
-              + "; run /copier traits on a server of the captured Minecraft version");
+              + "; run /stonebrick traits on a server of the captured Minecraft version");
     }
     Capture capture =
         new Capture(

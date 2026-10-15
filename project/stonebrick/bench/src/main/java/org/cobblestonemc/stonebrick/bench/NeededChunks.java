@@ -87,9 +87,10 @@ public record NeededChunks(String world, Cell from, Cell to, int radiusChunks) {
 
   /** Distance in chunks from a chunk to the route segment, measured in the XZ plane. */
   private double distanceToSegment(int chunkX, int chunkZ) {
-    // Floored chunk coordinates, matching exactly what /copier copy capsule is given. Measuring
+    // Floored chunk coordinates, matching exactly what /stonebrick copy capsule is given. Measuring
     // from fractional chunk positions instead would put the endpoints up to one chunk away from
-    // where the copier puts them, so a strip near each end would be forever "missing" here and
+    // where the utility plugin puts them, so a strip near each end would be forever "missing" here
+    // and
     // never requested there.
     double ax = from.x() >> 4;
     double az = from.z() >> 4;

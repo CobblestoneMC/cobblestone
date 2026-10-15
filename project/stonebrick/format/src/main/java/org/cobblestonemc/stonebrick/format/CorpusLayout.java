@@ -19,17 +19,17 @@ import java.util.stream.Stream;
  *
  * <pre>
  *   &lt;corpus&gt;/
- *     captures/&lt;name&gt;/     terrain, written by /copier
+ *     captures/&lt;name&gt;/     terrain, written by /stonebrick
  *     scenarios/*.yml      what to search across it
  * </pre>
  *
  * <p>Two directories, rather than captures sitting loose beside the scenario files. A capture may
- * then be named anything at all — including {@code scenarios} — and neither the copier nor the
- * runner has to know a reserved word. Reserving one would have patched the ambiguity; separating
- * them removes it.
+ * then be named anything at all — including {@code scenarios} — and neither the utility plugin nor
+ * the runner has to know a reserved word. Reserving one would have patched the ambiguity;
+ * separating them removes it.
  *
- * <p>The copier writes this same shape under its own output folder, so moving a finished capture
- * into a corpus is a directory copy with nothing to rename.
+ * <p>The utility plugin writes this same shape under its own output folder, so moving a finished
+ * capture into a corpus is a directory copy with nothing to rename.
  */
 public final class CorpusLayout {
 
