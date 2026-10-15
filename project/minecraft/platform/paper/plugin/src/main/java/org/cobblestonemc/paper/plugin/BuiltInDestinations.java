@@ -357,7 +357,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
   private NavigationTarget mount(MountLocation mount) {
     // Follows the mount while it is loaded, so live trips track it; otherwise heads to where it
     // was last seen.
-    TrackedEntity tracked = new TrackedEntity(mount.mount(), scheduler);
+    PaperTrackedEntity tracked = new PaperTrackedEntity(mount.mount(), scheduler);
     return NavigationTarget.builder(
             MOUNT_KEY,
             () ->
@@ -400,7 +400,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
           DestinationLeaf.of(
               () -> {
                 // Follows the pet, so live trips track it, and ends the trip if it dies.
-                TrackedEntity tracked = new TrackedEntity(pet.uuid(), scheduler);
+                PaperTrackedEntity tracked = new PaperTrackedEntity(pet.uuid(), scheduler);
                 return NavigationTarget.builder(
                         name, () -> tracked.location().flatMap(regions::block).stream().toList())
                     .mobile()

@@ -36,7 +36,7 @@ import org.spongepowered.api.world.server.ServerWorld;
  * when the server stops, and dropped when the mount dies. Writes are persisted off-thread like the
  * rest of Cobblestone's.
  */
-final class MountListener {
+final class SpongeMountListener {
 
   private final MountDao mounts;
   private final MinecraftScheduler<?> scheduler;
@@ -44,7 +44,7 @@ final class MountListener {
   /** Set once the server is stopping and every mount has been saved; nothing is written after. */
   private volatile boolean stopped;
 
-  MountListener(MountDao mounts, MinecraftScheduler<?> scheduler) {
+  SpongeMountListener(MountDao mounts, MinecraftScheduler<?> scheduler) {
     this.mounts = mounts;
     this.scheduler = scheduler;
   }

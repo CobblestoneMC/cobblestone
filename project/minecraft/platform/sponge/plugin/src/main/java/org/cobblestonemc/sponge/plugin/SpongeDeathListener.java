@@ -24,13 +24,14 @@ import org.spongepowered.api.world.server.ServerLocation;
  * <p>Read last, after any plugin that might change the outcome of the death, and persisted
  * off-thread like the rest of Cobblestone's writes.
  */
-final class DeathListener {
+final class SpongeDeathListener {
 
   private final DeathLocationDao deaths;
   private final MinecraftScheduler<?> scheduler;
   private final BooleanSupplier enabled;
 
-  DeathListener(DeathLocationDao deaths, MinecraftScheduler<?> scheduler, BooleanSupplier enabled) {
+  SpongeDeathListener(
+      DeathLocationDao deaths, MinecraftScheduler<?> scheduler, BooleanSupplier enabled) {
     this.deaths = deaths;
     this.scheduler = scheduler;
     this.enabled = enabled;

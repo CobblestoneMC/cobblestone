@@ -25,7 +25,7 @@ import org.spongepowered.api.world.server.ServerWorld;
  *
  * <p>Nothing is looked up on construction, since destinations are built while tab-completing.
  */
-final class TrackedEntity {
+final class SpongeTrackedEntity {
 
   private final UUID uuid;
 
@@ -35,7 +35,7 @@ final class TrackedEntity {
   private volatile Entity lastSeen;
   private volatile ServerLocation lastLocation;
 
-  TrackedEntity(UUID uuid) {
+  SpongeTrackedEntity(UUID uuid) {
     this.uuid = uuid;
   }
 

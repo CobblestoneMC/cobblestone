@@ -34,12 +34,12 @@ import org.cobblestonemc.plugin.data.MountLocation;
  * and when the server stops (while it is loaded, the destination follows the live entity), and
  * dropped when the mount dies. Writes are persisted off-thread like the rest of Cobblestone's.
  */
-final class MountListener implements Listener {
+final class PaperMountListener implements Listener {
 
   private final MountDao mounts;
   private final MinecraftScheduler<?> scheduler;
 
-  MountListener(MountDao mounts, MinecraftScheduler<?> scheduler) {
+  PaperMountListener(MountDao mounts, MinecraftScheduler<?> scheduler) {
     this.mounts = mounts;
     this.scheduler = scheduler;
   }

@@ -35,7 +35,7 @@ import org.spongepowered.math.vector.Vector3i;
  * overworld portals resolve their destination per-search (v1: the overworld spawn); end gateways
  * are block&nbsp;&rarr;&nbsp;point. Worlds unloaded since discovery are skipped until they return.
  */
-public final class PortalSearchModificationService implements SearchModificationService {
+public final class SpongePortalSearchModificationService implements SearchModificationService {
 
   private static final MinecraftStepPayload PORTAL_PAYLOAD = MinecraftStepPayload.portal();
 
@@ -50,7 +50,7 @@ public final class PortalSearchModificationService implements SearchModification
    * @param endReturns the End &rarr; overworld portal DAO
    * @param gateways the end-gateway (block &rarr; point) DAO
    */
-  public PortalSearchModificationService(
+  public SpongePortalSearchModificationService(
       PortalTransitionDao portals, EndReturnPortalDao endReturns, GatewayDao gateways) {
     this.portals = portals;
     this.endReturns = endReturns;

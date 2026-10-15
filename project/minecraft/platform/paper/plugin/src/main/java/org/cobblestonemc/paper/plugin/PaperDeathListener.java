@@ -24,13 +24,14 @@ import org.cobblestonemc.plugin.data.DeathLocationDao;
  * <p>Read at MONITOR, after any plugin that might cancel or relocate the death, and persisted
  * off-thread like the rest of Cobblestone's writes.
  */
-final class DeathListener implements Listener {
+final class PaperDeathListener implements Listener {
 
   private final DeathLocationDao deaths;
   private final MinecraftScheduler<?> scheduler;
   private final BooleanSupplier enabled;
 
-  DeathListener(DeathLocationDao deaths, MinecraftScheduler<?> scheduler, BooleanSupplier enabled) {
+  PaperDeathListener(
+      DeathLocationDao deaths, MinecraftScheduler<?> scheduler, BooleanSupplier enabled) {
     this.deaths = deaths;
     this.scheduler = scheduler;
     this.enabled = enabled;

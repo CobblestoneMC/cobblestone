@@ -92,7 +92,7 @@ public final class CobblestoneSpongePlugin {
   private Supplier<SearchSettings> searchSettings;
   private SpongeMetrics metrics;
   private PetListener petListener;
-  private MountListener mountListener;
+  private SpongeMountListener mountListener;
 
   @Inject
   CobblestoneSpongePlugin(
@@ -152,12 +152,12 @@ public final class CobblestoneSpongePlugin {
     // player teleports by the portal listener. (Nether entry normalization is deferred on Sponge.)
     navigationService.register(
         container,
-        new PortalSearchModificationService(
+        new SpongePortalSearchModificationService(
             dataStore.portalTransitions(), dataStore.endReturnPortals(), dataStore.gateways()));
     Sponge.eventManager()
         .registerListeners(
             container,
-            new PortalListener(
+            new SpongePortalListener(
                 dataStore.portalTransitions(),
                 dataStore.endReturnPortals(),
                 dataStore.gateways(),
@@ -218,12 +218,12 @@ public final class CobblestoneSpongePlugin {
     Sponge.eventManager()
         .registerListeners(
             container,
-            new DeathListener(
+            new SpongeDeathListener(
                 dataStore.deaths(),
                 navigationService.scheduler(),
                 () -> config.get(keys.deathsTrack)));
     // So are their last mount, and when each of their pets was tamed (to number same-named pets).
-    mountListener = new MountListener(dataStore.mounts(), navigationService.scheduler());
+    mountListener = new SpongeMountListener(dataStore.mounts(), navigationService.scheduler());
     Sponge.eventManager().registerListeners(container, mountListener);
     Sponge.eventManager().registerListeners(container, petListener);
 
