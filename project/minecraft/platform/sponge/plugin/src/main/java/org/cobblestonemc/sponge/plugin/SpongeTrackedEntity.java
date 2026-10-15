@@ -28,6 +28,10 @@ import org.spongepowered.api.world.server.ServerWorld;
 final class SpongeTrackedEntity {
 
   private final UUID uuid;
+
+  // Written only on the main thread and read by any thread, search threads included. Volatile is
+  // all the guarding they need: each is replaced whole (a location is immutable), and the two are
+  // never needed together.
   private volatile Entity lastSeen;
   private volatile ServerLocation lastLocation;
 

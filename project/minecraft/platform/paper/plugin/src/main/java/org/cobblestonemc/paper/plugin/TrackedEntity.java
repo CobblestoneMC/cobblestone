@@ -31,6 +31,14 @@ final class TrackedEntity {
 
   private final UUID uuid;
   private final MinecraftScheduler<Entity> scheduler;
+
+  // Written by server threads (the command's, the trip's, or a task on the entity's scheduler) and
+  // read by any thread, search threads included. Volatile is all the guarding they need: each is
+  // replaced whole, never changed in place (a location is a fresh copy, and cloned again for the
+  // reader), and the two are never needed together. Two writers racing can leave the older read
+  // last, but the next refresh, about a second later, corrects it. alive() reads the last-seen
+  // entity's health from the trip's thread, which on Folia may not own it; a stale read there only
+  // ends the trip a check later.
   private volatile Entity lastSeen;
   private volatile Location lastLocation;
 
