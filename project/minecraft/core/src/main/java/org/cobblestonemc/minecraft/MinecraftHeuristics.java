@@ -86,6 +86,8 @@ public final class MinecraftHeuristics {
                 (MinecraftWorld) target.domain(), target.nearestBoundaryCell(origin)),
         stores == null ? null : target -> stores.of((MinecraftWorld) target.domain()),
         RegionCost.forPlayer(agent, settings.excludedModes()),
-        RegionGraph.DEFAULT_DETOUR_RATIO);
+        RegionGraph.DEFAULT_DETOUR_RATIO,
+        MinecraftModes.cheapestCostPerBlock(agent, settings.excludedModes()),
+        false);
   }
 }

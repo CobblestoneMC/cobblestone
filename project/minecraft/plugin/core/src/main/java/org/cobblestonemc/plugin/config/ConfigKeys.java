@@ -337,9 +337,9 @@ public final class ConfigKeys {
 
                 REGIONS searches connected patches of ground, water, rock and air backwards from
                 the destination, so it reasons about where the terrain actually goes. It finds much
-                better paths and solves routes RUNNING_AVERAGE cannot solve at all, but each search
-                reads the terrain it reasons over -- hundreds of chunk reads on a long route -- and
-                that work is not yet shared between searches.
+                better paths and solves routes RUNNING_AVERAGE cannot solve at all. The terrain it
+                reasons over is summarized once, shared by every search, and kept on disk (see
+                search.regions), but the first search over new terrain pays for reading it.
 
                 RUNNING_AVERAGE extrapolates from the cost of the last few steps. Nearly free, and
                 it mistakes a cheap river for a cheap route.""")

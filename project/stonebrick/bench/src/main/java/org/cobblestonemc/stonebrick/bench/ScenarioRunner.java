@@ -388,7 +388,9 @@ public final class ScenarioRunner {
                 region -> columns,
                 region -> store,
                 org.cobblestonemc.minecraft.lod.RegionCost.forPlayer(player, excluded),
-                REGION_DETOUR);
+                REGION_DETOUR,
+                MinecraftModes.cheapestCostPerBlock(player, excluded),
+                true);
         yield lastRegionHeuristic;
       }
     };

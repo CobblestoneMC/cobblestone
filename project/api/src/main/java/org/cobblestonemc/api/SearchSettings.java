@@ -190,7 +190,8 @@ public final class SearchSettings {
      *
      * <p>Prices the journey from terrain it has actually looked at rather than from terrain it has
      * just crossed, and knows a wall from a tunnel. Costs chunk reads and CPU to classify the
-     * terrain -- a long route touches hundreds of columns -- and each solve pays for its own.
+     * terrain -- a long route touches hundreds of columns -- once: summaries are shared between
+     * searches and kept on disk.
      */
     REGIONS
   }

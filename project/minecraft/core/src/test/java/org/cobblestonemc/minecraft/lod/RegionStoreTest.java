@@ -203,6 +203,22 @@ class RegionStoreTest {
   }
 
   @Test
+  void anInvalidatedColumnIsNotReadBackFromDiskBeforeTheNextFlush(@TempDir Path root) {
+    Chunks chunks = new Chunks();
+    RegionStore store = store(root);
+    column(store, 0, 0, chunks);
+    store.flush().join();
+
+    // Dropped from memory by a block change, still on disk until the next flush: the copy there is
+    // the terrain before the change, and must not come back.
+    store.invalidate(0, 0);
+    column(store, 0, 0, chunks);
+
+    assertEquals(2, chunks.reads, "a changed column is built again, not read back stale");
+    assertEquals(0, store.stats().diskLoads());
+  }
+
+  @Test
   void aColumnWhoseChunkCannotBeReadIsNeverWritten(@TempDir Path root) {
     Chunks chunks = new Chunks();
     chunks.unreadable = true;

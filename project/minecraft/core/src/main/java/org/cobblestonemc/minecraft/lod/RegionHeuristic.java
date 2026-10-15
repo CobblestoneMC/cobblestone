@@ -49,6 +49,8 @@ public final class RegionHeuristic implements HeuristicStrategy {
   private final @Nullable Function<DomainRegion<?>, RegionStore> storeFor;
   private final RegionCost cost;
   private final double detourRatio;
+  private final double tierOneRate;
+  private final boolean keepSearches;
   private final List<RegionSearch> searches = new java.util.ArrayList<>();
 
   /**
@@ -88,16 +90,42 @@ public final class RegionHeuristic implements HeuristicStrategy {
       @Nullable Function<DomainRegion<?>, RegionStore> storeFor,
       RegionCost cost,
       double detourRatio) {
+    this(columnsFor, storeFor, cost, detourRatio, cost.cheapest(), false);
+  }
+
+  /**
+   * Creates a heuristic with its Tier-1 bound given, and whether to keep its searches.
+   *
+   * @param columnsFor builds a chunk source for a solve's target region
+   * @param storeFor the store for a solve's target region's world, or {@code null} for a store of
+   *     each solve's own
+   * @param cost the agent
+   * @param detourRatio the fill's detour ratio, for a store of each solve's own
+   * @param tierOneRate the least the agent can pay per block by any movement at all, which Tier 1
+   *     prices unsolved legs with: lower than {@link RegionCost#cheapest()} for an agent who can
+   *     ride or fall, since the region layer prices neither as a medium
+   * @param keepSearches whether to keep every solve's search for {@link #searches()}, which holds
+   *     each one's graph for the strategy's life; for measuring, never on a server
+   */
+  public RegionHeuristic(
+      Function<DomainRegion<?>, RegionGraph.ChunkColumns> columnsFor,
+      @Nullable Function<DomainRegion<?>, RegionStore> storeFor,
+      RegionCost cost,
+      double detourRatio,
+      double tierOneRate,
+      boolean keepSearches) {
     this.columnsFor = columnsFor;
     this.storeFor = storeFor;
     this.cost = cost;
     this.detourRatio = detourRatio;
+    this.tierOneRate = tierOneRate;
+    this.keepSearches = keepSearches;
   }
 
   @Override
   public double estimate(Cell from, DomainRegion<?> target, TraversalState state) {
     // Tier 1 asks without a solve behind it, and wants a cheap admissible bound.
-    return from.distance(target.nearestBoundaryCell(from)) * cost.cheapest();
+    return from.distance(target.nearestBoundaryCell(from)) * tierOneRate;
   }
 
   @Override
@@ -111,7 +139,8 @@ public final class RegionHeuristic implements HeuristicStrategy {
   }
 
   /**
-   * Returns the searches this strategy's solves have run, one per solve that asked anything.
+   * Returns the searches this strategy's solves have run, one per solve that asked anything, if it
+   * was made to keep them.
    *
    * <p>For diagnostics: the benchmark reads what each spent on building terrain against searching
    * it. Kept for the strategy's life, which is one navigate.
@@ -182,7 +211,9 @@ public final class RegionHeuristic implements HeuristicStrategy {
         // it, and the goal cell worth aiming at depends on where the route begins.
         search =
             new RegionSearch(graph, cost, target.nearestBoundaryCell(from), from, target::contains);
-        searches.add(search);
+        if (keepSearches) {
+          searches.add(search);
+        }
       }
       return search;
     }

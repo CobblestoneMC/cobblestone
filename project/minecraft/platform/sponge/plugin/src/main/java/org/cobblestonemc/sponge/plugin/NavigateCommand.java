@@ -76,6 +76,9 @@ final class NavigateCommand {
           .maxCellsVisited(4000)
           .maxWallClockMillis(1500L)
           .heuristicWeight(2.0)
+          // A few blocks back to the trail: the region layer's chunk reads would cost more than
+          // the search.
+          .heuristic(SearchSettings.Heuristic.RUNNING_AVERAGE)
           .build();
 
   private NavigateCommand() {}

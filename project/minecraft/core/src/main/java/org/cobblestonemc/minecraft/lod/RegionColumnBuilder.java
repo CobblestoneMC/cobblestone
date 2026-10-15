@@ -98,6 +98,28 @@ public final class RegionColumnBuilder {
   private int[] portalBox = new int[256 * 6];
 
   /**
+   * Returns the lowest Y a column counts its cells from: the world's floor, rounded down to a
+   * section.
+   *
+   * @param worldMinY the world's lowest Y, inclusive
+   * @return the column floor
+   */
+  public static int columnMinY(int worldMinY) {
+    return Math.floorDiv(worldMinY, 16) * 16;
+  }
+
+  /**
+   * Returns how many sections tall a column is.
+   *
+   * @param worldMinY the world's lowest Y, inclusive
+   * @param worldMaxY the world's highest Y, inclusive
+   * @return the section count
+   */
+  public static int sections(int worldMinY, int worldMaxY) {
+    return Math.floorDiv(worldMaxY, 16) - Math.floorDiv(worldMinY, 16) + 1;
+  }
+
+  /**
    * Creates a builder for a world of the given height.
    *
    * @param worldMinY the world's lowest Y, inclusive

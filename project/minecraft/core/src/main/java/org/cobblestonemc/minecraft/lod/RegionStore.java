@@ -104,9 +104,8 @@ public final class RegionStore {
     this.builds = builds;
     this.builders =
         ThreadLocal.withInitial(() -> new RegionColumnBuilder(worldMinY, worldMaxY, detourRatio));
-    RegionColumnBuilder shape = new RegionColumnBuilder(worldMinY, worldMaxY, detourRatio);
-    this.columnMinY = shape.minY();
-    this.sections = shape.sections();
+    this.columnMinY = RegionColumnBuilder.columnMinY(worldMinY);
+    this.sections = RegionColumnBuilder.sections(worldMinY, worldMaxY);
   }
 
   /**
@@ -195,7 +194,12 @@ public final class RegionStore {
 
   private void load(
       int chunkX, int chunkZ, RegionGraph.ChunkColumns chunks, CompletableFuture<RegionColumn> to) {
-    if (files == null) {
+    boolean stale;
+    synchronized (this) {
+      // Invalidated and not yet removed from disk: what is there is the terrain before the change.
+      stale = removed.contains(key(chunkX, chunkZ));
+    }
+    if (files == null || stale) {
       build(chunkX, chunkZ, chunks, to);
       return;
     }
@@ -220,7 +224,9 @@ public final class RegionStore {
           if (stored != null) {
             settle(chunkX, chunkZ, stored, false, to);
           } else {
-            build(chunkX, chunkZ, chunks, to);
+            // Built on the build pool: the disk thread is one thread, shared by every world's reads
+            // and writes, and a build is far slower than a read.
+            builds.execute(() -> build(chunkX, chunkZ, chunks, to));
           }
         });
   }
@@ -325,7 +331,11 @@ public final class RegionStore {
       loading.put(key, promise);
     }
     try {
-      RegionColumn stored = files == null ? null : files.read(chunkX, chunkZ);
+      boolean stale;
+      synchronized (this) {
+        stale = removed.contains(key);
+      }
+      RegionColumn stored = files == null || stale ? null : files.read(chunkX, chunkZ);
       if (stored != null) {
         // Stored already. Kept in memory too, since a chunk loading is a sign it is about to be
         // needed; but not written again.
@@ -406,7 +416,14 @@ public final class RegionStore {
             files.write(writing.values(), removing);
           } catch (IOException failed) {
             synchronized (this) {
-              writing.forEach(unwritten::putIfAbsent);
+              // Not a column invalidated while the write ran: putting it back would serve, and
+              // then write, the terrain before the change.
+              writing.forEach(
+                  (key, column) -> {
+                    if (!removed.contains(key)) {
+                      unwritten.putIfAbsent(key, column);
+                    }
+                  });
               removed.addAll(removing);
             }
             throw new java.io.UncheckedIOException(failed);

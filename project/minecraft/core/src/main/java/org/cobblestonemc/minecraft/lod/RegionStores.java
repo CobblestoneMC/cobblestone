@@ -88,15 +88,13 @@ public final class RegionStores implements AutoCloseable {
     return stores.computeIfAbsent(
         world.key(),
         key -> {
-          RegionColumnBuilder shape =
-              new RegionColumnBuilder(world.minY(), world.maxY(), detourRatio);
           RegionFiles files =
               root == null
                   ? null
                   : new RegionFiles(
                       root.resolve(RegionFiles.directoryName(key)),
-                      shape.minY(),
-                      shape.sections(),
+                      RegionColumnBuilder.columnMinY(world.minY()),
+                      RegionColumnBuilder.sections(world.minY(), world.maxY()),
                       detourRatio);
           return new RegionStore(
               world.minY(), world.maxY(), detourRatio, memoryBudget, files, disk, builds);

@@ -286,6 +286,9 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     getLogger().info("Cobblestone disabled.");
   }
 
+  /** The heuristic setting last read, so a bad one is warned about once. */
+  private volatile @org.jetbrains.annotations.Nullable String lastHeuristicSetting;
+
   /**
    * Reads the configured heuristic, falling back to the default on anything unrecognised.
    *
@@ -294,10 +297,16 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
    * debugging the wrong thing. So it warns, loudly enough to find, and uses the default.
    */
   private org.cobblestonemc.api.SearchSettings.Heuristic heuristicFrom(String configured) {
+    // Read for every search, so the warning below is said once per value rather than per search.
+    String previous = lastHeuristicSetting;
+    lastHeuristicSetting = configured;
     try {
       return org.cobblestonemc.api.SearchSettings.Heuristic.valueOf(
           configured.strip().toUpperCase(java.util.Locale.ROOT));
     } catch (IllegalArgumentException unknown) {
+      if (configured.equals(previous)) {
+        return org.cobblestonemc.api.SearchSettings.DEFAULT_HEURISTIC;
+      }
       getLogger()
           .warning(
               "search.algorithm.heuristic is '"
