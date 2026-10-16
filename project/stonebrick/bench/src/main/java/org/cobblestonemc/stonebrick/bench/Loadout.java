@@ -19,7 +19,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
-import org.cobblestonemc.minecraft.lod.Capability;
 import org.cobblestonemc.minecraft.lod.RegionCost;
 import org.cobblestonemc.stonebrick.platform.StonebrickPlayer;
 import org.yaml.snakeyaml.Yaml;
@@ -70,20 +69,10 @@ public record Loadout(
   }
 
   /**
-   * Returns the capabilities this loadout has.
+   * Returns what crossing the terrain costs this loadout, as production prices it.
    *
    * <p>Here rather than beside each caller so the heuristic and the verification both price the
-   * same agent the same way. A capability the loadout's exclusions forbid is dropped, or the
-   * estimate would price a route the fine search is not allowed to take.
-   *
-   * @return the capabilities
-   */
-  public Set<Capability> capabilities() {
-    return RegionCost.capabilitiesFor(player(), excludedModes);
-  }
-
-  /**
-   * Returns what crossing the terrain costs this loadout, as production prices it.
+   * same agent the same way.
    *
    * @return the cost model
    */

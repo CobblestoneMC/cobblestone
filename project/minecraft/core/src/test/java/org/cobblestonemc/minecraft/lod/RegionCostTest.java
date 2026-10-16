@@ -11,13 +11,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.EnumSet;
 import java.util.Set;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.junit.jupiter.api.Test;
 
-/** Each region is crossed by the cheapest capability the agent has for its class. */
+/** Each region is crossed by the cheapest way the agent has across its class. */
 class RegionCostTest {
 
   /** Ten blocks along X. */
@@ -45,36 +44,32 @@ class RegionCostTest {
 
   @Test
   void soulSpeedGoesWithWalking() {
-    Set<Capability> capabilities =
-        RegionCost.capabilitiesFor(TestPlayer.soulSpeed(1), Set.of(MinecraftStepType.WALK));
-    assertFalse(capabilities.contains(Capability.SOUL_SPEED));
+    RegionCost boots =
+        RegionCost.forPlayer(TestPlayer.soulSpeed(1), Set.of(MinecraftStepType.WALK));
+    assertFalse(boots.usable(RegionClass.SOUL_SOIL));
   }
 
   @Test
   void onlyTheSurfaceCarriesABoat() {
-    Set<Capability> boatOnly = EnumSet.of(Capability.WALK, Capability.BOAT);
-    RegionCost boater = RegionCost.forCapabilities(boatOnly);
-    assertTrue(boater.usable(RegionClass.WATER_SURFACE));
-    assertFalse(boater.usable(RegionClass.WATER), "below the surface is swum or nothing");
-    assertEquals(0.15, across(boater, RegionClass.WATER_SURFACE), 1e-9);
+    RegionCost boatOnly =
+        RegionCost.forPlayer(TestPlayer.create(false, true, false), Set.of(MinecraftStepType.SWIM));
+    assertTrue(boatOnly.usable(RegionClass.WATER_SURFACE));
+    assertFalse(boatOnly.usable(RegionClass.WATER), "below the surface is swum or nothing");
+    assertEquals(0.15, across(boatOnly, RegionClass.WATER_SURFACE), 1e-9);
 
-    RegionCost swimmer = RegionCost.forCapabilities(RegionCost.survival());
+    RegionCost swimmer = RegionCost.forPlayer(TestPlayer.walker(), Set.of());
     assertTrue(swimmer.usable(RegionClass.WATER));
     assertEquals(0.30, across(swimmer, RegionClass.WATER), 1e-9);
     assertEquals(0.30, across(swimmer, RegionClass.WATER_SURFACE), 1e-9);
 
-    Set<Capability> both = EnumSet.copyOf(RegionCost.survival());
-    both.add(Capability.BOAT);
-    RegionCost swimmingBoater = RegionCost.forCapabilities(both);
-    assertEquals(0.15, across(swimmingBoater, RegionClass.WATER_SURFACE), 1e-9);
-    assertEquals(0.30, across(swimmingBoater, RegionClass.WATER), 1e-9);
+    RegionCost boater = RegionCost.forPlayer(TestPlayer.create(false, true, false), Set.of());
+    assertEquals(0.15, across(boater, RegionClass.WATER_SURFACE), 1e-9);
+    assertEquals(0.30, across(boater, RegionClass.WATER), 1e-9);
   }
 
   @Test
   void aBoatSwimsTheDropsInASurface() {
-    Set<Capability> both = EnumSet.copyOf(RegionCost.survival());
-    both.add(Capability.BOAT);
-    RegionCost boater = RegionCost.forCapabilities(both);
+    RegionCost boater = RegionCost.forPlayer(TestPlayer.create(false, true, false), Set.of());
     // Ten blocks across and two down: boated across, swum down.
     assertEquals(
         0.15 * 10 + 0.30 * 2,

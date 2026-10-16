@@ -16,14 +16,12 @@ the terrain ahead. REGIONS reads the terrain ahead.
 - **Portals.** Every contact between two regions, as one box: faces touching, a walking step up
   or down, and falls of up to 3 blocks (32 into water), which are one-way. Inside a column they are
   built with it; across columns they are built per search at the seams.
-- **Agent-independent.** The graph knows terrain, not travellers. An agent is a set of
-  `Capability`s (walk, Soul Speed, swim, boat, climb, fly, mine), each with a rate per block. A
-  `RegionClass` lists the capabilities that cross it and the factor it puts on each: soul sand
-  multiplies walking by 2.5 and leaves Soul Speed alone, and only a water surface takes a boat.
-  `RegionCost` crosses each region by the agent's cheapest capability for it. A kind of terrain
-  earns its own class only when some capability crosses it at a different rate. Rock is always
-  usable, at the mining rate with a pickaxe and at a fallback rate without, so the graph stays
-  connected.
+- **Agent-independent.** The graph knows terrain, not travellers. A `RegionClass` is only a tag;
+  `RegionCost` is the agent, built from the player and the operator's exclusions, and says what
+  each class costs it: soul sand is 2.5x ground on foot and fast in Soul Speed boots, and only a
+  water surface takes a boat. A kind of terrain earns its own class only when some agent would pay
+  differently for it. Rock is always usable, at the mining rate with a pickaxe and at a fallback
+  rate without, so the graph stays connected.
 - **Search.** Reverse Resumable A*: a backward search from the destination, focused on the fine
   search's origin, resumed only when a question needs it. A settled portal knows its true cost to
   the destination over the graph, so answers are final when given. Each portal's label carries

@@ -15,10 +15,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftChunk;
+import org.cobblestonemc.minecraft.TestPlayer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -166,7 +168,7 @@ class RegionStoreTest {
   void aSearchOverStoredColumnsGivesTheSameAnswerAfterARestart(@TempDir Path root) {
     Cell goal = new Cell(0, 13, 0);
     Cell from = new Cell(150, 13, 40);
-    RegionCost walker = RegionCost.forCapabilities(RegionCost.survival());
+    RegionCost walker = RegionCost.forPlayer(TestPlayer.walker(), Set.of());
 
     Chunks chunks = new Chunks();
     RegionStore first = store(root);

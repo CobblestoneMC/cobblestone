@@ -11,13 +11,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.EnumSet;
 import java.util.Set;
 import java.util.function.Predicate;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftChunk;
+import org.cobblestonemc.minecraft.TestPlayer;
+import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.junit.jupiter.api.Test;
 
 class RegionSearchTest {
@@ -91,20 +92,16 @@ class RegionSearchTest {
     return y <= GROUND ? STONE : AIR;
   }
 
-  private static RegionSearch search(
-      Terrain terrain, Set<Capability> capabilities, Cell goal, Cell from) {
-    return new RegionSearch(
-        new RegionGraph(new World(terrain)), RegionCost.forCapabilities(capabilities), goal, from);
+  private static RegionSearch search(Terrain terrain, RegionCost agent, Cell goal, Cell from) {
+    return new RegionSearch(new RegionGraph(new World(terrain)), agent, goal, from);
   }
 
-  private static Set<Capability> walker() {
-    return RegionCost.survival();
+  private static RegionCost walker() {
+    return RegionCost.forPlayer(TestPlayer.walker(), Set.of());
   }
 
-  private static Set<Capability> walkerWithoutPickaxe() {
-    Set<Capability> capabilities = EnumSet.copyOf(RegionCost.survival());
-    capabilities.remove(Capability.MINE);
-    return capabilities;
+  private static RegionCost walkerWithoutPickaxe() {
+    return RegionCost.forPlayer(TestPlayer.walker(), Set.of(MinecraftStepType.MINE));
   }
 
   @Test
@@ -114,7 +111,7 @@ class RegionSearchTest {
     RegionSearch search = search(RegionSearchTest::flat, walker(), goal, from);
 
     double estimate = search.costToGoal(from);
-    double straight = from.distance(goal) * Capability.WALK.baseCostPerBlock();
+    double straight = from.distance(goal) * 0.20;
 
     assertNull(search.takePending());
     // Section-sized regions priced in straight lines, crossing at the points the route does: a
@@ -187,8 +184,7 @@ class RegionSearchTest {
         };
     Cell goal = new Cell(300, GROUND, 4);
     Cell from = new Cell(0, GROUND, 4);
-    Set<Capability> boater = EnumSet.copyOf(RegionCost.survival());
-    boater.add(Capability.BOAT);
+    RegionCost boater = RegionCost.forPlayer(TestPlayer.create(false, true, false), Set.of());
 
     double boat = search(river, boater, goal, from).costToGoal(from);
     double swim = search(river, walker(), goal, from).costToGoal(from);
@@ -217,8 +213,7 @@ class RegionSearchTest {
     Cell goal = new Cell(0, FEET, 0);
     Cell from = new Cell(400, FEET, 0);
     World world = new World(RegionSearchTest::flat);
-    RegionSearch search =
-        new RegionSearch(new RegionGraph(world), RegionCost.forCapabilities(walker()), goal, from);
+    RegionSearch search = new RegionSearch(new RegionGraph(world), walker(), goal, from);
 
     search.costToGoal(from);
 
@@ -243,7 +238,7 @@ class RegionSearchTest {
         cell -> cell.x() > 100 && cell.x() < 160 && cell.z() > -30 && cell.z() < 30;
     Cell from = new Cell(60, FEET, 0);
     Cell nearest = new Cell(101, FEET, 0);
-    RegionCost cost = RegionCost.forCapabilities(walker());
+    RegionCost cost = walker();
 
     double toPoint =
         new RegionSearch(new RegionGraph(new World(town)), cost, nearest, from).costToGoal(from);
