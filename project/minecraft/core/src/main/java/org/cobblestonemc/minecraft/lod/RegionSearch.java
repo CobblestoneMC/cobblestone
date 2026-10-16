@@ -498,8 +498,7 @@ public final class RegionSearch {
 
   private double cross(
       int region, double fx, double fy, double fz, double tx, double ty, double tz) {
-    return cost.traverse(
-        graph.regionClass(region), graph.breakTime(region), fx, fy, fz, tx, ty, tz);
+    return cost.traverse(graph.regionClass(region), fx, fy, fz, tx, ty, tz);
   }
 
   /**

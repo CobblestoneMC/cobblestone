@@ -51,8 +51,6 @@ public final class RegionColumn {
   /** Six ints per region: minimum X, Y, Z and maximum X, Y, Z, in world coordinates. */
   final int[] regionBox;
 
-  final float[] regionBreak;
-
   final int[] portalA;
   final int[] portalB;
   final boolean[] portalDirected;
@@ -69,7 +67,6 @@ public final class RegionColumn {
       byte[][] cells,
       byte[] regionClass,
       int[] regionBox,
-      float[] regionBreak,
       int[] portalA,
       int[] portalB,
       boolean[] portalDirected,
@@ -82,7 +79,6 @@ public final class RegionColumn {
     this.cells = cells;
     this.regionClass = regionClass;
     this.regionBox = regionBox;
-    this.regionBreak = regionBreak;
     this.portalA = portalA;
     this.portalB = portalB;
     this.portalDirected = portalDirected;
@@ -110,7 +106,6 @@ public final class RegionColumn {
         new byte[sections][],
         new byte[0],
         new int[0],
-        new float[0],
         new int[0],
         new int[0],
         new boolean[0],
@@ -199,7 +194,6 @@ public final class RegionColumn {
     for (int r = 0; r < regionClass.length; r++) {
       out.writeByte(regionClass[r]);
       writeBox(out, regionBox, r);
-      out.writeFloat(regionBreak[r]);
     }
     out.writeInt(portalA.length);
     for (int p = 0; p < portalA.length; p++) {
@@ -240,7 +234,6 @@ public final class RegionColumn {
     }
     byte[] regionClass = new byte[regions];
     int[] regionBox = new int[regions * 6];
-    float[] regionBreak = new float[regions];
     int ox = chunkX * 16;
     int oz = chunkZ * 16;
     for (int r = 0; r < regions; r++) {
@@ -249,7 +242,6 @@ public final class RegionColumn {
         throw new IOException("malformed column: region class " + regionClass[r]);
       }
       readBox(in, regionBox, r, ox, minY, oz);
-      regionBreak[r] = in.readFloat();
     }
     int portals = in.readInt();
     if (portals < 0) {
@@ -277,7 +269,6 @@ public final class RegionColumn {
         cells,
         regionClass,
         regionBox,
-        regionBreak,
         portalA,
         portalB,
         portalDirected,

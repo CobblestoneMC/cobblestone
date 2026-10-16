@@ -67,6 +67,7 @@ final class TraitCapture {
             .set(BlockTraits.OPEN, block.isOpen())
             .set(BlockTraits.OPENS_BY_HAND, block.opensByHand())
             .set(BlockTraits.PRESSURE_PLATE, block.isPressurePlate())
+            .miningClass(block.miningClass().ordinal())
             .breakTimeSeconds(block.breakTimeSeconds())
             .speedFactor(block.speedFactor())
             .damagePerSecond(block.damagePerSecond());

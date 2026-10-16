@@ -7,6 +7,9 @@
 
 package org.cobblestonemc.minecraft.lod;
 
+import org.cobblestonemc.minecraft.MiningClass;
+import org.jetbrains.annotations.Nullable;
+
 /**
  * A kind of terrain, as the region layer sees it. A tag, with no costs of its own: {@link
  * RegionCost} says what each class costs one agent.
@@ -17,9 +20,10 @@ package org.cobblestonemc.minecraft.lod;
  *
  * <p><b>A kind of terrain earns a class when some agent would pay differently for it.</b> Soul sand
  * and soul soil are both ground, but soul sand drags a walker and soul soil does not, while Soul
- * Speed boots make both fast: two classes. Water and its surface are both swum, but only the
- * surface carries a boat. Terrain no agent prices differently from an existing class belongs to
- * that class.
+ * Speed boots make both fast: two classes. Breakable material is bucketed by {@link MiningClass},
+ * because a pickaxe makes stone fast and dirt no faster. Water and its surface are both swum, but
+ * only the surface carries a boat. Terrain no agent prices differently from an existing class
+ * belongs to that class.
  *
  * <p>The order is stored: a region keeps its class as {@link #ordinal()}. Adding or reordering a
  * class needs {@link RegionColumnBuilder#CLASSIFIER_VERSION} bumped.
@@ -47,11 +51,76 @@ public enum RegionClass {
   /** Open space nothing stands in: crossed by flying, or fallen through. */
   AIR,
 
-  /** Breakable material: dug through, or for an agent that cannot dig, a wall at a price. */
-  SOLID;
+  /** Breakable by hand: leaves, glass, wool. */
+  SOFT(MiningClass.SOFT),
+
+  /** Soft rock: netherrack and its ores. */
+  SOFT_ROCK(MiningClass.SOFT_ROCK),
+
+  /** Rock: stone and its ores. */
+  ROCK(MiningClass.ROCK),
+
+  /** Hard rock: deepslate and its ores, end stone. */
+  HARD_ROCK(MiningClass.HARD_ROCK),
+
+  /** Obsidian, and whatever else needs a diamond pickaxe. */
+  OBSIDIAN(MiningClass.OBSIDIAN),
+
+  /** Dirt, sand and gravel. */
+  DIRT(MiningClass.DIRT),
+
+  /** Wood. */
+  WOOD(MiningClass.WOOD);
 
   /** Every class, cached; {@code values()} allocates. */
   public static final RegionClass[] ALL = values();
+
+  private final @Nullable MiningClass mining;
+
+  RegionClass() {
+    this(null);
+  }
+
+  RegionClass(@Nullable MiningClass mining) {
+    this.mining = mining;
+  }
+
+  /**
+   * Returns the class of breakable material in a mining bucket.
+   *
+   * @param mining the bucket
+   * @return the class
+   */
+  public static RegionClass solid(MiningClass mining) {
+    return switch (mining) {
+      case SOFT -> SOFT;
+      case SOFT_ROCK -> SOFT_ROCK;
+      case ROCK -> ROCK;
+      case HARD_ROCK -> HARD_ROCK;
+      case OBSIDIAN -> OBSIDIAN;
+      case DIRT -> DIRT;
+      case WOOD -> WOOD;
+    };
+  }
+
+  /**
+   * Returns the mining bucket of a class of breakable material, or {@code null} for any other.
+   *
+   * @return the bucket
+   */
+  public @Nullable MiningClass mining() {
+    return mining;
+  }
+
+  /**
+   * Returns whether this class is breakable material, dug through or, for an agent that cannot dig,
+   * a wall at a price.
+   *
+   * @return {@code true} for the mining buckets
+   */
+  public boolean solid() {
+    return mining != null;
+  }
 
   /**
    * Returns whether a walking body stands in cells of this class, so moves between them step up and

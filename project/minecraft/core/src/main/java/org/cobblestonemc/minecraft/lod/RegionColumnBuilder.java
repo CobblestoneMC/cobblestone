@@ -41,7 +41,7 @@ public final class RegionColumnBuilder {
    * The version of the rules this builds by: what each class is, how the fill splits regions, and
    * which contacts become portals. Stored columns built by any other version are rebuilt.
    */
-  public static final int CLASSIFIER_VERSION = 2;
+  public static final int CLASSIFIER_VERSION = 3;
 
   /**
    * Blocks of detour allowed regardless of distance, so a seed's immediate neighbours never split.
@@ -78,7 +78,6 @@ public final class RegionColumnBuilder {
   // --- scratch, reused between builds ---
   private final MinecraftBlock[] blocks;
   private final byte[] cls;
-  private final float[] breakTime;
   private final byte[] sectionClass;
   private final int[] regionOf;
   private final int[] queue = new int[16 * 16 * 16];
@@ -89,7 +88,6 @@ public final class RegionColumnBuilder {
   private int regionCount;
   private byte[] regionClass = new byte[256];
   private int[] regionBox = new int[256 * 6];
-  private float[] regionBreak = new float[256];
   private int portalCount;
   private int[] portalA = new int[256];
   private int[] portalB = new int[256];
@@ -138,7 +136,6 @@ public final class RegionColumnBuilder {
     int volume = height * 256;
     this.blocks = new MinecraftBlock[volume];
     this.cls = new byte[volume];
-    this.breakTime = new float[volume];
     this.regionOf = new int[volume];
     this.sectionClass = new byte[sections];
   }
@@ -225,7 +222,6 @@ public final class RegionColumnBuilder {
         cells,
         Arrays.copyOf(regionClass, regionCount),
         Arrays.copyOf(regionBox, regionCount * 6),
-        Arrays.copyOf(regionBreak, regionCount),
         Arrays.copyOf(portalA, portalCount),
         Arrays.copyOf(portalB, portalCount),
         Arrays.copyOf(portalDirected, portalCount),
@@ -261,11 +257,6 @@ public final class RegionColumnBuilder {
     int y = minY + (section << 4);
     int[] box = {chunkX * 16, y, chunkZ * 16, chunkX * 16 + 15, y + 15, chunkZ * 16 + 15};
     System.arraycopy(box, 0, regionBox, id * 6, 6);
-    double breakSum = 0;
-    for (int cell = from; cell < from + 4096; cell++) {
-      breakSum += breakTime[cell];
-    }
-    regionBreak[id] = (float) (breakSum / 4096);
   }
 
   /** Sorts every cell of the column scratch into a class, or {@code -1} for none. */
@@ -274,7 +265,6 @@ public final class RegionColumnBuilder {
     for (int cell = 0; cell < volume; cell++) {
       MinecraftBlock block = blocks[cell];
       cls[cell] = -1;
-      breakTime[cell] = 0;
       if (block == null) {
         continue;
       }
@@ -291,10 +281,8 @@ public final class RegionColumnBuilder {
         boolean stands = floor != null && floor.isSolidTop() && (head == null || head.isPassable());
         cls[cell] = (byte) (stands ? ground(floor) : RegionClass.AIR).ordinal();
       } else if (!block.isLava()) {
-        double seconds = block.breakTimeSeconds();
-        if (!Double.isInfinite(seconds)) {
-          cls[cell] = (byte) RegionClass.SOLID.ordinal();
-          breakTime[cell] = (float) seconds;
+        if (!Double.isInfinite(block.breakTimeSeconds())) {
+          cls[cell] = (byte) RegionClass.solid(block.miningClass()).ordinal();
         }
         // Unbreakable: bedrock, barriers. Nothing, not a region a miner could be priced through.
       }
@@ -337,7 +325,7 @@ public final class RegionColumnBuilder {
     RegionClass klass = RegionClass.ALL[c];
     boolean standing = klass.standing();
     // Rock is dug through in straight lines whatever its shape, so its regions need not be convex.
-    boolean capped = klass != RegionClass.SOLID;
+    boolean capped = !klass.solid();
     int id = newRegion(klass);
     int sx = seed & 15;
     int sz = (seed >> 4) & 15;
@@ -358,7 +346,6 @@ public final class RegionColumnBuilder {
       -Integer.MAX_VALUE,
       -Integer.MAX_VALUE
     };
-    double breakSum = 0;
     while (head < tail) {
       int cell = queue[head];
       int walked = steps[head++];
@@ -366,7 +353,6 @@ public final class RegionColumnBuilder {
       int z = (cell >> 4) & 15;
       int y = cell >> 8;
       RegionContacts.grow(box, chunkX * 16 + x, minY + y, chunkZ * 16 + z);
-      breakSum += breakTime[cell];
       for (int[] h : HORIZONTAL) {
         int nx = x + h[0];
         int nz = z + h[1];
@@ -392,7 +378,6 @@ public final class RegionColumnBuilder {
       }
     }
     System.arraycopy(box, 0, regionBox, id * 6, 6);
-    regionBreak[id] = (float) (breakSum / tail);
   }
 
   private int offer(
@@ -530,11 +515,9 @@ public final class RegionColumnBuilder {
       int size = regionCount * 2;
       regionClass = Arrays.copyOf(regionClass, size);
       regionBox = Arrays.copyOf(regionBox, size * 6);
-      regionBreak = Arrays.copyOf(regionBreak, size);
     }
     int id = regionCount++;
     regionClass[id] = (byte) klass.ordinal();
-    regionBreak[id] = 0;
     return id;
   }
 

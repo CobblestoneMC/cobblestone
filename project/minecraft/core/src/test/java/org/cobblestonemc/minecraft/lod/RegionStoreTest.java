@@ -133,7 +133,6 @@ class RegionStoreTest {
   private static void assertSame(RegionColumn expected, RegionColumn actual) {
     assertArrayEquals(expected.regionClass, actual.regionClass);
     assertArrayEquals(expected.regionBox, actual.regionBox);
-    assertArrayEquals(expected.regionBreak, actual.regionBreak);
     assertArrayEquals(expected.portalA, actual.portalA);
     assertArrayEquals(expected.portalB, actual.portalB);
     assertArrayEquals(expected.portalDirected, actual.portalDirected);

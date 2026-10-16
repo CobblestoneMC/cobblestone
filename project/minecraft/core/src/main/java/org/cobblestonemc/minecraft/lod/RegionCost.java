@@ -9,6 +9,7 @@ package org.cobblestonemc.minecraft.lod;
 
 import java.util.Set;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
+import org.cobblestonemc.minecraft.MiningClass;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 
 /**
@@ -96,7 +97,8 @@ public final class RegionCost {
             case WATER, WATER_SURFACE -> swim;
             case CLIMB -> least(climb, fly);
             case AIR -> fly;
-            case SOLID -> Double.NaN; // priced by break time; see traverse
+            // Priced by break time and direction; see traverse.
+            case SOFT, SOFT_ROCK, ROCK, HARD_ROCK, OBSIDIAN, DIRT, WOOD -> Double.NaN;
           };
       rates[klass.ordinal()] = rate;
       if (has(rate)) {
@@ -152,17 +154,18 @@ public final class RegionCost {
   /**
    * Returns whether this agent can be inside a region of the given class.
    *
-   * <p>{@link RegionClass#SOLID} always: an agent that cannot dig is still priced through rock, at
-   * {@link #FALLBACK_COST_PER_BLOCK}. That keeps the graph connected. A gap in it — a seam the
-   * builder joined too strictly, a corner it never looked across — would otherwise make whole
-   * regions unreachable, and the search would spend its effort proving it rather than answering.
-   * Priced at twice the cost of digging, rock is a route only when nothing else is.
+   * <p>A {@linkplain RegionClass#solid() solid} class always: an agent that cannot dig is still
+   * priced through rock, at {@link #FALLBACK_COST_PER_BLOCK}. That keeps the graph connected. A gap
+   * in it — a seam the builder joined too strictly, a corner it never looked across — would
+   * otherwise make whole regions unreachable, and the search would spend its effort proving it
+   * rather than answering. Priced at twice the cost of digging, rock is a route only when nothing
+   * else is.
    *
    * @param klass the class
    * @return {@code true} if usable
    */
   public boolean usable(RegionClass klass) {
-    return klass == RegionClass.SOLID
+    return klass.solid()
         || has(rates[klass.ordinal()])
         || (klass == RegionClass.WATER_SURFACE && has(boat));
   }
@@ -172,7 +175,6 @@ public final class RegionCost {
    * cheapest way the agent has across it.
    *
    * @param klass the region's class
-   * @param breakTime the region's mean break time, for rock
    * @param fx where the crossing starts, X
    * @param fy where the crossing starts, Y
    * @param fz where the crossing starts, Z
@@ -182,22 +184,17 @@ public final class RegionCost {
    * @return the cost in seconds
    */
   public double traverse(
-      RegionClass klass,
-      double breakTime,
-      double fx,
-      double fy,
-      double fz,
-      double tx,
-      double ty,
-      double tz) {
+      RegionClass klass, double fx, double fy, double fz, double tx, double ty, double tz) {
     double dx = tx - fx;
     double dy = ty - fy;
     double dz = tz - fz;
     double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    if (klass == RegionClass.SOLID) {
+    MiningClass bucket = klass.mining();
+    if (bucket != null) {
+      double breakTime = breakTime(bucket);
       // At least one block, however short the line: the two portals of a one-block wall sit face
       // to face, and a crossing priced by the distance between them would dig it for free.
-      return mine && breakTime > 0
+      return mine
           ? Math.max(mining(breakTime, dx, dy, dz), breakTime + FALL)
           : FALLBACK_COST_PER_BLOCK * Math.max(1, length);
     }
@@ -211,6 +208,28 @@ public final class RegionCost {
       cost = has(rate) ? Math.min(cost, boated) : boated;
     }
     return cost;
+  }
+
+  /**
+   * The seconds to break a typical block of a bucket.
+   *
+   * <p>What the fine search charges today, which knows no tools: {@code MinecraftBlock
+   * #breakTimeSeconds()} is the block's hardness times 1.5, whatever the agent carries. Each bucket
+   * stands for a typical hardness in it. Tools change this and nothing stored: a better pickaxe
+   * makes rock faster for the agent holding it, here.
+   */
+  private static double breakTime(MiningClass bucket) {
+    double hardness =
+        switch (bucket) {
+          case SOFT -> 0.2;
+          case SOFT_ROCK -> 0.4;
+          case ROCK -> 1.5;
+          case HARD_ROCK -> 3.0;
+          case OBSIDIAN -> 50.0;
+          case DIRT -> 0.5;
+          case WOOD -> 2.0;
+        };
+    return hardness * 1.5;
   }
 
   /**

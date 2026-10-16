@@ -21,7 +21,7 @@ class RegionCostTest {
 
   /** Ten blocks along X. */
   private static double across(RegionCost cost, RegionClass klass) {
-    return cost.traverse(klass, 0, 0, 0, 0, 10, 0, 0) / 10;
+    return cost.traverse(klass, 0, 0, 0, 10, 0, 0) / 10;
   }
 
   @Test
@@ -68,12 +68,24 @@ class RegionCostTest {
   }
 
   @Test
+  void eachMiningBucketIsPricedAsItsTypicalBlock() {
+    RegionCost miner = RegionCost.forPlayer(TestPlayer.walker(), Set.of());
+    // Ten blocks level: two blocks broken and a walk per block, at hardness times 1.5 a block.
+    assertEquals(2 * 1.5 * 1.5 + 0.20, across(miner, RegionClass.ROCK), 1e-9);
+    assertTrue(across(miner, RegionClass.SOFT_ROCK) < across(miner, RegionClass.ROCK));
+    assertTrue(across(miner, RegionClass.ROCK) < across(miner, RegionClass.HARD_ROCK));
+    assertTrue(across(miner, RegionClass.HARD_ROCK) < across(miner, RegionClass.OBSIDIAN));
+
+    RegionCost noPickaxe =
+        RegionCost.forPlayer(TestPlayer.walker(), Set.of(MinecraftStepType.MINE));
+    assertEquals(RegionCost.FALLBACK_COST_PER_BLOCK, across(noPickaxe, RegionClass.ROCK), 1e-9);
+  }
+
+  @Test
   void aBoatSwimsTheDropsInASurface() {
     RegionCost boater = RegionCost.forPlayer(TestPlayer.create(false, true, false), Set.of());
     // Ten blocks across and two down: boated across, swum down.
     assertEquals(
-        0.15 * 10 + 0.30 * 2,
-        boater.traverse(RegionClass.WATER_SURFACE, 0, 0, 2, 0, 10, 0, 0),
-        1e-9);
+        0.15 * 10 + 0.30 * 2, boater.traverse(RegionClass.WATER_SURFACE, 0, 2, 0, 10, 0, 0), 1e-9);
   }
 }

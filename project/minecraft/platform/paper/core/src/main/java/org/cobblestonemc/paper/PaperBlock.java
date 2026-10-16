@@ -13,6 +13,7 @@ import org.bukkit.Tag;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Openable;
 import org.cobblestonemc.minecraft.MinecraftBlock;
+import org.cobblestonemc.minecraft.MiningClass;
 
 /**
  * A {@link MinecraftBlock} backed by a Bukkit {@link BlockData} from a chunk snapshot — the
@@ -144,6 +145,25 @@ final class PaperBlock implements MinecraftBlock {
       return Double.POSITIVE_INFINITY; // bedrock, barriers, etc.
     }
     return Math.max(hardness * 1.5, 0.05);
+  }
+
+  @Override
+  public MiningClass miningClass() {
+    MiningClass.Tool tool =
+        Tag.MINEABLE_PICKAXE.isTagged(material)
+            ? MiningClass.Tool.PICKAXE
+            : Tag.MINEABLE_SHOVEL.isTagged(material)
+                ? MiningClass.Tool.SHOVEL
+                : Tag.MINEABLE_AXE.isTagged(material)
+                    ? MiningClass.Tool.AXE
+                    : Tag.MINEABLE_HOE.isTagged(material)
+                        ? MiningClass.Tool.HOE
+                        : MiningClass.Tool.NONE;
+    return MiningClass.of(
+        tool,
+        Tag.NEEDS_DIAMOND_TOOL.isTagged(material),
+        material.getHardness(),
+        material.getKey().getKey());
   }
 
   @Override

@@ -65,7 +65,7 @@ public final class RegionFiles {
   private static final int MAGIC = 0x43524731; // "CRG1"
 
   /** The layout of a file and of a column record. Bump it with any change to either. */
-  static final int FORMAT_VERSION = 2;
+  static final int FORMAT_VERSION = 3;
 
   /** Columns a file holds along each axis. */
   static final int SPAN = 32;
