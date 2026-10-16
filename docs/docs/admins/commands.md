@@ -5,16 +5,28 @@ description: Command reference.
 
 # Commands
 
-Cobblestone registers two commands. Both behave identically on Paper and Sponge.
+Everything lives under `/cobblestone`. The two commands players use most are also registered on
+their own, so the short forms are all a player needs:
+
+```
+/loc set home     # save the current position
+/nav home         # navigate back to it
+/loc list         # list saved locations
+```
+
+All of these behave identically on Paper and Sponge.
 
 | Command | Aliases |
 | --- | --- |
-| `/navigate` | `/nav` |
-| `/cobblestone` | `/stone` (and `/cobblestone loc` for `location`) |
+| `/cobblestone` | `/stone` |
+| `/cobblestone navigate` | `/navigate`, `/nav` |
+| `/cobblestone location` | `/location`, `/loc`, `/cobblestone loc` |
 
 ---
 
-## `/navigate <destination…> [flags]`
+## `/cobblestone navigate <destination…> [flags]`
+
+Usually typed as `/nav`; `/navigate` and `/cobblestone navigate` are the same command.
 
 **Permission:** `cobblestone.navigate` (default allow) · **Players only**
 
@@ -96,6 +108,9 @@ Prints help. All subcommands are also available under `/stone`.
 
 ### `/cobblestone location set <name> [-global]`
 
+`/location` and `/loc` are shorthand for `/cobblestone location`.
+
+
 **Permission:** `cobblestone.location`; `-global` additionally needs
 `cobblestone.admin.location.global` · **Players only**
 
@@ -103,8 +118,8 @@ Saves the caller's current block position under `name`. Personal by default; `-g
 available to all players.
 
 ```
-/stone location set home
-/stone location set spawn -global
+/loc set home
+/loc set spawn -global
 ```
 
 Names are single words. Personal names are scoped per player. A personal and a global location may

@@ -37,7 +37,11 @@ import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.world.server.ServerLocation;
 
-/** The {@code /cobblestone} (alias {@code /ody}) admin/utility command tree. */
+/**
+ * The {@code /cobblestone} (alias {@code /stone}) command tree. Its {@code navigate} and {@code
+ * location} subcommands are also registered on their own, as {@code /navigate} ({@code /nav}) and
+ * {@code /location} ({@code /loc}), since players reach for them most.
+ */
 final class CobblestoneCommand {
 
   private CobblestoneCommand() {}
@@ -47,29 +51,13 @@ final class CobblestoneCommand {
       ConfigKeys keys,
       Messages messages,
       Log4JCobblestoneLogger log,
-      LocationDao locations,
       PortalTransitionDao portals,
       TripManager<Entity, SpongeTripAgent, ServerLocation> trips,
       TripHud<Entity, SpongeTripAgent, ServerLocation> hud,
-      SearchRegistry<ServerLocation> searches) {
+      SearchRegistry<ServerLocation> searches,
+      Command.Parameterized navigate,
+      Command.Parameterized location) {
     Parameter.Value<Integer> cancelId = Parameter.integerNumber().key("id").optional().build();
-    Parameter.Value<String> name = Parameter.string().key("name").build();
-    Parameter.Value<String> unsetName =
-        Parameter.string()
-            .key("name")
-            .completer(
-                (ctx, input) ->
-                    suggestLocations(
-                        ctx,
-                        input,
-                        locations,
-                        ctx.hasPermission(Permissions.LOCATION_GLOBAL.value())))
-            .build();
-    // A valueless switch (-global), gated on the admin node. Flag.of(Parameter, …) would instead
-    // build a flag that takes an argument, which is not what `-global` means here.
-    Flag global =
-        Flag.builder().alias("global").setPermission(Permissions.LOCATION_GLOBAL.value()).build();
-
     Command.Parameterized reload =
         Command.builder()
             .permission(Permissions.RELOAD.value())
@@ -125,6 +113,39 @@ final class CobblestoneCommand {
             .addChild(portalsClear, "clear")
             .executor(ctx -> help(ctx, messages))
             .build();
+    return Command.builder()
+        .shortDescription(net.kyori.adventure.text.Component.text("Cobblestone commands"))
+        .addChild(reload, "reload")
+        .addChild(loglevel, "loglevel")
+        .addChild(cancel, "cancel")
+        .addChild(tripsCmd, "trips")
+        .addChild(hudCmd, "hud")
+        .addChild(portalsCmd, "portals")
+        .addChild(navigate, "navigate")
+        .addChild(location, "location", "loc")
+        .executor(ctx -> help(ctx, messages))
+        .build();
+  }
+
+  /** Builds the {@code location} command: {@code set}, {@code unset} and {@code list}. */
+  static Command.Parameterized location(Messages messages, LocationDao locations) {
+    Parameter.Value<String> name = Parameter.string().key("name").build();
+    Parameter.Value<String> unsetName =
+        Parameter.string()
+            .key("name")
+            .completer(
+                (ctx, input) ->
+                    suggestLocations(
+                        ctx,
+                        input,
+                        locations,
+                        ctx.hasPermission(Permissions.LOCATION_GLOBAL.value())))
+            .build();
+    // A valueless switch (-global), gated on the admin node. Flag.of(Parameter, …) would instead
+    // build a flag that takes an argument, which is not what `-global` means here.
+    Flag global =
+        Flag.builder().alias("global").setPermission(Permissions.LOCATION_GLOBAL.value()).build();
+
     Command.Parameterized locationSet =
         Command.builder()
             .addFlag(global)
@@ -139,25 +160,11 @@ final class CobblestoneCommand {
             .build();
     Command.Parameterized locationList =
         Command.builder().executor(ctx -> listLocations(ctx, messages, locations)).build();
-    Command.Parameterized locationCmd =
-        Command.builder()
-            .permission(Permissions.LOCATION.value())
-            .addChild(locationSet, "set")
-            .addChild(locationUnset, "unset")
-            .addChild(locationList, "list")
-            .executor(ctx -> help(ctx, messages))
-            .build();
-
     return Command.builder()
-        .shortDescription(
-            net.kyori.adventure.text.Component.text("Cobblestone admin and utilities"))
-        .addChild(reload, "reload")
-        .addChild(loglevel, "loglevel")
-        .addChild(cancel, "cancel")
-        .addChild(tripsCmd, "trips")
-        .addChild(hudCmd, "hud")
-        .addChild(portalsCmd, "portals")
-        .addChild(locationCmd, "location", "loc")
+        .permission(Permissions.LOCATION.value())
+        .addChild(locationSet, "set")
+        .addChild(locationUnset, "unset")
+        .addChild(locationList, "list")
         .executor(ctx -> help(ctx, messages))
         .build();
   }
@@ -166,6 +173,18 @@ final class CobblestoneCommand {
     Audience audience = ctx.cause().audience();
     Locale locale = localeOf(ctx, messages);
     messages.send(audience, locale, CobblestoneMessages.HELP_HEADER);
+    SpongeCommandHelp.line(
+        audience,
+        messages,
+        locale,
+        "/cobblestone navigate <destination…>",
+        "command.cobblestone.help.navigate");
+    SpongeCommandHelp.line(
+        audience,
+        messages,
+        locale,
+        "/cobblestone location set|unset|list <name> [-global]",
+        "command.cobblestone.help.location");
     SpongeCommandHelp.line(
         audience, messages, locale, "/cobblestone reload", "command.cobblestone.help.reload");
     SpongeCommandHelp.line(
@@ -178,12 +197,6 @@ final class CobblestoneCommand {
         audience, messages, locale, "/cobblestone trips", "command.cobblestone.help.trips");
     SpongeCommandHelp.line(
         audience, messages, locale, "/cobblestone hud [on|off]", "command.cobblestone.help.hud");
-    SpongeCommandHelp.line(
-        audience,
-        messages,
-        locale,
-        "/cobblestone location set|unset|list <name> [-global]",
-        "command.cobblestone.help.location");
     SpongeCommandHelp.line(
         audience,
         messages,

@@ -52,8 +52,8 @@ No further setup is required. For large servers, review [Configuration](config.m
 - Nether and End portal links, learned by observing players use them.
 
 ```
-/stone location set home
-/stone location set spawn -global
+/loc set home
+/loc set spawn -global
 /nav death
 ```
 

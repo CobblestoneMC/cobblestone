@@ -15,14 +15,15 @@ modifications are required.
 | Command | Alias | Purpose |
 | --- | --- | --- |
 | `/navigate` | `/nav` | Navigate to a destination. |
-| `/cobblestone` | `/stone` | Manage saved locations and trips. |
+| `/location` | `/loc` | Save, remove, and list locations. |
+| `/cobblestone` | `/stone` | Manage trips. Also holds `navigate` and `location` as subcommands. |
 
 ## Quick start
 
 Save your current position:
 
 ```
-/stone location set home
+/loc set home
 ```
 
 Navigate back to it from anywhere:
@@ -224,12 +225,12 @@ mode is used only if you are able to fly, and `mine` only where you may break bl
 ## Saved locations
 
 ```
-/stone location set <name>      # save the current position
-/stone location unset <name>    # delete a location
-/stone location list            # list personal and global locations
+/loc set <name>      # save the current position
+/loc unset <name>    # delete a location
+/loc list            # list personal and global locations
 ```
 
-`/stone loc` is an alias for `/stone location`. Names are single words and are scoped to each
+`/loc` is short for `/location`, which is also available as `/cobblestone location`. Names are single words and are scoped to each
 player. Where a personal and a global location share a name, use `location private <name>` or
 `location global <name>`.
 
