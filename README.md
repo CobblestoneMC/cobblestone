@@ -40,6 +40,10 @@ Cobblestone runs an A* search over the live world and renders the route as a par
 | Sponge | 1.21.1 | 21+ |
 | Sponge | 26.1+ | 25+ |
 
+Each release supports the latest Minecraft version. Older Minecraft versions are not supported,
+with one exception: Sponge 1.21.1 has long-term support, shipped as its own jar named
+`Cobblestone-Sponge-1.21.1-<version>.jar`.
+
 ## For admins
 
 - **Core**: Personal and global saved locations, death locations, players, worlds, and learned

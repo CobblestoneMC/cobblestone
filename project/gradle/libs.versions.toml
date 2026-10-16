@@ -1,10 +1,6 @@
 [versions]
 adventure = "4.17.0"
 paper = "26.1.2.build.+"
-# The Minecraft version the "latest" plugin endpoints target. It names their jars
-# (Cobblestone-Paper-<this>-<version>.jar), so it must track whatever paper-api/paperDevBundle and
-# spongeapi-latest above actually resolve to — that is what decides which server internals compile.
-minecraftLatest = "26.2"
 
 # The SpongeAPI the current-Minecraft plugin builds against. Re-pointed when `latest` moves.
 sponge = "17.0.0-SNAPSHOT"

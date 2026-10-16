@@ -28,8 +28,8 @@ repositories {
     }
 }
 
-// The Minecraft version this jar is for. It names the artifact and is written into the plugin
-// metadata, so the two can never disagree about what this jar runs on.
+// The Minecraft version this long-term-support jar is for. It names the artifact, so an admin can
+// tell it apart from the latest-Minecraft Sponge build.
 val minecraftVersion = "1.21.1"
 val spongeApiVersion = "12.0.0"
 
@@ -40,9 +40,9 @@ dependencies {
     compileOnly(libs.adventure.api)
 }
 
-// The shaded jar is the shippable artifact, and it is named for the Minecraft version rather than
-// for this module — an admin downloads `Cobblestone-Sponge-1.21.1-<version>.jar` and can tell at a
-// glance whether it matches their server.
+// The shaded jar is the shippable artifact, named for the Minecraft version rather than for this
+// module — an admin downloads `Cobblestone-Sponge-1.21.1-<version>.jar` and can tell at a glance that
+// it is the long-term-support build for their server.
 tasks.named<ShadowJar>("shadowJar") {
     archiveBaseName.set("Cobblestone-Sponge-$minecraftVersion")
     archiveClassifier.set("")

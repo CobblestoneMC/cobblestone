@@ -81,6 +81,10 @@ Destination providers, search modifications, and navigators are all extensible. 
 | Sponge | 1.21.1 | 21+ |
 | Sponge | 26.1+ | 25+ |
 
+Each release supports the latest Minecraft version. Older Minecraft versions are not supported,
+with one exception: Sponge 1.21.1 has long-term support, shipped as its own jar named
+`Cobblestone-Sponge-1.21.1-<version>.jar`.
+
 ## Performance
 
 Searches run asynchronously and are bounded per player. The [configuration](admins/config.md#search)

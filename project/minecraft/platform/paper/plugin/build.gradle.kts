@@ -33,14 +33,10 @@ dependencies {
     compileOnly(libs.adventure.api)
 }
 
-// The Minecraft version this jar is for, shared with the other "latest" endpoints so they cannot
-// disagree about what current means.
-val minecraftVersion = libs.versions.minecraftLatest.get()
-
-// The shaded jar is named for the Minecraft version rather than the module, so an admin can tell at
-// a glance whether `Cobblestone-Paper-<mc>-<version>.jar` matches their server.
+// The shaded jar is named for the platform rather than the module: `Cobblestone-Paper-<version>.jar`.
+// It carries no Minecraft version because the Paper build only supports the latest Minecraft.
 tasks.shadowJar {
-    archiveBaseName.set("Cobblestone-Paper-$minecraftVersion")
+    archiveBaseName.set("Cobblestone-Paper")
     archiveClassifier.set("")
     // Concatenate META-INF/services/* across all shaded modules so no ServiceLoader provider
     // (e.g. our CobblestoneApi) is dropped when they merge into the single uberjar.
