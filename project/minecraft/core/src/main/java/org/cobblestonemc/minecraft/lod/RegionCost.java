@@ -11,6 +11,7 @@ import java.util.Set;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MiningClass;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
+import org.cobblestonemc.regions.RegionAgent;
 
 /**
  * One agent, as the region layer sees it: what crossing each {@link RegionClass} costs it, and
@@ -35,7 +36,7 @@ import org.cobblestonemc.minecraft.api.MinecraftStepType;
  * backward search focuses itself with that bound, and a crossing priced below it would let the
  * search settle a portal before a cheaper route to it had been seen.
  */
-public final class RegionCost {
+public final class RegionCost implements RegionAgent {
 
   /**
    * What a block costs where the agent has no way through but the graph needs a price: rock, for an
@@ -151,6 +152,17 @@ public final class RegionCost {
     return 1 + 0.3 * (1 + 0.35 * level);
   }
 
+  @Override
+  public boolean usable(int klass) {
+    return usable(RegionClass.ALL[klass]);
+  }
+
+  @Override
+  public double traverse(
+      int klass, double fx, double fy, double fz, double tx, double ty, double tz) {
+    return traverse(RegionClass.ALL[klass], fx, fy, fz, tx, ty, tz);
+  }
+
   /**
    * Returns whether this agent can be inside a region of the given class.
    *
@@ -247,20 +259,12 @@ public final class RegionCost {
     return -dy * (breakTime + FALL) + horizontal * flat;
   }
 
-  /**
-   * Returns the least any crossing can cost per block.
-   *
-   * @return the cheapest rate, in seconds per block
-   */
+  @Override
   public double cheapest() {
     return cheapest;
   }
 
-  /**
-   * Returns what a crossing the graph cannot price costs per block: rock without a pickaxe.
-   *
-   * @return the fallback rate, in seconds per block
-   */
+  @Override
   public double fallback() {
     return FALLBACK_COST_PER_BLOCK;
   }

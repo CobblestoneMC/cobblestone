@@ -5,7 +5,7 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.minecraft.lod;
+package org.cobblestonemc.regions;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -43,7 +43,7 @@ import org.jetbrains.annotations.Nullable;
  * <pre>
  *   int    magic "CRG1"
  *   int    format version        layout of this file and of a column record
- *   int    classifier version    the rules the columns were built by
+ *   int    rules version         the fill's and the terrain's rules the columns were built by
  *   double detour ratio          a fill setting that changes the regions
  *   int    world floor, int sections
  *   int    count, then count x { short index in the file, int length, deflated column }
@@ -72,6 +72,8 @@ public final class RegionFiles {
 
   private final Path directory;
   private final double detourRatio;
+  private final int rules;
+  private final int classes;
   private final int minY;
   private final int sections;
 
@@ -89,12 +91,17 @@ public final class RegionFiles {
    * @param minY the world's floor, rounded down to a section
    * @param sections how many sections the world is tall
    * @param detourRatio the fill's detour ratio, recorded so a change of it is not read back
+   * @param terrain the terrain's rules, whose version is recorded likewise
    */
-  public RegionFiles(Path directory, int minY, int sections, double detourRatio) {
+  public RegionFiles(
+      Path directory, int minY, int sections, double detourRatio, RegionTerrain<?> terrain) {
     this.directory = directory;
     this.minY = minY;
     this.sections = sections;
     this.detourRatio = detourRatio;
+    // The fill's rules and the terrain's, in one number: a change to either is a different graph.
+    this.rules = (RegionColumnBuilder.FILL_VERSION << 16) | terrain.version();
+    this.classes = terrain.classes();
   }
 
   /**
@@ -308,7 +315,7 @@ public final class RegionFiles {
         new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(temporary)))) {
       out.writeInt(MAGIC);
       out.writeInt(FORMAT_VERSION);
-      out.writeInt(RegionColumnBuilder.CLASSIFIER_VERSION);
+      out.writeInt(rules);
       out.writeDouble(detourRatio);
       out.writeInt(minY);
       out.writeInt(sections);
@@ -339,7 +346,7 @@ public final class RegionFiles {
   private int header(DataInputStream in) throws IOException {
     if (in.readInt() != MAGIC
         || in.readInt() != FORMAT_VERSION
-        || in.readInt() != RegionColumnBuilder.CLASSIFIER_VERSION
+        || in.readInt() != rules
         || in.readDouble() != detourRatio
         || in.readInt() != minY
         || in.readInt() != sections) {
@@ -360,10 +367,10 @@ public final class RegionFiles {
     return bytes.toByteArray();
   }
 
-  private static RegionColumn decode(byte[] blob) throws IOException {
+  private RegionColumn decode(byte[] blob) throws IOException {
     try (DataInputStream in =
         new DataInputStream(new InflaterInputStream(new ByteArrayInputStream(blob)))) {
-      return RegionColumn.read(in);
+      return RegionColumn.read(in, classes);
     }
   }
 

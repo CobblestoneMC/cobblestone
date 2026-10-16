@@ -5,7 +5,7 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.minecraft.lod;
+package org.cobblestonemc.regions;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
@@ -48,8 +48,8 @@ public final class RegionSearch {
   private static final byte OPEN = 1;
   private static final byte SETTLED = 2;
 
-  private final RegionGraph graph;
-  private final RegionCost cost;
+  private final RegionGraph<?> graph;
+  private final RegionAgent cost;
   private final Cell goal;
   private final Cell origin;
   private final double cheapest;
@@ -96,7 +96,7 @@ public final class RegionSearch {
    * @param goal the destination
    * @param origin where the fine search starts
    */
-  public RegionSearch(RegionGraph graph, RegionCost cost, Cell goal, Cell origin) {
+  public RegionSearch(RegionGraph<?> graph, RegionAgent cost, Cell goal, Cell origin) {
     this(graph, cost, goal, origin, goal::equals);
   }
 
@@ -115,7 +115,7 @@ public final class RegionSearch {
    * @param inside whether a cell is part of the destination
    */
   public RegionSearch(
-      RegionGraph graph, RegionCost cost, Cell goal, Cell origin, Predicate<Cell> inside) {
+      RegionGraph<?> graph, RegionAgent cost, Cell goal, Cell origin, Predicate<Cell> inside) {
     this.graph = graph;
     this.cost = cost;
     this.goal = goal;
@@ -590,7 +590,7 @@ public final class RegionSearch {
    *
    * @return the graph
    */
-  public RegionGraph graph() {
+  public RegionGraph<?> graph() {
     return graph;
   }
 

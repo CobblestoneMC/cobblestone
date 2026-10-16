@@ -14,7 +14,7 @@ import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.ChunkFetch;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
-import org.cobblestonemc.minecraft.lod.RegionGraph;
+import org.cobblestonemc.regions.RegionGraph;
 import org.cobblestonemc.stonebrick.platform.MissingCaptureLog;
 import org.cobblestonemc.stonebrick.platform.StonebrickPlatformApi;
 
@@ -26,7 +26,7 @@ import org.cobblestonemc.stonebrick.platform.StonebrickPlatformApi;
  * resident comes back pending and the fine search parks, which is the path a live server is in
  * constantly.
  */
-final class CaptureChunkColumns implements RegionGraph.ChunkColumns {
+final class CaptureChunkColumns implements RegionGraph.ChunkColumns<MinecraftChunk> {
 
   private final StonebrickPlatformApi platform;
   private final String world;

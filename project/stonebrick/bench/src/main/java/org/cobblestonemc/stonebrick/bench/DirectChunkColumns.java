@@ -11,7 +11,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.MinecraftChunk;
-import org.cobblestonemc.minecraft.lod.RegionGraph;
+import org.cobblestonemc.regions.RegionGraph;
 import org.cobblestonemc.stonebrick.format.CaptureFormatException;
 import org.cobblestonemc.stonebrick.format.ChunkColumn;
 import org.cobblestonemc.stonebrick.platform.Capture;
@@ -24,7 +24,7 @@ import org.cobblestonemc.stonebrick.platform.CaptureChunks;
  * what the terrain costs to fetch, and routing it through the IO model would charge reads to a
  * solve nobody is timing.
  */
-final class DirectChunkColumns implements RegionGraph.ChunkColumns {
+final class DirectChunkColumns implements RegionGraph.ChunkColumns<MinecraftChunk> {
 
   private final Capture capture;
   private final String world;

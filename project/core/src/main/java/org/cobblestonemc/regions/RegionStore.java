@@ -5,7 +5,7 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.minecraft.lod;
+package org.cobblestonemc.regions;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -20,7 +20,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import org.cobblestonemc.FutureOr;
-import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -46,7 +45,7 @@ import org.jetbrains.annotations.Nullable;
  * background builds all use it at once; its maps are guarded by the store's own lock, and nothing
  * slow — building, reading, writing — happens while holding it.
  */
-public final class RegionStore {
+public final class RegionStore<C> {
 
   private final int worldMinY;
   private final int worldMaxY;
@@ -55,7 +54,8 @@ public final class RegionStore {
   private final @Nullable RegionFiles files;
   private final Executor disk;
   private final Executor builds;
-  private final ThreadLocal<RegionColumnBuilder> builders;
+  private final RegionTerrain<C> terrain;
+  private final ThreadLocal<RegionColumnBuilder<C>> builders;
   private final int columnMinY;
   private final int sections;
 
@@ -85,6 +85,7 @@ public final class RegionStore {
   /**
    * Creates a store.
    *
+   * @param terrain what the cells are, and how they join
    * @param worldMinY the world's lowest Y, inclusive
    * @param worldMaxY the world's highest Y, inclusive
    * @param detourRatio the fill's detour ratio; see {@link RegionGraph#DEFAULT_DETOUR_RATIO}
@@ -94,6 +95,7 @@ public final class RegionStore {
    * @param builds where a column is built when its chunk arrives later rather than at once
    */
   public RegionStore(
+      RegionTerrain<C> terrain,
       int worldMinY,
       int worldMaxY,
       double detourRatio,
@@ -109,7 +111,9 @@ public final class RegionStore {
     this.disk = disk;
     this.builds = builds;
     this.builders =
-        ThreadLocal.withInitial(() -> new RegionColumnBuilder(worldMinY, worldMaxY, detourRatio));
+        ThreadLocal.withInitial(
+            () -> new RegionColumnBuilder<>(terrain, worldMinY, worldMaxY, detourRatio));
+    this.terrain = terrain;
     this.columnMinY = RegionColumnBuilder.columnMinY(worldMinY);
     this.sections = RegionColumnBuilder.sections(worldMinY, worldMaxY);
   }
@@ -118,14 +122,24 @@ public final class RegionStore {
    * Creates a store that keeps everything in memory, on the caller's thread: one search's worth, as
    * for a benchmark or a test.
    *
+   * @param terrain what the cells are, and how they join
    * @param worldMinY the world's lowest Y, inclusive
    * @param worldMaxY the world's highest Y, inclusive
    * @param detourRatio the fill's detour ratio
+   * @param <C> the platform's column of terrain
    * @return the store
    */
-  public static RegionStore inMemory(int worldMinY, int worldMaxY, double detourRatio) {
-    return new RegionStore(
-        worldMinY, worldMaxY, detourRatio, Long.MAX_VALUE, null, Runnable::run, Runnable::run);
+  public static <C> RegionStore<C> inMemory(
+      RegionTerrain<C> terrain, int worldMinY, int worldMaxY, double detourRatio) {
+    return new RegionStore<>(
+        terrain,
+        worldMinY,
+        worldMaxY,
+        detourRatio,
+        Long.MAX_VALUE,
+        null,
+        Runnable::run,
+        Runnable::run);
   }
 
   /**
@@ -145,6 +159,15 @@ public final class RegionStore {
    */
   public int sections() {
     return sections;
+  }
+
+  /**
+   * Returns what this store's cells are, and how they join.
+   *
+   * @return the terrain
+   */
+  public RegionTerrain<C> terrain() {
+    return terrain;
   }
 
   /**
@@ -170,7 +193,7 @@ public final class RegionStore {
    * @param chunks where to read the chunk if the column has to be built
    * @return the column
    */
-  public FutureOr<RegionColumn> column(int chunkX, int chunkZ, RegionGraph.ChunkColumns chunks) {
+  public FutureOr<RegionColumn> column(int chunkX, int chunkZ, RegionGraph.ChunkColumns<C> chunks) {
     long key = key(chunkX, chunkZ);
     CompletableFuture<RegionColumn> promise;
     synchronized (this) {
@@ -199,7 +222,10 @@ public final class RegionStore {
   }
 
   private void load(
-      int chunkX, int chunkZ, RegionGraph.ChunkColumns chunks, CompletableFuture<RegionColumn> to) {
+      int chunkX,
+      int chunkZ,
+      RegionGraph.ChunkColumns<C> chunks,
+      CompletableFuture<RegionColumn> to) {
     boolean stale;
     synchronized (this) {
       // Invalidated and not yet removed from disk: what is there is the terrain before the change.
@@ -238,8 +264,11 @@ public final class RegionStore {
   }
 
   private void build(
-      int chunkX, int chunkZ, RegionGraph.ChunkColumns chunks, CompletableFuture<RegionColumn> to) {
-    FutureOr<MinecraftChunk> chunk;
+      int chunkX,
+      int chunkZ,
+      RegionGraph.ChunkColumns<C> chunks,
+      CompletableFuture<RegionColumn> to) {
+    FutureOr<C> chunk;
     try {
       chunk = chunks.column(chunkX, chunkZ);
     } catch (RuntimeException failed) {
@@ -256,7 +285,7 @@ public final class RegionStore {
         .whenCompleteAsync(
             (arrived, failure) -> {
               try {
-                MinecraftChunk readable = failure == null ? arrived : null;
+                C readable = failure == null ? arrived : null;
                 settle(chunkX, chunkZ, built(chunkX, chunkZ, readable), readable != null, to);
               } catch (RuntimeException failed) {
                 fail(chunkX, chunkZ, to, failed);
@@ -265,7 +294,7 @@ public final class RegionStore {
             builds);
   }
 
-  private RegionColumn built(int chunkX, int chunkZ, @Nullable MinecraftChunk chunk) {
+  private RegionColumn built(int chunkX, int chunkZ, @Nullable C chunk) {
     long started = System.nanoTime();
     RegionColumn column = builders.get().build(chunkX, chunkZ, chunk);
     long took = System.nanoTime() - started;
@@ -325,7 +354,7 @@ public final class RegionStore {
    * @param chunkZ the chunk Z
    * @param chunk the chunk
    */
-  public void prebuild(int chunkX, int chunkZ, MinecraftChunk chunk) {
+  public void prebuild(int chunkX, int chunkZ, C chunk) {
     long key = key(chunkX, chunkZ);
     CompletableFuture<RegionColumn> promise = new CompletableFuture<>();
     synchronized (this) {

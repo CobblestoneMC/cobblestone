@@ -5,7 +5,7 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.minecraft.lod;
+package org.cobblestonemc.regions;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -17,19 +17,18 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import org.cobblestonemc.FutureOr;
-import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.jetbrains.annotations.Nullable;
 
 /**
  * The world as a graph of terrain regions joined by portals, as one search sees it.
  *
  * <p><b>Exact about topology, loose about geometry.</b> Every region is a flood-filled connected
- * piece of one {@link RegionClass}, so two regions are joined only where a body could actually
- * cross between them; but nothing inside a region is remembered beyond its bounding box, and the
- * cost of crossing one is a straight line priced at its class's rate. That is the trade this layer
- * is built on: a wrong price costs the fine search a few nodes, while a wrong connection — a wall
- * reported as a doorway — costs it thousands, so connections are computed from blocks and prices
- * are allowed to be rough.
+ * piece of one class of terrain, so two regions are joined only where a body could actually cross
+ * between them; but nothing inside a region is remembered beyond its bounding box, and the cost of
+ * crossing one is a straight line priced at its class's rate. That is the trade this layer is built
+ * on: a wrong price costs the fine search a few nodes, while a wrong connection — a wall reported
+ * as a doorway — costs it thousands, so connections are computed from blocks and prices are allowed
+ * to be rough.
  *
  * <p><b>Columns come from a {@link RegionStore}; seams are built here.</b> A column — every region
  * and portal inside one chunk — is built once and shared by every search through the store, and
@@ -40,11 +39,11 @@ import org.jetbrains.annotations.Nullable;
  * across a region once and trust that it saw everything.
  *
  * <p><b>Agent-independent.</b> Nothing here knows who is travelling: a region says what the terrain
- * is, and {@link RegionCost} decides what that is worth and whether it is passable at all.
+ * is, and a {@link RegionAgent} decides what that is worth and whether it is passable at all.
  *
  * <p>Not thread-safe. One solve owns one graph, and the search that reads it is single-flight.
  */
-public final class RegionGraph {
+public final class RegionGraph<C> {
 
   /** No region: unbreakable, lava, outside the world, or a chunk that cannot be read. */
   public static final int NONE = -1;
@@ -59,8 +58,9 @@ public final class RegionGraph {
    */
   public static final double DEFAULT_DETOUR_RATIO = 1.5;
 
-  private final RegionStore store;
-  private final ChunkColumns chunks;
+  private final RegionStore<C> store;
+  private final RegionTerrain<C> terrain;
+  private final ChunkColumns<C> chunks;
   private final int minY;
   private final int height;
 
@@ -99,20 +99,22 @@ public final class RegionGraph {
    * Creates a graph over a store of its own, keeping everything in memory: one search's worth.
    *
    * @param chunks where columns come from
+   * @param terrain what the cells are, and how they join
    */
-  public RegionGraph(ChunkColumns chunks) {
-    this(chunks, DEFAULT_DETOUR_RATIO);
+  public RegionGraph(ChunkColumns<C> chunks, RegionTerrain<C> terrain) {
+    this(chunks, terrain, DEFAULT_DETOUR_RATIO);
   }
 
   /**
    * Creates a graph over a store of its own that splits regions at a chosen detour.
    *
    * @param chunks where columns come from
+   * @param terrain what the cells are, and how they join
    * @param detourRatio how much longer than a straight line a walk inside one region may be; see
    *     {@link #DEFAULT_DETOUR_RATIO}
    */
-  public RegionGraph(ChunkColumns chunks, double detourRatio) {
-    this(RegionStore.inMemory(chunks.minY(), chunks.maxY(), detourRatio), chunks);
+  public RegionGraph(ChunkColumns<C> chunks, RegionTerrain<C> terrain, double detourRatio) {
+    this(RegionStore.inMemory(terrain, chunks.minY(), chunks.maxY(), detourRatio), chunks);
   }
 
   /**
@@ -121,8 +123,9 @@ public final class RegionGraph {
    * @param store where built columns are kept
    * @param chunks where this search reads a chunk the store has to build a column from
    */
-  public RegionGraph(RegionStore store, ChunkColumns chunks) {
+  public RegionGraph(RegionStore<C> store, ChunkColumns<C> chunks) {
     this.store = store;
+    this.terrain = store.terrain();
     this.chunks = chunks;
     this.minY = store.columnMinY();
     this.height = store.sections() * 16;
@@ -149,13 +152,13 @@ public final class RegionGraph {
   }
 
   /**
-   * Returns a region's class.
+   * Returns a region's class, as its terrain numbers it.
    *
    * @param region the region
    * @return its class
    */
-  public RegionClass regionClass(int region) {
-    return RegionClass.ALL[regionClass[region]];
+  public int regionClass(int region) {
+    return regionClass[region];
   }
 
   /**
@@ -263,7 +266,7 @@ public final class RegionGraph {
    *
    * @return the store
    */
-  public RegionStore store() {
+  public RegionStore<C> store() {
     return store;
   }
 
@@ -401,7 +404,7 @@ public final class RegionGraph {
     int base = regionCount;
     long key = columnKey(column.chunkX, column.chunkZ);
     for (int r = 0; r < column.regionClass.length; r++) {
-      int id = newRegion(RegionClass.ALL[column.regionClass[r]], key);
+      int id = newRegion(column.regionClass[r], key);
       System.arraycopy(column.regionBox, r * 6, regionBox, id * 6, 6);
     }
     int[] box = new int[6];
@@ -446,15 +449,15 @@ public final class RegionGraph {
         int ra = low.regionAt(ax, ly, az);
         int rb = high.regionAt(bx, ly, bz);
         contacts.touch(ra, rb, wax, y, waz, wbx, y, wbz);
-        if (ra != NONE && regionClassOf(ra).standing()) {
+        if (ra != NONE && terrain.standing(regionClass[ra])) {
           seamSteps(ra, high, bx, ly, bz, wax, waz, wbx, wbz);
-          if (rb != NONE && regionClassOf(rb) == RegionClass.AIR) {
+          if (rb != NONE && terrain.open(regionClass[rb])) {
             seamDrop(ra, high, bx, ly, bz, wax, waz, wbx, wbz);
           }
         }
-        if (rb != NONE && regionClassOf(rb).standing()) {
+        if (rb != NONE && terrain.standing(regionClass[rb])) {
           seamSteps(rb, low, ax, ly, az, wbx, wbz, wax, waz);
-          if (ra != NONE && regionClassOf(ra) == RegionClass.AIR) {
+          if (ra != NONE && terrain.open(regionClass[ra])) {
             seamDrop(rb, low, ax, ly, az, wbx, wbz, wax, waz);
           }
         }
@@ -475,7 +478,7 @@ public final class RegionGraph {
   }
 
   private void step(int from, int to, int fx, int fy, int fz, int tx, int ty, int tz) {
-    if (to != NONE && to != from && RegionColumnBuilder.steppable(regionClassOf(to))) {
+    if (to != NONE && to != from && terrain.steppable(regionClass[to])) {
       contacts.touch(from, to, fx, fy, fz, tx, ty, tz);
     }
   }
@@ -483,16 +486,16 @@ public final class RegionGraph {
   private void seamDrop(
       int from, Placed other, int lx, int ly, int lz, int fx, int fz, int tx, int tz) {
     int y = minY + ly;
-    for (int k = 1; k <= RegionColumnBuilder.MAX_WATER_DROP && ly - k >= 0; k++) {
+    for (int k = 1; k <= terrain.deepestFall() && ly - k >= 0; k++) {
       int below = other.regionAt(lx, ly - k, lz);
       if (below == NONE) {
         return;
       }
-      RegionClass c = regionClassOf(below);
-      if (c == RegionClass.AIR) {
+      int c = regionClass[below];
+      if (terrain.open(c)) {
         continue;
       }
-      if (RegionColumnBuilder.landing(c, k)) {
+      if (terrain.landing(c, k)) {
         contacts.drop(from, below, fx, y, fz, tx, y, tz);
       }
       return;
@@ -503,11 +506,7 @@ public final class RegionGraph {
   // Storage
   // ------------------------------------------------------------------------------------------
 
-  private RegionClass regionClassOf(int region) {
-    return RegionClass.ALL[regionClass[region]];
-  }
-
-  private int newRegion(RegionClass klass, long column) {
+  private int newRegion(int klass, long column) {
     if (regionCount == regionClass.length) {
       int size = regionCount * 2;
       regionClass = Arrays.copyOf(regionClass, size);
@@ -517,7 +516,7 @@ public final class RegionGraph {
       regionPortalCount = Arrays.copyOf(regionPortalCount, size);
     }
     int id = regionCount++;
-    regionClass[id] = (byte) klass.ordinal();
+    regionClass[id] = (byte) klass;
     regionColumn[id] = column;
     regionPortals[id] = new int[4];
     return id;
@@ -582,11 +581,12 @@ public final class RegionGraph {
   /**
    * Where the graph gets its terrain: one chunk column at a time.
    *
-   * <p>⚠️ <b>An implementation must remember what it fetched.</b> Once a returned future has
-   * completed, a later call for the same column has to answer immediately, or the search parks on
-   * the same column forever.
+   * @param <C> the platform's column of terrain
+   *     <p>⚠️ <b>An implementation must remember what it fetched.</b> Once a returned future has
+   *     completed, a later call for the same column has to answer immediately, or the search parks
+   *     on the same column forever.
    */
-  public interface ChunkColumns {
+  public interface ChunkColumns<C> {
 
     /**
      * Returns a chunk column, or an immediate {@code null} if it cannot be known.
@@ -595,7 +595,7 @@ public final class RegionGraph {
      * @param chunkZ the chunk Z
      * @return the chunk
      */
-    FutureOr<MinecraftChunk> column(int chunkX, int chunkZ);
+    FutureOr<C> column(int chunkX, int chunkZ);
 
     /**
      * Returns the lowest world Y, inclusive.

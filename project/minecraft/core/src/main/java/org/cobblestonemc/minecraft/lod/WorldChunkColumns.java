@@ -14,6 +14,7 @@ import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.ChunkSource;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.regions.RegionGraph;
 
 /**
  * A live world's chunk columns, for a {@link RegionGraph}.
@@ -22,7 +23,7 @@ import org.cobblestonemc.minecraft.MinecraftWorld;
  * Sponge both get it without a copy. Nothing is read up front: the graph asks for a column the
  * first time a search needs it, and the fine search parks until it lands.
  */
-public final class WorldChunkColumns implements RegionGraph.ChunkColumns {
+public final class WorldChunkColumns implements RegionGraph.ChunkColumns<MinecraftChunk> {
 
   private final ChunkSource chunks;
   private final MinecraftWorld world;

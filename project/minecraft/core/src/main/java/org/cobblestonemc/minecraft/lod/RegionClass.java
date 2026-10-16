@@ -26,7 +26,7 @@ import org.jetbrains.annotations.Nullable;
  * belongs to that class.
  *
  * <p>The order is stored: a region keeps its class as {@link #ordinal()}. Adding or reordering a
- * class needs {@link RegionColumnBuilder#CLASSIFIER_VERSION} bumped.
+ * class needs {@link MinecraftTerrain#VERSION} bumped.
  */
 public enum RegionClass {
 

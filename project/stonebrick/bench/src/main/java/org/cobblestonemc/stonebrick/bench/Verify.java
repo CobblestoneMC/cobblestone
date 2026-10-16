@@ -15,8 +15,9 @@ import java.util.Locale;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.SearchObserver;
-import org.cobblestonemc.minecraft.lod.RegionGraph;
-import org.cobblestonemc.minecraft.lod.RegionSearch;
+import org.cobblestonemc.minecraft.lod.MinecraftTerrain;
+import org.cobblestonemc.regions.RegionGraph;
+import org.cobblestonemc.regions.RegionSearch;
 import org.cobblestonemc.stonebrick.format.CorpusLayout;
 import org.cobblestonemc.stonebrick.platform.Capture;
 
@@ -137,12 +138,13 @@ final class Verify {
     // Focused on the route's start, as the heuristic's own search is.
     RegionSearch regions =
         new RegionSearch(
-            new RegionGraph(
+            new RegionGraph<>(
                 new DirectChunkColumns(
                     capture,
                     scenario.world(),
                     capture.minY(scenario.world()),
                     capture.maxY(scenario.world())),
+                MinecraftTerrain.INSTANCE,
                 ScenarioRunner.REGION_DETOUR),
             loadout.cost(),
             scenario.destination(),

@@ -1,7 +1,14 @@
 # Regions: the fine search's heuristic
 
-`search.algorithm.heuristic: REGIONS`, the default. Classes in
-`project/minecraft/core/src/main/java/org/cobblestonemc/minecraft/lod`.
+`search.algorithm.heuristic: REGIONS`, the default.
+
+- **The region layer itself** is in `project/core/src/main/java/org/cobblestonemc/regions` and
+  knows no game: it fills cells of one class into regions, joins them with portals, stores them,
+  and searches over them. Two interfaces plug a game in: `RegionTerrain` (which class each cell is,
+  and how classes join: standing, steps, falls) and `RegionAgent` (what a class costs a traveller).
+- **Minecraft's side** is in `project/minecraft/core/src/main/java/org/cobblestonemc/minecraft/lod`:
+  `MinecraftTerrain` classifies blocks and holds a walking body's rules, `RegionClass` names the
+  classes, and `RegionCost` is the agent.
 
 ## The idea
 The fine search (`Tier2Search`) needs, for every cell it opens, an estimate of what the rest of
@@ -9,7 +16,8 @@ the route costs. RUNNING_AVERAGE extrapolates from the steps already taken, whic
 the terrain ahead. REGIONS reads the terrain ahead.
 
 - **Regions.** Each chunk column is classed cell by cell (stand, soul sand, soul soil, water, water
-  surface, climb, air, solid) and flood-filled into connected regions, one class each, within each
+  surface, climb, air, and breakable material by mining bucket: soft, soft rock, rock, hard rock,
+  obsidian, dirt, wood) and flood-filled into connected regions, one class each, within each
   16³ section. A region is split
   where walking inside it would bend more than 1.5x its straight line (Manhattan against
   Manhattan), so pricing a crossing as a straight line stays honest. Uniform sections skip the fill.
@@ -20,8 +28,10 @@ the terrain ahead. REGIONS reads the terrain ahead.
   `RegionCost` is the agent, built from the player and the operator's exclusions, and says what
   each class costs it: soul sand is 2.5x ground on foot and fast in Soul Speed boots, and only a
   water surface takes a boat. A kind of terrain earns its own class only when some agent would pay
-  differently for it. Rock is always usable, at the mining rate with a pickaxe and at a fallback
-  rate without, so the graph stays connected.
+  differently for it. A region stores only its class, never a cost: a mining bucket is priced from
+  a typical hardness in it, so tools will change the agent and nothing stored. Rock is always
+  usable, at the mining rate with a pickaxe and at a fallback rate without, so the graph stays
+  connected.
 - **Search.** Reverse Resumable A*: a backward search from the destination, focused on the fine
   search's origin, resumed only when a question needs it. A settled portal knows its true cost to
   the destination over the graph, so answers are final when given. Each portal's label carries

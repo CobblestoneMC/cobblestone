@@ -5,60 +5,48 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.minecraft.lod;
+package org.cobblestonemc.regions;
 
 import java.util.Arrays;
-import org.cobblestonemc.minecraft.MinecraftBlock;
-import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Turns one chunk into a {@link RegionColumn}: classify every cell, flood-fill each section into
- * regions, and record where regions inside the column touch.
+ * Turns one column of terrain into a {@link RegionColumn}: classify every cell, flood-fill each
+ * section into regions, and record where regions inside the column touch.
  *
  * <p><b>Three passes.</b>
  *
  * <ol>
- *   <li><b>Classify</b> gives every cell one {@link RegionClass} from its block, the block under it
- *       (footing) and the block over it (headroom).
+ *   <li><b>Classify</b> gives every cell one class, by the {@link RegionTerrain}.
  *   <li><b>Fill</b> groups touching cells of one class into regions, section by section, refusing a
  *       cell whose walk from the region's seed is much longer than the straight line ({@link
  *       RegionGraph#DEFAULT_DETOUR_RATIO}), because a region is priced in straight lines.
  *   <li><b>Contacts</b> scans for neighbouring cells in different regions — and for walking steps a
  *       level up or down, and ledges a body can drop from — and turns each touching pair into a
- *       portal whose box covers every cell where they meet.
+ *       portal whose box covers every cell where they meet. Which steps and drops count is the
+ *       terrain's to say.
  * </ol>
  *
- * <p><b>Change the rules, bump {@link #CLASSIFIER_VERSION}.</b> Columns are kept on disk, and a
- * stored column built under different rules is a different graph: read back silently, it would mix
- * two models in one search.
+ * <p><b>Change the rules, bump {@link #FILL_VERSION} or the terrain's version.</b> Columns are kept
+ * on disk, and a stored column built under different rules is a different graph: read back
+ * silently, it would mix two models in one search.
  *
  * <p>Not thread-safe: it reuses a column's worth of scratch between builds. One per thread.
+ *
+ * @param <C> the platform's column of terrain
  */
-public final class RegionColumnBuilder {
+public final class RegionColumnBuilder<C> {
 
   /**
-   * The version of the rules this builds by: what each class is, how the fill splits regions, and
-   * which contacts become portals. Stored columns built by any other version are rebuilt.
+   * The version of how this fills regions and finds contacts, apart from the terrain's own rules.
+   * Stored columns built by any other version are rebuilt.
    */
-  public static final int CLASSIFIER_VERSION = 3;
+  public static final int FILL_VERSION = 1;
 
   /**
    * Blocks of detour allowed regardless of distance, so a seed's immediate neighbours never split.
    */
   private static final double DETOUR_SLACK = 3.0;
-
-  /**
-   * The deepest drop onto ground a fall portal joins.
-   *
-   * <p>{@code MovementCosts.SAFE_FALL_BLOCKS}. FallMode will go further at the price of damage,
-   * which it charges at several seconds a block; a route that needs that is rare, and pricing it as
-   * a cheap drop would invite the fine search to every cliff edge.
-   */
-  static final int MAX_DROP = 3;
-
-  /** The deepest drop into water a fall portal joins: water breaks any fall. */
-  static final int MAX_WATER_DROP = 32;
 
   /** Regions a section can hold, as an unsigned byte with {@code 0xFF} reserved for none. */
   private static final int MAX_SECTION_REGIONS = 255;
@@ -68,6 +56,7 @@ public final class RegionColumnBuilder {
 
   private static final int[][] HORIZONTAL = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 
+  private final RegionTerrain<C> terrain;
   private final int worldMinY;
   private final int worldMaxY;
   private final double detourRatio;
@@ -76,7 +65,6 @@ public final class RegionColumnBuilder {
   private final int sections;
 
   // --- scratch, reused between builds ---
-  private final MinecraftBlock[] blocks;
   private final byte[] cls;
   private final byte[] sectionClass;
   private final int[] regionOf;
@@ -119,11 +107,14 @@ public final class RegionColumnBuilder {
   /**
    * Creates a builder for a world of the given height.
    *
+   * @param terrain what the cells are, and how they join
    * @param worldMinY the world's lowest Y, inclusive
    * @param worldMaxY the world's highest Y, inclusive
    * @param detourRatio how much longer than a straight line a walk inside one region may be
    */
-  public RegionColumnBuilder(int worldMinY, int worldMaxY, double detourRatio) {
+  public RegionColumnBuilder(
+      RegionTerrain<C> terrain, int worldMinY, int worldMaxY, double detourRatio) {
+    this.terrain = terrain;
     this.worldMinY = worldMinY;
     this.worldMaxY = worldMaxY;
     this.detourRatio = detourRatio;
@@ -134,7 +125,6 @@ public final class RegionColumnBuilder {
     this.minY = minSection * 16;
     this.height = sections * 16;
     int volume = height * 256;
-    this.blocks = new MinecraftBlock[volume];
     this.cls = new byte[volume];
     this.regionOf = new int[volume];
     this.sectionClass = new byte[sections];
@@ -164,25 +154,17 @@ public final class RegionColumnBuilder {
    *
    * @param chunkX the chunk X
    * @param chunkZ the chunk Z
-   * @param chunk the chunk, or {@code null} if it cannot be read
+   * @param chunk the column of terrain, or {@code null} if it cannot be read
    * @return the column
    */
-  public RegionColumn build(int chunkX, int chunkZ, @Nullable MinecraftChunk chunk) {
+  public RegionColumn build(int chunkX, int chunkZ, @Nullable C chunk) {
     if (chunk == null) {
       // A column that cannot be read is nothing at all: no regions, so no portals into it. The
       // search routes around it, as the fine search will have to.
       return RegionColumn.empty(chunkX, chunkZ, minY, sections);
     }
-    for (int ly = 0; ly < height; ly++) {
-      int y = minY + ly;
-      boolean inside = y >= worldMinY && y <= worldMaxY;
-      for (int z = 0; z < 16; z++) {
-        for (int x = 0; x < 16; x++) {
-          blocks[(ly << 8) | (z << 4) | x] = inside ? chunk.block(x, y, z) : null;
-        }
-      }
-    }
-    classify();
+    terrain.classify(chunk, worldMinY, worldMaxY, minY, cls);
+    uniformSections();
     regionCount = 0;
     portalCount = 0;
     Arrays.fill(regionOf, RegionColumn.NONE);
@@ -250,8 +232,7 @@ public final class RegionColumnBuilder {
 
   /** Makes a uniform section one region, without filling it. */
   private void whole(int section, int chunkX, int chunkZ) {
-    RegionClass klass = RegionClass.ALL[sectionClass[section]];
-    int id = newRegion(klass);
+    int id = newRegion(sectionClass[section]);
     int from = section << 12;
     Arrays.fill(regionOf, from, from + 4096, id);
     int y = minY + (section << 4);
@@ -259,34 +240,8 @@ public final class RegionColumnBuilder {
     System.arraycopy(box, 0, regionBox, id * 6, 6);
   }
 
-  /** Sorts every cell of the column scratch into a class, or {@code -1} for none. */
-  private void classify() {
-    int volume = height * 256;
-    for (int cell = 0; cell < volume; cell++) {
-      MinecraftBlock block = blocks[cell];
-      cls[cell] = -1;
-      if (block == null) {
-        continue;
-      }
-      if (block.isWater()) {
-        // The surface is where a boat floats: open to the air, as BoatMode wants it.
-        MinecraftBlock above = cell + 256 < volume ? blocks[cell + 256] : null;
-        boolean open = above == null || (above.isPassable() && !above.isWater());
-        cls[cell] = (byte) (open ? RegionClass.WATER_SURFACE : RegionClass.WATER).ordinal();
-      } else if (block.isClimbable() || block.isScaffolding()) {
-        cls[cell] = (byte) RegionClass.CLIMB.ordinal();
-      } else if (block.isPassable()) {
-        MinecraftBlock floor = cell >= 256 ? blocks[cell - 256] : null;
-        MinecraftBlock head = cell + 256 < volume ? blocks[cell + 256] : null;
-        boolean stands = floor != null && floor.isSolidTop() && (head == null || head.isPassable());
-        cls[cell] = (byte) (stands ? ground(floor) : RegionClass.AIR).ordinal();
-      } else if (!block.isLava()) {
-        if (!Double.isInfinite(block.breakTimeSeconds())) {
-          cls[cell] = (byte) RegionClass.solid(block.miningClass()).ordinal();
-        }
-        // Unbreakable: bedrock, barriers. Nothing, not a region a miner could be priced through.
-      }
-    }
+  /** Notes which sections hold one class edge to edge, which need no fill. */
+  private void uniformSections() {
     for (int s = 0; s < sections; s++) {
       int from = s << 12;
       byte first = cls[from];
@@ -302,19 +257,6 @@ public final class RegionColumnBuilder {
   }
 
   /**
-   * The class of a cell a body stands in, by what it stands on.
-   *
-   * <p>Soul Speed works on soul sand and soul soil alike, but only soul sand drags a walker without
-   * it, which its speed factor says.
-   */
-  private static RegionClass ground(MinecraftBlock floor) {
-    if (!floor.boostsSoulSpeed()) {
-      return RegionClass.STAND;
-    }
-    return floor.speedFactor() < 1 ? RegionClass.SOUL_SAND : RegionClass.SOUL_SOIL;
-  }
-
-  /**
    * Flood-fills one region from a seed, within its section.
    *
    * <p>Breadth-first, so the first time a cell is reached is by its shortest walk from the seed,
@@ -322,11 +264,9 @@ public final class RegionColumnBuilder {
    */
   private void fill(int seed, int section, int chunkX, int chunkZ) {
     int c = cls[seed];
-    RegionClass klass = RegionClass.ALL[c];
-    boolean standing = klass.standing();
-    // Rock is dug through in straight lines whatever its shape, so its regions need not be convex.
-    boolean capped = !klass.solid();
-    int id = newRegion(klass);
+    boolean standing = terrain.standing(c);
+    boolean capped = terrain.convex(c);
+    int id = newRegion(c);
     int sx = seed & 15;
     int sz = (seed >> 4) & 15;
     int sy = seed >> 8;
@@ -442,7 +382,7 @@ public final class RegionColumnBuilder {
       if (cell + 256 < volume) {
         contacts.touch(r, regionOf[cell + 256], ox + x, y, oz + z, ox + x, y + 1, oz + z);
       }
-      if (!RegionClass.ALL[cls[cell]].standing()) {
+      if (!terrain.standing(cls[cell])) {
         continue;
       }
       for (int[] h : HORIZONTAL) {
@@ -459,7 +399,7 @@ public final class RegionColumnBuilder {
         if (ly > 0) {
           step(r, beside - 256, ox + x, y, oz + z, ox + nx, y - 1, oz + nz);
         }
-        if (cls[beside] == RegionClass.AIR.ordinal()) {
+        if (cls[beside] >= 0 && terrain.open(cls[beside])) {
           dropInto(r, ox + x, y, oz + z, ox + nx, oz + nz, beside);
         }
       }
@@ -472,14 +412,9 @@ public final class RegionColumnBuilder {
     if (region == RegionColumn.NONE || region == from || cls[to] < 0) {
       return;
     }
-    if (steppable(RegionClass.ALL[cls[to]])) {
+    if (terrain.steppable(cls[to])) {
       contacts.touch(from, region, fx, fy, fz, tx, ty, tz);
     }
-  }
-
-  /** Whether a walking body can step into a cell of this class. */
-  static boolean steppable(RegionClass klass) {
-    return klass.standing() || klass.water() || klass == RegionClass.CLIMB;
   }
 
   /**
@@ -489,35 +424,27 @@ public final class RegionColumnBuilder {
    * ground does not reach the ledge.
    */
   private void dropInto(int from, int x, int y, int z, int airX, int airZ, int air) {
-    for (int k = 1; k <= MAX_WATER_DROP && air - k * 256 >= 0; k++) {
+    for (int k = 1; k <= terrain.deepestFall() && air - k * 256 >= 0; k++) {
       int below = air - k * 256;
       int c = cls[below];
-      if (c == RegionClass.AIR.ordinal()) {
+      if (c >= 0 && terrain.open(c)) {
         continue;
       }
-      if (c >= 0 && landing(RegionClass.ALL[c], k)) {
+      if (c >= 0 && terrain.landing(c, k)) {
         contacts.drop(from, regionOf[below], x, y, z, airX, y, airZ);
       }
       return;
     }
   }
 
-  /** Whether a fall of {@code depth} blocks onto this class is one worth a portal. */
-  static boolean landing(RegionClass klass, int depth) {
-    // One block down is a step, already joined by the step contacts.
-    return (klass.standing() && depth >= 2 && depth <= MAX_DROP)
-        || klass.water()
-        || (klass == RegionClass.CLIMB && depth <= MAX_DROP);
-  }
-
-  private int newRegion(RegionClass klass) {
+  private int newRegion(int klass) {
     if (regionCount == regionClass.length) {
       int size = regionCount * 2;
       regionClass = Arrays.copyOf(regionClass, size);
       regionBox = Arrays.copyOf(regionBox, size * 6);
     }
     int id = regionCount++;
-    regionClass[id] = (byte) klass.ordinal();
+    regionClass[id] = (byte) klass;
     return id;
   }
 

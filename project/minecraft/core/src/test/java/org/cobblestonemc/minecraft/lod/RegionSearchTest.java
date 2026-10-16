@@ -19,6 +19,8 @@ import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
+import org.cobblestonemc.regions.RegionGraph;
+import org.cobblestonemc.regions.RegionSearch;
 import org.junit.jupiter.api.Test;
 
 class RegionSearchTest {
@@ -62,7 +64,7 @@ class RegionSearchTest {
     MinecraftBlock at(int x, int y, int z);
   }
 
-  private static final class World implements RegionGraph.ChunkColumns {
+  private static final class World implements RegionGraph.ChunkColumns<MinecraftChunk> {
     private final Terrain terrain;
     int read;
 
@@ -92,8 +94,12 @@ class RegionSearchTest {
     return y <= GROUND ? STONE : AIR;
   }
 
+  private static RegionGraph<MinecraftChunk> graph(World world) {
+    return new RegionGraph<>(world, MinecraftTerrain.INSTANCE);
+  }
+
   private static RegionSearch search(Terrain terrain, RegionCost agent, Cell goal, Cell from) {
-    return new RegionSearch(new RegionGraph(new World(terrain)), agent, goal, from);
+    return new RegionSearch(graph(new World(terrain)), agent, goal, from);
   }
 
   private static RegionCost walker() {
@@ -213,7 +219,7 @@ class RegionSearchTest {
     Cell goal = new Cell(0, FEET, 0);
     Cell from = new Cell(400, FEET, 0);
     World world = new World(RegionSearchTest::flat);
-    RegionSearch search = new RegionSearch(new RegionGraph(world), walker(), goal, from);
+    RegionSearch search = new RegionSearch(graph(world), walker(), goal, from);
 
     search.costToGoal(from);
 
@@ -240,11 +246,9 @@ class RegionSearchTest {
     Cell nearest = new Cell(101, FEET, 0);
     RegionCost cost = walker();
 
-    double toPoint =
-        new RegionSearch(new RegionGraph(new World(town)), cost, nearest, from).costToGoal(from);
+    double toPoint = new RegionSearch(graph(new World(town)), cost, nearest, from).costToGoal(from);
     double toArea =
-        new RegionSearch(new RegionGraph(new World(town)), cost, nearest, from, inside)
-            .costToGoal(from);
+        new RegionSearch(graph(new World(town)), cost, nearest, from, inside).costToGoal(from);
 
     double around = (Math.hypot(40, 31) + 60 + Math.hypot(1, 31)) * 0.2;
     assertTrue(

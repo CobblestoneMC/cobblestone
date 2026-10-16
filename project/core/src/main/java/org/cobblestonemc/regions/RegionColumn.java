@@ -5,7 +5,7 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.minecraft.lod;
+package org.cobblestonemc.regions;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -208,10 +208,11 @@ public final class RegionColumn {
    * Reads a column written by {@link #write}.
    *
    * @param in where to read
+   * @param classes how many classes the terrain has, to refuse a column with any other
    * @return the column
    * @throws IOException if the read fails or the data is malformed
    */
-  static RegionColumn read(DataInput in) throws IOException {
+  static RegionColumn read(DataInput in, int classes) throws IOException {
     int chunkX = in.readInt();
     int chunkZ = in.readInt();
     int minY = in.readInt();
@@ -238,7 +239,7 @@ public final class RegionColumn {
     int oz = chunkZ * 16;
     for (int r = 0; r < regions; r++) {
       regionClass[r] = in.readByte();
-      if (regionClass[r] < 0 || regionClass[r] >= RegionClass.ALL.length) {
+      if (regionClass[r] < 0 || regionClass[r] >= classes) {
         throw new IOException("malformed column: region class " + regionClass[r]);
       }
       readBox(in, regionBox, r, ox, minY, oz);

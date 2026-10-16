@@ -22,6 +22,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.regions.RegionColumnBuilder;
+import org.cobblestonemc.regions.RegionFiles;
+import org.cobblestonemc.regions.RegionGraph;
+import org.cobblestonemc.regions.RegionStore;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -43,7 +47,7 @@ public final class RegionStores implements AutoCloseable {
   private final ExecutorService disk;
   private final ExecutorService builds;
   private final ThreadPoolExecutor prebuilds;
-  private final Map<String, RegionStore> stores = new ConcurrentHashMap<>();
+  private final Map<String, RegionStore<MinecraftChunk>> stores = new ConcurrentHashMap<>();
 
   /**
    * Creates the registry.
@@ -84,7 +88,7 @@ public final class RegionStores implements AutoCloseable {
    * @param world the world
    * @return its store
    */
-  public RegionStore of(MinecraftWorld world) {
+  public RegionStore<MinecraftChunk> of(MinecraftWorld world) {
     return stores.computeIfAbsent(
         world.key(),
         key -> {
@@ -95,9 +99,17 @@ public final class RegionStores implements AutoCloseable {
                       root.resolve(RegionFiles.directoryName(key)),
                       RegionColumnBuilder.columnMinY(world.minY()),
                       RegionColumnBuilder.sections(world.minY(), world.maxY()),
-                      detourRatio);
-          return new RegionStore(
-              world.minY(), world.maxY(), detourRatio, memoryBudget, files, disk, builds);
+                      detourRatio,
+                      MinecraftTerrain.INSTANCE);
+          return new RegionStore<>(
+              MinecraftTerrain.INSTANCE,
+              world.minY(),
+              world.maxY(),
+              detourRatio,
+              memoryBudget,
+              files,
+              disk,
+              builds);
         });
   }
 
@@ -143,7 +155,7 @@ public final class RegionStores implements AutoCloseable {
    * @param chunk the chunk; it must stay readable from another thread
    */
   public void prebuild(MinecraftWorld world, int chunkX, int chunkZ, MinecraftChunk chunk) {
-    RegionStore store = of(world);
+    RegionStore<MinecraftChunk> store = of(world);
     prebuilds.execute(() -> store.prebuild(chunkX, chunkZ, chunk));
   }
 
@@ -177,7 +189,7 @@ public final class RegionStores implements AutoCloseable {
    */
   public CompletableFuture<Void> flush() {
     List<CompletableFuture<Void>> writes = new ArrayList<>();
-    for (RegionStore store : stores.values()) {
+    for (RegionStore<MinecraftChunk> store : stores.values()) {
       writes.add(store.flush());
     }
     return CompletableFuture.allOf(writes.toArray(new CompletableFuture<?>[0]));
@@ -188,7 +200,7 @@ public final class RegionStores implements AutoCloseable {
    *
    * @return the stores
    */
-  public Map<String, RegionStore> stores() {
+  public Map<String, RegionStore<MinecraftChunk>> stores() {
     return Map.copyOf(stores);
   }
 
@@ -212,7 +224,7 @@ public final class RegionStores implements AutoCloseable {
     } catch (Exception failed) {
       // Unwritten columns are rebuilt after the restart; nothing is lost but time.
     }
-    for (RegionStore store : stores.values()) {
+    for (RegionStore<MinecraftChunk> store : stores.values()) {
       store.close();
     }
     disk.shutdown();

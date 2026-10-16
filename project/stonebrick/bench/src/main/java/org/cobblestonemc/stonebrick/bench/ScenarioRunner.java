@@ -35,19 +35,21 @@ import org.cobblestonemc.api.TraversalState;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
+import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
-import org.cobblestonemc.minecraft.lod.RegionColumnBuilder;
+import org.cobblestonemc.minecraft.lod.MinecraftTerrain;
 import org.cobblestonemc.minecraft.lod.RegionCost;
-import org.cobblestonemc.minecraft.lod.RegionFiles;
-import org.cobblestonemc.minecraft.lod.RegionGraph;
-import org.cobblestonemc.minecraft.lod.RegionHeuristic;
-import org.cobblestonemc.minecraft.lod.RegionSearch;
-import org.cobblestonemc.minecraft.lod.RegionStore;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
+import org.cobblestonemc.regions.RegionColumnBuilder;
+import org.cobblestonemc.regions.RegionFiles;
+import org.cobblestonemc.regions.RegionGraph;
+import org.cobblestonemc.regions.RegionHeuristic;
+import org.cobblestonemc.regions.RegionSearch;
+import org.cobblestonemc.regions.RegionStore;
 import org.cobblestonemc.stonebrick.format.CaptureDirectory;
 import org.cobblestonemc.stonebrick.format.CorpusLayout;
 import org.cobblestonemc.stonebrick.platform.Capture;
@@ -347,7 +349,7 @@ public final class ScenarioRunner {
     return lastRegionColumns == null ? 0 : lastRegionColumns.chunkColumns();
   }
 
-  private @Nullable RegionHeuristic lastRegionHeuristic;
+  private @Nullable RegionHeuristic<MinecraftChunk> lastRegionHeuristic;
 
   /**
    * Returns where the last run's region layer spent its time and memory, or {@code null} if it did
@@ -432,7 +434,7 @@ public final class ScenarioRunner {
     this.regionCache = directory;
   }
 
-  private org.cobblestonemc.minecraft.lod.@Nullable RegionStore lastRegionStore;
+  private @Nullable RegionStore<MinecraftChunk> lastRegionStore;
 
   private @Nullable Path regionCache;
 
@@ -478,7 +480,8 @@ public final class ScenarioRunner {
     // One store for the run, on this thread: a cold start, or a restart over a cache on disk.
     MinecraftWorld world = platform.world(scenario.world());
     lastRegionStore =
-        new RegionStore(
+        new RegionStore<>(
+            MinecraftTerrain.INSTANCE,
             world.minY(),
             world.maxY(),
             REGION_DETOUR,
@@ -490,12 +493,14 @@ public final class ScenarioRunner {
                         RegionFiles.directoryName(scenario.capture() + "-" + scenario.world())),
                     RegionColumnBuilder.columnMinY(world.minY()),
                     RegionColumnBuilder.sections(world.minY(), world.maxY()),
-                    REGION_DETOUR),
+                    REGION_DETOUR,
+                    MinecraftTerrain.INSTANCE),
             Runnable::run,
             Runnable::run);
-    RegionStore store = lastRegionStore;
+    RegionStore<MinecraftChunk> store = lastRegionStore;
     lastRegionHeuristic =
-        new RegionHeuristic(
+        new RegionHeuristic<>(
+            MinecraftTerrain.INSTANCE,
             region -> columns,
             region -> store,
             RegionCost.forPlayer(player, settings.excludedModes()),

@@ -5,7 +5,7 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.minecraft.lod;
+package org.cobblestonemc.regions;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -35,8 +35,10 @@ import org.jetbrains.annotations.Nullable;
  * <p><b>Answers are final when given.</b> {@link RegionSearch} only answers once nothing left on
  * its frontier could undercut the answer, so a cell asked about twice gets the same number, and the
  * answers are cached by cell for the fine search's many repeat questions.
+ *
+ * @param <C> the platform's column of terrain
  */
-public final class RegionHeuristic implements HeuristicStrategy {
+public final class RegionHeuristic<C> implements HeuristicStrategy {
 
   /**
    * Cached answers a solve keeps before starting over.
@@ -46,23 +48,14 @@ public final class RegionHeuristic implements HeuristicStrategy {
    */
   private static final int CACHE_LIMIT = 1 << 20;
 
-  private final Function<DomainRegion<?>, RegionGraph.ChunkColumns> columnsFor;
-  private final @Nullable Function<DomainRegion<?>, RegionStore> storeFor;
-  private final RegionCost cost;
+  private final RegionTerrain<C> terrain;
+  private final Function<DomainRegion<?>, RegionGraph.ChunkColumns<C>> columnsFor;
+  private final @Nullable Function<DomainRegion<?>, RegionStore<C>> storeFor;
+  private final RegionAgent cost;
   private final double detourRatio;
   private final double tierOneRate;
   private final boolean keepSearches;
   private final List<RegionSearch> searches = new ArrayList<>();
-
-  /**
-   * Creates a heuristic over a single terrain source.
-   *
-   * @param columns where chunk columns come from
-   * @param cost the agent
-   */
-  public RegionHeuristic(RegionGraph.ChunkColumns columns, RegionCost cost) {
-    this(region -> columns, null, cost, RegionGraph.DEFAULT_DETOUR_RATIO);
-  }
 
   /**
    * Creates a heuristic that builds a terrain source per solve, reading built columns from a shared
@@ -78,6 +71,7 @@ public final class RegionHeuristic implements HeuristicStrategy {
    * <p>Estimates are the region search's own answers, unscaled. How far the fine search trusts them
    * is the search's heuristic weight, and nothing else.
    *
+   * @param terrain what the cells are, and how they join
    * @param columnsFor builds a chunk source for a solve's target region, for the columns the store
    *     has to build
    * @param storeFor the store for a solve's target region's world, or {@code null} for a store of
@@ -87,34 +81,38 @@ public final class RegionHeuristic implements HeuristicStrategy {
    *     carries its own; see {@link RegionGraph#DEFAULT_DETOUR_RATIO}
    */
   public RegionHeuristic(
-      Function<DomainRegion<?>, RegionGraph.ChunkColumns> columnsFor,
-      @Nullable Function<DomainRegion<?>, RegionStore> storeFor,
-      RegionCost cost,
+      RegionTerrain<C> terrain,
+      Function<DomainRegion<?>, RegionGraph.ChunkColumns<C>> columnsFor,
+      @Nullable Function<DomainRegion<?>, RegionStore<C>> storeFor,
+      RegionAgent cost,
       double detourRatio) {
-    this(columnsFor, storeFor, cost, detourRatio, cost.cheapest(), false);
+    this(terrain, columnsFor, storeFor, cost, detourRatio, cost.cheapest(), false);
   }
 
   /**
    * Creates a heuristic with its Tier-1 bound given, and whether to keep its searches.
    *
+   * @param terrain what the cells are, and how they join
    * @param columnsFor builds a chunk source for a solve's target region
    * @param storeFor the store for a solve's target region's world, or {@code null} for a store of
    *     each solve's own
    * @param cost the agent
    * @param detourRatio the fill's detour ratio, for a store of each solve's own
    * @param tierOneRate the least the agent can pay per block by any movement at all, which Tier 1
-   *     prices unsolved legs with: lower than {@link RegionCost#cheapest()} for an agent who can
-   *     ride or fall, since the region layer prices neither as a capability
+   *     prices unsolved legs with: lower than {@link RegionAgent#cheapest()} for an agent who can
+   *     move in ways the region layer does not price, such as riding
    * @param keepSearches whether to keep every solve's search for {@link #searches()}, which holds
    *     each one's graph for the strategy's life; for measuring, never on a server
    */
   public RegionHeuristic(
-      Function<DomainRegion<?>, RegionGraph.ChunkColumns> columnsFor,
-      @Nullable Function<DomainRegion<?>, RegionStore> storeFor,
-      RegionCost cost,
+      RegionTerrain<C> terrain,
+      Function<DomainRegion<?>, RegionGraph.ChunkColumns<C>> columnsFor,
+      @Nullable Function<DomainRegion<?>, RegionStore<C>> storeFor,
+      RegionAgent cost,
       double detourRatio,
       double tierOneRate,
       boolean keepSearches) {
+    this.terrain = terrain;
     this.columnsFor = columnsFor;
     this.storeFor = storeFor;
     this.cost = cost;
@@ -131,12 +129,12 @@ public final class RegionHeuristic implements HeuristicStrategy {
 
   @Override
   public SolveHeuristic newSolve(int windowWidth, DomainRegion<?> target) {
-    RegionGraph.ChunkColumns columns = columnsFor.apply(target);
-    RegionStore store =
+    RegionGraph.ChunkColumns<C> columns = columnsFor.apply(target);
+    RegionStore<C> store =
         storeFor == null
-            ? RegionStore.inMemory(columns.minY(), columns.maxY(), detourRatio)
+            ? RegionStore.inMemory(terrain, columns.minY(), columns.maxY(), detourRatio)
             : storeFor.apply(target);
-    return new Solve(target, new RegionGraph(store, columns));
+    return new Solve(target, new RegionGraph<>(store, columns));
   }
 
   /**
@@ -156,11 +154,11 @@ public final class RegionHeuristic implements HeuristicStrategy {
   private final class Solve implements SolveHeuristic {
 
     private final DomainRegion<?> target;
-    private final RegionGraph graph;
+    private final RegionGraph<C> graph;
     private final Map<Cell, Double> answered = new HashMap<>();
     private RegionSearch search;
 
-    Solve(DomainRegion<?> target, RegionGraph graph) {
+    Solve(DomainRegion<?> target, RegionGraph<C> graph) {
       this.target = target;
       this.graph = graph;
     }

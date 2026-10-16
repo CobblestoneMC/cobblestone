@@ -12,12 +12,13 @@ import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.Heuristics;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
+import org.cobblestonemc.minecraft.lod.MinecraftTerrain;
 import org.cobblestonemc.minecraft.lod.RegionCost;
-import org.cobblestonemc.minecraft.lod.RegionGraph;
-import org.cobblestonemc.minecraft.lod.RegionHeuristic;
 import org.cobblestonemc.minecraft.lod.RegionStores;
 import org.cobblestonemc.minecraft.lod.WorldChunkColumns;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
+import org.cobblestonemc.regions.RegionGraph;
+import org.cobblestonemc.regions.RegionHeuristic;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -85,7 +86,8 @@ public final class MinecraftHeuristics {
     return switch (settings.settings().heuristic()) {
       case RUNNING_AVERAGE -> Heuristics.runningAverage(behavior.cheapestCostPerBlock());
       case REGIONS ->
-          new RegionHeuristic(
+          new RegionHeuristic<>(
+              MinecraftTerrain.INSTANCE,
               target ->
                   // The domain of a Tier-3 target region is always the world that leg runs in; the
                   // cast is the price of HeuristicStrategy being domain-agnostic.
