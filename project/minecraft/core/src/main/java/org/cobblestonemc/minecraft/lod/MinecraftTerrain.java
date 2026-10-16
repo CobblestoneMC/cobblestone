@@ -33,7 +33,7 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
   public static final MinecraftTerrain INSTANCE = new MinecraftTerrain();
 
   /** The version of these rules; see {@link RegionTerrain#version()}. */
-  public static final int VERSION = 3;
+  public static final int VERSION = 4;
 
   /**
    * The deepest drop onto ground a fall portal joins.
@@ -143,6 +143,73 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
   @Override
   public int deepestFall() {
     return MAX_WATER_DROP;
+  }
+
+  /**
+   * The family a class fills with: rock of every hardness for a pickaxe fills as one, because
+   * deepslate is dithered into stone block by block and a region per kind would shred both. Every
+   * other class is a family of its own.
+   */
+  @Override
+  public int family(int klass) {
+    return switch (RegionClass.ALL[klass]) {
+      case SOFT_ROCK, ROCK, MIXED_ROCK, HARD_ROCK -> RegionClass.ROCK.ordinal();
+      default -> klass;
+    };
+  }
+
+  /**
+   * A rock region's class is the band of rock nearest its cells' average hardness: soft rock, rock,
+   * mixed rock or hard rock. Nothing but the class is stored, so an estimate across a region is at
+   * most half a band from its true average.
+   */
+  @Override
+  public int label(int family, int[] counts) {
+    if (family != RegionClass.ROCK.ordinal()) {
+      return family;
+    }
+    double sum = 0;
+    int cells = 0;
+    for (RegionClass band : ROCK_BANDS) {
+      sum += counts[band.ordinal()] * hardness(band);
+      cells += counts[band.ordinal()];
+    }
+    double mean = sum / cells;
+    RegionClass nearest = ROCK_BANDS[0];
+    for (RegionClass band : ROCK_BANDS) {
+      if (Math.abs(hardness(band) - mean) < Math.abs(hardness(nearest) - mean)) {
+        nearest = band;
+      }
+    }
+    return nearest.ordinal();
+  }
+
+  /** The classes a rock region can be, softest first. */
+  private static final RegionClass[] ROCK_BANDS = {
+    RegionClass.SOFT_ROCK, RegionClass.ROCK, RegionClass.MIXED_ROCK, RegionClass.HARD_ROCK
+  };
+
+  /**
+   * Returns the hardness typical of a class of breakable material, as Minecraft defines hardness.
+   *
+   * <p>A fact about the terrain, not a cost: it is what a rock region's class is chosen by, and
+   * what an agent prices breaking it from with whatever tool it has.
+   *
+   * @param klass a class for which {@link RegionClass#solid()} holds
+   * @return the hardness
+   */
+  public static double hardness(RegionClass klass) {
+    return switch (klass) {
+      case SOFT -> 0.2;
+      case SOFT_ROCK -> 0.4;
+      case ROCK -> 1.5;
+      case MIXED_ROCK -> 2.25;
+      case HARD_ROCK -> 3.0;
+      case OBSIDIAN -> 50.0;
+      case DIRT -> 0.5;
+      case WOOD -> 2.0;
+      default -> throw new IllegalArgumentException(klass + " is not breakable material");
+    };
   }
 
   @Override

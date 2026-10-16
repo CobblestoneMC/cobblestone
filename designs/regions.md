@@ -28,7 +28,10 @@ the terrain ahead. REGIONS reads the terrain ahead.
   `RegionCost` is the agent, built from the player and the operator's exclusions, and says what
   each class costs it: soul sand is 2.5x ground on foot and fast in Soul Speed boots, and only a
   water surface takes a boat. A kind of terrain earns its own class only when some agent would pay
-  differently for it. A region stores only its class, never a cost: a mining bucket is priced from
+  differently for it. Rock for a pickaxe fills as one family, because deepslate is dithered into
+  stone block by block and a region per kind would shred both (about 80% more regions); a rock
+  region is then the band nearest its cells' average hardness: soft rock, rock, mixed rock or hard
+  rock. A region stores only its class, never a cost: a mining bucket is priced from
   a typical hardness in it, so tools will change the agent and nothing stored. Rock is always
   usable, at the mining rate with a pickaxe and at a fallback rate without, so the graph stays
   connected.

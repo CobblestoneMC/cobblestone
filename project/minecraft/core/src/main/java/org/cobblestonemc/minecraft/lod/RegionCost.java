@@ -9,7 +9,6 @@ package org.cobblestonemc.minecraft.lod;
 
 import java.util.Set;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
-import org.cobblestonemc.minecraft.MiningClass;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.cobblestonemc.regions.RegionAgent;
 
@@ -99,7 +98,7 @@ public final class RegionCost implements RegionAgent {
             case CLIMB -> least(climb, fly);
             case AIR -> fly;
             // Priced by break time and direction; see traverse.
-            case SOFT, SOFT_ROCK, ROCK, HARD_ROCK, OBSIDIAN, DIRT, WOOD -> Double.NaN;
+            case SOFT, SOFT_ROCK, ROCK, MIXED_ROCK, HARD_ROCK, OBSIDIAN, DIRT, WOOD -> Double.NaN;
           };
       rates[klass.ordinal()] = rate;
       if (has(rate)) {
@@ -201,9 +200,8 @@ public final class RegionCost implements RegionAgent {
     double dy = ty - fy;
     double dz = tz - fz;
     double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    MiningClass bucket = klass.mining();
-    if (bucket != null) {
-      double breakTime = breakTime(bucket);
+    if (klass.solid()) {
+      double breakTime = breakTime(klass);
       // At least one block, however short the line: the two portals of a one-block wall sit face
       // to face, and a crossing priced by the distance between them would dig it for free.
       return mine
@@ -223,25 +221,15 @@ public final class RegionCost implements RegionAgent {
   }
 
   /**
-   * The seconds to break a typical block of a bucket.
+   * The seconds to break a typical block of a class of breakable material.
    *
    * <p>What the fine search charges today, which knows no tools: {@code MinecraftBlock
-   * #breakTimeSeconds()} is the block's hardness times 1.5, whatever the agent carries. Each bucket
-   * stands for a typical hardness in it. Tools change this and nothing stored: a better pickaxe
-   * makes rock faster for the agent holding it, here.
+   * #breakTimeSeconds()} is the block's hardness times 1.5, whatever the agent carries. Tools
+   * change this and nothing stored: a better pickaxe makes rock faster for the agent holding it,
+   * here.
    */
-  private static double breakTime(MiningClass bucket) {
-    double hardness =
-        switch (bucket) {
-          case SOFT -> 0.2;
-          case SOFT_ROCK -> 0.4;
-          case ROCK -> 1.5;
-          case HARD_ROCK -> 3.0;
-          case OBSIDIAN -> 50.0;
-          case DIRT -> 0.5;
-          case WOOD -> 2.0;
-        };
-    return hardness * 1.5;
+  private static double breakTime(RegionClass klass) {
+    return MinecraftTerrain.hardness(klass) * 1.5;
   }
 
   /**

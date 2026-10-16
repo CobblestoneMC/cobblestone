@@ -60,6 +60,12 @@ public enum RegionClass {
   /** Rock: stone and its ores. */
   ROCK(MiningClass.ROCK),
 
+  /**
+   * Rock and hard rock mixed: where deepslate is dithered into stone. Never a block's own class,
+   * only a region's; see {@link MinecraftTerrain#label}.
+   */
+  MIXED_ROCK(true, null),
+
   /** Hard rock: deepslate and its ores, end stone. */
   HARD_ROCK(MiningClass.HARD_ROCK),
 
@@ -75,13 +81,19 @@ public enum RegionClass {
   /** Every class, cached; {@code values()} allocates. */
   public static final RegionClass[] ALL = values();
 
+  private final boolean solid;
   private final @Nullable MiningClass mining;
 
   RegionClass() {
-    this(null);
+    this(false, null);
   }
 
-  RegionClass(@Nullable MiningClass mining) {
+  RegionClass(MiningClass mining) {
+    this(true, mining);
+  }
+
+  RegionClass(boolean solid, @Nullable MiningClass mining) {
+    this.solid = solid;
     this.mining = mining;
   }
 
@@ -104,7 +116,8 @@ public enum RegionClass {
   }
 
   /**
-   * Returns the mining bucket of a class of breakable material, or {@code null} for any other.
+   * Returns the mining bucket a block of this class is in, or {@code null} for a class no block is,
+   * such as {@link #MIXED_ROCK}, or one that is not breakable material.
    *
    * @return the bucket
    */
@@ -116,10 +129,10 @@ public enum RegionClass {
    * Returns whether this class is breakable material, dug through or, for an agent that cannot dig,
    * a wall at a price.
    *
-   * @return {@code true} for the mining buckets
+   * @return {@code true} for the mining buckets and mixed rock
    */
   public boolean solid() {
-    return mining != null;
+    return solid;
   }
 
   /**

@@ -18,9 +18,11 @@ import org.jetbrains.annotations.Nullable;
  *
  * <ol>
  *   <li><b>Classify</b> gives every cell one class, by the {@link RegionTerrain}.
- *   <li><b>Fill</b> groups touching cells of one class into regions, section by section, refusing a
+ *   <li><b>Fill</b> groups touching cells of one family into regions, section by section, refusing a
  *       cell whose walk from the region's seed is much longer than the straight line ({@link
- *       RegionGraph#DEFAULT_DETOUR_RATIO}), because a region is priced in straight lines.
+ *       RegionGraph#DEFAULT_DETOUR_RATIO}), because a region is priced in straight lines. A
+ *       family is usually one class; the terrain gives a region filled from a larger one its
+ *       class from the mix of its cells.
  *   <li><b>Contacts</b> scans for neighbouring cells in different regions — and for walking steps a
  *       level up or down, and ledges a body can drop from — and turns each touching pair into a
  *       portal whose box covers every cell where they meet. Which steps and drops count is the
@@ -41,7 +43,7 @@ public final class RegionColumnBuilder<C> {
    * The version of how this fills regions and finds contacts, apart from the terrain's own rules.
    * Stored columns built by any other version are rebuilt.
    */
-  public static final int FILL_VERSION = 1;
+  public static final int FILL_VERSION = 2;
 
   /**
    * Blocks of detour allowed regardless of distance, so a seed's immediate neighbours never split.
@@ -66,6 +68,13 @@ public final class RegionColumnBuilder<C> {
 
   // --- scratch, reused between builds ---
   private final byte[] cls;
+
+  /** Each cell's family, by which the fill joins cells; see {@link RegionTerrain#family}. */
+  private final byte[] family;
+
+  /** The cells of the region being filled, by class. */
+  private final int[] counts;
+
   private final byte[] sectionClass;
   private final int[] regionOf;
   private final int[] queue = new int[16 * 16 * 16];
@@ -126,6 +135,8 @@ public final class RegionColumnBuilder<C> {
     this.height = sections * 16;
     int volume = height * 256;
     this.cls = new byte[volume];
+    this.family = new byte[volume];
+    this.counts = new int[terrain.classes()];
     this.regionOf = new int[volume];
     this.sectionClass = new byte[sections];
   }
@@ -164,6 +175,9 @@ public final class RegionColumnBuilder<C> {
       return RegionColumn.empty(chunkX, chunkZ, minY, sections);
     }
     terrain.classify(chunk, worldMinY, worldMaxY, minY, cls);
+    for (int cell = 0; cell < cls.length; cell++) {
+      family[cell] = cls[cell] < 0 ? -1 : (byte) terrain.family(cls[cell]);
+    }
     uniformSections();
     regionCount = 0;
     portalCount = 0;
@@ -263,10 +277,11 @@ public final class RegionColumnBuilder<C> {
    * and that is the walk the detour cap is measured on.
    */
   private void fill(int seed, int section, int chunkX, int chunkZ) {
-    int c = cls[seed];
+    int c = family[seed];
     boolean standing = terrain.standing(c);
     boolean capped = terrain.convex(c);
     int id = newRegion(c);
+    Arrays.fill(counts, 0);
     int sx = seed & 15;
     int sz = (seed >> 4) & 15;
     int sy = seed >> 8;
@@ -293,6 +308,7 @@ public final class RegionColumnBuilder<C> {
       int z = (cell >> 4) & 15;
       int y = cell >> 8;
       RegionContacts.grow(box, chunkX * 16 + x, minY + y, chunkZ * 16 + z);
+      counts[cls[cell]]++;
       for (int[] h : HORIZONTAL) {
         int nx = x + h[0];
         int nz = z + h[1];
@@ -318,6 +334,7 @@ public final class RegionColumnBuilder<C> {
       }
     }
     System.arraycopy(box, 0, regionBox, id * 6, 6);
+    regionClass[id] = (byte) terrain.label(c, counts);
   }
 
   private int offer(
@@ -333,7 +350,7 @@ public final class RegionColumnBuilder<C> {
       int sz,
       boolean capped) {
     int cell = (y << 8) | (z << 4) | x;
-    if (regionOf[cell] != RegionColumn.NONE || cls[cell] != c) {
+    if (regionOf[cell] != RegionColumn.NONE || family[cell] != c) {
       return tail;
     }
     if (capped) {

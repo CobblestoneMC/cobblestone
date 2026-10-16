@@ -99,6 +99,41 @@ public interface RegionTerrain<C> {
   int deepestFall();
 
   /**
+   * Returns the family a class fills with: cells of classes in one family fill into one region,
+   * which {@link #label} then gives a class from the mix.
+   *
+   * <p>For terrain that comes in kinds an agent prices differently but that are mixed finely
+   * together, such as two kinds of rock dithered into each other, where a region per kind would
+   * shred both into fragments. By default every class is a family of its own.
+   *
+   * @param klass the class
+   * @return the family, itself a class
+   */
+  default int family(int klass) {
+    return klass;
+  }
+
+  /**
+   * Returns the class of a region filled from a family, given how many of its cells are of each
+   * class.
+   *
+   * <p>By default, the class most of its cells are.
+   *
+   * @param family the family the region was filled from
+   * @param counts how many of the region's cells are of each class, by class
+   * @return the region's class
+   */
+  default int label(int family, int[] counts) {
+    int best = family;
+    for (int klass = 0; klass < counts.length; klass++) {
+      if (counts[klass] > counts[best]) {
+        best = klass;
+      }
+    }
+    return best;
+  }
+
+  /**
    * Returns whether regions of this class must be close to convex.
    *
    * <p>A region is priced in straight lines, so the fill refuses a cell whose walk from the
