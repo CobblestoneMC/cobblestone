@@ -39,7 +39,6 @@ import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
-import org.cobblestonemc.minecraft.api.RegionSource;
 import org.cobblestonemc.paper.PaperNavigationServiceImpl;
 import org.cobblestonemc.paper.plugin.api.NavigatorFactory;
 import org.cobblestonemc.plugin.Permissions;
@@ -403,9 +402,7 @@ final class NavigateCommand {
                   GUIDE_SETTINGS,
                   flags.excludedModes(),
                   flags.excludedWorlds(),
-                  flags.excludedDimensions(),
-                  // A few blocks back to the trail, through chunks the player has loaded.
-                  RegionSource.LOADED))
+                  flags.excludedDimensions()))
           .future()
           .handle(NavigateCommand::convertUpdateResult);
     };
@@ -435,9 +432,7 @@ final class NavigateCommand {
                   searchSettings.get(),
                   flags.excludedModes(),
                   flags.excludedWorlds(),
-                  flags.excludedDimensions(),
-                  // A few blocks back to the trail, through chunks the player has loaded.
-                  RegionSource.LOADED));
+                  flags.excludedDimensions()));
       searches.track(uuid, handle);
       return handle
           .future()

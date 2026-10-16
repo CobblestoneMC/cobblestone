@@ -167,10 +167,7 @@ public final class CobblestoneSpongePlugin {
         .registerListeners(
             container,
             new SpongeRegionListener(
-                regionStores,
-                navigationService,
-                navigationService::readLoaded,
-                config.get(keys.regionsBuildOnChunkLoad)));
+                regionStores, navigationService, navigationService::readLoaded));
 
     // Discovered vanilla portals are surfaced to searches as an internal modifier, and learned from
     // player teleports by the portal listener. (Nether entry normalization is deferred on Sponge.)

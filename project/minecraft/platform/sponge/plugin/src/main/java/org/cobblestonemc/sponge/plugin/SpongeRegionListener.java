@@ -29,22 +29,21 @@ import org.spongepowered.math.vector.Vector3i;
  *
  * <p>Sponge reports every block change through one event, after it happened, so a single listener
  * covers what Paper needs a dozen for: each changed block forgets its chunk's summary, to be made
- * again when a search next needs it. A chunk that loads is summarized in the background, when the
- * server is configured to, while the background queue has room.
+ * again when a search next needs it. A loaded chunk's summary stays in memory while the chunk does:
+ * a chunk that loads is summarized in the background if it is not already known, while the
+ * background queue has room, and when it unloads its summary is kept only as the memory budget
+ * allows.
  */
 final class SpongeRegionListener {
 
   private final RegionStores stores;
   private final WorldWrapper worlds;
   private final LoadedChunks chunks;
-  private final boolean buildOnLoad;
 
-  SpongeRegionListener(
-      RegionStores stores, WorldWrapper worlds, LoadedChunks chunks, boolean buildOnLoad) {
+  SpongeRegionListener(RegionStores stores, WorldWrapper worlds, LoadedChunks chunks) {
     this.stores = stores;
     this.worlds = worlds;
     this.chunks = chunks;
-    this.buildOnLoad = buildOnLoad;
   }
 
   /** Every block that changed forgets its chunk's summary. */
@@ -65,9 +64,6 @@ final class SpongeRegionListener {
 
   @Listener(order = Order.POST)
   public void onChunkLoad(ChunkEvent.Load event) {
-    if (!buildOnLoad || !stores.prebuildRoom()) {
-      return;
-    }
     Optional<ServerWorld> loaded = Sponge.server().worldManager().world(event.worldKey());
     if (loaded.isEmpty()) {
       return;
@@ -76,7 +72,8 @@ final class SpongeRegionListener {
     MinecraftWorld wrapped = worlds.wrap(world);
     int chunkX = event.chunkPosition().x();
     int chunkZ = event.chunkPosition().z();
-    if (stores.known(wrapped, chunkX, chunkZ)) {
+    stores.chunkLoaded(wrapped, chunkX, chunkZ);
+    if (!stores.prebuildRoom() || stores.known(wrapped, chunkX, chunkZ)) {
       return;
     }
     chunks
@@ -87,6 +84,17 @@ final class SpongeRegionListener {
                 stores.prebuild(wrapped, chunkX, chunkZ, read);
               }
             });
+  }
+
+  @Listener(order = Order.POST)
+  public void onChunkUnload(ChunkEvent.Unload.Post event) {
+    Sponge.server()
+        .worldManager()
+        .world(event.worldKey())
+        .ifPresent(
+            world ->
+                stores.chunkUnloaded(
+                    worlds.wrap(world), event.chunkPosition().x(), event.chunkPosition().z()));
   }
 
   /** Reads a chunk the server has loaded, without loading anything. */

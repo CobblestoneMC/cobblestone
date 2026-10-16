@@ -24,7 +24,6 @@ import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
-import org.cobblestonemc.minecraft.api.RegionSource;
 import org.cobblestonemc.plugin.api.Navigator;
 import org.cobblestonemc.plugin.api.NavigatorSettings;
 import org.cobblestonemc.plugin.api.TripOutcome;
@@ -282,9 +281,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
         return CompletableFuture.completedFuture(Optional.empty());
       }
       MinecraftSearchSettings settings =
-          new MinecraftSearchSettings(
-              // A few blocks back to the trail, through chunks the player has loaded.
-              GUIDE_SETTINGS, Set.of(), Set.of(), Set.of(), RegionSource.LOADED);
+          new MinecraftSearchSettings(GUIDE_SETTINGS, Set.of(), Set.of(), Set.of());
       return navigate(player, target, settings).future().handle(AbstractTripService::successPath);
     };
   }

@@ -287,4 +287,29 @@ class RegionStoreTest {
     }
     assertEquals(4, restarted.stats().diskLoads(), "every evicted column still reached the disk");
   }
+
+  @Test
+  void aLoadedChunksColumnIsNeverEvictedUntilItUnloads() {
+    Chunks chunks = new Chunks();
+    RegionStore tight =
+        track(
+            new RegionStore(
+                MIN_Y,
+                MAX_Y,
+                RegionGraph.DEFAULT_DETOUR_RATIO,
+                1, // a byte: every column not loaded is evicted at once
+                null,
+                Runnable::run,
+                Runnable::run));
+    tight.chunkLoaded(0, 0);
+    column(tight, 0, 0, chunks);
+    for (int cx = 1; cx < 5; cx++) {
+      column(tight, cx, 0, chunks);
+    }
+    assertTrue(tight.known(0, 0), "the loaded chunk's column stays");
+    assertTrue(!tight.known(1, 0), "the others go past the budget");
+
+    tight.chunkUnloaded(0, 0);
+    assertTrue(!tight.known(0, 0), "unloaded, it goes too");
+  }
 }

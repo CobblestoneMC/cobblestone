@@ -34,6 +34,7 @@ import org.bukkit.event.block.SpongeAbsorbEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
+import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.event.world.StructureGrowEvent;
 import org.bukkit.event.world.WorldSaveEvent;
 import org.cobblestonemc.minecraft.MinecraftChunk;
@@ -51,9 +52,11 @@ import org.cobblestonemc.paper.WorldWrapper;
  * needs it. Changes no event reports, from other plugins writing blocks directly or from editing
  * the world while the server is stopped, are not seen.
  *
- * <p><b>A chunk that loads is summarized in the background,</b> when the server is configured to,
- * so terrain players walk through is ready before anyone navigates it. Only chunks not already
- * known, and only while the background queue has room.
+ * <p><b>A loaded chunk's summary stays in memory while the chunk does.</b> A chunk that loads is
+ * summarized in the background if it is not already known, while the background queue has room, so
+ * terrain players walk through is ready before anyone navigates it, and searches near players never
+ * read a summary from disk. When the chunk unloads, its summary is kept only as the memory budget
+ * allows.
  *
  * <p>Everything here runs at {@link EventPriority#MONITOR} and ignores cancelled events: it reacts
  * to what happened, never to what was attempted.
@@ -62,14 +65,11 @@ final class PaperRegionListener implements Listener {
 
   private final RegionStores stores;
   private final WorldWrapper worlds;
-  private final boolean buildOnLoad;
   private final LoadedChunks chunks;
 
-  PaperRegionListener(
-      RegionStores stores, WorldWrapper worlds, LoadedChunks chunks, boolean buildOnLoad) {
+  PaperRegionListener(RegionStores stores, WorldWrapper worlds, LoadedChunks chunks) {
     this.stores = stores;
     this.worlds = worlds;
-    this.buildOnLoad = buildOnLoad;
     this.chunks = chunks;
   }
 
@@ -194,12 +194,10 @@ final class PaperRegionListener implements Listener {
 
   @EventHandler(priority = EventPriority.MONITOR)
   public void onChunkLoad(ChunkLoadEvent event) {
-    if (!buildOnLoad || !stores.prebuildRoom()) {
-      return;
-    }
     Chunk chunk = event.getChunk();
     MinecraftWorld world = worlds.wrap(chunk.getWorld());
-    if (stores.known(world, chunk.getX(), chunk.getZ())) {
+    stores.chunkLoaded(world, chunk.getX(), chunk.getZ());
+    if (!stores.prebuildRoom() || stores.known(world, chunk.getX(), chunk.getZ())) {
       return;
     }
     // Read the way searches read: the chunk is loaded, so this is a copy, not a load, and the
@@ -212,6 +210,12 @@ final class PaperRegionListener implements Listener {
                 stores.prebuild(world, chunk.getX(), chunk.getZ(), read);
               }
             });
+  }
+
+  @EventHandler(priority = EventPriority.MONITOR)
+  public void onChunkUnload(ChunkUnloadEvent event) {
+    Chunk chunk = event.getChunk();
+    stores.chunkUnloaded(worlds.wrap(chunk.getWorld()), chunk.getX(), chunk.getZ());
   }
 
   /** Reads a chunk the server has loaded, without loading anything. */

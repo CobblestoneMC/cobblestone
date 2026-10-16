@@ -31,7 +31,9 @@ import org.jetbrains.annotations.Nullable;
  * and a column only needs building again when a block in it changes, so a column built once serves
  * every later search, by every agent, until then; and through {@link RegionFiles}, across restarts.
  *
- * <p><b>Memory is bounded; disk is the record.</b> Columns are kept in memory up to a byte budget,
+ * <p><b>Loaded chunks are always in memory; the rest is bounded; disk is the record.</b> A column
+ * whose chunk the server has loaded ({@link #chunkLoaded}) is never evicted: it is where players
+ * are, and so where searches start and guide paths run. Other columns are kept up to a byte budget,
  * least recently used first out. A column built but not yet written is held until the next {@link
  * #flush}, whatever the budget, so evicting it never loses it.
  *
@@ -66,6 +68,9 @@ public final class RegionStore {
 
   /** Invalidated since the last flush: to come off disk. */
   private final Set<Long> removed = new HashSet<>();
+
+  /** Chunks the server has loaded, whose columns stay in memory. */
+  private final Set<Long> loadedChunks = new HashSet<>();
 
   private final Map<Long, CompletableFuture<RegionColumn>> loading = new HashMap<>();
   private final Set<Long> changedWhileLoading = new HashSet<>();
@@ -354,6 +359,28 @@ public final class RegionStore {
   }
 
   /**
+   * Marks a chunk as loaded by the server: its column, once built, stays in memory until {@link
+   * #chunkUnloaded}.
+   *
+   * @param chunkX the chunk X
+   * @param chunkZ the chunk Z
+   */
+  public synchronized void chunkLoaded(int chunkX, int chunkZ) {
+    loadedChunks.add(key(chunkX, chunkZ));
+  }
+
+  /**
+   * Marks a chunk as unloaded: its column is now kept only while the memory budget allows.
+   *
+   * @param chunkX the chunk X
+   * @param chunkZ the chunk Z
+   */
+  public synchronized void chunkUnloaded(int chunkX, int chunkZ) {
+    loadedChunks.remove(key(chunkX, chunkZ));
+    trim(Long.MIN_VALUE);
+  }
+
+  /**
    * Returns whether a column is in memory, unwritten, or on its way. Says nothing about disk.
    *
    * @param chunkX the chunk X
@@ -509,6 +536,13 @@ public final class RegionStore {
       memoryBytes -= previous.footprintBytes();
     }
     memoryBytes += column.footprintBytes();
+    trim(key);
+  }
+
+  /**
+   * Evicts the least recently used columns past the budget, but never {@code keep} or a loaded one.
+   */
+  private void trim(long keep) {
     if (memoryBytes <= memoryBudget) {
       return;
     }
@@ -516,8 +550,8 @@ public final class RegionStore {
     Iterator<Map.Entry<Long, RegionColumn>> eldest = memory.entrySet().iterator();
     while (memoryBytes > memoryBudget && eldest.hasNext()) {
       Map.Entry<Long, RegionColumn> entry = eldest.next();
-      if (entry.getKey() == key) {
-        continue; // never the one just asked for
+      if (entry.getKey() == keep || loadedChunks.contains(entry.getKey())) {
+        continue; // never the one just asked for, nor where players are
       }
       memoryBytes -= entry.getValue().footprintBytes();
       evicted.add(entry.getKey());

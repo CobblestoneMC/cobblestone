@@ -146,17 +146,17 @@ until a block in the chunk changes.
 | `search.regions.persist` | `true` | restart |
 | `search.regions.memory_megabytes` | `128` | restart |
 | `search.regions.flush_seconds` | `60` | restart |
-| `search.regions.build_on_chunk_load` | `true` | restart |
 
 - **`persist`**: Keep summaries on disk under `plugins/Cobblestone/regions/`, so a restart does not
   start from nothing. A few kilobytes per chunk, only for chunks searches touched or players
   loaded. Delete the folder to force everything to be summarized again.
-- **`memory_megabytes`**: Memory each world's summaries may use. About 40 KB per chunk; beyond the
-  limit the least recently used are dropped and read back from disk when needed.
+- **`memory_megabytes`**: Memory each world's summaries may use beyond the chunks players have
+  loaded. Loaded chunks are summarized on a background thread as they load and always kept in
+  memory, about 40 KB each: twenty players at view distance 10 hold around 9,000 chunks, or 350 MB.
+  Beyond them, the least recently used summaries are dropped past this limit and read back from
+  disk when needed.
 - **`flush_seconds`**: How often new summaries are written. They are also written when the world
   saves and when the server stops.
-- **`build_on_chunk_load`**: Summarize chunks on a background thread as players load them, so
-  terrain is ready before anyone navigates through it.
 
 Block changes made while the server is running are tracked. Edits made while it is stopped, by
 external tools, are not: delete the `regions` folder after editing a world offline.

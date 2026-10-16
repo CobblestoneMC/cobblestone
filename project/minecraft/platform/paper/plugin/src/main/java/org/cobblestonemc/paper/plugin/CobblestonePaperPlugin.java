@@ -106,12 +106,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     getServer()
         .getPluginManager()
         .registerEvents(
-            new PaperRegionListener(
-                regionStores,
-                platformApi,
-                platformApi::readLoaded,
-                config.get(keys.regionsBuildOnChunkLoad)),
-            this);
+            new PaperRegionListener(regionStores, platformApi, platformApi::readLoaded), this);
     long flushSeconds = Math.max(5, config.get(keys.regionsFlushSeconds));
     this.regionFlush =
         getServer()

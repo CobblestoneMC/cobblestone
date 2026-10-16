@@ -113,6 +113,28 @@ public final class RegionStores implements AutoCloseable {
   }
 
   /**
+   * Marks a chunk as loaded by the server, so its column stays in memory while it is.
+   *
+   * @param world the world
+   * @param chunkX the chunk X
+   * @param chunkZ the chunk Z
+   */
+  public void chunkLoaded(MinecraftWorld world, int chunkX, int chunkZ) {
+    of(world).chunkLoaded(chunkX, chunkZ);
+  }
+
+  /**
+   * Marks a chunk as unloaded, so its column is kept only while the memory budget allows.
+   *
+   * @param world the world
+   * @param chunkX the chunk X
+   * @param chunkZ the chunk Z
+   */
+  public void chunkUnloaded(MinecraftWorld world, int chunkX, int chunkZ) {
+    of(world).chunkUnloaded(chunkX, chunkZ);
+  }
+
+  /**
    * Builds a column ahead of time from a chunk the server has loaded anyway, on the build pool.
    *
    * @param world the world

@@ -34,13 +34,14 @@ the terrain ahead. REGIONS reads the terrain ahead.
   the river.
 - **Weight.** The estimate is used as it is, under the search weight, 1.7 by default. The weight
   eases to 1 over the last 64 blocks before the target.
-- **Where the terrain comes from.** By default, the server's region stores. A search can instead
-  ask for `RegionSource.LOADED`: columns built for it alone from the chunks the server has loaded,
-  never read from disk or kept. The path back to a trail does this.
+- **Loaded chunks stay in memory.** A chunk's column is built in the background when the chunk
+  loads, and kept in memory while it stays loaded. Searches near players, such as the path back to
+  a trail, never read a column from disk.
 
 ## Storage
-- **One `RegionStore` per world,** shared by every search and agent: memory (128 MB default,
-  least recently used out), then disk, then building from the chunk.
+- **One `RegionStore` per world,** shared by every search and agent: memory, then disk, then
+  building from the chunk. Columns of loaded chunks are always in memory; the rest are kept up to
+  128 MB by default, least recently used out.
 - **On disk,** `regions/<world>/r.<x>.<z>.crg`, 32x32 columns a file, each record deflated, about
   6.4 KB a column. A file is replaced whole through a temporary file. A header that does not match
   the format, classifier, detour ratio or world height reads as empty and is rebuilt.
@@ -48,7 +49,8 @@ the terrain ahead. REGIONS reads the terrain ahead.
   Paper listens for each kind of change event, Sponge for its one. Offline edits are not seen;
   the admin docs say to delete `regions/` after them.
 - **Writes** every 60 s, on world save and on shutdown. Unwritten columns survive eviction.
-  Chunks that load are built in the background through a bounded queue.
+  Chunks that load are built in the background through a bounded queue; when it is full, the column
+  is built when a search first needs it, and then kept like the others.
 
 ## Measurements
 All on the stonebrick corpus: 22 routes, 58 runs over the loadouts player, flyer,

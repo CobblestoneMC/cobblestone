@@ -113,7 +113,6 @@ public final class ConfigKeys {
   public final ConfigKey<Integer> regionsFlushSeconds;
 
   /** Whether chunks are summarized in the background as they load. Requires a restart. */
-  public final ConfigKey<Boolean> regionsBuildOnChunkLoad;
 
   /** Whether Cobblestone discovers vanilla portal links by watching players teleport. Mutable. */
   public final ConfigKey<Boolean> portalsDiscovery;
@@ -456,10 +455,11 @@ public final class ConfigKeys {
             .key("search.regions.memory_megabytes", 128, Codec.ofInt())
             .comment(
                 """
-                How much memory each world's summaries may hold, in megabytes. A summarized chunk
-                is about 40 KB in memory, so the default keeps around three thousand per world;
-                beyond that the least recently used are dropped and read back from disk when
-                needed.""")
+                How much memory each world's summaries may hold beyond the chunks players have
+                loaded, in megabytes. Loaded chunks are summarized in the background as they load
+                and always kept, about 40 KB each: twenty players at view distance 10 hold around
+                9,000 chunks, or 350 MB. Beyond them, the least recently used summaries are dropped
+                past this budget and read back from disk when needed.""")
             .requiresRestart()
             .register();
     this.regionsFlushSeconds =
@@ -470,17 +470,6 @@ public final class ConfigKeys {
                 How often new summaries are written to disk, in seconds. They are also written
                 when the world saves and when the server stops; a crash loses at most this much,
                 and what is lost is summarized again when next needed.""")
-            .requiresRestart()
-            .register();
-    this.regionsBuildOnChunkLoad =
-        manager
-            .key("search.regions.build_on_chunk_load", true, Codec.ofBoolean())
-            .comment(
-                """
-                Whether to summarize chunks in the background as players load them, so that
-                terrain is ready before anyone navigates through it. Costs a little CPU per chunk
-                loaded, on a background thread, and no extra disk reads; when chunks load faster
-                than they can be summarized, the excess is skipped and summarized on demand.""")
             .requiresRestart()
             .register();
 
