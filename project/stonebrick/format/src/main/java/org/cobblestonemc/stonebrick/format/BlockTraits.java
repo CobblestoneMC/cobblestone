@@ -88,6 +88,13 @@ public record BlockTraits(
   /** Bit index: Soul Speed boots work on this block, as on soul sand and soul soil. */
   public static final int SOUL_SPEED = 14;
 
+  /**
+   * Bit index of the first of three bits holding the block's mining class, as the ordinal of {@code
+   * MiningClass} in the Minecraft module: a wire contract like {@link #DIRECTIONS}, so reordering
+   * that enum needs the trait table version bumped.
+   */
+  public static final int MINING_CLASS = 32;
+
   /** Bit index of the first of six {@code enterable} bits, one per {@link #DIRECTIONS} entry. */
   public static final int ENTERABLE = 16;
 
@@ -102,6 +109,15 @@ public record BlockTraits(
    */
   public boolean has(int bitIndex) {
     return (bits & (1L << bitIndex)) != 0;
+  }
+
+  /**
+   * Returns the block's mining class, as an ordinal; see {@link #MINING_CLASS}.
+   *
+   * @return the ordinal
+   */
+  public int miningClass() {
+    return (int) ((bits >>> MINING_CLASS) & 0b111);
   }
 
   /**
@@ -179,6 +195,17 @@ public record BlockTraits(
      */
     public Builder exitable(int directionIndex, boolean value) {
       return set(EXITABLE + directionIndex, value);
+    }
+
+    /**
+     * Sets the mining class.
+     *
+     * @param ordinal the ordinal of the block's {@code MiningClass}, 0 to 7
+     * @return this builder
+     */
+    public Builder miningClass(int ordinal) {
+      bits = (bits & ~(0b111L << MINING_CLASS)) | ((long) (ordinal & 0b111) << MINING_CLASS);
+      return this;
     }
 
     /**

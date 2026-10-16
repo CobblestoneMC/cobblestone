@@ -92,13 +92,18 @@ limit; a manual `/navigate` always runs.
 | --- | --- | --- |
 | `search.algorithm.max_cells_visited` | `200000` | live |
 | `search.algorithm.max_wall_clock_seconds` | `60` | live |
-| `search.algorithm.heuristic_weight` | `1.5` | live |
+| `search.algorithm.heuristic` | `REGIONS` | live |
+| `search.algorithm.heuristic_weight` | `1.7` | live |
 | `search.algorithm.tier1_unsolved_pessimism` | `1.5` | live |
 | `search.algorithm.running_average_width` | `5` | live |
 
 - **`max_cells_visited`**: Cell limit per search. Memory use is a few hundred bytes per cell, so the
   default peaks in the tens of megabytes. Increase for longer routes; decrease on small heaps.
 - **`max_wall_clock_seconds`**: Time limit per search.
+- **`heuristic`**: How the search estimates the rest of a route. `REGIONS` reads the connected
+  patches of terrain ahead, finding better routes and handling water, caves and boats, at the cost
+  of extra chunk reads per search. `RUNNING_AVERAGE` extrapolates from the last few steps; it is
+  cheaper but never routes a player onto the water by boat.
 - **`heuristic_weight`**: A* heuristic weight. `1.0` yields optimal routes; higher values search
   faster with routes at most this factor longer than optimal.
 - **`tier1_unsolved_pessimism`**: Cost multiplier for route legs that have not yet been solved.
@@ -130,6 +135,31 @@ limit; a manual `/navigate` always runs.
     | `search.chunks.max_load_requests` | `256` | live |
 
     Maximum chunk tickets held at once. Values below about 64 disable read-ahead and slow searches.
+
+### `search.regions`
+
+The `REGIONS` heuristic summarizes each chunk once and shares the summary between every search
+until a block in the chunk changes.
+
+| Setting | Default | |
+| --- | --- | --- |
+| `search.regions.persist` | `true` | restart |
+| `search.regions.memory_megabytes` | `128` | restart |
+| `search.regions.flush_seconds` | `60` | restart |
+
+- **`persist`**: Keep summaries on disk under `plugins/Cobblestone/regions/`, so a restart does not
+  start from nothing. A few kilobytes per chunk, only for chunks searches touched or players
+  loaded. Delete the folder to force everything to be summarized again.
+- **`memory_megabytes`**: Memory each world's summaries may use beyond the chunks players have
+  loaded. Loaded chunks are summarized on a background thread as they load and always kept in
+  memory, about 40 KB each: twenty players at view distance 10 hold around 9,000 chunks, or 350 MB.
+  Beyond them, the least recently used summaries are dropped past this limit and read back from
+  disk when needed.
+- **`flush_seconds`**: How often new summaries are written. They are also written when the world
+  saves and when the server stops.
+
+Block changes made while the server is running are tracked. Edits made while it is stopped, by
+external tools, are not: delete the `regions` folder after editing a world offline.
 
 ### Tuning
 

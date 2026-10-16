@@ -8,12 +8,16 @@
 package org.cobblestonemc.stonebrick.bench;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.cobblestonemc.SearchObserver;
 
 /**
@@ -49,7 +53,8 @@ final class Sweep {
       double weight,
       String outcome,
       double cost,
-      long nodes) {
+      long nodes,
+      int columns) {
 
     boolean solved() {
       return outcome.equals("success");
@@ -94,7 +99,20 @@ final class Sweep {
             if (options.io() != null) {
               variant = variant.withIo(options.io());
             }
+            Path cache = null;
+            if (options.warm() && heuristic == Scenario.Heuristic.REGIONS) {
+              // A restart: one run builds the terrain and writes it to disk, and the run measured
+              // is a new store reading that disk back, with nothing carried over in memory.
+              cache = Files.createTempDirectory("stonebrick-regions");
+              runner.regionCache(cache);
+              runner.run(variant, loadout, SearchObserver.none());
+              runner.flushRegionCache();
+            }
             RunResult result = runner.run(variant, loadout, SearchObserver.none());
+            if (cache != null) {
+              runner.regionCache(null);
+              deleteTree(cache);
+            }
             Point point =
                 new Point(
                     scenario.runId(loadout),
@@ -103,21 +121,35 @@ final class Sweep {
                     weight,
                     result.outcome(),
                     result.pathCost(),
-                    result.nodesExpanded());
+                    result.nodesExpanded(),
+                    runner.lastRegionColumns());
             points.add(point);
             // Each point as it lands, not only in the tables at the end: a full sweep runs for
             // hours, and one stopped partway through should leave its measurements behind.
+            // The wall-clock parts trail the deterministic ones, so a parser reading fixed fields
+            // still finds them where it always did.
+            String breakdown = runner.lastRegionBreakdown();
             System.out.printf(
                 Locale.ROOT,
-                "point %s %s w=%.2f %s cost=%.3f expanded=%d closest=%.0f legs=%d%n",
+                "point %s %s w=%.2f %s cost=%.3f expanded=%d columns=%d ms=%d ioMs=%d reads=%d"
+                    + " regionReads=%d coldReads=%d opened=%d closest=%.0f legs=%d%s%n",
                 point.scenario(),
                 heuristic,
                 weight,
                 point.outcome(),
                 point.cost(),
                 point.nodes(),
+                point.columns(),
+                result.realMillis(),
+                // Time parked on the modelled disk: the virtual clock only moves for that.
+                result.virtualMillis(),
+                result.chunkReads(),
+                result.profileChunkReads(),
+                result.coldChunkReads(),
+                result.nodesOpened(),
                 result.closestBlocks(),
-                runner.lastLegs());
+                runner.lastLegs(),
+                breakdown == null ? "" : " " + breakdown);
           }
         }
       }
@@ -127,6 +159,14 @@ final class Sweep {
     perScenario(points);
     System.out.println();
     summary(points, heuristics, weights);
+  }
+
+  private static void deleteTree(Path root) throws IOException {
+    try (Stream<Path> paths = Files.walk(root)) {
+      for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+        Files.deleteIfExists(path);
+      }
+    }
   }
 
   private static void perScenario(List<Point> points) {
@@ -157,7 +197,8 @@ final class Sweep {
           point.weight(),
           point.nodes(),
           point.solved() ? String.format(Locale.ROOT, "%.2f", point.cost()) : point.outcome(),
-          excess);
+          excess,
+          point.columns() == 0 ? "-" : String.valueOf(point.columns()));
     }
   }
 

@@ -41,15 +41,20 @@ import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.minecraft.BreakChecker;
+import org.cobblestonemc.minecraft.ChunkFetch;
+import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.ChunkSource;
+import org.cobblestonemc.minecraft.CobblestonePlayer;
+import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
+import org.cobblestonemc.minecraft.lod.RegionStores;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 import org.cobblestonemc.minecraft.registry.OwnedRegistry;
 import org.cobblestonemc.paper.api.BoxWorldRegion;
@@ -58,6 +63,7 @@ import org.cobblestonemc.paper.api.PassChecker;
 import org.cobblestonemc.paper.api.SearchModificationRegistrar;
 import org.cobblestonemc.paper.api.SearchModificationService;
 import org.cobblestonemc.paper.api.Transition;
+import org.jetbrains.annotations.Nullable;
 
 public final class PaperNavigationServiceImpl
     implements NavigationService, SearchModificationRegistrar, WorldWrapper {
@@ -70,6 +76,7 @@ public final class PaperNavigationServiceImpl
   private final PaperRegions regions = new PaperRegions(this);
   private final Map<String, MinecraftWorld> worldCache = new ConcurrentHashMap<>();
   private final OwnedRegistry<SearchModificationService> searchModifiers = new OwnedRegistry<>();
+  private volatile @Nullable RegionStores regionStores;
 
   /**
    * Creates the API for a plugin.
@@ -86,6 +93,31 @@ public final class PaperNavigationServiceImpl
     this.platform = new PaperPlatformApi(plugin, scheduler, logger);
     this.chunkSettings = chunkSettings;
     this.core = CobblestoneApi.load();
+  }
+
+  /**
+   * Shares built region summaries between this server's searches, and with the next start if the
+   * stores keep them on disk. Without, each search summarizes its own terrain.
+   *
+   * @param stores the server's region stores
+   */
+  public void useRegionStores(RegionStores stores) {
+    this.regionStores = stores;
+  }
+
+  /**
+   * Reads a chunk the server already has loaded, off the server thread, without loading anything.
+   *
+   * @param world the world
+   * @param chunkX the chunk X
+   * @param chunkZ the chunk Z
+   * @return the chunk, or {@code null} if it is not loaded or cannot be read
+   */
+  public CompletableFuture<MinecraftChunk> readLoaded(World world, int chunkX, int chunkZ) {
+    return platform
+        .fetchChunk(chunkX, chunkZ, wrap(world), ChunkLoadPolicy.LOADED_ONLY, false)
+        .thenApply(fetch -> fetch instanceof ChunkFetch.Success success ? success.chunk() : null)
+        .exceptionally(failure -> null);
   }
 
   @Override
@@ -205,14 +237,13 @@ public final class PaperNavigationServiceImpl
     BreakChecker breakChecker = buildBreakChecker(modifiers, player, chunks);
     List<Restriction<MinecraftWorld>> restrictions = buildRestrictions(modifiers, player);
     // Built on the server thread: it reads the Bukkit player, which worker threads must not touch.
+    CobblestonePlayer agent = new PaperPlayer(player);
     MinecraftMovementBehavior behavior =
         MinecraftMovementBehavior.forPlayer(
-            chunks,
-            new PaperPlayer(player),
-            settings.excludedModes(),
-            breakChecker,
-            countEnderPearls(player));
-    HeuristicStrategy heuristic = MinecraftHeuristics.forPlayer(behavior, settings);
+            chunks, agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
+    HeuristicStrategy heuristic =
+        MinecraftHeuristics.forPlayer(
+            behavior, chunks, agent, originPosition.cell(), settings, regionStores);
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
         gatherTransitions(

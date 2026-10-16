@@ -105,6 +105,15 @@ public interface MinecraftBlock {
   }
 
   /**
+   * Returns the bucket this block is broken in, if it can be broken at all.
+   *
+   * @return the mining class
+   */
+  default MiningClass miningClass() {
+    return MiningClass.ROCK;
+  }
+
+  /**
    * Returns whether Soul Speed boots work on this block: soul sand and soul soil.
    *
    * <p>Its own question rather than a reading of {@link #speedFactor()}, because the two are
