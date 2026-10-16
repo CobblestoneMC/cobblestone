@@ -45,13 +45,13 @@ public interface HologramPlatform<A, L> {
   TrailSmoother.BlockProbe probe(A agent);
 
   /**
-   * Places a label in the player's world, shown only to them.
+   * Places one line of label text in the player's world, shown only to them. It is never hit:
+   * {@link TrailLabelManager#swing} says what a swing lands on.
    *
    * @param agent the player
    * @param at the center of its text
    * @param text the text
-   * @param onHit run when the player hits the label
    * @return the label, or empty if it can't be placed there from this thread
    */
-  Optional<Hologram> spawn(A agent, Vec3 at, Component text, Runnable onHit);
+  Optional<Hologram> spawn(A agent, Vec3 at, Component text);
 }

@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -22,6 +23,7 @@ import org.cobblestonemc.minecraft.ScheduledTaskHandle;
 import org.cobblestonemc.plugin.api.Navigator;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Messages;
+import org.cobblestonemc.plugin.navigator.TrailSmoother;
 import org.cobblestonemc.plugin.navigator.Vec3;
 import org.cobblestonemc.plugin.trip.Trip;
 import org.cobblestonemc.plugin.trip.TripAgent;
@@ -40,6 +42,10 @@ import org.cobblestonemc.plugin.trip.TripManager;
  * such spot yet gets its label as soon as it has one. Labels stay where they appeared, and all go
  * away as soon as the player leaves the block. Someone following a trail knows where it goes; one
  * who stops may not.
+ *
+ * <p>Each label reads {@code Cancel} in red above the trip's name, and hitting that cancels the
+ * trip. The client can't hit a label (see {@link LabelHit}), so the platform reports every left
+ * click to {@link #swing}, which works out what it landed on.
  *
  * @param <E> the native entity type
  * @param <A> the trip-agent type wrapping a player
@@ -110,14 +116,58 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
       return;
     }
     session.sources.remove(navigator);
-    Shown shown = session.shown.remove(navigator);
+    Shown<E, A, L> shown = session.shown.remove(navigator);
     if (shown != null) {
-      shown.hologram().remove();
+      shown.remove();
     }
     if (session.sources.isEmpty()) {
       session.ticker.cancel();
       sessions.remove(player);
     }
+  }
+
+  /**
+   * Handles the player swinging their arm, which is any left click: if their line of sight meets
+   * the {@code Cancel} line of one of their labels, its trip is cancelled. Call on the player's
+   * thread.
+   *
+   * @param player the player
+   * @return whether the swing hit a label, in which case the click should do nothing else
+   */
+  public boolean swing(UUID player) {
+    A agent;
+    Trip<E, A, L> hit = null;
+    synchronized (this) {
+      Session<E, A, L> session = sessions.get(player);
+      if (session == null || session.shown.isEmpty()) {
+        return false;
+      }
+      agent = session.agent;
+      Optional<PlayerPosition> position = platform.position(agent);
+      if (position.isEmpty()) {
+        return false;
+      }
+      TrailSmoother.BlockProbe probe = platform.probe(agent);
+      double nearest = Double.POSITIVE_INFINITY;
+      for (Shown<E, A, L> shown : session.shown.values()) {
+        OptionalDouble distance =
+            LabelHit.distance(
+                position.get().eye(),
+                position.get().look(),
+                HologramPlacement.cancelAt(shown.at()),
+                shown.cancelHalfWidth(),
+                probe);
+        if (distance.isPresent() && distance.getAsDouble() < nearest) {
+          nearest = distance.getAsDouble();
+          hit = shown.trip();
+        }
+      }
+    }
+    if (hit == null) {
+      return false;
+    }
+    cancel(agent, hit); // outside our lock: stopping the trip detaches its navigator from us
+    return true;
   }
 
   private void render(UUID player) {
@@ -149,7 +199,7 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
       }
     }
     Vec3 eye = position.get().eye();
-    Map<Navigator<L>, Shown> shown = session.shown;
+    Map<Navigator<L>, Shown<E, A, L>> shown = session.shown;
     List<Vec3> taken = new ArrayList<>(shown.values().stream().map(Shown::at).toList());
     for (int i = 0; i < active.size(); i++) {
       Trip<E, A, L> trip = active.get(i);
@@ -160,11 +210,11 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
       }
       // White, like the name over a player.
       Component text = Component.text(labels.get(i), NamedTextColor.WHITE);
-      Shown current = shown.get(navigator);
+      Shown<E, A, L> current = shown.get(navigator);
       if (current != null) {
         if (!text.equals(current.text())) {
-          current.hologram().text(text); // another trip started or ended
-          shown.put(navigator, new Shown(current.hologram(), current.at(), text));
+          current.name().text(text); // another trip started or ended
+          shown.put(navigator, current.withText(text));
         }
         continue;
       }
@@ -178,15 +228,32 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
       if (spot.isEmpty()) {
         continue; // nowhere to put it yet; try again next time
       }
-      A agent = session.agent;
-      platform
-          .spawn(agent, spot.get(), text, () -> cancel(agent, trip))
+      spawn(session.agent, trip, spot.get(), text)
           .ifPresent(
-              hologram -> {
-                shown.put(navigator, new Shown(hologram, spot.get(), text));
+              label -> {
+                shown.put(navigator, label);
                 taken.add(spot.get());
               });
     }
+  }
+
+  /** Places a trip's label, its name at {@code at} and {@code Cancel} above. */
+  private Optional<Shown<E, A, L>> spawn(A agent, Trip<E, A, L> trip, Vec3 at, Component text) {
+    String cancelText = messages.raw(agent.locale(), CobblestoneMessages.HOLOGRAM_CANCEL.key());
+    Optional<Hologram> name = platform.spawn(agent, at, text);
+    if (name.isEmpty()) {
+      return Optional.empty();
+    }
+    Optional<Hologram> cancel =
+        platform.spawn(
+            agent, HologramPlacement.cancelAt(at), Component.text(cancelText, NamedTextColor.RED));
+    if (cancel.isEmpty()) {
+      name.get().remove();
+      return Optional.empty();
+    }
+    return Optional.of(
+        new Shown<>(
+            name.get(), cancel.get(), at, text, trip, LabelHit.halfWidth(cancelText.length())));
   }
 
   private void cancel(A agent, Trip<E, A, L> trip) {
@@ -224,7 +291,7 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
     final A agent;
     final ScheduledTaskHandle ticker;
     final Map<Navigator<L>, Source<L>> sources = new LinkedHashMap<>(); // in attach order
-    final Map<Navigator<L>, Shown> shown = new HashMap<>();
+    final Map<Navigator<L>, Shown<E, A, L>> shown = new HashMap<>();
     PlayerPosition position; // where the player was at the last update, or null
     int stillTicks; // how long they have been in that block
 
@@ -234,10 +301,36 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
     }
 
     void clear() {
-      shown.values().forEach(label -> label.hologram().remove());
+      shown.values().forEach(Shown::remove);
       shown.clear();
     }
   }
 
-  private record Shown(Hologram hologram, Vec3 at, Component text) {}
+  /**
+   * A trip's label as shown.
+   *
+   * @param name the line with the trip's name
+   * @param cancel the {@code Cancel} line above it
+   * @param at the center of the name
+   * @param text the name
+   * @param trip the trip it cancels
+   * @param cancelHalfWidth half the width of the {@code Cancel} line, for hitting it
+   */
+  private record Shown<E, A extends TripAgent<E>, L>(
+      Hologram name,
+      Hologram cancel,
+      Vec3 at,
+      Component text,
+      Trip<E, A, L> trip,
+      double cancelHalfWidth) {
+
+    Shown<E, A, L> withText(Component text) {
+      return new Shown<>(name, cancel, at, text, trip, cancelHalfWidth);
+    }
+
+    void remove() {
+      name.remove();
+      cancel.remove();
+    }
+  }
 }
