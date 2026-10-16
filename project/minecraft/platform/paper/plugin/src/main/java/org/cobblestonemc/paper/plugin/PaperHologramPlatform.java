@@ -12,6 +12,7 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.bukkit.util.Vector;
 import org.cobblestonemc.paper.hologram.PaperHologram;
 import org.cobblestonemc.paper.hologram.PaperHolograms;
 import org.cobblestonemc.plugin.hologram.Hologram;
@@ -40,8 +41,10 @@ final class PaperHologramPlatform implements HologramPlatform<PaperTripAgent, Lo
     if (!player.isOnline()) {
       return Optional.empty();
     }
+    Location eye = player.getEyeLocation();
     return Optional.of(
-        new PlayerPosition(point(player.getLocation()), point(player.getEyeLocation())));
+        new PlayerPosition(
+            point(player.getLocation()), point(eye), vector(eye.getDirection().normalize())));
   }
 
   @Override
@@ -50,12 +53,14 @@ final class PaperHologramPlatform implements HologramPlatform<PaperTripAgent, Lo
   }
 
   @Override
-  public Optional<Hologram> spawn(PaperTripAgent agent, Vec3 at, Component text, Runnable onHit) {
+  public Optional<Hologram> spawn(PaperTripAgent agent, Vec3 at, Component text) {
     Player player = agent.player();
     World world = player.getWorld();
-    return holograms
-        .spawn(player, location(world, at), text, onHit)
-        .map(PaperHologramPlatform::wrap);
+    return holograms.spawn(player, location(world, at), text).map(PaperHologramPlatform::wrap);
+  }
+
+  private static Vec3 vector(Vector vector) {
+    return new Vec3(vector.getX(), vector.getY(), vector.getZ());
   }
 
   private static Hologram wrap(PaperHologram label) {

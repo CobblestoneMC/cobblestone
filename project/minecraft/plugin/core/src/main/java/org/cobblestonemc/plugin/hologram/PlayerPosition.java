@@ -10,12 +10,13 @@ package org.cobblestonemc.plugin.hologram;
 import org.cobblestonemc.plugin.navigator.Vec3;
 
 /**
- * Where a player stands, and sees from.
+ * Where a player stands, sees from, and looks.
  *
  * @param feet the player's position
  * @param eye the position of their eyes
+ * @param look the unit direction they are looking in
  */
-public record PlayerPosition(Vec3 feet, Vec3 eye) {
+public record PlayerPosition(Vec3 feet, Vec3 eye, Vec3 look) {
 
   /**
    * Whether the player's feet are in the same block as {@code other}'s.

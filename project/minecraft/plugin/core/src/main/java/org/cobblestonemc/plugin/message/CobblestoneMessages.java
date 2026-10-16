@@ -224,6 +224,9 @@ public final class CobblestoneMessages {
   public static final Message0 HUD_UNAVAILABLE =
       Message0.error("command.cobblestone.hud.unavailable");
 
+  /** The red line above a trip's label that cancels the trip when hit. */
+  public static final Message0 HOLOGRAM_CANCEL = Message0.info("hologram.cancel");
+
   /** Confirms a trip was cancelled by hitting its label ({@code {0}} = the label's text). */
   public static final Message1 HOLOGRAM_CANCELED = Message1.success("hologram.canceled");
 
