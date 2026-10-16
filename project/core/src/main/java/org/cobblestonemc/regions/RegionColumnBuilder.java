@@ -18,11 +18,11 @@ import org.jetbrains.annotations.Nullable;
  *
  * <ol>
  *   <li><b>Classify</b> gives every cell one class, by the {@link RegionTerrain}.
- *   <li><b>Fill</b> groups touching cells of one family into regions, section by section, refusing a
- *       cell whose walk from the region's seed is much longer than the straight line ({@link
- *       RegionGraph#DEFAULT_DETOUR_RATIO}), because a region is priced in straight lines. A
- *       family is usually one class; the terrain gives a region filled from a larger one its
- *       class from the mix of its cells.
+ *   <li><b>Fill</b> groups touching cells of one family into regions, section by section, refusing
+ *       a cell whose walk from the region's seed is much longer than the straight line ({@link
+ *       RegionGraph#DEFAULT_DETOUR_RATIO}), because a region is priced in straight lines. A family
+ *       is usually one class; the terrain gives a region filled from a larger one its class from
+ *       the mix of its cells.
  *   <li><b>Contacts</b> scans for neighbouring cells in different regions — and for walking steps a
  *       level up or down, and ledges a body can drop from — and turns each touching pair into a
  *       portal whose box covers every cell where they meet. Which steps and drops count is the
