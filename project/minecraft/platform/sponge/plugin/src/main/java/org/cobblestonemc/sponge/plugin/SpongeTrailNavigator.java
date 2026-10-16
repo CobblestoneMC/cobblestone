@@ -93,6 +93,14 @@ final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> 
   }
 
   @Override
+  protected Vec3 playerEye() {
+    return player()
+        .map(p -> p.eyePosition().get())
+        .map(eye -> new Vec3(eye.x(), eye.y(), eye.z()))
+        .orElse(new Vec3(0, 0, 0));
+  }
+
+  @Override
   protected String playerWorldKey() {
     return player().map(p -> p.world().key().asString()).orElse(null);
   }

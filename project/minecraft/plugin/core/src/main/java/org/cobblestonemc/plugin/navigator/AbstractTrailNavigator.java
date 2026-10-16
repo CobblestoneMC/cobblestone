@@ -40,6 +40,16 @@ import org.cobblestonemc.plugin.message.Messages;
  * nearest point on the path ahead when the player drifts off, prompts on discrete-action steps, and
  * asks the trip to recalculate if the player strays past {@code recalcDistance}.
  *
+ * <p>The trail leads rather than trails: along the current leg (the route from the player, by way
+ * of the guide back to the trail if they are off it, up to the next teleport), it starts at a
+ * <i>trail head</i> some way ahead of them, so the particles are always in front and never stream
+ * past their face. The head is {@link #MIN_GAP} blocks along the leg, or as far as they travel in
+ * {@link #LEAD_SECONDS} at their recent speed if that is further; if they can't see it (around a
+ * corner, say), it comes back to just past the furthest point of the leg they can see, leaving a
+ * stub around the corner. The trail stops {@link #GOAL_CLEARANCE} blocks short of the destination
+ * when they can see it, where its label takes over (see {@link TrailLabels}). Highlights before
+ * action steps and marks on blocks to mine are drawn however close they are.
+ *
  * <p>All the follow geometry, progress, and rendering <i>layout</i> live here; a platform subclass
  * supplies only the handful of native operations — reading the player's position/world, converting
  * a step location to a render point, spawning one particle, and testing a block — so Paper and
@@ -63,6 +73,29 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   private static final double MINE_MARGIN = 0.05; // cage hugs the block to mine
   private static final double PARTICLE_FLOW_SPEED = 1.0;
 
+  /** How far ahead along the leg the trail starts while the player stands still, in blocks. */
+  static final double MIN_GAP = 3.0;
+
+  /** How many seconds of travel at the player's recent speed the trail starts ahead of them. */
+  static final double LEAD_SECONDS = 2.0;
+
+  /** The furthest ahead the trail starts, in blocks. */
+  static final double MAX_GAP = 32.0;
+
+  /** How far past the furthest point the player can see the trail head may be, in blocks. */
+  static final double STUB = 1.0;
+
+  /** How far short of a destination the player can see the trail stops, in blocks. */
+  static final double GOAL_CLEARANCE = 3.0;
+
+  /** The share of the gap to the latest speed taken each tick: a time constant of half a second. */
+  private static final double SPEED_SMOOTHING = 1 - Math.exp(-1 / 10.0);
+
+  /** A move further than this in one tick is a teleport, not travel, in blocks. */
+  private static final double MAX_TRAVEL_PER_TICK = 4.0;
+
+  private static final double TICKS_PER_SECOND = 20.0;
+
   /**
    * A real short path back to the trail, smoothed like the trail.
    *
@@ -72,6 +105,61 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
    */
   private record Guide<L>(
       List<Step<L, MinecraftStepPayload>> steps, SmoothedTrail trail, String world) {}
+
+  /**
+   * A stretch of the current leg: segment {@code segment} of {@code path}, from {@code from} (a
+   * fraction of the segment) to its end.
+   *
+   * @param drawn whether particles are drawn along it (not for an action, such as opening a door)
+   */
+  private record Stretch(SmoothedTrail path, int segment, double from, boolean drawn) {
+
+    double length() {
+      return path.segmentLength(segment) * (1 - from);
+    }
+
+    /** The point {@code arc} blocks along this stretch. */
+    Vec3 at(double arc) {
+      double length = length();
+      double fraction = length == 0.0 ? from : from + (1 - from) * Math.clamp(arc / length, 0, 1);
+      return path.sample(segment, fraction).point();
+    }
+  }
+
+  /**
+   * The route from the player to the next teleport or the destination, as far as it is drawn.
+   *
+   * @param stretches the stretches in order, starting where the player is
+   * @param fromPlayer whether it starts at the player: {@code false} while they are off the trail
+   *     with no guide back yet, when it starts at the point of the trail nearest them
+   * @param toGoal whether it runs to the destination
+   * @param end the index of the first step past it, at which later legs start
+   * @param teleport whether it ends at a teleport, beyond which the route goes on
+   */
+  private record Leg(
+      List<Stretch> stretches, boolean fromPlayer, boolean toGoal, int end, boolean teleport) {
+
+    double length() {
+      double length = 0;
+      for (Stretch stretch : stretches) {
+        length += stretch.length();
+      }
+      return length;
+    }
+
+    /** The point {@code arc} blocks along the leg. */
+    Vec3 at(double arc) {
+      for (Stretch stretch : stretches) {
+        double length = stretch.length();
+        if (arc <= length) {
+          return stretch.at(arc);
+        }
+        arc -= length;
+      }
+      Stretch last = stretches.getLast();
+      return last.at(last.length());
+    }
+  }
 
   private final int bufferCells;
   private final double density;
@@ -98,6 +186,10 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   private Guide<L> guide; // null when on-trail
   // record last prompted instruction so we don't repeat ourselves on a recalculation
   private MinecraftInstruction lastPromptedInstruction;
+  private Vec3 lastPlayerVec;
+  double speed; // blocks per second, smoothed; package-private for tests
+  private Vec3 trailHead; // where the trail starts this tick, or null if it isn't drawn
+  private boolean headFromPlayer; // whether the trail head is measured from the player
 
   /**
    * Creates the navigator; call {@link #setPath} once the subclass is set up.
@@ -137,6 +229,9 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
 
   /** The player's exact current position (only queried while online). */
   protected abstract Vec3 playerPoint();
+
+  /** The position of the player's eyes (only queried while online). */
+  protected abstract Vec3 playerEye();
 
   /** The key of the player's current world, or {@code null} if unresolved. */
   protected abstract String playerWorldKey();
@@ -196,7 +291,20 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   @Override
   public void start() {
     // The first tick renders the trail.
-    labels.attach(playerId(), this, this::labelPoint);
+    labels.attach(
+        playerId(),
+        this,
+        new TrailLabels.Source<>() {
+          @Override
+          public Optional<L> headPoint() {
+            return labelPoint();
+          }
+
+          @Override
+          public Optional<L> goalPoint() {
+            return AbstractTrailNavigator.this.goalPoint();
+          }
+        });
   }
 
   @Override
@@ -212,6 +320,7 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
       guideCooldown--;
     }
     Vec3 playerVec = playerPoint();
+    updateSpeed(playerVec);
     String playerWorld = playerWorldKey();
     boolean onTrailWorld = sameWorld(playerWorld, worldKey(steps.get(foremost).position()));
     TrailSmoother.BlockProbe probe = blockProbe();
@@ -248,6 +357,7 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
 
     if (reachedGoal(playerVec, playerWorld)) {
       complete = true;
+      trailHead = null;
       return;
     }
 
@@ -277,10 +387,21 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
 
     promptForActionIfNeeded();
     ThreadLocalRandom random = ThreadLocalRandom.current();
-    renderTrail(playerVec, playerWorld, probe, random);
-    if (nextStepIsVanilla) {
-      renderGuide(playerVec, playerWorld, probe, random);
+    render(playerVec, playerWorld, nextStepIsVanilla, probe, random);
+  }
+
+  /** Smooths the player's speed toward how far they moved since the last tick. */
+  private void updateSpeed(Vec3 playerVec) {
+    Vec3 last = lastPlayerVec;
+    lastPlayerVec = playerVec;
+    if (last == null) {
+      return;
     }
+    double travelled = playerVec.minus(last).length();
+    if (travelled > MAX_TRAVEL_PER_TICK) {
+      return; // a teleport, not travel
+    }
+    speed += SPEED_SMOOTHING * (travelled * TICKS_PER_SECOND - speed);
   }
 
   @Override
@@ -347,87 +468,29 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   }
 
   /**
-   * The first point on the route the player is shown (the trail, or the guide back to it) that is
-   * {@code distance} blocks from them in a straight line: where the trip's label goes. Empty while
-   * labels are off, the player is off the trail with no guide yet, or the route ahead leaves their
-   * world, isn't drawn there, or reaches an action step or its end sooner.
+   * The trail head: where the trip's label goes. Empty while labels are off, the player is off the
+   * trail with no guide back yet, or the trail isn't drawn in their world.
    */
-  Optional<L> labelPoint(double distance) {
+  Optional<L> labelPoint() {
+    if (!showLabel.getAsBoolean() || complete || !playerOnline()) {
+      return Optional.empty();
+    }
+    Vec3 head = trailHead;
+    return head == null || !headFromPlayer ? Optional.empty() : Optional.of(location(head));
+  }
+
+  /**
+   * The end of the route, if it is in the player's world: where the label naming the destination
+   * goes, unless the destination says where it is. Empty while labels are off.
+   */
+  Optional<L> goalPoint() {
     if (!showLabel.getAsBoolean() || complete || steps.isEmpty() || !playerOnline()) {
       return Optional.empty();
     }
-    Vec3 playerVec = playerPoint();
-    String playerWorld = playerWorldKey();
-    if (!sameWorld(playerWorld, worldKey(steps.get(foremost).position()))) {
+    if (!sameWorld(playerWorldKey(), worldKey(steps.getLast().position()))) {
       return Optional.empty();
     }
-    // Walk the route the player is shown from where they are: along the trail if they are on it,
-    // otherwise along the guide back to it and then on along the trail.
-    double radiusSquared = distance * distance;
-    Vec3 from = projectedTarget(playerVec);
-    if (playerVec.minus(from).lengthSquared() > CALC_GUIDE_THRESHOLD_SQUARED) {
-      Guide<L> guide = this.guide;
-      if (guide == null || !sameWorld(playerWorld, guide.world())) {
-        return Optional.empty(); // off the trail, and no guide drawn yet
-      }
-      SmoothedTrail path = guide.trail();
-      path.drawFrom(playerVec); // the guide is drawn from wherever the player now is
-      from = playerVec;
-      for (int i = 0; i < guide.steps().size(); i++) {
-        if (guide.steps().get(i).payload().stepType().isAction() || !path.segmentDrawable(i)) {
-          return Optional.empty();
-        }
-        Vec3 to = path.node(i + 1);
-        if (to.minus(playerVec).lengthSquared() >= radiusSquared) {
-          return Optional.of(location(exitPoint(from, to, playerVec, distance)));
-        }
-        from = to;
-      }
-      // The guide ends at the current step's destination; carry on along the trail from there.
-      from = trail.node(foremost + 1);
-      return trailPoint(foremost + 1, from, playerVec, playerWorld, distance);
-    }
-    return trailPoint(foremost, from, playerVec, playerWorld, distance);
-  }
-
-  /**
-   * The first point on the trail from {@code from} (on segment {@code first}) at {@code distance}
-   * from the player, within the drawn buffer.
-   */
-  private Optional<L> trailPoint(
-      int first, Vec3 from, Vec3 playerVec, String playerWorld, double distance) {
-    int end = Math.min(steps.size(), foremost + bufferCells);
-    for (int i = first; i < end; i++) {
-      var step = steps.get(i);
-      if (!sameWorld(playerWorld, worldKey(step.position()))
-          || step.payload().stepType().isAction()
-          || !trail.segmentDrawable(i)) {
-        return Optional.empty();
-      }
-      Vec3 to = trail.node(i + 1);
-      if (to.minus(playerVec).lengthSquared() >= distance * distance) {
-        return Optional.of(location(exitPoint(from, to, playerVec, distance)));
-      }
-      from = to;
-    }
-    return Optional.empty();
-  }
-
-  /**
-   * Where the segment from {@code from} to {@code to} leaves the sphere of {@code radius} around
-   * {@code center}, given that {@code to} is outside it; {@code from} itself if it is too.
-   */
-  private static Vec3 exitPoint(Vec3 from, Vec3 to, Vec3 center, double radius) {
-    Vec3 segment = to.minus(from);
-    Vec3 offset = from.minus(center);
-    double a = segment.lengthSquared();
-    double b = 2 * offset.dot(segment);
-    double c = offset.lengthSquared() - radius * radius;
-    if (a == 0.0 || c >= 0.0) {
-      return from;
-    }
-    double t = (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a);
-    return from.plus(segment.times(Math.clamp(t, 0.0, 1.0)));
+    return Optional.of(location(trail.original(trail.size() - 1)));
   }
 
   private boolean reachedGoal(Vec3 playerVec, String playerWorld) {
@@ -475,33 +538,162 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     }
   }
 
-  private void renderTrail(
+  /**
+   * Draws this tick's trail: the current leg from its trail head (see the class description), the
+   * legs past a teleport whole, and highlights and mine marks however close they are.
+   */
+  private void render(
       Vec3 playerVec,
       String playerWorld,
+      boolean nextStepIsVanilla,
       TrailSmoother.BlockProbe probe,
       ThreadLocalRandom random) {
-    int end = Math.min(steps.size(), foremost + bufferCells);
-    for (int i = foremost; i < end; i++) {
+    int bufferEnd = Math.min(steps.size(), foremost + bufferCells);
+    Guide<L> guide = nextStepIsVanilla ? this.guide : null;
+    if (guide != null && sameWorld(playerWorld, guide.world())) {
+      guide.trail().refresh(0, guide.trail().size() - 1, tickCounter, node -> true, probe);
+      guide.trail().drawFrom(playerVec); // the guide leads from wherever the player now is
+      renderMarks(guide.trail(), guide.steps(), 0, guide.steps().size(), playerVec, probe, random);
+    } else {
+      guide = null;
+    }
+    renderMarks(trail, steps, foremost, bufferEnd, playerVec, probe, random);
+
+    Leg leg = leg(playerVec, playerWorld, guide, bufferEnd);
+    trailHead = null;
+    if (leg == null) {
+      // Not on the trail's world: draw whatever of it is in the player's world, whole.
+      renderWhole(foremost, bufferEnd, playerWorld, random);
+      return;
+    }
+    if (leg.stretches().isEmpty()) {
+      if (leg.teleport()) {
+        renderWhole(leg.end() + 1, bufferEnd, playerWorld, random); // standing at the portal
+      }
+      return;
+    }
+    Vec3 eye = playerEye();
+    double length = leg.length();
+    double head = Math.min(Math.clamp(LEAD_SECONDS * speed, MIN_GAP, MAX_GAP), length);
+    // Out of sight (around a corner, say): come back to just past the furthest point in sight.
+    for (double arc = head; arc >= 0; arc -= 1.0) {
+      if (LineOfSight.clear(eye, leg.at(arc), probe)) {
+        head = Math.min(head, arc + STUB);
+        break;
+      }
+    }
+    double end = length;
+    if (leg.toGoal() && LineOfSight.clear(eye, trail.node(trail.size() - 1), probe)) {
+      end -= GOAL_CLEARANCE; // the destination's label takes it from here
+    }
+    trailHead = leg.at(head);
+    headFromPlayer = leg.fromPlayer();
+    double start = 0;
+    for (Stretch stretch : leg.stretches()) {
+      double stretchLength = stretch.length();
+      double from = Math.max(head, start);
+      double to = Math.min(end, start + stretchLength);
+      if (stretch.drawn() && to > from && stretchLength > 0) {
+        double fraction = stretch.from() + (1 - stretch.from()) * ((from - start) / stretchLength);
+        double toFraction = stretch.from() + (1 - stretch.from()) * ((to - start) / stretchLength);
+        scatter(stretch.path(), stretch.segment(), fraction, toFraction, to - from, random);
+      }
+      start += stretchLength;
+    }
+    if (leg.teleport()) {
+      renderWhole(leg.end() + 1, bufferEnd, playerWorld, random);
+    }
+  }
+
+  /**
+   * The current leg: from the player along the guide back to the trail if they are off it and one
+   * is drawn, otherwise from the point of the trail nearest them; then on along the trail until a
+   * teleport, another world, the end of what is drawn, or the destination. Null if the trail's next
+   * step is not in the player's world.
+   */
+  private Leg leg(Vec3 playerVec, String playerWorld, Guide<L> guide, int bufferEnd) {
+    if (!sameWorld(playerWorld, worldKey(steps.get(foremost).position()))) {
+      return null;
+    }
+    List<Stretch> stretches = new ArrayList<>();
+    boolean offTrail =
+        playerVec.minus(projectedTarget(playerVec)).lengthSquared() > CALC_GUIDE_THRESHOLD_SQUARED;
+    int first = foremost;
+    double from = projectedFraction(playerVec);
+    if (offTrail && guide != null) {
+      for (int i = 0; i < guide.steps().size(); i++) {
+        MinecraftStepType type = guide.steps().get(i).payload().stepType();
+        if (type == MinecraftStepType.TELEPORT || !guide.trail().segmentDrawable(i)) {
+          return new Leg(stretches, true, false, foremost, false);
+        }
+        stretches.add(new Stretch(guide.trail(), i, 0, !type.isAction()));
+      }
+      // The guide ends at the current step's destination; carry on along the trail from there.
+      first = foremost + 1;
+      from = 0;
+    }
+    for (int i = first; i < bufferEnd; i++) {
+      Step<L, MinecraftStepPayload> step = steps.get(i);
+      MinecraftStepType type = step.payload().stepType();
+      if (type == MinecraftStepType.TELEPORT) {
+        return new Leg(stretches, !offTrail || guide != null, false, i, true);
+      }
+      if (!sameWorld(playerWorld, worldKey(step.position())) || !trail.segmentDrawable(i)) {
+        return new Leg(stretches, !offTrail || guide != null, false, i, false);
+      }
+      stretches.add(new Stretch(trail, i, i == first ? from : 0, !type.isAction()));
+    }
+    boolean toGoal = bufferEnd == steps.size();
+    return new Leg(stretches, !offTrail || guide != null, toGoal, bufferEnd, false);
+  }
+
+  /** Draws every walked step from {@code from} to {@code to} in the player's world, whole. */
+  private void renderWhole(int from, int to, String playerWorld, ThreadLocalRandom random) {
+    for (int i = Math.max(0, from); i < to; i++) {
       var step = steps.get(i);
-      if (!sameWorld(playerWorld, worldKey(step.position()))) {
-        continue;
+      if (sameWorld(playerWorld, worldKey(step.position()))
+          && !step.payload().stepType().isAction()
+          && trail.segmentDrawable(i)) {
+        scatter(trail, i, 0, 1, trail.segmentLength(i), random);
       }
+    }
+  }
+
+  /**
+   * Highlights where each action step of {@code path} from step {@code from} to {@code to} is
+   * taken, and marks each block to mine.
+   */
+  private void renderMarks(
+      SmoothedTrail path,
+      List<Step<L, MinecraftStepPayload>> pathSteps,
+      int from,
+      int to,
+      Vec3 playerVec,
+      TrailSmoother.BlockProbe probe,
+      ThreadLocalRandom random) {
+    String playerWorld = playerWorldKey();
+    for (int i = from; i < to; i++) {
+      var step = pathSteps.get(i);
       MinecraftStepPayload payload = step.payload();
-      if (payload.stepType().isAction()) {
-        // no trail to a cell if we get there by performing an action
+      if (!sameWorld(playerWorld, worldKey(step.position()))
+          || payload.stepType().isAction()
+          || !path.segmentDrawable(i)) {
         continue;
       }
-      boolean highlight = false;
-      if (i == steps.size() - 1) {
-        // the end should be highlighted
-        highlight = true;
-      } else if (i + 1 < end && steps.get(i + 1).payload().stepType().isAction()) {
-        // if the next step is an action, highlight this step
-        highlight = true;
+      Vec3 destination = path.node(i + 1);
+      if (playerVec.minus(destination).lengthSquared() < NEAR_BUFFER_SQUARED) {
+        continue; // keep the player's immediate view clear
       }
-      // Step i is the trail's segment i; skip it where the world isn't readable.
-      if (trail.segmentDrawable(i)) {
-        renderStep(trail, i, payload, highlight, playerVec, probe, random);
+      if (i + 1 < to && pathSteps.get(i + 1).payload().stepType().isAction()) {
+        highlight(destination, random); // the next step is an action: take it here
+      }
+      if (payload.stepType() == MinecraftStepType.MINE) {
+        var feet = BlockPos.of(path.original(i + 1));
+        for (BlockPos mined : List.of(feet, feet.above())) {
+          if (probe.at(mined.x(), mined.y(), mined.z()) == TrailBlock.SOLID) {
+            renderMineMarker(mined, random);
+          }
+        }
       }
     }
   }
@@ -543,37 +735,6 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
         && Objects.equals(worldKey(arriving.position()), worldKey(leaving.position()));
   }
 
-  /**
-   * Draws step {@code i} of {@code path} (its segment {@code i}), a highlight at its destination if
-   * asked, and a mine marker on its unsmoothed block if it mines.
-   */
-  private void renderStep(
-      SmoothedTrail path,
-      int i,
-      MinecraftStepPayload payload,
-      boolean highlight,
-      Vec3 playerVec,
-      TrailSmoother.BlockProbe probe,
-      ThreadLocalRandom random) {
-    Vec3 destination = path.node(i + 1);
-    if (playerVec.minus(destination).lengthSquared() < NEAR_BUFFER_SQUARED) {
-      return; // keep the player's immediate view clear
-    }
-    scatter(path, i, random);
-    if (highlight) {
-      highlight(destination, random);
-    }
-
-    if (payload != null && payload.stepType() == MinecraftStepType.MINE) {
-      var feet = BlockPos.of(path.original(i + 1));
-      for (BlockPos mined : List.of(feet, feet.above())) {
-        if (probe.at(mined.x(), mined.y(), mined.z()) == TrailBlock.SOLID) {
-          renderMineMarker(mined, random);
-        }
-      }
-    }
-  }
-
   /** A cage just outside the block plus an X on each face — "mine this block". */
   private void renderMineMarker(BlockPos block, ThreadLocalRandom random) {
     double h = 0.5 + MINE_MARGIN;
@@ -609,41 +770,22 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     }
   }
 
-  private void renderGuide(
-      Vec3 playerVec,
-      String playerWorld,
-      TrailSmoother.BlockProbe probe,
-      ThreadLocalRandom random) {
-    Guide<L> guide = this.guide;
-    if (guide == null
-        || !sameWorld(playerWorld, worldKey(steps.get(foremost).position()))
-        || !sameWorld(playerWorld, guide.world())) {
-      // No fallback while the guide search is pending/failed
-      return;
-    }
-    List<Step<L, MinecraftStepPayload>> guideSteps = guide.steps();
-    SmoothedTrail path = guide.trail();
-    path.refresh(0, path.size() - 1, tickCounter, node -> true, probe);
-    path.drawFrom(playerVec); // the guide leads from wherever the player now is
-    for (int i = 0; i < guideSteps.size(); i++) {
-      if (path.segmentDrawable(i)) {
-        renderStep(path, i, guideSteps.get(i).payload(), false, playerVec, probe, random);
-      }
-    }
-  }
-
   /**
-   * Spawns ~{@code density} Gaussian-scattered particles per block around a random point on segment
-   * {@code i} of {@code path} as drawn, flowing along it. A fractional density is probabilistic
-   * (0.7 → 70%).
+   * Spawns ~{@code density} Gaussian-scattered particles per block of {@code length} around a
+   * random point on segment {@code i} of {@code path} as drawn, between fractions {@code from} and
+   * {@code to} of it, flowing along it. A fractional count is probabilistic (0.7 → 70%).
    */
-  private void scatter(SmoothedTrail path, int i, ThreadLocalRandom random) {
-    double floatCount = density * path.segmentLength(i);
+  private void scatter(
+      SmoothedTrail path, int i, double from, double to, double length, ThreadLocalRandom random) {
+    double floatCount = density * length;
     int count = (int) floatCount;
     if (random.nextDouble() < floatCount - count) {
       count++;
     }
-    TrailCurve.Sample sample = path.sample(i, random.nextDouble());
+    if (count == 0) {
+      return;
+    }
+    TrailCurve.Sample sample = path.sample(i, from + (to - from) * random.nextDouble());
     var center = sample.point();
     var velocity = sample.direction().times(PARTICLE_FLOW_SPEED);
     for (int p = 0; p < count; p++) {
@@ -678,13 +820,24 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   private Vec3 projectedTarget(Vec3 playerVec) {
     Vec3 start = trail.node(foremost);
     Vec3 segment = trail.node(foremost + 1).minus(start);
-    double lengthSquared = segment.lengthSquared();
-    double t =
-        lengthSquared == 0.0
-            ? 0.0
-            : Math.clamp(playerVec.minus(start).dot(segment) / lengthSquared, 0.0, 1.0);
+    double t = projectedFraction(playerVec);
     return new Vec3(
         start.x() + segment.x() * t, start.y() + segment.y() * t, start.z() + segment.z() * t);
+  }
+
+  /** How far along the current step's segment {@link #projectedTarget} is, from 0 to 1. */
+  private double projectedFraction(Vec3 playerVec) {
+    Vec3 start = trail.node(foremost);
+    Vec3 segment = trail.node(foremost + 1).minus(start);
+    double lengthSquared = segment.lengthSquared();
+    return lengthSquared == 0.0
+        ? 0.0
+        : Math.clamp(playerVec.minus(start).dot(segment) / lengthSquared, 0.0, 1.0);
+  }
+
+  /** Where the trail starts this tick, or null if it isn't drawn; for tests. */
+  Vec3 trailHead() {
+    return trailHead;
   }
 
   /** The trail's node {@code node} as smoothed so far (node 0 = the origin), for tests. */

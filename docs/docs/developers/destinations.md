@@ -182,7 +182,7 @@ unavailable, such as when its world is unloaded.
 
 ### Moving targets
 
-`Destination.builder` takes the same regions as `Destination.regions`, plus three settings:
+`Destination.builder` takes the same regions as `Destination.regions`, plus four settings:
 
 ```java
 Destination.builder(
@@ -192,17 +192,21 @@ Destination.builder(
             ? List.of(SingleCellWorldRegion.of(npc.getEntity().getLocation()))
             : List.of())
     .mobile()                                  // trips to it default to -live
+    .labelled()                                // its nameplate already names it
     .existence(() -> CitizensAPI.getNPCRegistry().getById(npc.getId()) != null)
     .detail(Component.text("Wanders the market"))
     .build();
 ```
 
 - `mobile()` sets the default for live trips. Players may override it with `-live` or `-no-live`.
+- `labelled()` says the destination already shows its name in the world, as an NPC's nameplate
+  does. Otherwise, once the player is within 24 blocks, Cobblestone floats a label naming it over
+  the end of the route.
 - `detail(...)` and `existence(...)` are described under [Hover detail](#hover-detail) and
   [Existence](#existence).
 
-You may also implement `MinecraftDestination` yourself; `isMobile()`, `detail()` and `exists()`
-are its defaults to override.
+You may also implement `MinecraftDestination` yourself; `isMobile()`, `hasLabel()`, `detail()`
+and `exists()` are its defaults to override.
 
 ### Leaves
 

@@ -37,6 +37,14 @@ public interface HologramPlatform<A, L> {
   Optional<PlayerPosition> position(A agent);
 
   /**
+   * Returns the key of the player's world.
+   *
+   * @param agent the player
+   * @return the world's key
+   */
+  String worldKey(A agent);
+
+  /**
    * Returns a reader of the blocks in the player's world for this tick, which never loads a chunk.
    *
    * @param agent the player
