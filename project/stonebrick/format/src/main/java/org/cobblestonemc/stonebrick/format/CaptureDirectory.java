@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Stream;
 
 /**
@@ -175,7 +176,7 @@ public final class CaptureDirectory {
   public void writeMeta(Map<String, String> values) throws IOException {
     StringBuilder text = new StringBuilder();
     text.append("#stonebrick-capture 1\n");
-    new java.util.TreeMap<>(values)
+    new TreeMap<>(values)
         .forEach((key, value) -> text.append(key).append('\t').append(value).append('\n'));
     Files.createDirectories(root);
     Files.write(meta(), text.toString().getBytes(StandardCharsets.UTF_8));

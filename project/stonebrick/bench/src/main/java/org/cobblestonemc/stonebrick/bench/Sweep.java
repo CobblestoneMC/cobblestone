@@ -9,6 +9,7 @@ package org.cobblestonemc.stonebrick.bench;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -76,7 +77,7 @@ final class Sweep {
     // was first run), so every aggregate silently becomes a report on the easiest routes only.
     List<Scenario.Heuristic> heuristics =
         options.heuristic() == null
-            ? java.util.Arrays.stream(Scenario.Heuristic.values())
+            ? Arrays.stream(Scenario.Heuristic.values())
                 .filter(heuristic -> heuristic != Scenario.Heuristic.ZERO)
                 .toList()
             : List.of(options.heuristic());
@@ -108,14 +109,15 @@ final class Sweep {
             // hours, and one stopped partway through should leave its measurements behind.
             System.out.printf(
                 Locale.ROOT,
-                "point %s %s w=%.2f %s cost=%.3f expanded=%d closest=%.0f%n",
+                "point %s %s w=%.2f %s cost=%.3f expanded=%d closest=%.0f legs=%d%n",
                 point.scenario(),
                 heuristic,
                 weight,
                 point.outcome(),
                 point.cost(),
                 point.nodes(),
-                result.closestBlocks());
+                result.closestBlocks(),
+                runner.lastLegs());
           }
         }
       }

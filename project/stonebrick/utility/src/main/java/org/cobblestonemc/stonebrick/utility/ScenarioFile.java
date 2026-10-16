@@ -16,6 +16,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * The corpus's single {@code scenarios.yml}, read and rewritten by {@code /stonebrick mark}.
@@ -128,8 +131,8 @@ final class ScenarioFile {
    * @return the block x, y and z, or {@code null} if it is not marked
    * @throws IOException if the file cannot be read
    */
-  static int @org.jetbrains.annotations.Nullable [] position(
-      Path file, String world, String name, String which) throws IOException {
+  static int @Nullable [] position(Path file, String world, String name, String which)
+      throws IOException {
     List<String> body = read(file).getOrDefault(world, Map.of()).get(name);
     if (body == null) {
       return null;
@@ -137,9 +140,8 @@ final class ScenarioFile {
     String prefix = "    " + (which.equals("origin") ? "origin" : "destination") + ":";
     for (String line : body) {
       if (line.startsWith(prefix)) {
-        java.util.regex.Matcher m =
-            java.util.regex.Pattern.compile("x:\\s*(-?\\d+),\\s*y:\\s*(-?\\d+),\\s*z:\\s*(-?\\d+)")
-                .matcher(line);
+        Matcher m =
+            Pattern.compile("x:\\s*(-?\\d+),\\s*y:\\s*(-?\\d+),\\s*z:\\s*(-?\\d+)").matcher(line);
         if (m.find()) {
           return new int[] {
             Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3))
@@ -158,8 +160,7 @@ final class ScenarioFile {
    * @return the world key, or {@code null} if no world has it
    * @throws IOException if the file cannot be read
    */
-  static @org.jetbrains.annotations.Nullable String worldOf(Path file, String name)
-      throws IOException {
+  static @Nullable String worldOf(Path file, String name) throws IOException {
     for (Map.Entry<String, Map<String, List<String>>> world : read(file).entrySet()) {
       if (world.getValue().containsKey(name)) {
         return world.getKey();

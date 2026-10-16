@@ -15,8 +15,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class ChunkColumnCodecTest {
 
@@ -27,7 +32,7 @@ class ChunkColumnCodecTest {
 
   private static String[] filled(String state) {
     String[] states = new String[Sbc.CUBE_VOLUME];
-    java.util.Arrays.fill(states, state);
+    Arrays.fill(states, state);
     return states;
   }
 
@@ -148,20 +153,18 @@ class ChunkColumnCodecTest {
 
   @Test
   void foreignBytesAreRejected() {
-    byte[] notACapture =
-        "this is not a capture file at all".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    byte[] notACapture = "this is not a capture file at all".getBytes(StandardCharsets.UTF_8);
     assertThrows(CaptureFormatException.class, () -> ChunkColumnCodec.read(notACapture));
   }
 
   @Test
   void paletteMustStartWithAir() {
-    assertThrows(CaptureFormatException.class, () -> BlockPalette.of(java.util.List.of(STONE)));
+    assertThrows(CaptureFormatException.class, () -> BlockPalette.of(List.of(STONE)));
   }
 
   @Test
-  void identicalWriteToDiskIsSkipped(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
-      throws Exception {
-    java.nio.file.Path file = dir.resolve("c.0.0.sbc");
+  void identicalWriteToDiskIsSkipped(@TempDir Path dir) throws Exception {
+    Path file = dir.resolve("c.0.0.sbc");
     assertTrue(ChunkColumnCodec.write(buildMixedColumn(), file));
     // Re-capturing unchanged terrain must not touch the file, or `git status` is never clean.
     assertFalse(ChunkColumnCodec.write(buildMixedColumn(), file));

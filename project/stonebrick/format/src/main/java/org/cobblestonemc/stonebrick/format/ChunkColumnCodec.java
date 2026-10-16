@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.stonebrick.format;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -16,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.zip.CRC32;
 
@@ -157,8 +159,7 @@ public final class ChunkColumnCodec {
           "checksum mismatch: the capture file is corrupt and would decode to wrong blocks");
     }
 
-    try (DataInputStream in =
-        new DataInputStream(new java.io.ByteArrayInputStream(file, 0, bodyLength))) {
+    try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(file, 0, bodyLength))) {
       int magic = in.readInt();
       if (magic != Sbc.MAGIC) {
         throw new CaptureFormatException(
@@ -284,7 +285,7 @@ public final class ChunkColumnCodec {
    */
   public static boolean write(ChunkColumn column, Path path) throws IOException {
     byte[] encoded = write(column);
-    if (Files.exists(path) && java.util.Arrays.equals(Files.readAllBytes(path), encoded)) {
+    if (Files.exists(path) && Arrays.equals(Files.readAllBytes(path), encoded)) {
       return false;
     }
     Path parent = path.getParent();

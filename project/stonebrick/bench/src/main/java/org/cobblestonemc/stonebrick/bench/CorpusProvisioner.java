@@ -10,6 +10,7 @@ package org.cobblestonemc.stonebrick.bench;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
 import java.net.URI;
@@ -20,7 +21,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -28,8 +32,10 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
 import org.cobblestonemc.stonebrick.format.CaptureDirectory;
 import org.cobblestonemc.stonebrick.format.CorpusLayout;
+import org.cobblestonemc.stonebrick.format.TraitTable;
 import org.yaml.snakeyaml.Yaml;
 
 /**
@@ -177,14 +183,14 @@ public final class CorpusProvisioner {
    */
   /** Whether this capture's trait table was written against different trait bits. */
   boolean staleTraits(CaptureDirectory capture) {
-    java.nio.file.Path table = capture.root().resolve("traits.tsv");
-    if (!java.nio.file.Files.isRegularFile(table)) {
+    Path table = capture.root().resolve("traits.tsv");
+    if (!Files.isRegularFile(table)) {
       return true;
     }
     try {
-      org.cobblestonemc.stonebrick.format.TraitTable.read(table);
+      TraitTable.read(table);
       return false;
-    } catch (java.io.IOException e) {
+    } catch (IOException e) {
       return true;
     }
   }
@@ -310,13 +316,13 @@ public final class CorpusProvisioner {
 
   private static String sha256(Path file) throws IOException {
     try {
-      java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
       StringBuilder hex = new StringBuilder();
       for (byte b : digest.digest(Files.readAllBytes(file))) {
         hex.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
       }
       return hex.toString();
-    } catch (java.security.NoSuchAlgorithmException e) {
+    } catch (NoSuchAlgorithmException e) {
       throw new IOException(e);
     }
   }
@@ -446,7 +452,7 @@ public final class CorpusProvisioner {
         continue;
       }
       try (var walk = Files.walk(dir)) {
-        for (Path path : walk.sorted(java.util.Comparator.reverseOrder()).toList()) {
+        for (Path path : walk.sorted(Comparator.reverseOrder()).toList()) {
           Files.deleteIfExists(path);
         }
       }
@@ -495,7 +501,7 @@ public final class CorpusProvisioner {
                 });
 
     try (Writer console =
-        new java.io.OutputStreamWriter(server.getOutputStream(), StandardCharsets.UTF_8)) {
+        new OutputStreamWriter(server.getOutputStream(), StandardCharsets.UTF_8)) {
       await(server, booted::get, BOOT_TIMEOUT_SECONDS, "the server to start");
 
       int done = 0;
@@ -541,8 +547,7 @@ public final class CorpusProvisioner {
    * Java, a port in use, a corrupt jar — otherwise costs the full timeout before saying anything,
    * and by then the reason is several screens up in its own output.
    */
-  private static void await(
-      Process server, java.util.function.BooleanSupplier ready, long seconds, String what)
+  private static void await(Process server, BooleanSupplier ready, long seconds, String what)
       throws IOException, InterruptedException {
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(seconds);
     while (System.nanoTime() < deadline) {

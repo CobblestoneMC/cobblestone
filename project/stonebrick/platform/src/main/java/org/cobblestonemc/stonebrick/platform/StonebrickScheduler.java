@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.stonebrick.platform;
 
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -59,7 +60,7 @@ public final class StonebrickScheduler implements MinecraftScheduler<Object>, Au
   }
 
   @Override
-  public java.util.concurrent.ExecutorService asyncExecutor() {
+  public ExecutorService asyncExecutor() {
     return executor;
   }
 

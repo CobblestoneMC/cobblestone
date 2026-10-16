@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.CobblestoneApi;
@@ -117,9 +118,7 @@ class DeterminismTest {
 
     MinecraftMovementBehavior behavior =
         MinecraftMovementBehavior.forPlayer(
-            new ChunkProvider(platform, platform.settings()),
-            player,
-            java.util.Set.<MinecraftStepType>of());
+            new ChunkProvider(platform, platform.settings()), player, Set.<MinecraftStepType>of());
 
     NavigationResult<Position<MinecraftWorld>, MinecraftStepPayload> result =
         CobblestoneApi.load()

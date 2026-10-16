@@ -130,6 +130,16 @@ minecraft:overworld:
     destination: { x: 1728, y: 62, z: 1116 }
     tags: [surface]
 
+  overland-warps:
+    description: long-overland with four warps along the way; Tier 1 picks between them
+    capture: long-overland
+    tier: LOCAL
+    io: zero
+    origin: { x: -880, y: 86, z: 60 }
+    destination: { x: 1120, y: 65, z: -40 }
+    warps: [{x: -375, y: 65, z: 104}, {x: 120, y: 63, z: 161}, {x: 615, y: 81, z: 75}, {x: 922, y: 65, z: -36}]
+    tags: [warps]
+
   long-overland:
     capture: long-overland
     tier: LOCAL
@@ -357,6 +367,26 @@ minecraft:the_nether:
     io: zero
     origin: { x: 286, y: 83, z: -75 }
     destination: { x: 562, y: 49, z: 204 }
+
+  nether-warps:
+    description: long-nether with three warps, one off to the side
+    capture: long-nether
+    tier: LOCAL
+    io: zero
+    origin: { x: 286, y: 83, z: -75 }
+    destination: { x: 1250, y: 64, z: 380 }
+    warps: [{x: 769, y: 73, z: 112}, {x: 1141, y: 86, z: 204}, {x: 562, y: 49, z: 204}]
+    tags: [warps]
+
+  nether-roof-trap:
+    description: a warp onto the bedrock roof right above the goal, which leads nowhere
+    capture: long-nether
+    tier: LOCAL
+    io: zero
+    origin: { x: 286, y: 83, z: -75 }
+    destination: { x: 1250, y: 64, z: 380 }
+    warps: [{x: 1250, y: 128, z: 380}, {x: 769, y: 73, z: 112}]
+    tags: [warps]
 
   long-nether:
     capture: long-nether
