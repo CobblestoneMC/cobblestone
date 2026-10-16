@@ -7,6 +7,8 @@
 
 package org.cobblestonemc.minecraft.movement;
 
+import org.cobblestonemc.minecraft.MinecraftBlock;
+
 /**
  * What a player may do on a search, settled when its {@link MinecraftMovementBehavior} is built.
  *
@@ -22,6 +24,7 @@ package org.cobblestonemc.minecraft.movement;
  * @param boardBoat place a boat from the inventory and board it
  * @param paddle travel by boat once in one
  * @param enderPearls how many ender pearls may be thrown
+ * @param soulSpeed the Soul Speed level of the boots worn, or 0
  */
 record Abilities(
     boolean walk,
@@ -35,4 +38,20 @@ record Abilities(
     int flightHeight,
     boolean boardBoat,
     boolean paddle,
-    int enderPearls) {}
+    int enderPearls,
+    int soulSpeed) {
+
+  /**
+   * Returns what a block of walking costs onto a floor, by its speed factor or, where Soul Speed
+   * works on it, the boots.
+   *
+   * @param floor the block walked on
+   * @return the cost of a block of walking, before any diagonal
+   */
+  double walk(MinecraftBlock floor) {
+    if (soulSpeed > 0 && floor.boostsSoulSpeed()) {
+      return MovementCosts.WALK / MovementCosts.soulSpeedFactor(soulSpeed);
+    }
+    return MovementCosts.WALK / floor.speedFactor();
+  }
+}

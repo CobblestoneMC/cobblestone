@@ -152,12 +152,18 @@ final class PaperBlock implements MinecraftBlock {
   }
 
   @Override
+  public boolean boostsSoulSpeed() {
+    return material == Material.SOUL_SAND || material == Material.SOUL_SOIL;
+  }
+
+  @Override
   public double speedFactor() {
     if (ICE.contains(material)) {
       return 1.4;
     }
     return switch (material) {
-      case SOUL_SAND, SOUL_SOIL, HONEY_BLOCK -> 0.4;
+      // Not soul soil: it only looks like soul sand. Soul Speed works on both.
+      case SOUL_SAND, HONEY_BLOCK -> 0.4;
       case COBWEB -> 0.15;
       default -> 1.0;
     };

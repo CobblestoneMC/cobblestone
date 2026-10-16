@@ -135,13 +135,17 @@ final class SpongeBlock implements MinecraftBlock {
   }
 
   @Override
+  public boolean boostsSoulSpeed() {
+    return type.equals(BlockTypes.SOUL_SAND.get()) || type.equals(BlockTypes.SOUL_SOIL.get());
+  }
+
+  @Override
   public double speedFactor() {
     if (ICE.contains(type)) {
       return 1.4;
     }
-    if (type.equals(BlockTypes.SOUL_SAND.get())
-        || type.equals(BlockTypes.SOUL_SOIL.get())
-        || type.equals(BlockTypes.HONEY_BLOCK.get())) {
+    // Not soul soil: it only looks like soul sand. Soul Speed works on both.
+    if (type.equals(BlockTypes.SOUL_SAND.get()) || type.equals(BlockTypes.HONEY_BLOCK.get())) {
       return 0.4;
     }
     if (type.equals(BlockTypes.COBWEB.get())) {

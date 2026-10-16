@@ -56,6 +56,13 @@ public interface CobblestonePlayer {
   boolean isInBoat();
 
   /**
+   * Returns the level of Soul Speed on the boots the player wears, or 0 without it.
+   *
+   * @return the Soul Speed level
+   */
+  int soulSpeedLevel();
+
+  /**
    * Returns the position of the player's most recently ridden horse, if known — used to build the
    * horse mount transition.
    *

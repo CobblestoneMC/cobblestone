@@ -35,6 +35,7 @@ public final class StonebrickPlayer implements CobblestonePlayer {
   private final boolean canGlide;
   private final boolean hasBoat;
   private final boolean inBoat;
+  private final int soulSpeed;
   private final @Nullable Position<MinecraftWorld> lastHorse;
 
   private StonebrickPlayer(Builder builder) {
@@ -44,6 +45,7 @@ public final class StonebrickPlayer implements CobblestonePlayer {
     this.canGlide = builder.canGlide;
     this.hasBoat = builder.hasBoat;
     this.inBoat = builder.inBoat;
+    this.soulSpeed = builder.soulSpeed;
     this.lastHorse = builder.lastHorse;
   }
 
@@ -87,6 +89,11 @@ public final class StonebrickPlayer implements CobblestonePlayer {
   }
 
   @Override
+  public int soulSpeedLevel() {
+    return soulSpeed;
+  }
+
+  @Override
   public Optional<Position<MinecraftWorld>> lastRiddenHorse() {
     return Optional.ofNullable(lastHorse);
   }
@@ -110,6 +117,7 @@ public final class StonebrickPlayer implements CobblestonePlayer {
     private boolean canGlide;
     private boolean hasBoat;
     private boolean inBoat;
+    private int soulSpeed;
     private @Nullable Position<MinecraftWorld> lastHorse;
 
     private Builder() {}
@@ -178,6 +186,17 @@ public final class StonebrickPlayer implements CobblestonePlayer {
      */
     public Builder inBoat(boolean value) {
       this.inBoat = value;
+      return this;
+    }
+
+    /**
+     * Sets the level of Soul Speed on the player's boots.
+     *
+     * @param level the level, or 0 for none
+     * @return this builder
+     */
+    public Builder soulSpeed(int level) {
+      this.soulSpeed = level;
       return this;
     }
 

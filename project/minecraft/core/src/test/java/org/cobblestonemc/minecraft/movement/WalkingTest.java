@@ -11,10 +11,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.Set;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.Movement;
 import org.cobblestonemc.api.TraversalState;
+import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftKeys;
 import org.cobblestonemc.minecraft.TestBlocks;
 import org.cobblestonemc.minecraft.TestMovements;
@@ -115,6 +117,32 @@ class WalkingTest {
         TestMovements.from(walker, soul, new Cell(0, 1, 0)).to(new Cell(1, 1, 0));
     assertEquals(MinecraftStepType.WALK, slow.payload().stepType());
     assertEquals(MovementCosts.WALK / 0.4, slow.cost(), 1e-9);
+  }
+
+  /** Soul Speed walks soul sand and soul soil faster than ground, and does nothing elsewhere. */
+  @Test
+  void soulSpeedBootsSpeedUpSoulBlocksOnly() {
+    MinecraftMovementBehavior boots =
+        MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, TestPlayer.soulSpeed(3), Set.of());
+    double fast = MovementCosts.WALK / MovementCosts.soulSpeedFactor(3);
+    for (MinecraftBlock floor : List.of(TestBlocks.soulSand(), TestBlocks.soulSoil())) {
+      TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, floor).build();
+      assertEquals(
+          fast,
+          TestMovements.from(boots, world, new Cell(0, 1, 0)).to(new Cell(1, 1, 0)).cost(),
+          1e-9);
+    }
+    TestWorld soil = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.soulSoil()).build();
+    assertEquals(
+        MovementCosts.WALK,
+        TestMovements.from(walker, soil, new Cell(0, 1, 0)).to(new Cell(1, 1, 0)).cost(),
+        1e-9,
+        "soul soil does not drag a walker without the boots");
+    TestWorld ground = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
+    assertEquals(
+        MovementCosts.WALK,
+        TestMovements.from(boots, ground, new Cell(0, 1, 0)).to(new Cell(1, 1, 0)).cost(),
+        1e-9);
   }
 
   @Test

@@ -36,6 +36,10 @@ public final class TestBlocks {
 
   /** A full solid block with a given break time and top-surface speed factor. */
   static MinecraftBlock solid(double breakTime, double speedFactor) {
+    return solid(breakTime, speedFactor, false);
+  }
+
+  private static MinecraftBlock solid(double breakTime, double speedFactor, boolean soulSpeed) {
     return new MinecraftBlock() {
       @Override
       public boolean isPassable() {
@@ -56,6 +60,11 @@ public final class TestBlocks {
       public double speedFactor() {
         return speedFactor;
       }
+
+      @Override
+      public boolean boostsSoulSpeed() {
+        return soulSpeed;
+      }
     };
   }
 
@@ -68,7 +77,11 @@ public final class TestBlocks {
   }
 
   public static MinecraftBlock soulSand() {
-    return solid(1.0, 0.4);
+    return solid(1.0, 0.4, true);
+  }
+
+  public static MinecraftBlock soulSoil() {
+    return solid(1.0, 1.0, true);
   }
 
   public static MinecraftBlock slab() {

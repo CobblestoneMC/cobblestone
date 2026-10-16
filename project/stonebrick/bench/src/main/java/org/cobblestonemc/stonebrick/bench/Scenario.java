@@ -153,11 +153,16 @@ public record Scenario(
    * independently, and every scenario is run under every loadout.
    */
   public record AgentSpec(
-      boolean canFly, boolean canGlide, boolean hasBoat, boolean inBoat, Set<String> permissions) {
+      boolean canFly,
+      boolean canGlide,
+      boolean hasBoat,
+      boolean inBoat,
+      int soulSpeed,
+      Set<String> permissions) {
 
     /** Returns a plain survival player with no special capabilities. */
     public static AgentSpec plain() {
-      return new AgentSpec(false, false, false, false, Set.of());
+      return new AgentSpec(false, false, false, false, 0, Set.of());
     }
   }
 

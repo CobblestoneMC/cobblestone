@@ -44,6 +44,18 @@ final class MovementCosts {
   /** Multiplier applied to distance for a diagonal move. */
   static final double DIAGONAL = Math.sqrt(2.0);
 
+  /**
+   * How much faster Soul Speed boots of a level walk on soul sand and soul soil: the enchantment
+   * adds {@code 0.03 * (1 + 0.35 * level)} to a base movement speed of 0.1, and lifts soul sand's
+   * drag. Mirrored by {@code RegionCost}.
+   *
+   * @param level the Soul Speed level, at least 1
+   * @return the factor walking speed is multiplied by
+   */
+  static double soulSpeedFactor(int level) {
+    return 1 + 0.3 * (1 + 0.35 * level);
+  }
+
   /** Blocks you can fall without taking damage. */
   static final int SAFE_FALL_BLOCKS = 3;
 
