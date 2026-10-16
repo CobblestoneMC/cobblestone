@@ -210,10 +210,10 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
         continue; // not a labeled trail
       }
       Component text =
-          Component.text("↑ ")
-              .color(CobblestoneColors.SECONDARY)
+          Component.text("✦ ")
+              .color(CobblestoneColors.PRIMARY)
               .append(Component.text(labels.get(i)).color(NamedTextColor.WHITE))
-              .append(Component.text(" ↑").color(CobblestoneColors.SECONDARY));
+              .append(Component.text(" ✦").color(CobblestoneColors.PRIMARY));
       Shown<E, A, L> current = shown.get(navigator);
       if (current != null) {
         if (!text.equals(current.text())) {
