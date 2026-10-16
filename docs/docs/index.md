@@ -53,7 +53,7 @@ Cobblestone does not teleport players itself. Integrations can register teleport
 EssentialsX `/home` or Towny `/town spawn`, as route steps that the player is prompted to run.
 
 ```
-/stone location set home        # save the current position
+/loc set home                   # save the current position
 /nav home                       # navigate back to it
 ```
 

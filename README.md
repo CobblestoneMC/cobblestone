@@ -28,7 +28,7 @@
 3. Try it:
 
 ```
-/stone location set home     # save the current position
+/loc set home                # save the current position
 /nav home                    # navigate back to it
 ```
 
@@ -67,10 +67,10 @@ Integrations are distributed as separate plugins.
 /nav town riverwood home        # Towny town
 /nav npc Blacksmith             # Citizens NPC
 
-/stone location set home        # save the current position
-/stone location set spawn -global
-/stone location unset home
-/stone location list
+/loc set home                   # save the current position
+/loc set spawn -global
+/loc unset home
+/loc list
 
 /stone trips                    # list active trips
 /stone cancel all               # cancel all trips

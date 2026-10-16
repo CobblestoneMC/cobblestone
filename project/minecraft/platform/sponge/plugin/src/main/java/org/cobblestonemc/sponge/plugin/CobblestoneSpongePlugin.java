@@ -292,22 +292,9 @@ public final class CobblestoneSpongePlugin {
     if (tripService == null) {
       return; // the data store failed to open; navigation is disabled
     }
-    event.register(
-        container,
-        CobblestoneCommand.build(
-            config,
-            keys,
-            messages,
-            cobblestoneLogger,
-            dataStore.locations(),
-            dataStore.portalTransitions(),
-            tripManager,
-            tripHud,
-            searchRegistry),
-        "cobblestone",
-        "stone");
-    event.register(
-        container,
+    // /navigate and /location are also /cobblestone subcommands; each command is built once and
+    // shared, so both spellings behave alike.
+    Command.Parameterized navigate =
         NavigateCommand.build(
             navigationService,
             tripService,
@@ -316,9 +303,25 @@ public final class CobblestoneSpongePlugin {
             searchGate,
             searchSettings,
             cobblestoneLogger,
-            messages),
-        "navigate",
-        "nav");
+            messages);
+    Command.Parameterized location = CobblestoneCommand.location(messages, dataStore.locations());
+    event.register(
+        container,
+        CobblestoneCommand.build(
+            config,
+            keys,
+            messages,
+            cobblestoneLogger,
+            dataStore.portalTransitions(),
+            tripManager,
+            tripHud,
+            searchRegistry,
+            navigate,
+            location),
+        "cobblestone",
+        "stone");
+    event.register(container, navigate, "navigate", "nav");
+    event.register(container, location, "location", "loc");
   }
 
   /** Loads a joining player's state. */
