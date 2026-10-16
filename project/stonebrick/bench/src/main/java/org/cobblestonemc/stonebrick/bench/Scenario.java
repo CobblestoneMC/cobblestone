@@ -13,14 +13,18 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.stonebrick.platform.IoMode;
 import org.cobblestonemc.stonebrick.platform.IoProfile;
+import org.jetbrains.annotations.Nullable;
 import org.yaml.snakeyaml.Yaml;
 
 /**
@@ -58,7 +62,7 @@ public record Scenario(
     Cell origin,
     Cell destination,
     int destinationRadius,
-    Cell @org.jetbrains.annotations.Nullable [] destinationBox,
+    Cell @Nullable [] destinationBox,
     SearchLimits settings,
     IoProfile io,
     MissingCapturePolicy onMissingCapture,
@@ -85,9 +89,9 @@ public record Scenario(
     /** Remaining distance times the recent per-block cost. */
     RUNNING_AVERAGE(SearchSettings.Heuristic.RUNNING_AVERAGE);
 
-    private final SearchSettings.@org.jetbrains.annotations.Nullable Heuristic production;
+    private final SearchSettings.@Nullable Heuristic production;
 
-    Heuristic(SearchSettings.@org.jetbrains.annotations.Nullable Heuristic production) {
+    Heuristic(SearchSettings.@Nullable Heuristic production) {
       this.production = production;
     }
 
@@ -96,7 +100,7 @@ public record Scenario(
      *
      * @return the production heuristic
      */
-    public SearchSettings.@org.jetbrains.annotations.Nullable Heuristic production() {
+    public SearchSettings.@Nullable Heuristic production() {
       return production;
     }
   }
@@ -212,8 +216,7 @@ public record Scenario(
         if (!(entry.getValue() instanceof Map)) {
           throw new IOException(file + ": '" + entry.getKey() + "' is not a scenario");
         }
-        Map<String, Object> body =
-            new java.util.LinkedHashMap<>((Map<String, Object>) entry.getValue());
+        Map<String, Object> body = new LinkedHashMap<>((Map<String, Object>) entry.getValue());
         body.put("id", idOf(world.getKey(), entry.getKey()));
         body.put("world", world.getKey());
         try {
@@ -223,7 +226,7 @@ public record Scenario(
         }
       }
     }
-    scenarios.sort(java.util.Comparator.comparing(Scenario::id));
+    scenarios.sort(Comparator.comparing(Scenario::id));
     return scenarios;
   }
 
@@ -392,7 +395,7 @@ public record Scenario(
         id,
         string(root, "description", ""),
         new LinkedHashSet<>(stringList(root, "tags")),
-        Tier.valueOf(string(root, "tier", "CI").toUpperCase(java.util.Locale.ROOT)),
+        Tier.valueOf(string(root, "tier", "CI").toUpperCase(Locale.ROOT)),
         require(root, "capture", file),
         // Top level first: the world belongs to the scenario, not to one of its endpoints. The
         // per-position fallbacks are for files written before the format collapsed into one.
@@ -411,13 +414,13 @@ public record Scenario(
                 number(limits, "maxWallClockMillis", SearchSettings.DEFAULT_MAX_WALL_CLOCK_MILLIS)),
         profile,
         MissingCapturePolicy.valueOf(
-            string(root, "onMissingCapture", "ERROR").toUpperCase(java.util.Locale.ROOT)),
+            string(root, "onMissingCapture", "ERROR").toUpperCase(Locale.ROOT)),
         string(root, "expect", "success"),
         ungenerated(root, file),
         Heuristic.valueOf(
             // Whatever production ships, so the gate guards the search players actually get.
             string(root, "heuristic", SearchSettings.DEFAULT_HEURISTIC.name())
-                .toUpperCase(java.util.Locale.ROOT)
+                .toUpperCase(Locale.ROOT)
                 .replace('-', '_')));
   }
 
@@ -429,8 +432,8 @@ public record Scenario(
    * destinations are, and what lets a route arrive by whichever side is cheapest.
    */
   @SuppressWarnings("unchecked")
-  private static Cell @org.jetbrains.annotations.Nullable [] box(
-      Map<String, Object> destination, Path file) throws IOException {
+  private static Cell @Nullable [] box(Map<String, Object> destination, Path file)
+      throws IOException {
     Object raw = destination.get("box");
     if (raw == null) {
       return null;
@@ -460,7 +463,7 @@ public record Scenario(
     if (!(value instanceof List<?> list)) {
       return Set.of();
     }
-    Set<Long> chunks = new java.util.LinkedHashSet<>();
+    Set<Long> chunks = new LinkedHashSet<>();
     for (Object item : list) {
       String text = String.valueOf(item).trim();
       String[] parts = text.split(",");

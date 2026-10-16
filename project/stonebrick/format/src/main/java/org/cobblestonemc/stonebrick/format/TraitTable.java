@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -161,7 +163,7 @@ public final class TraitTable {
           .append('\n');
     }
     byte[] encoded = text.toString().getBytes(StandardCharsets.UTF_8);
-    if (Files.exists(path) && java.util.Arrays.equals(Files.readAllBytes(path), encoded)) {
+    if (Files.exists(path) && Arrays.equals(Files.readAllBytes(path), encoded)) {
       return false;
     }
     Path parent = path.getParent();
@@ -193,7 +195,7 @@ public final class TraitTable {
               + " so it is refused rather than used. Regenerate it with:"
               + "  ./gradlew captureCorpus -PacceptMinecraftEula=true");
     }
-    Map<String, BlockTraits> traits = new java.util.HashMap<>();
+    Map<String, BlockTraits> traits = new HashMap<>();
     for (int i = 1; i < lines.size(); i++) {
       String line = lines.get(i);
       if (line.isEmpty() || line.charAt(0) == '#') {
@@ -234,7 +236,7 @@ public final class TraitTable {
   /** Accumulates traits, keeping the first description of any state. */
   public static final class Builder {
 
-    private final Map<String, BlockTraits> traits = new java.util.HashMap<>();
+    private final Map<String, BlockTraits> traits = new HashMap<>();
 
     private Builder() {}
 

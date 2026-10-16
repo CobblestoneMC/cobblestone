@@ -7,6 +7,8 @@
 
 package org.cobblestonemc.paper;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import org.cobblestonemc.CobblestoneLogger;
@@ -164,12 +166,12 @@ final class NMSSupport {
   private static boolean hasMember(Class<?> type, String name) {
     try {
       for (Class<?> current = type; current != null; current = current.getSuperclass()) {
-        for (java.lang.reflect.Method method : current.getDeclaredMethods()) {
+        for (Method method : current.getDeclaredMethods()) {
           if (method.getName().equals(name)) {
             return true;
           }
         }
-        for (java.lang.reflect.Field field : current.getDeclaredFields()) {
+        for (Field field : current.getDeclaredFields()) {
           if (field.getName().equals(name)) {
             return true;
           }

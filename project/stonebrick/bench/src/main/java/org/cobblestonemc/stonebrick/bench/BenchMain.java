@@ -8,13 +8,19 @@
 package org.cobblestonemc.stonebrick.bench;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.cobblestonemc.Cell;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.SearchObserver;
+import org.cobblestonemc.stonebrick.format.CaptureDirectory;
+import org.cobblestonemc.stonebrick.format.CorpusLayout;
+import org.cobblestonemc.stonebrick.platform.IoProfile;
 
 /**
  * The benchmark command line.
@@ -91,14 +97,14 @@ public final class BenchMain {
             if (!loadout.appliesTo(scenario)) {
               continue;
             }
-            List<org.cobblestonemc.Cell> cells = new ArrayList<>();
+            List<Cell> cells = new ArrayList<>();
             RunResult result =
                 runner.run(
                     applyOverrides(scenario, options),
                     loadout,
                     new SearchObserver() {
                       @Override
-                      public void solved(List<org.cobblestonemc.Cell> path) {
+                      public void solved(List<Cell> path) {
                         cells.addAll(path);
                       }
                     });
@@ -109,7 +115,7 @@ public final class BenchMain {
                 result.outcome(),
                 result.pathCost(),
                 cells.size());
-            for (org.cobblestonemc.Cell cell : cells) {
+            for (Cell cell : cells) {
               System.out.printf(Locale.ROOT, "  %d %d %d%n", cell.x(), cell.y(), cell.z());
             }
           }
@@ -139,8 +145,7 @@ public final class BenchMain {
    */
   private static void requireCaptured(Path corpusRoot, Scenario scenario, NeededChunks capsule)
       throws IOException {
-    org.cobblestonemc.stonebrick.format.CaptureDirectory capture =
-        org.cobblestonemc.stonebrick.format.CorpusLayout.at(corpusRoot).capture(scenario.capture());
+    CaptureDirectory capture = CorpusLayout.at(corpusRoot).capture(scenario.capture());
     int minX = (Math.min(capsule.from().x(), capsule.to().x()) >> 4) - capsule.radiusChunks();
     int maxX = (Math.max(capsule.from().x(), capsule.to().x()) >> 4) + capsule.radiusChunks();
     int minZ = (Math.min(capsule.from().z(), capsule.to().z()) >> 4) - capsule.radiusChunks();
@@ -148,8 +153,7 @@ public final class BenchMain {
     int missing = 0;
     for (int x = minX; x <= maxX; x++) {
       for (int z = minZ; z <= maxZ; z++) {
-        if (capsule.covers(x, z)
-            && !java.nio.file.Files.exists(capture.column(capsule.world(), x, z))) {
+        if (capsule.covers(x, z) && !Files.exists(capture.column(capsule.world(), x, z))) {
           missing++;
         }
       }
@@ -206,7 +210,7 @@ public final class BenchMain {
       throws IOException {
     ScenarioRunner runner = new ScenarioRunner(options.corpusRoot(), new QuietLogger());
     Path manifest = options.corpusRoot().resolve(NeededChunks.FILE_NAME);
-    Map<String, NeededChunks> needed = new java.util.LinkedHashMap<>(NeededChunks.read(manifest));
+    Map<String, NeededChunks> needed = new LinkedHashMap<>(NeededChunks.read(manifest));
     boolean changed = false;
     boolean missing = false;
 
@@ -336,7 +340,7 @@ public final class BenchMain {
       Scenario.Heuristic heuristic,
       double[] weights,
       String agent,
-      org.cobblestonemc.stonebrick.platform.IoProfile io) {
+      IoProfile io) {
 
     static Options parse(String[] args) {
       String command = args.length > 0 && !args[0].startsWith("--") ? args[0] : "run";
@@ -350,7 +354,7 @@ public final class BenchMain {
       Scenario.Heuristic heuristic = null;
       double[] weights = null;
       String agent = null;
-      org.cobblestonemc.stonebrick.platform.IoProfile io = null;
+      IoProfile io = null;
 
       for (int i = 0; i < args.length; i++) {
         switch (args[i]) {
@@ -367,7 +371,7 @@ public final class BenchMain {
           case "--agent", "--loadout" -> agent = args[++i];
           case "--io" -> {
             String name = args[++i];
-            io = org.cobblestonemc.stonebrick.platform.IoProfile.byName(name);
+            io = IoProfile.byName(name);
             if (io == null) {
               throw new IllegalArgumentException(
                   "Unknown --io '" + name + "'. Known: zero, nvme, sata, spinning, busy.");

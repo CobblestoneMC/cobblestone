@@ -9,7 +9,9 @@ package org.cobblestonemc.stonebrick.bench;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
@@ -35,6 +37,7 @@ import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
+import org.cobblestonemc.stonebrick.format.CaptureDirectory;
 import org.cobblestonemc.stonebrick.format.CorpusLayout;
 import org.cobblestonemc.stonebrick.platform.Capture;
 import org.cobblestonemc.stonebrick.platform.DeterministicScheduler;
@@ -261,20 +264,18 @@ public final class ScenarioRunner {
    */
   private static Map<String, String> configurationOf(Scenario scenario, Path captureRoot)
       throws IOException {
-    Map<String, String> configuration = new java.util.LinkedHashMap<>();
+    Map<String, String> configuration = new LinkedHashMap<>();
     configuration.put("heuristic", scenario.heuristic().name());
     configuration.put(
         "heuristicWeight",
-        String.format(java.util.Locale.ROOT, "%.2f", scenario.settings().heuristicWeight()));
+        String.format(Locale.ROOT, "%.2f", scenario.settings().heuristicWeight()));
     configuration.put("maxCellsVisited", String.valueOf(scenario.settings().maxCellsVisited()));
     configuration.put("io", scenario.io().toString());
     configuration.put(
         "capture",
         scenario.capture()
             + "@"
-            + org.cobblestonemc.stonebrick.format.CaptureDirectory.at(captureRoot)
-                .readMeta()
-                .getOrDefault("capturedAt", "unknown"));
+            + CaptureDirectory.at(captureRoot).readMeta().getOrDefault("capturedAt", "unknown"));
     return configuration;
   }
 
@@ -286,7 +287,7 @@ public final class ScenarioRunner {
       case NavigationResult.Failure<Position<MinecraftWorld>, MinecraftStepPayload> failure ->
           failure.reason() == FailureReason.NO_ROUTE
               ? "no_route"
-              : failure.reason().name().toLowerCase(java.util.Locale.ROOT);
+              : failure.reason().name().toLowerCase(Locale.ROOT);
       case NavigationResult.Error<Position<MinecraftWorld>, MinecraftStepPayload> ignored ->
           "error";
     };

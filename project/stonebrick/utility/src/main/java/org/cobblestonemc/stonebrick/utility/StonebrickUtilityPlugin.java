@@ -8,6 +8,7 @@
 package org.cobblestonemc.stonebrick.utility;
 
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
+import java.io.IOException;
 import java.util.List;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -31,7 +32,7 @@ public final class StonebrickUtilityPlugin extends JavaPlugin {
     ScenarioChecker checker = new ScenarioChecker(this, state);
     try {
       checker.installLoadouts();
-    } catch (java.io.IOException e) {
+    } catch (IOException e) {
       getLogger().warning("Could not write the loadouts for /stonebrick check: " + e.getMessage());
     }
     UtilityCommand command = new UtilityCommand(this, state, checker);

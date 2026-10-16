@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -46,8 +47,7 @@ class LoadoutTest {
 
     Loadout walker = loadouts.get(0);
     assertFalse(walker.agent().canFly());
-    assertEquals(
-        java.util.Set.of(MinecraftStepType.MINE, MinecraftStepType.BOAT), walker.excludedModes());
+    assertEquals(Set.of(MinecraftStepType.MINE, MinecraftStepType.BOAT), walker.excludedModes());
 
     Loadout flyer = loadouts.get(1);
     assertTrue(flyer.agent().canFly());
@@ -132,8 +132,6 @@ class LoadoutTest {
     assertEquals("overworld/deep-cave", scenario.id());
     assertEquals(
         "overworld/deep-cave@flyer",
-        scenario.runId(
-            new Loadout(
-                "flyer", "", Scenario.AgentSpec.plain(), java.util.Set.of(), java.util.Set.of())));
+        scenario.runId(new Loadout("flyer", "", Scenario.AgentSpec.plain(), Set.of(), Set.of())));
   }
 }

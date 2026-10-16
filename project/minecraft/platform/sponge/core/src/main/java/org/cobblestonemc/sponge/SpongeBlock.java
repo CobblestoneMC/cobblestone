@@ -12,7 +12,9 @@ import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.spongepowered.api.block.BlockState;
 import org.spongepowered.api.block.BlockType;
 import org.spongepowered.api.block.BlockTypes;
+import org.spongepowered.api.data.Key;
 import org.spongepowered.api.data.Keys;
+import org.spongepowered.api.data.value.Value;
 import org.spongepowered.api.tag.BlockTypeTags;
 
 /**
@@ -66,8 +68,7 @@ final class SpongeBlock implements MinecraftBlock {
     return state;
   }
 
-  private boolean flag(
-      org.spongepowered.api.data.Key<org.spongepowered.api.data.value.Value<Boolean>> key) {
+  private boolean flag(Key<Value<Boolean>> key) {
     return state.get(key).orElse(false);
   }
 

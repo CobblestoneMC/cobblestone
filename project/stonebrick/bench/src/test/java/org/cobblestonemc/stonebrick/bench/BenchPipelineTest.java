@@ -17,8 +17,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.SearchObserver;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -149,7 +151,7 @@ class BenchPipelineTest {
             real.realMillis(),
             real.peakHeapBytes(),
             null,
-            java.util.Set.of(),
+            Set.of(),
             real.configuration(),
             real.closestBlocks());
 
@@ -217,7 +219,7 @@ class BenchPipelineTest {
             real.realMillis() * 50 + 1000,
             real.peakHeapBytes() * 3,
             null,
-            java.util.Set.of(),
+            Set.of(),
             real.configuration(),
             real.closestBlocks());
 
@@ -245,7 +247,7 @@ class BenchPipelineTest {
     // A degenerate run must never become a baseline, or the bad world is what we compare to
     // forever.
     assertTrue(
-        org.junit.jupiter.api.Assertions.assertThrows(
+        Assertions.assertThrows(
                 IOException.class, () -> Baselines.accept(dir.resolve("baselines"), result, "sha"))
             .getMessage()
             .contains("outside its capture"));

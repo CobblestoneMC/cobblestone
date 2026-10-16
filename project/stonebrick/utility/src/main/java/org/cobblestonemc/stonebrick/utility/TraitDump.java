@@ -18,6 +18,7 @@ import org.cobblestonemc.stonebrick.format.BlockPalette;
 import org.cobblestonemc.stonebrick.format.CaptureDirectory;
 import org.cobblestonemc.stonebrick.format.ChunkColumn;
 import org.cobblestonemc.stonebrick.format.ChunkColumnCodec;
+import org.cobblestonemc.stonebrick.format.Sbc;
 import org.cobblestonemc.stonebrick.format.TraitTable;
 
 /**
@@ -47,9 +48,7 @@ final class TraitDump {
    */
   static int writeAll(CaptureDirectory capture) throws IOException {
     TraitTable.Builder traits = TraitTable.builder();
-    traits.add(
-        org.cobblestonemc.stonebrick.format.Sbc.AIR,
-        TraitCapture.of(Material.AIR.createBlockData()));
+    traits.add(Sbc.AIR, TraitCapture.of(Material.AIR.createBlockData()));
 
     for (String world : capture.worlds()) {
       for (Path column : capture.listColumns(world)) {

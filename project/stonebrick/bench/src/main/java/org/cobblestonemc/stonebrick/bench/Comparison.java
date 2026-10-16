@@ -103,7 +103,7 @@ public final class Comparison {
           result.scenario(),
           Status.NEW,
           String.format(
-              java.util.Locale.ROOT,
+              Locale.ROOT,
               "%s, %,d expanded, cost %.2f; no baseline yet",
               result.outcome(),
               result.nodesExpanded(),

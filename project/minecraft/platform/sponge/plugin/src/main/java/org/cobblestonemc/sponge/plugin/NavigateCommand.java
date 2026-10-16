@@ -55,6 +55,7 @@ import org.cobblestonemc.sponge.SpongeNavigationServiceImpl;
 import org.spongepowered.api.command.Command;
 import org.spongepowered.api.command.CommandCompletion;
 import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.parameter.CommandContext;
 import org.spongepowered.api.command.parameter.Parameter;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.util.Tristate;
@@ -136,8 +137,7 @@ final class NavigateCommand {
   }
 
   /** The words the player has typed, in order, gathered from the per-word parameters. */
-  private static List<String> typedWords(
-      org.spongepowered.api.command.parameter.CommandContext context) {
+  private static List<String> typedWords(CommandContext context) {
     List<String> words = new ArrayList<>();
     for (Parameter.Key<String> key : WORD_KEYS) {
       context.one(key).ifPresent(words::add);
@@ -494,9 +494,7 @@ final class NavigateCommand {
    * before it are readable from the context.
    */
   private static List<CommandCompletion> complete(
-      org.spongepowered.api.command.parameter.CommandContext context,
-      String input,
-      SpongeIntegrationRegistry integrations) {
+      CommandContext context, String input, SpongeIntegrationRegistry integrations) {
     Optional<ServerPlayer> player = context.cause().first(ServerPlayer.class);
     if (player.isEmpty()) {
       return List.of();

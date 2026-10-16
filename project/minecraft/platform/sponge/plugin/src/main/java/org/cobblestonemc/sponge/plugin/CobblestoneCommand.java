@@ -7,12 +7,14 @@
 
 package org.cobblestonemc.sponge.plugin;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
 import net.kyori.adventure.audience.Audience;
+import net.kyori.adventure.text.Component;
 import org.cobblestonemc.LogLevel;
 import org.cobblestonemc.plugin.Permissions;
 import org.cobblestonemc.plugin.config.ConfigKeys;
@@ -149,8 +151,7 @@ final class CobblestoneCommand {
             .build();
 
     return Command.builder()
-        .shortDescription(
-            net.kyori.adventure.text.Component.text("Cobblestone admin and utilities"))
+        .shortDescription(Component.text("Cobblestone admin and utilities"))
         .addChild(reload, "reload")
         .addChild(loglevel, "loglevel")
         .addChild(cancel, "cancel")
@@ -474,9 +475,8 @@ final class CobblestoneCommand {
       return List.of();
     }
     String prefix = input.toLowerCase(Locale.ROOT);
-    List<CommandCompletion> completions = new java.util.ArrayList<>();
-    List<Location> candidates =
-        new java.util.ArrayList<>(locations.ownedBy(player.get().uniqueId()));
+    List<CommandCompletion> completions = new ArrayList<>();
+    List<Location> candidates = new ArrayList<>(locations.ownedBy(player.get().uniqueId()));
     if (includeGlobal) {
       candidates.addAll(locations.global());
     }
