@@ -21,7 +21,7 @@ import org.cobblestonemc.plugin.navigator.Vec3;
 final class HologramPlacement {
 
   /** How far above the trail (which runs at body height) the name floats, in blocks. */
-  static final double HEIGHT = 0.5;
+  static final double HEIGHT = 1.0;
 
   /** How far above the name its {@code Cancel} line floats, out of the way. */
   static final double CANCEL_RISE = 0.5;

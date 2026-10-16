@@ -21,6 +21,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.ScheduledTaskHandle;
 import org.cobblestonemc.plugin.api.Navigator;
+import org.cobblestonemc.plugin.message.CobblestoneColors;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.navigator.TrailSmoother;
@@ -206,10 +207,13 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
       Navigator<L> navigator = trip.navigator();
       Source<L> source = session.sources.get(navigator);
       if (source == null) {
-        continue; // not a labelled trail
+        continue; // not a labeled trail
       }
-      // White, like the name over a player, between arrows that say it is a way to go.
-      Component text = Component.text("↑ " + labels.get(i) + " ↑", NamedTextColor.WHITE);
+      Component text =
+          Component.text("↑ ")
+              .color(CobblestoneColors.SECONDARY)
+              .append(Component.text(labels.get(i)).color(NamedTextColor.WHITE))
+              .append(Component.text(" ↑").color(CobblestoneColors.SECONDARY));
       Shown<E, A, L> current = shown.get(navigator);
       if (current != null) {
         if (!text.equals(current.text())) {

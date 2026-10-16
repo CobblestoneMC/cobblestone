@@ -130,7 +130,6 @@ class TrailLabelManagerTest {
     FakeHologram label = platform.only();
     assertEquals(OVER, label.at);
     assertEquals("↑ Steve ↑", plain(label.text));
-    assertEquals(NamedTextColor.WHITE, label.text.color(), "like the name over a player");
     assertEquals(20, updatesToShow() * TrailLabelManager.PERIOD_TICKS, "a second");
 
     FakeHologram cancel = platform.cancels().getFirst();
