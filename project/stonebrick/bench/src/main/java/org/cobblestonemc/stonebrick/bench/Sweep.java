@@ -109,14 +109,15 @@ final class Sweep {
             // hours, and one stopped partway through should leave its measurements behind.
             System.out.printf(
                 Locale.ROOT,
-                "point %s %s w=%.2f %s cost=%.3f expanded=%d closest=%.0f%n",
+                "point %s %s w=%.2f %s cost=%.3f expanded=%d closest=%.0f legs=%d%n",
                 point.scenario(),
                 heuristic,
                 weight,
                 point.outcome(),
                 point.cost(),
                 point.nodes(),
-                result.closestBlocks());
+                result.closestBlocks(),
+                runner.lastLegs());
           }
         }
       }

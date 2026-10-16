@@ -45,6 +45,8 @@ import org.yaml.snakeyaml.Yaml;
  * @param destinationRadius how far from {@code destination} counts as arrival
  * @param destinationBox an area that counts as arrival instead, as {@code {min, max}} corners, or
  *     {@code null}; {@code destination} then stays the route's anchor, for its capture
+ * @param warps where teleports usable from anywhere in the world land, as Essentials' {@code /warp}
+ *     and {@code /home} are: what makes Tier 1 choose between routes
  * @param settings the search limits
  * @param io what a chunk read costs
  * @param onMissingCapture what to do about reads outside the capture
@@ -63,6 +65,7 @@ public record Scenario(
     Cell destination,
     int destinationRadius,
     Cell @Nullable [] destinationBox,
+    List<Cell> warps,
     SearchLimits settings,
     IoProfile io,
     MissingCapturePolicy onMissingCapture,
@@ -269,6 +272,7 @@ public record Scenario(
             destination,
             destinationRadius,
             destinationBox,
+            warps,
             settings,
             io,
             onMissingCapture,
@@ -295,6 +299,7 @@ public record Scenario(
         destination,
         destinationRadius,
         destinationBox,
+        warps,
         limits,
         io,
         onMissingCapture,
@@ -326,6 +331,7 @@ public record Scenario(
         destination,
         destinationRadius,
         destinationBox,
+        warps,
         tuned,
         io,
         onMissingCapture,
@@ -368,6 +374,7 @@ public record Scenario(
         destination,
         destinationRadius,
         destinationBox,
+        warps,
         settings,
         profile,
         onMissingCapture,
@@ -407,6 +414,7 @@ public record Scenario(
         cell(destination, file),
         integer(destination, "radius", 0),
         box(destination, file),
+        warps(root, file),
         new SearchLimits(
             number(limits, "heuristicWeight", SearchSettings.DEFAULT_HEURISTIC_WEIGHT),
             integer(limits, "maxCellsVisited", SearchSettings.DEFAULT_MAX_CELLS_VISITED),
@@ -447,6 +455,32 @@ public record Scenario(
       new Cell(Math.min(from.x(), to.x()), Math.min(from.y(), to.y()), Math.min(from.z(), to.z())),
       new Cell(Math.max(from.x(), to.x()), Math.max(from.y(), to.y()), Math.max(from.z(), to.z()))
     };
+  }
+
+  /**
+   * Reads the warps, {@code warps: [{x, y, z}, ...]}, in the scenario's world.
+   *
+   * <p>A route with warps is a Tier-1 search: a walk to the goal, or a teleport and a walk from
+   * wherever it lands, and Tier 1 solves legs until it has settled on one. Without them the bench
+   * never re-plans.
+   */
+  @SuppressWarnings("unchecked")
+  private static List<Cell> warps(Map<String, Object> root, Path file) throws IOException {
+    Object raw = root.get("warps");
+    if (raw == null) {
+      return List.of();
+    }
+    if (!(raw instanceof List<?> list)) {
+      throw new IOException(file + ": warps must be a list of {x, y, z}");
+    }
+    List<Cell> warps = new ArrayList<>();
+    for (Object item : list) {
+      if (!(item instanceof Map<?, ?> map)) {
+        throw new IOException(file + ": a warp must be {x, y, z}");
+      }
+      warps.add(cell((Map<String, Object>) map, file));
+    }
+    return List.copyOf(warps);
   }
 
   /**

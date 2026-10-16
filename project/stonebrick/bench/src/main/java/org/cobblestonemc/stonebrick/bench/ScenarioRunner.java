@@ -9,6 +9,7 @@ package org.cobblestonemc.stonebrick.bench;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -24,10 +25,13 @@ import org.cobblestonemc.Heuristics;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.SingleDestination;
+import org.cobblestonemc.SolveHeuristic;
+import org.cobblestonemc.Transition;
 import org.cobblestonemc.api.FailureReason;
 import org.cobblestonemc.api.NavigationResult;
 import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.api.SearchSettings;
+import org.cobblestonemc.api.TraversalState;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
@@ -225,14 +229,92 @@ public final class ScenarioRunner {
             new Position<>(scenario.origin(), world),
             new SingleDestination<>(target),
             behavior,
+            warps(scenario, world),
             List.of(),
-            List.of(),
-            heuristicFor(
-                scenario,
-                behavior,
-                new MinecraftSearchSettings(settings, excluded, Set.of(), Set.of())),
+            legs.counting(
+                heuristicFor(
+                    scenario,
+                    behavior,
+                    new MinecraftSearchSettings(settings, excluded, Set.of(), Set.of()))),
             settings,
             observer);
+  }
+
+  /** Teleports usable from anywhere in the world, as Essentials offers them. */
+  private static List<Transition<MinecraftStepPayload, MinecraftWorld>> warps(
+      Scenario scenario, MinecraftWorld world) {
+    List<Transition<MinecraftStepPayload, MinecraftWorld>> warps = new ArrayList<>();
+    for (Cell warp : scenario.warps()) {
+      warps.add(
+          new Warp(
+              new DomainRegion<>() {
+                @Override
+                public MinecraftWorld domain() {
+                  return world;
+                }
+
+                @Override
+                public boolean contains(Cell cell) {
+                  return true;
+                }
+
+                @Override
+                public Cell nearestBoundaryCell(Cell from) {
+                  return from;
+                }
+              },
+              new Position<>(warp, world)));
+    }
+    return warps;
+  }
+
+  /** A command teleport: {@code TELEPORT_COST_SECONDS} in the Essentials integration. */
+  private record Warp(DomainRegion<MinecraftWorld> origin, Position<MinecraftWorld> destination)
+      implements Transition<MinecraftStepPayload, MinecraftWorld> {
+
+    @Override
+    public double cost() {
+      return 3.0;
+    }
+
+    @Override
+    public MinecraftStepPayload payload() {
+      return MinecraftStepPayload.command("warp");
+    }
+  }
+
+  /** Counts the legs Tier 2 solved in the last run: one new solve of the heuristic each. */
+  private final LegCounter legs = new LegCounter();
+
+  /**
+   * Returns how many legs the last run's Tier 2 solved, which is more than one only when Tier 1 had
+   * routes to choose between.
+   *
+   * @return the legs solved
+   */
+  public int lastLegs() {
+    return legs.count;
+  }
+
+  /** Wraps a heuristic to count its solves. */
+  private static final class LegCounter {
+    private int count;
+
+    HeuristicStrategy counting(HeuristicStrategy delegate) {
+      count = 0;
+      return new HeuristicStrategy() {
+        @Override
+        public double estimate(Cell from, DomainRegion<?> target, TraversalState state) {
+          return delegate.estimate(from, target, state);
+        }
+
+        @Override
+        public SolveHeuristic newSolve(int windowWidth, DomainRegion<?> target) {
+          count++;
+          return delegate.newSolve(windowWidth, target);
+        }
+      };
+    }
   }
 
   /**
