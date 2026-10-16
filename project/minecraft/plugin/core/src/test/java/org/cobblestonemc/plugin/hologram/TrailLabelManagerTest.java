@@ -64,6 +64,7 @@ class TrailLabelManagerTest {
   private static final Vec3 FEET = new Vec3(0.5, 0.0, 0.5);
   private static final Vec3 AHEAD = new Vec3(3.0, 0.9, 0.5);
   private static final Vec3 OVER = AHEAD.plus(new Vec3(0, HologramPlacement.HEIGHT, 0));
+  private static final Vec3 EYE = FEET.plus(new Vec3(0, 1.62, 0));
 
   private final TestScheduler scheduler = new TestScheduler();
   private final FakePlatform platform = new FakePlatform();
@@ -128,9 +129,12 @@ class TrailLabelManagerTest {
 
     FakeHologram label = platform.only();
     assertEquals(OVER, label.at);
-    assertEquals("Steve", plain(label.text));
-    assertEquals(NamedTextColor.WHITE, label.text.color(), "like the name over a player");
+    assertEquals("↑ Steve ↑", plain(label.text));
     assertEquals(20, updatesToShow() * TrailLabelManager.PERIOD_TICKS, "a second");
+
+    FakeHologram cancel = platform.cancels().getFirst();
+    assertEquals(OVER.plus(new Vec3(0, HologramPlacement.CANCEL_RISE, 0)), cancel.at, "above");
+    assertEquals(NamedTextColor.RED, cancel.text.color());
   }
 
   @Test
@@ -141,15 +145,16 @@ class TrailLabelManagerTest {
     platform.feet = FEET.plus(new Vec3(1, 0, 0));
     scheduler.tick();
     assertTrue(first.removed);
+    assertTrue(platform.cancels().getFirst().removed);
 
     platform.feet = FEET.plus(new Vec3(2, 0, 0));
     for (int i = 0; i < updatesToShow(); i++) {
       scheduler.tick();
     }
-    assertEquals(1, platform.spawned.size(), "the wait starts over in each new block");
+    assertEquals(1, platform.names().size(), "the wait starts over in each new block");
     scheduler.tick();
-    assertEquals(2, platform.spawned.size());
-    assertFalse(platform.spawned.getLast().removed);
+    assertEquals(2, platform.names().size());
+    assertFalse(platform.names().getLast().removed);
   }
 
   @Test
@@ -185,6 +190,7 @@ class TrailLabelManagerTest {
     navigator.ahead = Optional.of(AHEAD);
     scheduler.tick();
     assertEquals(OVER, platform.only().at);
+    assertEquals(1, platform.cancels().size());
   }
 
   @Test
@@ -212,28 +218,28 @@ class TrailLabelManagerTest {
     start(address("essentials", "player", "Steve"), AHEAD);
     start(address("towny", "town", "Steve"), AHEAD);
 
-    assertEquals(2, platform.spawned.size());
-    FakeHologram first = platform.spawned.get(0);
-    FakeHologram second = platform.spawned.get(1);
-    assertEquals("player Steve", plain(first.text));
-    assertEquals("town Steve", plain(second.text));
+    assertEquals(2, platform.names().size());
+    FakeHologram first = platform.names().get(0);
+    FakeHologram second = platform.names().get(1);
+    assertEquals("↑ player Steve ↑", plain(first.text));
+    assertEquals("↑ town Steve ↑", plain(second.text));
     assertEquals(OVER, first.at);
-    assertEquals(OVER.plus(new Vec3(0, HologramPlacement.LINE_SPACING, 0)), second.at);
+    assertEquals(OVER.plus(new Vec3(0, HologramPlacement.LABEL_SPACING, 0)), second.at);
   }
 
   @Test
   void aLabelIsRenamedWhenAnotherTripStartsOrEnds() {
     start(address("essentials", "player", "Steve"), AHEAD);
     FakeHologram player = platform.only();
-    assertEquals("Steve", plain(player.text));
+    assertEquals("↑ Steve ↑", plain(player.text));
 
     Trip<Object, TestTripAgent, Vec3> town =
         start(address("towny", "town", "Steve"), new Vec3(0.5, 0.9, 3.0));
-    assertEquals("player Steve", plain(player.text));
+    assertEquals("↑ player Steve ↑", plain(player.text));
 
     trips.stop(town);
     scheduler.tick();
-    assertEquals("Steve", plain(player.text));
+    assertEquals("↑ Steve ↑", plain(player.text));
     assertFalse(player.removed);
   }
 
@@ -245,23 +251,59 @@ class TrailLabelManagerTest {
   }
 
   @Test
-  void hittingTheLabelCancelsItsTrip() {
+  void hittingCancelCancelsItsTrip() {
     start(address("essentials", "player", "Steve"), AHEAD);
     Trip<Object, TestTripAgent, Vec3> town = start(address("towny", "town", "Steve"), AHEAD);
 
-    platform.spawned.get(1).onHit.run();
+    platform.lookAt(platform.cancels().get(1).at);
+    assertTrue(labels.swing(player.uuid()), "the click does nothing else");
 
     assertEquals(1, trips.trips(player.uuid()).size());
     assertFalse(trips.trips(player.uuid()).contains(town));
-    assertTrue(platform.spawned.get(1).removed);
-    assertFalse(platform.spawned.get(0).removed);
+    assertTrue(platform.names().get(1).removed);
+    assertTrue(platform.cancels().get(1).removed);
+    assertFalse(platform.names().get(0).removed);
     assertEquals(
         List.of("Canceled your trip to town Steve."),
         sent.stream().map(TrailLabelManagerTest::plain).toList(),
         "named as the label was");
 
-    platform.spawned.get(1).onHit.run(); // a second hit before it is gone does nothing
+    assertFalse(labels.swing(player.uuid()), "nothing there any more");
     assertEquals(1, sent.size());
+  }
+
+  @Test
+  void hittingFromFarAwayCounts() {
+    Vec3 far = new Vec3(20.0, 0.9, 0.5); // well past the 3 blocks a survival player can reach
+    start(address("player", "Steve"), far);
+    platform.lookAt(platform.cancels().getFirst().at);
+    assertTrue(labels.swing(player.uuid()));
+    assertTrue(trips.trips(player.uuid()).isEmpty());
+  }
+
+  @Test
+  void hittingTheNameDoesNothing() {
+    start(address("player", "Steve"), AHEAD);
+    platform.lookAt(platform.only().at);
+    assertFalse(labels.swing(player.uuid()));
+    assertEquals(1, trips.trips(player.uuid()).size());
+    assertTrue(sent.isEmpty());
+  }
+
+  @Test
+  void swingingElsewhereDoesNothing() {
+    start(address("player", "Steve"), AHEAD);
+    platform.look = new Vec3(-1, 0, 0);
+    assertFalse(labels.swing(player.uuid()));
+    assertEquals(1, trips.trips(player.uuid()).size());
+  }
+
+  @Test
+  void swingingBeforeTheLabelShowsDoesNothing() {
+    start(address("player", "Steve"), new AheadNavigator(AHEAD));
+    platform.lookAt(OVER.plus(new Vec3(0, HologramPlacement.CANCEL_RISE, 0)));
+    assertFalse(labels.swing(player.uuid()));
+    assertEquals(1, trips.trips(player.uuid()).size());
   }
 
   @Test
@@ -308,11 +350,27 @@ class TrailLabelManagerTest {
     final List<FakeHologram> spawned = new ArrayList<>();
     TrailSmoother.BlockProbe probe = (x, y, z) -> y < 0 ? TrailBlock.SOLID : TrailBlock.OPEN;
     Vec3 feet = FEET;
+    Vec3 look = new Vec3(1, 0, 0);
     boolean online = true;
 
+    /** The one label's name line. */
     FakeHologram only() {
-      assertEquals(1, spawned.size());
-      return spawned.getFirst();
+      assertEquals(1, names().size());
+      return names().getFirst();
+    }
+
+    /** Every name line placed, in order. */
+    List<FakeHologram> names() {
+      return spawned.stream().filter(label -> !plain(label.text).equals("Cancel")).toList();
+    }
+
+    /** Every {@code Cancel} line placed, in order. */
+    List<FakeHologram> cancels() {
+      return spawned.stream().filter(label -> plain(label.text).equals("Cancel")).toList();
+    }
+
+    void lookAt(Vec3 target) {
+      look = target.minus(EYE).unit();
     }
 
     @Override
@@ -323,7 +381,7 @@ class TrailLabelManagerTest {
     @Override
     public Optional<PlayerPosition> position(TestTripAgent agent) {
       return online
-          ? Optional.of(new PlayerPosition(feet, feet.plus(new Vec3(0, 1.62, 0))))
+          ? Optional.of(new PlayerPosition(feet, feet.plus(new Vec3(0, 1.62, 0)), look))
           : Optional.empty();
     }
 
@@ -333,8 +391,8 @@ class TrailLabelManagerTest {
     }
 
     @Override
-    public Optional<Hologram> spawn(TestTripAgent agent, Vec3 at, Component text, Runnable onHit) {
-      FakeHologram hologram = new FakeHologram(at, text, onHit);
+    public Optional<Hologram> spawn(TestTripAgent agent, Vec3 at, Component text) {
+      FakeHologram hologram = new FakeHologram(at, text);
       spawned.add(hologram);
       return Optional.of(hologram);
     }
@@ -342,14 +400,12 @@ class TrailLabelManagerTest {
 
   private static final class FakeHologram implements Hologram {
     final Vec3 at;
-    final Runnable onHit;
     Component text;
     boolean removed;
 
-    FakeHologram(Vec3 at, Component text, Runnable onHit) {
+    FakeHologram(Vec3 at, Component text) {
       this.at = at;
       this.text = text;
-      this.onHit = onHit;
     }
 
     @Override

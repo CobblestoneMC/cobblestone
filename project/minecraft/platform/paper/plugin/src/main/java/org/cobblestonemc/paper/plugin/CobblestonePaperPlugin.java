@@ -162,13 +162,13 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     // registered as a service so it is discovered like any third-party navigator.
     this.tripManager =
         new TripManager<>(platformApi.scheduler(), config.get(keys.tripsMaxActivePerPlayer));
-    // Each trail floats its trip's name over itself while the player stands still; hitting it
-    // cancels the trip.
+    // Each trail floats its trip's name over itself while the player stands still; hitting the
+    // Cancel line above it cancels the trip.
     this.holograms = new PaperHolograms(this);
-    getServer().getPluginManager().registerEvents(holograms, this);
     TrailLabelManager<Entity, PaperTripAgent, Location> trailLabels =
         new TrailLabelManager<>(
             tripManager, platformApi.scheduler(), messages, new PaperHologramPlatform(holograms));
+    getServer().getPluginManager().registerEvents(new PaperLabelClickListener(trailLabels), this);
     integrationRegistry.registerNavigator(
         this,
         TrailNavigatorSettings.NAVIGATOR_ID,

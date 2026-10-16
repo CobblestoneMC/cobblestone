@@ -263,9 +263,10 @@ To tell several trails apart, stand still for a second: a few blocks ahead of yo
 each trip appears over its trail (or the guide back to it), named the same way as in the HUD. With
 one trip to a player named Steve it reads `Steve`; add a trip to a town also named Steve and they
 read `player Steve` and `town Steve`. A label only appears where you can see it, and the labels go
-away as soon as you move, so they stay out of your way while you follow the trail. **Hit a label to
-cancel that trip.** On Sponge servers, other players nearby can see your labels too, but only you
-can cancel your trips with them.
+away as soon as you move, so they stay out of your way while you follow the trail. **Hit the red
+`Cancel` above a label to cancel that trip**; it works from any distance you can see it from. On
+Sponge servers, other players nearby can see your labels too, but only you can cancel your trips
+with them.
 
 ## Errors
 

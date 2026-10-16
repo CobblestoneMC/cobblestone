@@ -15,15 +15,22 @@ import org.cobblestonemc.plugin.navigator.Vec3;
 
 /**
  * Where a trip's label floats: over the trail, in a free block the player can see, and clear of the
- * player's other labels.
+ * player's other labels. A label is two lines, its trip's name with {@code Cancel} above it; it is
+ * placed by the center of the name.
  */
 final class HologramPlacement {
 
-  /** How far above the trail (which runs at body height) the label floats, in blocks. */
+  /** How far above the trail (which runs at body height) the name floats, in blocks. */
   static final double HEIGHT = 1.0;
 
-  /** The vertical gap between two labels stacked over the same spot. */
+  /** How far above the name its {@code Cancel} line floats, out of the way. */
+  static final double CANCEL_RISE = 0.5;
+
+  /** The vertical gap between two lines of text. */
   static final double LINE_SPACING = 0.3;
+
+  /** The vertical gap between two labels stacked over the same spot: a name, then a Cancel. */
+  static final double LABEL_SPACING = CANCEL_RISE + LINE_SPACING;
 
   /** Labels closer than this horizontally are stacked. */
   private static final double STACK_RADIUS = 0.75;
@@ -52,7 +59,8 @@ final class HologramPlacement {
   /**
    * Finds where to put a label over {@code trail}: {@link #HEIGHT} above it or, if that block is
    * solid, the nearest free block beside or above, raised over any {@code taken} label it would
-   * overlap. The spot must be in an open block with a clear line of sight from {@code eye}.
+   * overlap. Both of the label's lines must be in open blocks with a clear line of sight from
+   * {@code eye}.
    *
    * @param eye the player's eyes
    * @param trail the point on the trail the label belongs to
@@ -65,17 +73,27 @@ final class HologramPlacement {
     Vec3 over = trail.plus(new Vec3(0, HEIGHT, 0));
     for (int[] offset : NEIGHBORS) {
       Vec3 spot = unstack(over.plus(new Vec3(offset[0], offset[1], offset[2])), taken);
-      if (spot != null && open(spot, probe) && inSight(eye, spot, probe)) {
+      if (spot != null && visible(eye, spot, probe) && visible(eye, cancelAt(spot), probe)) {
         return Optional.of(spot);
       }
     }
     return Optional.empty();
   }
 
+  /**
+   * Where the {@code Cancel} line of the label at {@code at} floats.
+   *
+   * @param at the center of the label's name
+   * @return the center of its {@code Cancel} line
+   */
+  static Vec3 cancelAt(Vec3 at) {
+    return at.plus(new Vec3(0, CANCEL_RISE, 0));
+  }
+
   /** Raises {@code spot} until it overlaps none of {@code taken}; {@code null} if it can't. */
   private static Vec3 unstack(Vec3 spot, List<Vec3> taken) {
     for (int i = 0; i < MAX_STACK; i++) {
-      Vec3 raised = spot.plus(new Vec3(0, i * LINE_SPACING, 0));
+      Vec3 raised = spot.plus(new Vec3(0, i * LABEL_SPACING, 0));
       if (taken.stream().noneMatch(other -> overlaps(raised, other))) {
         return raised;
       }
@@ -87,11 +105,12 @@ final class HologramPlacement {
     double dx = a.x() - b.x();
     double dz = a.z() - b.z();
     return dx * dx + dz * dz < STACK_RADIUS * STACK_RADIUS
-        && Math.abs(a.y() - b.y()) < LINE_SPACING - 1e-6;
+        && Math.abs(a.y() - b.y()) < LABEL_SPACING - 1e-6;
   }
 
-  private static boolean open(Vec3 point, TrailSmoother.BlockProbe probe) {
-    return probe.at(floor(point.x()), floor(point.y()), floor(point.z())) == TrailBlock.OPEN;
+  private static boolean visible(Vec3 eye, Vec3 point, TrailSmoother.BlockProbe probe) {
+    return probe.at(floor(point.x()), floor(point.y()), floor(point.z())) == TrailBlock.OPEN
+        && inSight(eye, point, probe);
   }
 
   /**

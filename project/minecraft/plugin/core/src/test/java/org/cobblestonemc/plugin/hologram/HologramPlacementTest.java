@@ -55,7 +55,7 @@ class HologramPlacementTest {
   @Test
   void stacksOverAnotherLabel() {
     assertEquals(
-        Optional.of(OVER.plus(new Vec3(0, HologramPlacement.LINE_SPACING, 0))),
+        Optional.of(OVER.plus(new Vec3(0, HologramPlacement.LABEL_SPACING, 0))),
         HologramPlacement.place(EYE, TRAIL, List.of(OVER), FLOOR));
   }
 

@@ -5,5 +5,5 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-/** Floating text labels on Sponge, hit to act, built from plain entities. */
+/** Floating text labels on Sponge, built from text display entities. */
 package org.cobblestonemc.sponge.hologram;

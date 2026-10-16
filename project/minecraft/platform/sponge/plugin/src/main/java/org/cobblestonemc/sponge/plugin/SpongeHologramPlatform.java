@@ -64,7 +64,10 @@ final class SpongeHologramPlatform implements HologramPlatform<SpongeTripAgent, 
       return Optional.empty();
     }
     return Optional.of(
-        new PlayerPosition(point(player.position()), point(player.eyePosition().get())));
+        new PlayerPosition(
+            point(player.position()),
+            point(player.eyePosition().get()),
+            look(player.headRotation().get())));
   }
 
   private static Vec3 point(Vector3d vector) {
@@ -77,10 +80,17 @@ final class SpongeHologramPlatform implements HologramPlatform<SpongeTripAgent, 
   }
 
   @Override
-  public Optional<Hologram> spawn(SpongeTripAgent agent, Vec3 at, Component text, Runnable onHit) {
-    ServerPlayer player = agent.player();
+  public Optional<Hologram> spawn(SpongeTripAgent agent, Vec3 at, Component text) {
     return holograms
-        .spawn(player, player.world(), vector(at), text, onHit)
+        .spawn(agent.player().world(), vector(at), text)
         .map(SpongeHologramPlatform::wrap);
+  }
+
+  /** The unit direction a head turned {@code rotation} (pitch, yaw, in degrees) looks in. */
+  private static Vec3 look(Vector3d rotation) {
+    double pitch = Math.toRadians(rotation.x());
+    double yaw = Math.toRadians(rotation.y());
+    return new Vec3(
+        -Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
   }
 }

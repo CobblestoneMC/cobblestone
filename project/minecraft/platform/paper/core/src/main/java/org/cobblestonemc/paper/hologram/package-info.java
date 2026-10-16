@@ -5,5 +5,5 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-/** Floating text labels on Paper, seen by one player and hit to act, built from plain entities. */
+/** Floating text labels on Paper, seen by one player, built from text display entities. */
 package org.cobblestonemc.paper.hologram;

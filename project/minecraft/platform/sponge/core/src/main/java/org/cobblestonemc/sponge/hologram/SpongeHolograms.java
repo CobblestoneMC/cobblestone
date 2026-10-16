@@ -14,121 +14,69 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.spongepowered.api.data.Keys;
-import org.spongepowered.api.data.persistence.DataContainer;
-import org.spongepowered.api.data.persistence.DataQuery;
 import org.spongepowered.api.entity.Entity;
-import org.spongepowered.api.entity.EntityArchetype;
 import org.spongepowered.api.entity.EntityTypes;
-import org.spongepowered.api.entity.living.ArmorStand;
-import org.spongepowered.api.entity.living.player.server.ServerPlayer;
+import org.spongepowered.api.entity.display.BillboardTypes;
+import org.spongepowered.api.entity.display.TextDisplay;
 import org.spongepowered.api.event.Listener;
-import org.spongepowered.api.event.Order;
-import org.spongepowered.api.event.entity.AttackEntityEvent;
-import org.spongepowered.api.event.entity.InteractEntityEvent;
-import org.spongepowered.api.event.filter.cause.First;
 import org.spongepowered.api.event.world.chunk.ChunkEvent;
 import org.spongepowered.api.world.server.ServerWorld;
 import org.spongepowered.math.vector.Vector3d;
 
 /**
- * Floating text labels for one player, which run a callback when that player hits them. Register an
- * instance as a listener so hits are seen and the entities can't be hit or used otherwise.
+ * Floating lines of text. Register an instance as a listener so labels left over from a previous
+ * run are cleaned up.
  *
- * <p>Each label is two entities: an invisible marker armor stand, whose name is the text, and an
- * {@code Interaction} sized to the text, which is what gets hit (a marker armor stand has no
- * hitbox). SpongeAPI can't show an entity to one player only, so <b>every player nearby sees every
- * label</b>; only its own player's hit does anything. Attacks on and right-clicks of either entity
- * are cancelled.
- *
- * <p>SpongeAPI can't keep an entity from being saved either, so both carry the scoreboard tag
- * {@value #TAG} and any that were saved (e.g. by a crash) are removed when their chunk loads.
- *
- * <p>SpongeAPI has no data keys for an Interaction's size, so it is spawned from an archetype with
- * the vanilla {@code width} and {@code height} entity data; changing the text respawns it.
+ * <p>Each line is a {@link TextDisplay}, tagged {@value #TAG}. It turns to face whoever looks at
+ * it, is lit like a name tag whatever the light around it, and is hidden behind blocks like the
+ * world around it. It has no hitbox, so nothing can hit or use it; what a player means to hit is
+ * worked out from where they look. SpongeAPI can't show an entity to one player only, so everyone
+ * nearby sees it.
  */
 public final class SpongeHolograms {
 
   static final String TAG = "cobblestone_label";
 
   /**
-   * How far above an armor stand its name's text is centered. The client draws a name 0.5 above the
-   * entity's height (0 for a marker) downward, one line of 9 pixels at 0.025 blocks each.
+   * How far above a text display its text is centered. The client draws a line upward from the
+   * entity: 9 pixels of text and a pixel of background on either side, at 0.025 blocks each.
    */
-  private static final double NAME_CENTER = 0.5 - 9 * 0.025 / 2;
+  private static final double TEXT_CENTER = (9 + 2) * 0.025 / 2;
 
-  private static final float HITBOX_HEIGHT = 0.28f;
-  private static final double BLOCKS_PER_CHARACTER = 0.15;
-  private static final double MIN_HITBOX_WIDTH = 0.4;
-  private static final double MAX_HITBOX_WIDTH = 3.0;
+  private static final int FULL_BRIGHTNESS = 15;
 
   private final Map<UUID, Label> byEntity = new ConcurrentHashMap<>();
 
   /**
-   * Places a label for {@code owner}.
+   * Places a line of text.
    *
-   * @param owner the player whose hits count
    * @param world the world to place it in
    * @param at the center of its text
    * @param text the text
-   * @param onHit run when the owner hits it
    * @return the label, or empty if it couldn't be spawned
    */
-  public Optional<SpongeHologram> spawn(
-      ServerPlayer owner, ServerWorld world, Vector3d at, Component text, Runnable onHit) {
-    ArmorStand stand = world.createEntity(EntityTypes.ARMOR_STAND, nameAt(at));
-    stand.offer(Keys.HAS_MARKER, true);
-    stand.offer(Keys.IS_INVISIBLE, true);
-    stand.offer(Keys.IS_GRAVITY_AFFECTED, false);
-    stand.offer(Keys.INVULNERABLE, true);
-    stand.offer(Keys.IS_SILENT, true);
-    stand.offer(Keys.CUSTOM_NAME, text);
-    stand.offer(Keys.IS_CUSTOM_NAME_VISIBLE, true);
-    stand.offer(Keys.SCOREBOARD_TAGS, Set.of(TAG));
-    if (!world.spawnEntity(stand)) {
+  public Optional<SpongeHologram> spawn(ServerWorld world, Vector3d at, Component text) {
+    TextDisplay display =
+        world.createEntity(
+            EntityTypes.TEXT_DISPLAY, new Vector3d(at.x(), at.y() - TEXT_CENTER, at.z()));
+    display.offer(Keys.DISPLAY_NAME, text);
+    display.offer(Keys.BILLBOARD_TYPE, BillboardTypes.CENTER.get());
+    display.offer(Keys.SEE_THROUGH_BLOCKS, false);
+    display.offer(Keys.BLOCK_LIGHT, FULL_BRIGHTNESS);
+    display.offer(Keys.SKY_LIGHT, FULL_BRIGHTNESS);
+    display.offer(Keys.SCOREBOARD_TAGS, Set.of(TAG));
+    if (!world.spawnEntity(display)) {
       return Optional.empty();
     }
-    Optional<Entity> hitbox = spawnHitbox(world, at, text);
-    if (hitbox.isEmpty()) {
-      stand.remove();
-      return Optional.empty();
-    }
-    Label label = new Label(owner.uniqueId(), world, stand, hitbox.get(), at, onHit);
-    byEntity.put(stand.uniqueId(), label);
-    byEntity.put(hitbox.get().uniqueId(), label);
+    Label label = new Label(display);
+    byEntity.put(display.uniqueId(), label);
     return Optional.of(label);
   }
 
   /** Removes every label, e.g. on shutdown. */
   public void removeAll() {
     Map.copyOf(byEntity).values().forEach(Label::remove);
-  }
-
-  @Listener(order = Order.FIRST)
-  public void onAttack(InteractEntityEvent.Primary event, @First ServerPlayer player) {
-    Label label = byEntity.get(event.entity().uniqueId());
-    if (label == null) {
-      return;
-    }
-    event.setCancelled(true);
-    if (label.owner.equals(player.uniqueId())) {
-      label.onHit.run();
-    }
-  }
-
-  @Listener(order = Order.FIRST)
-  public void onDamage(AttackEntityEvent event) {
-    if (byEntity.containsKey(event.entity().uniqueId())) {
-      event.setCancelled(true);
-    }
-  }
-
-  @Listener(order = Order.FIRST)
-  public void onInteract(InteractEntityEvent.Secondary event) {
-    if (byEntity.containsKey(event.entity().uniqueId())) {
-      event.setCancelled(true);
-    }
   }
 
   /** Removes labels left over from a previous run (e.g. saved by a crash). */
@@ -142,76 +90,19 @@ public final class SpongeHolograms {
     }
   }
 
-  private Optional<Entity> spawnHitbox(ServerWorld world, Vector3d at, Component text) {
-    DataContainer data =
-        DataContainer.createNew()
-            .set(DataQuery.of("width"), width(text))
-            .set(DataQuery.of("height"), HITBOX_HEIGHT)
-            .set(DataQuery.of("response"), false)
-            .set(DataQuery.of("Tags"), List.of(TAG));
-    Optional<Entity> hitbox =
-        EntityArchetype.builder()
-            .type(EntityTypes.INTERACTION.get())
-            .entityData(data)
-            .build()
-            .apply(world.location(hitboxAt(at)));
-    hitbox.ifPresent(entity -> entity.offer(Keys.SCOREBOARD_TAGS, Set.of(TAG)));
-    return hitbox;
-  }
-
-  private static Vector3d nameAt(Vector3d at) {
-    return new Vector3d(at.x(), at.y() - NAME_CENTER, at.z());
-  }
-
-  private static Vector3d hitboxAt(Vector3d at) {
-    return new Vector3d(at.x(), at.y() - HITBOX_HEIGHT / 2.0, at.z());
-  }
-
-  /** A hitbox about as wide as the text is drawn. */
-  private static float width(Component text) {
-    int characters = PlainTextComponentSerializer.plainText().serialize(text).length();
-    return (float)
-        Math.clamp(characters * BLOCKS_PER_CHARACTER, MIN_HITBOX_WIDTH, MAX_HITBOX_WIDTH);
-  }
-
   private final class Label implements SpongeHologram {
 
-    private final UUID owner;
-    private final ServerWorld world;
-    private final ArmorStand stand;
-    private final Runnable onHit;
-    private Entity hitbox;
-    private final Vector3d at;
+    private final TextDisplay display;
     private boolean removed;
 
-    Label(
-        UUID owner,
-        ServerWorld world,
-        ArmorStand stand,
-        Entity hitbox,
-        Vector3d at,
-        Runnable onHit) {
-      this.owner = owner;
-      this.world = world;
-      this.stand = stand;
-      this.hitbox = hitbox;
-      this.at = at;
-      this.onHit = onHit;
+    Label(TextDisplay display) {
+      this.display = display;
     }
 
     @Override
     public void text(Component text) {
-      if (removed) {
-        return;
-      }
-      stand.offer(Keys.CUSTOM_NAME, text);
-      // The hitbox can't be resized in place, so a fresh one replaces it.
-      Optional<Entity> resized = spawnHitbox(world, at, text);
-      if (resized.isPresent()) {
-        byEntity.remove(hitbox.uniqueId());
-        hitbox.remove();
-        hitbox = resized.get();
-        byEntity.put(hitbox.uniqueId(), this);
+      if (!removed) {
+        display.offer(Keys.DISPLAY_NAME, text);
       }
     }
 
@@ -221,10 +112,8 @@ public final class SpongeHolograms {
         return;
       }
       removed = true;
-      byEntity.remove(stand.uniqueId());
-      byEntity.remove(hitbox.uniqueId());
-      stand.remove();
-      hitbox.remove();
+      byEntity.remove(display.uniqueId());
+      display.remove();
     }
   }
 }
