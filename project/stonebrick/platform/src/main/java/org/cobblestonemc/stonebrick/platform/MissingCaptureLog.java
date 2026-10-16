@@ -7,6 +7,8 @@
 
 package org.cobblestonemc.stonebrick.platform;
 
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.cobblestonemc.stonebrick.format.Sbc;
 
@@ -47,7 +49,7 @@ public final class MissingCaptureLog {
    * <p>The bounding box is enough to tell a human what went wrong; the set is what lets the capture
    * manifest widen to exactly what the search reached for, rather than to a rectangle around it.
    */
-  private final java.util.Set<Long> chunks = java.util.concurrent.ConcurrentHashMap.newKeySet();
+  private final Set<Long> chunks = ConcurrentHashMap.newKeySet();
 
   /**
    * Records a read of a chunk column the capture does not contain.
@@ -110,8 +112,8 @@ public final class MissingCaptureLog {
    *
    * @return packed {@code (x &lt;&lt; 32) | z} chunk coordinates
    */
-  public java.util.Set<Long> chunks() {
-    return java.util.Set.copyOf(chunks);
+  public Set<Long> chunks() {
+    return Set.copyOf(chunks);
   }
 
   /**

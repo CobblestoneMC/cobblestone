@@ -8,7 +8,9 @@
 package org.cobblestonemc.stonebrick.platform;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.cobblestonemc.minecraft.ChunkFetch;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
@@ -33,7 +35,7 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
   private final MinecraftScheduler<Object> scheduler;
   private final ChunkProviderSettings settings;
   private final SimulatedChunkIo io;
-  private final java.util.Set<Long> ungenerated = new java.util.HashSet<>();
+  private final Set<Long> ungenerated = new HashSet<>();
   private final MissingCaptureLog missing;
   private final Map<String, StonebrickWorld> worlds = new HashMap<>();
 
@@ -86,7 +88,7 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
    *
    * @param chunks packed {@code (x &lt;&lt; 32) | z} chunk coordinates
    */
-  public void presentAsUngenerated(java.util.Set<Long> chunks) {
+  public void presentAsUngenerated(Set<Long> chunks) {
     ungenerated.addAll(chunks);
   }
 

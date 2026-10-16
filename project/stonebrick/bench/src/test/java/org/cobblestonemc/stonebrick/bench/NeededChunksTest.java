@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.cobblestonemc.Cell;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -119,6 +120,6 @@ class NeededChunksTest {
     byte[] first = Files.readAllBytes(file);
     NeededChunks.write(file, NeededChunks.read(file));
 
-    org.junit.jupiter.api.Assertions.assertArrayEquals(first, Files.readAllBytes(file));
+    Assertions.assertArrayEquals(first, Files.readAllBytes(file));
   }
 }

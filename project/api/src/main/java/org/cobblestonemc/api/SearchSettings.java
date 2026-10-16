@@ -7,6 +7,8 @@
 
 package org.cobblestonemc.api;
 
+import java.util.Objects;
+
 /**
  * Immutable, tunable limits and knobs for a single search.
  *
@@ -181,7 +183,7 @@ public final class SearchSettings {
      * @return this builder
      */
     public Builder heuristic(Heuristic value) {
-      this.heuristic = java.util.Objects.requireNonNull(value, "heuristic");
+      this.heuristic = Objects.requireNonNull(value, "heuristic");
       return this;
     }
 

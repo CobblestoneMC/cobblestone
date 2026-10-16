@@ -11,7 +11,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -190,7 +192,7 @@ final class ScenarioChecker {
     int maxZ = (Math.max(capsule.from().z(), capsule.to().z()) >> 4) + capsule.radiusChunks();
     // Decided once, up front: the job asks its filter again as it goes, and a filter that read
     // the disk would change its answer as the job wrote, skipping chunks it had counted.
-    java.util.Set<Long> wanted = new java.util.HashSet<>();
+    Set<Long> wanted = new HashSet<>();
     for (int x = minX; x <= maxX; x++) {
       for (int z = minZ; z <= maxZ; z++) {
         if (capsule.covers(x, z) && !Files.exists(capture.column(worldKey, x, z))) {

@@ -28,6 +28,7 @@ import org.spongepowered.api.event.cause.entity.MovementType;
 import org.spongepowered.api.event.cause.entity.MovementTypes;
 import org.spongepowered.api.event.entity.ChangeEntityWorldEvent;
 import org.spongepowered.api.event.entity.MoveEntityEvent;
+import org.spongepowered.api.registry.DefaultedRegistryReference;
 import org.spongepowered.api.world.WorldTypes;
 import org.spongepowered.api.world.server.ServerWorld;
 import org.spongepowered.math.vector.Vector3d;
@@ -189,8 +190,7 @@ final class SpongePortalListener {
   }
 
   private static boolean isMovement(
-      Optional<MovementType> actual,
-      org.spongepowered.api.registry.DefaultedRegistryReference<MovementType> expected) {
+      Optional<MovementType> actual, DefaultedRegistryReference<MovementType> expected) {
     return actual.isPresent() && actual.get().equals(expected.get());
   }
 

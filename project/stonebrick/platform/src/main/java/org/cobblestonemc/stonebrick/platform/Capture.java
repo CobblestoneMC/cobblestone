@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.stonebrick.format.CaptureDirectory;
 import org.cobblestonemc.stonebrick.format.CaptureFormatException;
@@ -67,7 +68,7 @@ public final class Capture {
       throw new CaptureFormatException(
           root
               + " has no "
-              + org.cobblestonemc.stonebrick.format.TraitTable.FILE_NAME
+              + TraitTable.FILE_NAME
               + "; run /stonebrick traits on a server of the captured Minecraft version");
     }
     Capture capture =
@@ -154,7 +155,7 @@ public final class Capture {
    *
    * @return the world keys
    */
-  public java.util.Set<String> worldKeys() {
+  public Set<String> worldKeys() {
     return worlds.keySet();
   }
 

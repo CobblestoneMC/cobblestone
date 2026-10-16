@@ -8,13 +8,16 @@
 package org.cobblestonemc.stonebrick.utility;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import org.bukkit.Bukkit;
+import org.bukkit.ChunkSnapshot;
 import org.bukkit.World;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
@@ -86,8 +89,7 @@ final class CaptureJob {
   private final AtomicInteger inFlight = new AtomicInteger();
   private final AtomicBoolean cancelled = new AtomicBoolean();
   private final AtomicBoolean finished = new AtomicBoolean();
-  private final java.util.concurrent.CompletableFuture<Void> done =
-      new java.util.concurrent.CompletableFuture<>();
+  private final CompletableFuture<Void> done = new CompletableFuture<>();
 
   private final long startedAt = System.currentTimeMillis();
   private long lastReportAt = startedAt;
@@ -154,7 +156,7 @@ final class CaptureJob {
    * Returns a future completed once the job has stopped and its trait table and metadata are
    * written, which is when its columns can be read.
    */
-  java.util.concurrent.CompletableFuture<Void> done() {
+  CompletableFuture<Void> done() {
     return done;
   }
 
@@ -249,7 +251,7 @@ final class CaptureJob {
     return null;
   }
 
-  private void encodeAndWrite(org.bukkit.ChunkSnapshot snapshot) {
+  private void encodeAndWrite(ChunkSnapshot snapshot) {
     try {
       ChunkColumn column;
       synchronized (traits) {
@@ -339,7 +341,7 @@ final class CaptureJob {
    */
   private void mergeAndWriteTraits(TraitTable table) throws IOException {
     TraitTable.Builder merged = TraitTable.builder();
-    if (java.nio.file.Files.exists(capture.traitTable())) {
+    if (Files.exists(capture.traitTable())) {
       try {
         TraitTable.read(capture.traitTable()).asMap().forEach(merged::add);
       } catch (IOException stale) {

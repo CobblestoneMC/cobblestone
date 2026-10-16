@@ -7,25 +7,48 @@
 
 package org.cobblestonemc.stonebrick.utility;
 
+import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
+import io.papermc.paper.command.brigadier.MessageComponentSerializer;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
+import org.bukkit.ChunkSnapshot;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
+import org.bukkit.block.Biome;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.generator.BiomeProvider;
+import org.bukkit.generator.structure.GeneratedStructure;
+import org.bukkit.generator.structure.StructurePiece;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.util.BoundingBox;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.stonebrick.bench.NeededChunks;
 import org.cobblestonemc.stonebrick.format.CaptureDirectory;
@@ -217,7 +240,7 @@ final class UtilityCommand {
         .build();
   }
 
-  private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> rectangleCommand(
+  private LiteralArgumentBuilder<CommandSourceStack> rectangleCommand(
       String literal, boolean estimateOnly) {
     return Commands.literal(literal)
         .then(
@@ -302,8 +325,8 @@ final class UtilityCommand {
    * for a tool two people use. A suggestion list gets the discoverability without the thicket —
    * which is the part that was actually missing, since a greedy string offers nothing at all.
    */
-  private static final java.util.Map<String, String> OPTIONS =
-      java.util.Map.of(
+  private static final Map<String, String> OPTIONS =
+      Map.of(
           "--name", "capture directory to write into",
           "--world", "world key to capture, instead of yours",
           "--blocks", "coordinates are block, not chunk",
@@ -314,24 +337,21 @@ final class UtilityCommand {
           "--force", "waive the chunk-count guard",
           "--generate", "generate chunks that do not exist yet (seeded corpus worlds only)");
 
-  private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>
-      suggestOptions(
-          com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
-          com.mojang.brigadier.suggestion.SuggestionsBuilder builder) {
+  private static CompletableFuture<Suggestions> suggestOptions(
+      CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
     // The greedy string hands us everything typed so far, so suggest against the last word only.
     String remaining = builder.getRemaining();
     int lastSpace = remaining.lastIndexOf(' ');
     String word = lastSpace < 0 ? remaining : remaining.substring(lastSpace + 1);
-    com.mojang.brigadier.suggestion.SuggestionsBuilder offset =
-        builder.createOffset(builder.getStart() + lastSpace + 1);
+    SuggestionsBuilder offset = builder.createOffset(builder.getStart() + lastSpace + 1);
     OPTIONS.entrySet().stream()
         .filter(entry -> entry.getKey().startsWith(word))
-        .sorted(java.util.Map.Entry.comparingByKey())
+        .sorted(Map.Entry.comparingByKey())
         .forEach(
             entry ->
                 offset.suggest(
                     entry.getKey(),
-                    io.papermc.paper.command.brigadier.MessageComponentSerializer.message()
+                    MessageComponentSerializer.message()
                         .serialize(Component.text(entry.getValue()))));
     return offset.buildFuture();
   }
@@ -344,9 +364,7 @@ final class UtilityCommand {
    * a capture tool asked for a corridor should not quietly take a field.
    */
   private int capsule(
-      com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
-      String rawOptions,
-      boolean estimateOnly) {
+      CommandContext<CommandSourceStack> ctx, String rawOptions, boolean estimateOnly) {
     int x1 = IntegerArgumentType.getInteger(ctx, "x1");
     int z1 = IntegerArgumentType.getInteger(ctx, "z1");
     int x2 = IntegerArgumentType.getInteger(ctx, "x2");
@@ -364,9 +382,7 @@ final class UtilityCommand {
   }
 
   private int rectangle(
-      com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
-      String rawOptions,
-      boolean estimateOnly) {
+      CommandContext<CommandSourceStack> ctx, String rawOptions, boolean estimateOnly) {
     return run(
         ctx.getSource().getSender(),
         rawOptions,
@@ -458,7 +474,7 @@ final class UtilityCommand {
           maxChunkX,
           maxChunkZ,
           report);
-      return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+      return Command.SINGLE_SUCCESS;
     }
 
     if (state.hasActiveJob()) {
@@ -485,15 +501,14 @@ final class UtilityCommand {
             filter,
             report);
     state.start(job);
-    return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+    return Command.SINGLE_SUCCESS;
   }
 
   /**
    * The {@code origin} or {@code dest} branch of {@code mark}: where the player stands, or given
    * coordinates, which is how the console marks. A Y of {@code surface} stands on the ground there.
    */
-  private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> markEnd(
-      String which) {
+  private LiteralArgumentBuilder<CommandSourceStack> markEnd(String which) {
     return Commands.literal(which)
         .executes(ctx -> markHere(ctx.getSource().getSender(), scenarioArg(ctx), which))
         .then(
@@ -521,8 +536,7 @@ final class UtilityCommand {
                                                         ctx, "world")))))));
   }
 
-  private static String scenarioArg(
-      com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+  private static String scenarioArg(CommandContext<CommandSourceStack> ctx) {
     return StringArgumentType.getString(ctx, "scenario");
   }
 
@@ -540,9 +554,7 @@ final class UtilityCommand {
   }
 
   private int markAt(
-      com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
-      String which,
-      @Nullable String worldKey) {
+      CommandContext<CommandSourceStack> ctx, String which, @Nullable String worldKey) {
     CommandSender sender = ctx.getSource().getSender();
     World world = resolveWorld(sender, worldKey);
     if (world == null) {
@@ -589,7 +601,7 @@ final class UtilityCommand {
       int[] other = ScenarioFile.position(file, worldKey, scenario, otherEnd);
       if (other == null) {
         report.accept("  Now mark the " + otherEnd + ".");
-        return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+        return Command.SINGLE_SUCCESS;
       }
       Endpoint far = Endpoint.at(world, other[0], other[1], other[2]);
       double dx = far.x() - x;
@@ -623,7 +635,7 @@ final class UtilityCommand {
     } catch (IOException e) {
       return fail(sender, "Could not write the mark: " + e.getMessage());
     }
-    return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+    return Command.SINGLE_SUCCESS;
   }
 
   private int tag(CommandSender sender, String scenario, String raw) {
@@ -639,18 +651,15 @@ final class UtilityCommand {
     } catch (IOException e) {
       return fail(sender, "Could not tag it: " + e.getMessage());
     }
-    return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+    return Command.SINGLE_SUCCESS;
   }
 
   private int check(CommandSender sender, String scenario, boolean generate) {
-    return checker.start(scenario, generate, reporter(sender))
-        ? com.mojang.brigadier.Command.SINGLE_SUCCESS
-        : 0;
+    return checker.start(scenario, generate, reporter(sender)) ? Command.SINGLE_SUCCESS : 0;
   }
 
   /** Says where a body would stand in a column, and what is there: for picking ends from afar. */
-  private int probe(
-      com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, @Nullable String key) {
+  private int probe(CommandContext<CommandSourceStack> ctx, @Nullable String key) {
     CommandSender sender = ctx.getSource().getSender();
     World world = resolveWorld(sender, key);
     if (world == null) {
@@ -667,22 +676,20 @@ final class UtilityCommand {
         "  every level to stand at: "
             + String.join(", ", levels.stream().limit(24).map(String::valueOf).toList())
             + (levels.size() > 24 ? ", ..." : ""));
-    for (org.bukkit.generator.structure.GeneratedStructure structure :
-        world.getChunkAt(x >> 4, z >> 4).getStructures()) {
-      org.bukkit.util.BoundingBox box = structure.getBoundingBox();
+    for (GeneratedStructure structure : world.getChunkAt(x >> 4, z >> 4).getStructures()) {
+      BoundingBox box = structure.getBoundingBox();
       report.accept(
           "  structure %s: %d pieces in %s"
               .formatted(structureName(structure), structure.getPieces().size(), box(box)));
     }
-    return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+    return Command.SINGLE_SUCCESS;
   }
 
   /**
    * Lists the pieces of the structures at a column, nearest first, each with a place to stand in
    * it: for putting a scenario's end inside a mineshaft corridor or a stronghold room.
    */
-  private int pieces(
-      com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, @Nullable String key) {
+  private int pieces(CommandContext<CommandSourceStack> ctx, @Nullable String key) {
     CommandSender sender = ctx.getSource().getSender();
     World world = resolveWorld(sender, key);
     if (world == null) {
@@ -695,14 +702,13 @@ final class UtilityCommand {
     if (structures.isEmpty()) {
       return fail(sender, "No structure reaches the chunk at " + x + ", " + z + ".");
     }
-    for (org.bukkit.generator.structure.GeneratedStructure structure : structures) {
+    for (GeneratedStructure structure : structures) {
       report.accept(
           "%s, %d pieces:".formatted(structureName(structure), structure.getPieces().size()));
       structure.getPieces().stream()
-          .map(org.bukkit.generator.structure.StructurePiece::getBoundingBox)
+          .map(StructurePiece::getBoundingBox)
           .sorted(
-              java.util.Comparator.comparingDouble(
-                  b -> Math.hypot(b.getCenterX() - x, b.getCenterZ() - z)))
+              Comparator.comparingDouble(b -> Math.hypot(b.getCenterX() - x, b.getCenterZ() - z)))
           .limit(12)
           .forEach(
               b -> {
@@ -716,7 +722,7 @@ final class UtilityCommand {
                                 : stand[0] + " " + stand[1] + " " + stand[2]));
               });
     }
-    return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+    return Command.SINGLE_SUCCESS;
   }
 
   /**
@@ -728,20 +734,17 @@ final class UtilityCommand {
    * keeping the one most fully inside the biome, nearest the point on a tie. The Y matters for cave
    * biomes, which only exist underground.
    */
-  private int span(
-      com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
-      int length,
-      @Nullable String key) {
+  private int span(CommandContext<CommandSourceStack> ctx, int length, @Nullable String key) {
     CommandSender sender = ctx.getSource().getSender();
     World world = resolveWorld(sender, key);
     if (world == null) {
       return fail(sender, "Name a world: span <biome> <x> <y> <z> <length> <world>");
     }
-    String name = StringArgumentType.getString(ctx, "biome").toLowerCase(java.util.Locale.ROOT);
+    String name = StringArgumentType.getString(ctx, "biome").toLowerCase(Locale.ROOT);
     int x = IntegerArgumentType.getInteger(ctx, "x");
     int y = IntegerArgumentType.getInteger(ctx, "y");
     int z = IntegerArgumentType.getInteger(ctx, "z");
-    org.bukkit.generator.BiomeProvider biomes = world.vanillaBiomeProvider();
+    BiomeProvider biomes = world.vanillaBiomeProvider();
     final int step = 8;
     final int around = 768;
     final int reach = around + length;
@@ -749,8 +752,7 @@ final class UtilityCommand {
     boolean[][] inside = new boolean[cells][cells];
     for (int i = 0; i < cells; i++) {
       for (int j = 0; j < cells; j++) {
-        org.bukkit.block.Biome biome =
-            biomes.getBiome(world, x - reach + i * step, y, z - reach + j * step);
+        Biome biome = biomes.getBiome(world, x - reach + i * step, y, z - reach + j * step);
         inside[i][j] = biome.getKey().getKey().equals(name);
       }
     }
@@ -795,7 +797,7 @@ final class UtilityCommand {
         .accept(
             "%.0f%% of the line %d %d -> %d %d is %s (%.0f from the point)"
                 .formatted(100 * best, line[0], line[1], line[2], line[3], name, bestDistance));
-    return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+    return Command.SINGLE_SUCCESS;
   }
 
   /**
@@ -804,27 +806,24 @@ final class UtilityCommand {
    * sculk} for an ancient city. Reads chunk snapshots rather than blocks one at a time, so a wide
    * search costs little.
    */
-  private int find(
-      com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
-      int radius,
-      @Nullable String key) {
+  private int find(CommandContext<CommandSourceStack> ctx, int radius, @Nullable String key) {
     CommandSender sender = ctx.getSource().getSender();
     World world = resolveWorld(sender, key);
     if (world == null) {
       return fail(sender, "Name a world: find <block> <x> <z> <radius> <world>");
     }
-    String word = StringArgumentType.getString(ctx, "block").toLowerCase(java.util.Locale.ROOT);
+    String word = StringArgumentType.getString(ctx, "block").toLowerCase(Locale.ROOT);
     int x = IntegerArgumentType.getInteger(ctx, "x");
     int z = IntegerArgumentType.getInteger(ctx, "z");
     record Hit(int x, int y, int z, String name, double distance) {}
-    List<Hit> hits = new java.util.ArrayList<>();
+    List<Hit> hits = new ArrayList<>();
     for (int cx = (x - radius) >> 4; cx <= (x + radius) >> 4; cx++) {
       for (int cz = (z - radius) >> 4; cz <= (z + radius) >> 4; cz++) {
-        org.bukkit.ChunkSnapshot snapshot = world.getChunkAt(cx, cz).getChunkSnapshot();
+        ChunkSnapshot snapshot = world.getChunkAt(cx, cz).getChunkSnapshot();
         for (int y = world.getMinHeight(); y < world.getMaxHeight(); y++) {
           for (int dx = 0; dx < 16; dx++) {
             for (int dz = 0; dz < 16; dz++) {
-              org.bukkit.Material type = snapshot.getBlockType(dx, y, dz);
+              Material type = snapshot.getBlockType(dx, y, dz);
               if (!type.isAir() && type.getKey().getKey().contains(word)) {
                 int bx = (cx << 4) + dx;
                 int bz = (cz << 4) + dz;
@@ -842,9 +841,9 @@ final class UtilityCommand {
     if (hits.isEmpty()) {
       return fail(sender, "No block named like '" + word + "' within " + radius + ".");
     }
-    hits.sort(java.util.Comparator.comparingDouble(Hit::distance));
+    hits.sort(Comparator.comparingDouble(Hit::distance));
     report.accept("%,d blocks like '%s'; the nearest:".formatted(hits.size(), word));
-    java.util.Set<String> shown = new java.util.HashSet<>();
+    Set<String> shown = new HashSet<>();
     for (Hit hit : hits) {
       if (shown.size() >= 8) {
         break;
@@ -867,14 +866,14 @@ final class UtilityCommand {
           "  %s at %d %d %d, %.0f away; stand at %s"
               .formatted(hit.name(), hit.x(), hit.y(), hit.z(), hit.distance(), stand));
     }
-    return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+    return Command.SINGLE_SUCCESS;
   }
 
   /**
    * Finds a place to stand inside a piece, along the middle of its longer side: a corridor's middle
    * column can be a support beam, but somewhere along it is floor.
    */
-  private static int @Nullable [] standIn(World world, org.bukkit.util.BoundingBox b) {
+  private static int @Nullable [] standIn(World world, BoundingBox b) {
     int minY = (int) b.getMinY();
     int maxY = (int) b.getMaxY() + 1;
     boolean alongX = b.getWidthX() >= b.getWidthZ();
@@ -900,14 +899,14 @@ final class UtilityCommand {
     return null;
   }
 
-  private static String structureName(org.bukkit.generator.structure.GeneratedStructure structure) {
+  private static String structureName(GeneratedStructure structure) {
     return String.valueOf(
-        io.papermc.paper.registry.RegistryAccess.registryAccess()
-            .getRegistry(io.papermc.paper.registry.RegistryKey.STRUCTURE)
+        RegistryAccess.registryAccess()
+            .getRegistry(RegistryKey.STRUCTURE)
             .getKey(structure.getStructure()));
   }
 
-  private static String box(org.bukkit.util.BoundingBox box) {
+  private static String box(BoundingBox box) {
     return "%d %d %d .. %d %d %d"
         .formatted(
             (int) box.getMinX(),
@@ -939,12 +938,12 @@ final class UtilityCommand {
                 reporter(sender).accept("Could not write the trait table: " + e);
               }
             });
-    return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+    return Command.SINGLE_SUCCESS;
   }
 
   private int status(CommandSender sender) {
     sender.sendMessage(Component.text(state.activeStatus()));
-    return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+    return Command.SINGLE_SUCCESS;
   }
 
   private int cancel(CommandSender sender) {
@@ -953,7 +952,7 @@ final class UtilityCommand {
     }
     state.cancel();
     sender.sendMessage(Component.text("Cancelling; chunks already loaded will still be written."));
-    return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+    return Command.SINGLE_SUCCESS;
   }
 
   /**
@@ -966,7 +965,7 @@ final class UtilityCommand {
   private Consumer<String> reporter(CommandSender sender) {
     return line -> {
       plugin.getLogger().info(line);
-      if (!(sender instanceof org.bukkit.command.ConsoleCommandSender)) {
+      if (!(sender instanceof ConsoleCommandSender)) {
         sender.sendMessage(Component.text(line));
       }
     };
@@ -1005,7 +1004,7 @@ final class UtilityCommand {
         Component.text("         --surface <below> <above> | --y <minY> <maxY> | --full"));
     sender.sendMessage(
         Component.text("Coordinates are chunk coordinates unless you pass --blocks."));
-    return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+    return Command.SINGLE_SUCCESS;
   }
 
   private static int fail(CommandSender sender, String message) {

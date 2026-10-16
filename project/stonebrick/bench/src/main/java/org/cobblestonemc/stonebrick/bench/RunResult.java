@@ -9,6 +9,7 @@ package org.cobblestonemc.stonebrick.bench;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -62,7 +63,7 @@ public record RunResult(
     long realMillis,
     long peakHeapBytes,
     @Nullable String missingCaptureReport,
-    java.util.Set<Long> missingChunks,
+    Set<Long> missingChunks,
     Map<String, String> configuration,
     double closestBlocks) {
 

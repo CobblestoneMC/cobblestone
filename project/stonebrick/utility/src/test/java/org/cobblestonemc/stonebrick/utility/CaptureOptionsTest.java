@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 class CaptureOptionsTest {
@@ -105,6 +106,6 @@ class CaptureOptionsTest {
   }
 
   private static void assertArrayEqualsInt(int[] expected, int[] actual) {
-    assertEquals(java.util.Arrays.toString(expected), java.util.Arrays.toString(actual));
+    assertEquals(Arrays.toString(expected), Arrays.toString(actual));
   }
 }

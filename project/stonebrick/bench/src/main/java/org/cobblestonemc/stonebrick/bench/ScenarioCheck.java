@@ -10,6 +10,7 @@ package org.cobblestonemc.stonebrick.bench;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -87,7 +88,7 @@ public final class ScenarioCheck {
 
   /** Every estimate production can run: each one a scenario is checked under. */
   private static List<Scenario.Heuristic> heuristics() {
-    return java.util.Arrays.stream(Scenario.Heuristic.values())
+    return Arrays.stream(Scenario.Heuristic.values())
         .filter(heuristic -> heuristic.production() != null)
         .toList();
   }

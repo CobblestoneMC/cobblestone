@@ -7,6 +7,8 @@
 
 package org.cobblestonemc.stonebrick.platform;
 
+import java.util.Locale;
+
 /**
  * What a chunk read costs, as a model a benchmark can dial.
  *
@@ -84,7 +86,7 @@ public record IoProfile(
    * @return the profile, or {@code null}
    */
   public static IoProfile byName(String name) {
-    return switch (name.toLowerCase(java.util.Locale.ROOT)) {
+    return switch (name.toLowerCase(Locale.ROOT)) {
       case "zero" -> zero();
       case "nvme" -> nvme();
       case "sata-ssd", "sata" -> sataSsd();
