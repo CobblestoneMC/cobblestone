@@ -20,14 +20,17 @@ import org.cobblestonemc.plugin.navigator.Vec3;
  */
 final class HologramPlacement {
 
-  /** How far above the trail (which runs at body height) the label floats, in blocks. */
-  static final double HEIGHT = 1.0;
+  /** How far above the trail (which runs at body height) the name floats, in blocks. */
+  static final double HEIGHT = 0.5;
+
+  /** How far above the name its {@code Cancel} line floats, out of the way. */
+  static final double CANCEL_RISE = 0.5;
 
   /** The vertical gap between two lines of text. */
   static final double LINE_SPACING = 0.3;
 
-  /** The vertical gap between two labels stacked over the same spot: a label is two lines. */
-  static final double LABEL_SPACING = 2 * LINE_SPACING;
+  /** The vertical gap between two labels stacked over the same spot: a name, then a Cancel. */
+  static final double LABEL_SPACING = CANCEL_RISE + LINE_SPACING;
 
   /** Labels closer than this horizontally are stacked. */
   private static final double STACK_RADIUS = 0.75;
@@ -84,7 +87,7 @@ final class HologramPlacement {
    * @return the center of its {@code Cancel} line
    */
   static Vec3 cancelAt(Vec3 at) {
-    return at.plus(new Vec3(0, LINE_SPACING, 0));
+    return at.plus(new Vec3(0, CANCEL_RISE, 0));
   }
 
   /** Raises {@code spot} until it overlaps none of {@code taken}; {@code null} if it can't. */

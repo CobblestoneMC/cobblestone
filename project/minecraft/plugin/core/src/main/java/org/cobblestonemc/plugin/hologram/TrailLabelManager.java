@@ -208,8 +208,8 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
       if (source == null) {
         continue; // not a labelled trail
       }
-      // White, like the name over a player.
-      Component text = Component.text(labels.get(i), NamedTextColor.WHITE);
+      // White, like the name over a player, between arrows that say it is a way to go.
+      Component text = Component.text("↑ " + labels.get(i) + " ↑", NamedTextColor.WHITE);
       Shown<E, A, L> current = shown.get(navigator);
       if (current != null) {
         if (!text.equals(current.text())) {
