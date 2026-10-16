@@ -85,6 +85,12 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
   }
 
   @Override
+  protected Vec3 playerEye() {
+    Location eye = player.getEyeLocation();
+    return new Vec3(eye.getX(), eye.getY(), eye.getZ());
+  }
+
+  @Override
   protected String playerWorldKey() {
     World world = player.getWorld();
     return world == null ? null : world.getKey().asString();

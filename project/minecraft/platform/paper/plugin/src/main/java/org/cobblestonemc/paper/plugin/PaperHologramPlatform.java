@@ -48,6 +48,11 @@ final class PaperHologramPlatform implements HologramPlatform<PaperTripAgent, Lo
   }
 
   @Override
+  public String worldKey(PaperTripAgent agent) {
+    return agent.player().getWorld().getKey().asString();
+  }
+
+  @Override
   public TrailSmoother.BlockProbe probe(PaperTripAgent agent) {
     return new PaperWorldProbe(agent.player().getWorld());
   }
@@ -56,18 +61,23 @@ final class PaperHologramPlatform implements HologramPlatform<PaperTripAgent, Lo
   public Optional<Hologram> spawn(PaperTripAgent agent, Vec3 at, Component text) {
     Player player = agent.player();
     World world = player.getWorld();
-    return holograms.spawn(player, location(world, at), text).map(PaperHologramPlatform::wrap);
+    return holograms.spawn(player, location(world, at), text).map(label -> wrap(label, world));
   }
 
   private static Vec3 vector(Vector vector) {
     return new Vec3(vector.getX(), vector.getY(), vector.getZ());
   }
 
-  private static Hologram wrap(PaperHologram label) {
+  private static Hologram wrap(PaperHologram label, World world) {
     return new Hologram() {
       @Override
       public void text(Component text) {
         label.text(text);
+      }
+
+      @Override
+      public void move(Vec3 to) {
+        label.move(location(world, to));
       }
 
       @Override

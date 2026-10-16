@@ -41,7 +41,11 @@ arrive within two blocks of the destination.
 
 ## The trail
 
-The trail renders only the next segment of the route, brightest at the point to head for next.
+The trail renders only the next segment of the route, and it leads: it starts a few blocks ahead
+of you, further the faster you go (about two seconds of travel), so it is always in front of you
+and never streams past your face. If the way ahead turns a corner, it starts just around the
+corner. It stops a few blocks short of a destination you can see, where a label naming the
+destination takes over.
 
 - **Straying.** If you leave the trail, a short guide path is drawn back to it. Beyond 32 blocks
   (by default), the route is recomputed from your current position.
@@ -259,14 +263,20 @@ caves - 48s
 Each trip is named by the shortest part of its address that tells it apart from your other trips.
 `/stone hud` with no argument switches it on or off; your choice is remembered.
 
-To tell several trails apart, stand still for a second: a few blocks ahead of you, the name of
-each trip appears over its trail (or the guide back to it), named the same way as in the HUD. With
-one trip to a player named Steve it reads `Steve`; add a trip to a town also named Steve and they
-read `player Steve` and `town Steve`. A label only appears where you can see it, and the labels go
-away as soon as you move, so they stay out of your way while you follow the trail. **Hit the red
-`Cancel` above a label to cancel that trip**; it works from any distance you can see it from. On
-Sponge servers, other players nearby can see your labels too, but only you can cancel your trips
-with them.
+To tell several trails apart, stand still for a second: the name of each trip appears where its
+trail starts (or the guide back to it), named the same way as in the HUD, as `↑ Steve ↑`. With one
+trip to a player named Steve it reads `Steve`; add a trip to a town also named Steve and they read
+`player Steve` and `town Steve`. A label only appears where you can see it, follows its trail if
+the route changes, and goes away as soon as you move, so it stays out of your way while you follow
+the trail. **Hit the red `Cancel` above a label to cancel that trip**; it works from any distance
+you can see it from.
+
+Once you are within 24 blocks of a destination, a label naming it, as `↓ Steve ↓`, floats over it
+whether you are moving or not, and follows it if it moves, like a mount. It goes away only if you
+head back more than 32 blocks. A player or a named pet already shows its name, so it gets none.
+
+On Sponge servers, other players nearby can see your labels too, but only you can cancel your
+trips with them.
 
 ## Errors
 

@@ -17,6 +17,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicReference;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
@@ -37,10 +38,11 @@ import org.cobblestonemc.plugin.trip.TestTripAgent;
 import org.cobblestonemc.plugin.trip.Trip;
 import org.cobblestonemc.plugin.trip.TripLabel;
 import org.cobblestonemc.plugin.trip.TripManager;
+import org.cobblestonemc.plugin.trip.TripTarget;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** When {@link TrailLabelManager} shows and removes a player's trail labels, and what they say. */
+/** When {@link TrailLabelManager} shows, moves and removes a player's labels, and what they say. */
 class TrailLabelManagerTest {
 
   private static final CobblestoneLogger LOGGER =
@@ -65,6 +67,7 @@ class TrailLabelManagerTest {
   private static final Vec3 AHEAD = new Vec3(3.0, 0.9, 0.5);
   private static final Vec3 OVER = AHEAD.plus(new Vec3(0, HologramPlacement.HEIGHT, 0));
   private static final Vec3 EYE = FEET.plus(new Vec3(0, 1.62, 0));
+  private static final Vec3 GOAL = new Vec3(10.5, 0.9, 0.5);
 
   private final TestScheduler scheduler = new TestScheduler();
   private final FakePlatform platform = new FakePlatform();
@@ -167,16 +170,142 @@ class TrailLabelManagerTest {
 
   @Test
   void movingWithinTheBlockDoesNotCount() {
+    start(address("player", "Steve"), AHEAD);
+    FakeHologram label = platform.only();
+
+    platform.feet = FEET.plus(new Vec3(0.2, 0, -0.2));
+    scheduler.tick();
+    assertFalse(label.removed);
+  }
+
+  @Test
+  void glidesAfterTheTrailHeadWhenTheRouteChangesALittle() {
     AheadNavigator navigator = new AheadNavigator(AHEAD);
     start(address("player", "Steve"), navigator);
     standStill();
     FakeHologram label = platform.only();
+    FakeHologram cancel = platform.cancels().getFirst();
 
-    platform.feet = FEET.plus(new Vec3(0.2, 0, -0.2));
-    navigator.ahead = Optional.of(AHEAD.plus(new Vec3(0.2, 0, 0)));
+    Vec3 moved = AHEAD.plus(new Vec3(0.6, 0, 0));
+    navigator.ahead = Optional.of(moved);
     scheduler.tick();
+
+    assertFalse(label.removed, "the same label");
+    Vec3 over = moved.plus(new Vec3(0, HologramPlacement.HEIGHT, 0));
+    assertEquals(over, label.at);
+    assertEquals(over.plus(new Vec3(0, HologramPlacement.CANCEL_RISE, 0)), cancel.at);
+    assertEquals(1, label.moves);
+  }
+
+  @Test
+  void jumpsWhenTheTrailHeadMovesFar() {
+    AheadNavigator navigator = new AheadNavigator(AHEAD);
+    start(address("player", "Steve"), navigator);
+    standStill();
+    FakeHologram first = platform.only();
+
+    navigator.ahead = Optional.of(AHEAD.plus(new Vec3(0, 0, 3)));
+    scheduler.tick();
+
+    assertTrue(first.removed, "no long swing across");
+    assertEquals(0, first.moves);
+    assertEquals(2, platform.names().size());
+    assertFalse(platform.names().getLast().removed);
+  }
+
+  @Test
+  void aDestinationLabelAppearsNearbyEvenWhileMoving() {
+    AheadNavigator navigator = new AheadNavigator(AHEAD);
+    navigator.goal = Optional.of(GOAL);
+    start(address("player", "Steve"), navigator);
+    platform.feet = FEET.plus(new Vec3(1, 0, 0)); // on the move
+    scheduler.tick();
+
+    FakeHologram label = platform.goals().getFirst();
+    assertEquals(GOAL.plus(new Vec3(0, TrailLabelManager.GOAL_HEIGHT, 0)), label.at);
+    assertEquals("↓ Steve ↓", plain(label.text));
+    assertTrue(platform.cancels().isEmpty(), "no Cancel over the destination");
+  }
+
+  @Test
+  void aDestinationLabelWaitsUntilThePlayerIsClose() {
+    AheadNavigator navigator = new AheadNavigator(AHEAD);
+    navigator.goal = Optional.of(new Vec3(30.5, 0.9, 0.5));
+    start(address("player", "Steve"), navigator);
+    scheduler.tick();
+    assertTrue(platform.goals().isEmpty());
+
+    platform.feet = new Vec3(8.5, 0, 0.5);
+    scheduler.tick();
+    assertEquals(1, platform.goals().size());
+  }
+
+  @Test
+  void aDestinationLabelGoesOnlyOnceThePlayerHeadsWellBack() {
+    AheadNavigator navigator = new AheadNavigator(AHEAD);
+    navigator.goal = Optional.of(new Vec3(20.5, 0.9, 0.5));
+    start(address("player", "Steve"), navigator);
+    scheduler.tick();
+    FakeHologram label = platform.goals().getFirst();
+
+    platform.feet = new Vec3(-8.5, 0, 0.5); // about 29 blocks away
+    scheduler.tick();
+    assertFalse(label.removed, "not yet");
+
+    platform.feet = new Vec3(-12.5, 0, 0.5); // about 33 blocks away
+    scheduler.tick();
+    assertTrue(label.removed);
+  }
+
+  @Test
+  void aDestinationLabelFollowsAMovingTarget() {
+    AtomicReference<Vec3> horse = new AtomicReference<>(new Vec3(6.5, 2.1, 0.5));
+    TripTarget target =
+        new TripTarget(
+            () -> true, false, () -> Optional.of(new TripTarget.Point("world", horse.get())));
+    AheadNavigator navigator = new AheadNavigator(AHEAD);
+    navigator.goal = Optional.of(GOAL);
+    trips.start(player, navigator, address("mount"), null, null, false, 0L, target);
+    scheduler.tick();
+    FakeHologram label = platform.goals().getFirst();
+    assertEquals(horse.get(), label.at, "over the horse, not the end of the route");
+
+    horse.set(new Vec3(7.2, 2.1, 0.5));
+    scheduler.tick();
+    assertEquals(horse.get(), label.at);
+    assertEquals(1, label.moves);
     assertFalse(label.removed);
-    assertEquals(OVER, label.at, "stays where it appeared");
+  }
+
+  @Test
+  void noDestinationLabelForATargetInAnotherWorld() {
+    TripTarget target =
+        new TripTarget(() -> true, false, () -> Optional.of(new TripTarget.Point("nether", GOAL)));
+    AheadNavigator navigator = new AheadNavigator(AHEAD);
+    navigator.goal = Optional.of(GOAL);
+    trips.start(player, navigator, address("mount"), null, null, false, 0L, target);
+    scheduler.tick();
+    assertTrue(platform.goals().isEmpty());
+  }
+
+  @Test
+  void noDestinationLabelForATargetThatShowsItsName() {
+    TripTarget target = new TripTarget(() -> true, true, Optional::empty);
+    AheadNavigator navigator = new AheadNavigator(AHEAD);
+    navigator.goal = Optional.of(GOAL);
+    trips.start(player, navigator, address("player", "Steve"), null, null, false, 0L, target);
+    scheduler.tick();
+    assertTrue(platform.goals().isEmpty());
+  }
+
+  @Test
+  void aDestinationLabelIsNotHit() {
+    AheadNavigator navigator = new AheadNavigator(AHEAD);
+    navigator.goal = Optional.of(GOAL);
+    start(address("player", "Steve"), navigator);
+    scheduler.tick();
+    platform.lookAt(platform.goals().getFirst().at);
+    assertFalse(labels.swing(player.uuid()));
   }
 
   @Test
@@ -359,9 +488,14 @@ class TrailLabelManagerTest {
       return names().getFirst();
     }
 
-    /** Every name line placed, in order. */
+    /** Every trail label's name line placed, in order. */
     List<FakeHologram> names() {
-      return spawned.stream().filter(label -> !plain(label.text).equals("Cancel")).toList();
+      return spawned.stream().filter(label -> plain(label.text).startsWith("↑")).toList();
+    }
+
+    /** Every destination label placed, in order. */
+    List<FakeHologram> goals() {
+      return spawned.stream().filter(label -> plain(label.text).startsWith("↓")).toList();
     }
 
     /** Every {@code Cancel} line placed, in order. */
@@ -386,6 +520,11 @@ class TrailLabelManagerTest {
     }
 
     @Override
+    public String worldKey(TestTripAgent agent) {
+      return "world";
+    }
+
+    @Override
     public TrailSmoother.BlockProbe probe(TestTripAgent agent) {
       return probe;
     }
@@ -399,9 +538,10 @@ class TrailLabelManagerTest {
   }
 
   private static final class FakeHologram implements Hologram {
-    final Vec3 at;
+    Vec3 at;
     Component text;
     boolean removed;
+    int moves;
 
     FakeHologram(Vec3 at, Component text) {
       this.at = at;
@@ -411,6 +551,12 @@ class TrailLabelManagerTest {
     @Override
     public void text(Component text) {
       this.text = text;
+    }
+
+    @Override
+    public void move(Vec3 to) {
+      at = to;
+      moves++;
     }
 
     @Override
@@ -447,6 +593,7 @@ class TrailLabelManagerTest {
   /** A trail navigator whose trail passes a settable point ahead of the player. */
   private final class AheadNavigator extends PlainNavigator {
     Optional<Vec3> ahead;
+    Optional<Vec3> goal = Optional.empty();
 
     AheadNavigator(Vec3 ahead) {
       this.ahead = Optional.of(ahead);
@@ -454,7 +601,20 @@ class TrailLabelManagerTest {
 
     @Override
     public void start() {
-      labels.attach(player.uuid(), this, distance -> ahead.map(point -> point));
+      labels.attach(
+          player.uuid(),
+          this,
+          new TrailLabels.Source<>() {
+            @Override
+            public Optional<Vec3> headPoint() {
+              return ahead;
+            }
+
+            @Override
+            public Optional<Vec3> goalPoint() {
+              return goal;
+            }
+          });
     }
 
     @Override

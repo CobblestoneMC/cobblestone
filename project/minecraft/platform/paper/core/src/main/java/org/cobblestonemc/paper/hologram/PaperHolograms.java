@@ -24,8 +24,9 @@ import org.bukkit.plugin.Plugin;
  *
  * <p>Each line is a {@link TextDisplay} that is never saved and only sent to its player. It turns
  * to face them, is lit like a name tag whatever the light around it, and is hidden behind blocks
- * like the world around it. It has no hitbox, so nothing can hit or use it; what a player means to
- * hit is worked out from where they look.
+ * like the world around it. When it moves, it glides there over {@link #GLIDE_TICKS}. It has no
+ * hitbox, so nothing can hit or use it; what a player means to hit is worked out from where they
+ * look.
  *
  * <p>Folia: a label is spawned and changed only from the thread owning its region, and its removal
  * from any other thread is handed to its entity's own scheduler.
@@ -39,6 +40,9 @@ public final class PaperHolograms {
   private static final double TEXT_CENTER = (9 + 2) * 0.025 / 2;
 
   private static final int FULL_BRIGHTNESS = 15;
+
+  /** How long a label takes to glide to where it is moved: as often as labels are updated. */
+  private static final int GLIDE_TICKS = 2;
 
   private final Plugin plugin;
   private final Map<UUID, Label> byEntity = new ConcurrentHashMap<>();
@@ -67,7 +71,7 @@ public final class PaperHolograms {
     TextDisplay display =
         at.getWorld()
             .spawn(
-                at.clone().subtract(0, TEXT_CENTER, 0),
+                entityAt(at),
                 TextDisplay.class,
                 entity -> {
                   entity.setVisibleByDefault(false);
@@ -76,11 +80,16 @@ public final class PaperHolograms {
                   entity.setBillboard(Display.Billboard.CENTER);
                   entity.setSeeThrough(false);
                   entity.setBrightness(new Display.Brightness(FULL_BRIGHTNESS, FULL_BRIGHTNESS));
+                  entity.setTeleportDuration(GLIDE_TICKS);
                 });
     viewer.showEntity(plugin, display);
     Label label = new Label(display);
     byEntity.put(display.getUniqueId(), label);
     return Optional.of(label);
+  }
+
+  private static Location entityAt(Location at) {
+    return at.clone().subtract(0, TEXT_CENTER, 0);
   }
 
   /** Removes every label, e.g. on shutdown. */
@@ -101,6 +110,13 @@ public final class PaperHolograms {
     public void text(Component text) {
       if (!removed && Bukkit.isOwnedByCurrentRegion(display)) {
         display.text(text);
+      }
+    }
+
+    @Override
+    public void move(Location to) {
+      if (!removed) {
+        display.teleportAsync(entityAt(to));
       }
     }
 

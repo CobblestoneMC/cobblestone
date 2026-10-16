@@ -360,7 +360,7 @@ final class NavigateCommand {
                               searchSettings),
                           guideSearch(player, flags, platformApi),
                           live,
-                          destination::exists)
+                          destination.tripTarget())
                       .whenComplete(
                           (outcome, tripError) -> {
                             if (tripError != null || outcome instanceof TripOutcome.Failed) {
