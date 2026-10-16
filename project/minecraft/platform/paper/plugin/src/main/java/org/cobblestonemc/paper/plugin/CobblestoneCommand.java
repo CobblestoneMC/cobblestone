@@ -41,9 +41,9 @@ import org.cobblestonemc.plugin.trip.Trip;
 import org.cobblestonemc.plugin.trip.TripManager;
 
 /**
- * The {@code /cobblestone} admin/utility command tree. For Phase 6b it carries {@code reload} and
- * the {@code location set/unset} subcommands; portals, cancel, and trips join it in later
- * sub-phases.
+ * The {@code /cobblestone} (alias {@code /stone}) command tree. Its {@code navigate} and {@code
+ * location} subcommands are also registered on their own, as {@code /navigate} ({@code /nav}) and
+ * {@code /location} ({@code /loc}), since players reach for them most.
  */
 final class CobblestoneCommand {
 
@@ -55,11 +55,12 @@ final class CobblestoneCommand {
    * @param config the config manager (for reload)
    * @param keys the registered config keys (to re-read after reload)
    * @param messages the message renderer
-   * @param locations the location DAO (for {@code location set/unset})
    * @param portals the portal-transition DAO (for {@code portals clear})
    * @param trips the trip manager (for {@code cancel}/{@code trips})
    * @param hud the trip HUD (for {@code hud})
    * @param searches the search registry (for {@code cancel})
+   * @param navigate the {@code navigate} node, shared with the top-level {@code /navigate}
+   * @param location the {@code location} node, shared with the top-level {@code /location}
    * @return the command node
    */
   static LiteralCommandNode<CommandSourceStack> build(
@@ -67,58 +68,12 @@ final class CobblestoneCommand {
       ConfigKeys keys,
       Messages messages,
       JulCobblestoneLogger log,
-      LocationDao locations,
       PortalTransitionDao portals,
       TripManager<Entity, PaperTripAgent, Location> trips,
       TripHud<Entity, PaperTripAgent, Location> hud,
-      SearchRegistry<Location> searches) {
-
-    var locationSubCommand =
-        Commands.literal("location")
-            .requires(source -> source.getSender().hasPermission(Permissions.LOCATION.value()))
-            .executes(ctx -> showHelp(ctx.getSource().getSender(), messages))
-            .then(
-                Commands.literal("set")
-                    .then(
-                        Commands.argument("name", StringArgumentType.word())
-                            .executes(ctx -> setLocation(ctx, locations, messages, false))
-                            .then(
-                                Commands.literal("-global")
-                                    .requires(
-                                        source ->
-                                            source
-                                                .getSender()
-                                                .hasPermission(Permissions.LOCATION_GLOBAL.value()))
-                                    .executes(ctx -> setLocation(ctx, locations, messages, true)))))
-            .then(
-                Commands.literal("unset")
-                    .then(
-                        Commands.argument("name", StringArgumentType.word())
-                            .suggests(
-                                (ctx, builder) ->
-                                    suggestLocations(
-                                        ctx.getSource().getSender(),
-                                        builder,
-                                        locations,
-                                        ctx.getSource()
-                                            .getSender()
-                                            .hasPermission(Permissions.LOCATION_GLOBAL.value())))
-                            .executes(ctx -> unsetLocation(ctx, locations, messages, false))
-                            .then(
-                                Commands.literal("-global")
-                                    .requires(
-                                        source ->
-                                            source
-                                                .getSender()
-                                                .hasPermission(Permissions.LOCATION_GLOBAL.value()))
-                                    .executes(
-                                        ctx -> unsetLocation(ctx, locations, messages, true)))))
-            .then(
-                Commands.literal("list")
-                    .executes(
-                        ctx -> listLocations(ctx.getSource().getSender(), messages, locations)))
-            .build();
-
+      SearchRegistry<Location> searches,
+      LiteralCommandNode<CommandSourceStack> navigate,
+      LiteralCommandNode<CommandSourceStack> location) {
     return Commands.literal("cobblestone")
         .executes(ctx -> showHelp(ctx.getSource().getSender(), messages))
         .then(
@@ -183,8 +138,61 @@ final class CobblestoneCommand {
                     Commands.literal("clear")
                         .executes(
                             ctx -> clearPortals(ctx.getSource().getSender(), messages, portals))))
-        .then(locationSubCommand)
-        .then(Commands.literal("loc").redirect(locationSubCommand))
+        .then(navigate)
+        .then(location)
+        .then(Commands.literal("loc").redirect(location))
+        .build();
+  }
+
+  /**
+   * Builds the {@code location} node: {@code set}, {@code unset} and {@code list}.
+   *
+   * @param messages the message renderer
+   * @param locations the location DAO
+   * @return the command node
+   */
+  static LiteralCommandNode<CommandSourceStack> location(Messages messages, LocationDao locations) {
+    return Commands.literal("location")
+        .requires(source -> source.getSender().hasPermission(Permissions.LOCATION.value()))
+        .executes(ctx -> showHelp(ctx.getSource().getSender(), messages))
+        .then(
+            Commands.literal("set")
+                .then(
+                    Commands.argument("name", StringArgumentType.word())
+                        .executes(ctx -> setLocation(ctx, locations, messages, false))
+                        .then(
+                            Commands.literal("-global")
+                                .requires(
+                                    source ->
+                                        source
+                                            .getSender()
+                                            .hasPermission(Permissions.LOCATION_GLOBAL.value()))
+                                .executes(ctx -> setLocation(ctx, locations, messages, true)))))
+        .then(
+            Commands.literal("unset")
+                .then(
+                    Commands.argument("name", StringArgumentType.word())
+                        .suggests(
+                            (ctx, builder) ->
+                                suggestLocations(
+                                    ctx.getSource().getSender(),
+                                    builder,
+                                    locations,
+                                    ctx.getSource()
+                                        .getSender()
+                                        .hasPermission(Permissions.LOCATION_GLOBAL.value())))
+                        .executes(ctx -> unsetLocation(ctx, locations, messages, false))
+                        .then(
+                            Commands.literal("-global")
+                                .requires(
+                                    source ->
+                                        source
+                                            .getSender()
+                                            .hasPermission(Permissions.LOCATION_GLOBAL.value()))
+                                .executes(ctx -> unsetLocation(ctx, locations, messages, true)))))
+        .then(
+            Commands.literal("list")
+                .executes(ctx -> listLocations(ctx.getSource().getSender(), messages, locations)))
         .build();
   }
 
@@ -250,6 +258,18 @@ final class CobblestoneCommand {
     Locale locale = localeOf(sender, messages);
     messages.send(sender, locale, CobblestoneMessages.HELP_HEADER);
     PaperCommandHelp.line(
+        sender,
+        messages,
+        locale,
+        "/cobblestone navigate <destination...>",
+        "command.cobblestone.help.navigate");
+    PaperCommandHelp.line(
+        sender,
+        messages,
+        locale,
+        "/cobblestone location set|unset|list <name> [-global]",
+        "command.cobblestone.help.location");
+    PaperCommandHelp.line(
         sender, messages, locale, "/cobblestone reload", "command.cobblestone.help.reload");
     PaperCommandHelp.line(
         sender,
@@ -261,12 +281,6 @@ final class CobblestoneCommand {
         sender, messages, locale, "/cobblestone trips", "command.cobblestone.help.trips");
     PaperCommandHelp.line(
         sender, messages, locale, "/cobblestone hud [on|off]", "command.cobblestone.help.hud");
-    PaperCommandHelp.line(
-        sender,
-        messages,
-        locale,
-        "/cobblestone location set|unset|list <name> [-global]",
-        "command.cobblestone.help.location");
     PaperCommandHelp.line(
         sender, messages, locale, "/cobblestone portals clear", "command.cobblestone.help.portals");
     PaperCommandHelp.line(

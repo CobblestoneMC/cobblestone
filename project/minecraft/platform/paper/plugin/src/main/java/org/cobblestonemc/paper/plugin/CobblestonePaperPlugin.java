@@ -259,35 +259,36 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
         .registerEventHandler(
             LifecycleEvents.COMMANDS,
             event -> {
-              event
-                  .registrar()
-                  .register(
-                      CobblestoneCommand.build(
-                          config,
-                          keys,
-                          messages,
-                          logger,
-                          dataStore.locations(),
-                          dataStore.portalTransitions(),
-                          tripManager,
-                          tripHud,
-                          searchRegistry),
-                      "Cobblestone admin and utility commands",
-                      List.of("stone"));
-              event
-                  .registrar()
-                  .register(
-                      NavigateCommand.build(
-                          platformApi,
-                          tripService,
-                          integrationRegistry,
-                          searchRegistry,
-                          searchGate,
-                          searchSettings,
-                          logger,
-                          messages),
-                      "Navigate to a destination",
-                      List.of("nav"));
+              // /navigate and /location are also /cobblestone subcommands; each node is built
+              // once and shared, so both spellings behave alike.
+              var navigate =
+                  NavigateCommand.build(
+                      platformApi,
+                      tripService,
+                      integrationRegistry,
+                      searchRegistry,
+                      searchGate,
+                      searchSettings,
+                      logger,
+                      messages);
+              var location = CobblestoneCommand.location(messages, dataStore.locations());
+              var registrar = event.registrar();
+              registrar.register(
+                  CobblestoneCommand.build(
+                      config,
+                      keys,
+                      messages,
+                      logger,
+                      dataStore.portalTransitions(),
+                      tripManager,
+                      tripHud,
+                      searchRegistry,
+                      navigate,
+                      location),
+                  "Cobblestone commands",
+                  List.of("stone"));
+              registrar.register(navigate, "Navigate to a destination", List.of("nav"));
+              registrar.register(location, "Save, remove, or list locations", List.of("loc"));
             });
 
     if (config.get(keys.metricsEnabled)) {

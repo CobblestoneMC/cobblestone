@@ -60,9 +60,7 @@ public interface CobblestonePlayer {
    *
    * @return the Soul Speed level
    */
-  default int soulSpeedLevel() {
-    return 0;
-  }
+  int soulSpeedLevel();
 
   /**
    * Returns the position of the player's most recently ridden horse, if known — used to build the

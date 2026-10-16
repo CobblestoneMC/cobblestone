@@ -13,7 +13,7 @@ navigator.
 | Node | Default | Grants |
 | --- | --- | --- |
 | `cobblestone.navigate` | allow | `/navigate`, `/cobblestone trips`, `/cobblestone cancel` |
-| `cobblestone.location` | allow | `/cobblestone location set/unset/list` for personal locations |
+| `cobblestone.location` | allow | `/location set/unset/list` for personal locations |
 | `cobblestone.hud` | allow | `/cobblestone hud` |
 | `cobblestone.navigator` | allow | Parent of the per-navigator nodes |
 | `cobblestone.admin.location.global` | op | Creating and deleting global locations |
