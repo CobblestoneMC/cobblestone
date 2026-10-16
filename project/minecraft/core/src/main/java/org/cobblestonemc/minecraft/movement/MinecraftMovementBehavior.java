@@ -113,7 +113,8 @@ public final class MinecraftMovementBehavior
             flightHeight,
             boats && player.hasBoatInInventory(),
             boats && (player.hasBoatInInventory() || player.isInBoat()),
-            Math.max(0, enderPearls));
+            Math.max(0, enderPearls),
+            player.soulSpeedLevel());
     // A player already in a boat starts in it. Getting out is always open to them, so excluding
     // boats leaves them only that.
     TraversalState initialState =

@@ -125,6 +125,11 @@ final class StonebrickBlock implements MinecraftBlock {
   }
 
   @Override
+  public boolean boostsSoulSpeed() {
+    return traits.has(BlockTraits.SOUL_SPEED);
+  }
+
+  @Override
   public double speedFactor() {
     return traits.speedFactor();
   }

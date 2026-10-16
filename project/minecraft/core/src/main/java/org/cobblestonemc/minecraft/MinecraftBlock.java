@@ -104,6 +104,19 @@ public interface MinecraftBlock {
     return Double.POSITIVE_INFINITY;
   }
 
+  /**
+   * Returns whether Soul Speed boots work on this block: soul sand and soul soil.
+   *
+   * <p>Its own question rather than a reading of {@link #speedFactor()}, because the two are
+   * independent. Soul sand drags and soul soil does not, but Soul Speed makes both faster than
+   * ordinary ground; honey drags too, and Soul Speed does nothing for it.
+   *
+   * @return {@code true} for soul sand and soul soil
+   */
+  default boolean boostsSoulSpeed() {
+    return false;
+  }
+
   /** whether a boat can ride on top of this block (water, and ice for speed). */
   default boolean supportsBoat() {
     return isWater();

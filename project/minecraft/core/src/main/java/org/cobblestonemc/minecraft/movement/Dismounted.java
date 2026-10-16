@@ -73,10 +73,9 @@ final class Dismounted {
       }
       if (diagonal) {
         if (can.walk() && standable && !Geometry.cornerBlocked(view, from, dx, dz)) {
-          double factor = view.at(level, 0, -1, 0).speedFactor();
           edges.add(
               level,
-              MovementCosts.WALK / factor * MovementCosts.DIAGONAL,
+              can.walk(view.at(level, 0, -1, 0)) * MovementCosts.DIAGONAL,
               MinecraftStepType.WALK,
               state);
         }
@@ -88,24 +87,18 @@ final class Dismounted {
           !standable && Geometry.standable(view, above) && view.at(up, 0, 1, 0).isPassable();
       if (can.walk()) {
         if (standable) {
-          double factor = view.at(level, 0, -1, 0).speedFactor();
-          edges.add(level, MovementCosts.WALK / factor, MinecraftStepType.WALK, state);
+          edges.add(level, can.walk(view.at(level, 0, -1, 0)), MinecraftStepType.WALK, state);
         } else if (stepUp) {
           MinecraftBlock floor = view.at(level);
           MinecraftStepType type =
               floor.isHalfHeight() ? MinecraftStepType.WALK : MinecraftStepType.JUMP;
-          edges.add(
-              above,
-              MovementCosts.WALK / floor.speedFactor() * MovementCosts.DIAGONAL,
-              type,
-              state);
+          edges.add(above, can.walk(floor) * MovementCosts.DIAGONAL, type, state);
         } else {
           Cell below = from.plus(dx, -1, dz);
           if (Geometry.standable(view, below)) {
-            double factor = view.at(below, 0, -1, 0).speedFactor();
             edges.add(
                 below,
-                MovementCosts.WALK / factor * MovementCosts.DIAGONAL,
+                can.walk(view.at(below, 0, -1, 0)) * MovementCosts.DIAGONAL,
                 MinecraftStepType.WALK,
                 state);
           }
