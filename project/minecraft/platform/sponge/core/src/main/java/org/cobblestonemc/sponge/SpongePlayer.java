@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.sponge;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
@@ -23,6 +24,8 @@ import org.spongepowered.api.entity.EntityTypes;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.item.ItemType;
 import org.spongepowered.api.item.ItemTypes;
+import org.spongepowered.api.item.enchantment.Enchantment;
+import org.spongepowered.api.item.enchantment.EnchantmentTypes;
 import org.spongepowered.api.item.inventory.ItemStack;
 import org.spongepowered.api.item.inventory.Slot;
 
@@ -111,6 +114,16 @@ final class SpongePlayer implements CobblestonePlayer {
         .map(Entity::type)
         .map(SpongePlayer::isBoat)
         .orElse(false);
+  }
+
+  @Override
+  public int soulSpeedLevel() {
+    return player().flatMap(player -> player.feet().get(Keys.APPLIED_ENCHANTMENTS)).stream()
+        .flatMap(List::stream)
+        .filter(enchantment -> enchantment.type().equals(EnchantmentTypes.SOUL_SPEED.get()))
+        .mapToInt(Enchantment::level)
+        .max()
+        .orElse(0);
   }
 
   static boolean isBoat(EntityType<?> type) {

@@ -21,6 +21,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.ScheduledTaskHandle;
 import org.cobblestonemc.plugin.api.Navigator;
+import org.cobblestonemc.plugin.message.CobblestoneColors;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.navigator.TrailSmoother;
@@ -240,8 +241,11 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
       if (source == null) {
         continue; // not a labelled trail
       }
-      // White, like the name over a player, between arrows that say it is a way to go.
-      Component text = Component.text("↑ " + labels.get(i) + " ↑", NamedTextColor.WHITE);
+      Component text =
+          Component.text("✦ ")
+              .color(CobblestoneColors.PRIMARY)
+              .append(Component.text(labels.get(i)).color(NamedTextColor.WHITE))
+              .append(Component.text(" ✦").color(CobblestoneColors.PRIMARY));
       Shown<E, A, L> current = shown.get(navigator);
       Optional<Vec3> spot =
           source
@@ -301,8 +305,12 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
         }
         continue;
       }
-      // Arrows down at the place itself.
-      Component text = Component.text("↓ " + labels.get(i) + " ↓", NamedTextColor.WHITE);
+      // Arrows down at the place itself, styled like the trail labels.
+      Component text =
+          Component.text("↓ ")
+              .color(CobblestoneColors.PRIMARY)
+              .append(Component.text(labels.get(i)).color(NamedTextColor.WHITE))
+              .append(Component.text(" ↓").color(CobblestoneColors.PRIMARY));
       Vec3 at = spot.get();
       if (current != null && current.at().minus(at).length() > GOAL_GLIDE_LIMIT) {
         current.hologram().remove(); // it was teleported: jump there

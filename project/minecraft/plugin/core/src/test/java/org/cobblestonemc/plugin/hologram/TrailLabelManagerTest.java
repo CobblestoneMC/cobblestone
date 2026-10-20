@@ -132,7 +132,7 @@ class TrailLabelManagerTest {
 
     FakeHologram label = platform.only();
     assertEquals(OVER, label.at);
-    assertEquals("↑ Steve ↑", plain(label.text));
+    assertEquals("✦ Steve ✦", plain(label.text));
     assertEquals(20, updatesToShow() * TrailLabelManager.PERIOD_TICKS, "a second");
 
     FakeHologram cancel = platform.cancels().getFirst();
@@ -350,8 +350,8 @@ class TrailLabelManagerTest {
     assertEquals(2, platform.names().size());
     FakeHologram first = platform.names().get(0);
     FakeHologram second = platform.names().get(1);
-    assertEquals("↑ player Steve ↑", plain(first.text));
-    assertEquals("↑ town Steve ↑", plain(second.text));
+    assertEquals("✦ player Steve ✦", plain(first.text));
+    assertEquals("✦ town Steve ✦", plain(second.text));
     assertEquals(OVER, first.at);
     assertEquals(OVER.plus(new Vec3(0, HologramPlacement.LABEL_SPACING, 0)), second.at);
   }
@@ -360,15 +360,15 @@ class TrailLabelManagerTest {
   void aLabelIsRenamedWhenAnotherTripStartsOrEnds() {
     start(address("essentials", "player", "Steve"), AHEAD);
     FakeHologram player = platform.only();
-    assertEquals("↑ Steve ↑", plain(player.text));
+    assertEquals("✦ Steve ✦", plain(player.text));
 
     Trip<Object, TestTripAgent, Vec3> town =
         start(address("towny", "town", "Steve"), new Vec3(0.5, 0.9, 3.0));
-    assertEquals("↑ player Steve ↑", plain(player.text));
+    assertEquals("✦ player Steve ✦", plain(player.text));
 
     trips.stop(town);
     scheduler.tick();
-    assertEquals("↑ Steve ↑", plain(player.text));
+    assertEquals("✦ Steve ✦", plain(player.text));
     assertFalse(player.removed);
   }
 
@@ -490,7 +490,7 @@ class TrailLabelManagerTest {
 
     /** Every trail label's name line placed, in order. */
     List<FakeHologram> names() {
-      return spawned.stream().filter(label -> plain(label.text).startsWith("↑")).toList();
+      return spawned.stream().filter(label -> plain(label.text).startsWith("✦")).toList();
     }
 
     /** Every destination label placed, in order. */

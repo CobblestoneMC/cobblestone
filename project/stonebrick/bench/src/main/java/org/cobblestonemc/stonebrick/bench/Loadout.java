@@ -78,6 +78,7 @@ public record Loadout(
         .canGlide(agent.canGlide())
         .hasBoat(agent.hasBoat())
         .inBoat(agent.inBoat())
+        .soulSpeed(agent.soulSpeed())
         .permissions(agent.permissions())
         .build();
   }
@@ -157,6 +158,7 @@ public record Loadout(
             flag(body, "canGlide"),
             flag(body, "hasBoat"),
             flag(body, "inBoat"),
+            body.get("soulSpeed") instanceof Number level ? level.intValue() : 0,
             Set.copyOf(strings(body.get("permissions")))),
         Set.copyOf(excluded),
         Set.copyOf(strings(body.get("only"))));

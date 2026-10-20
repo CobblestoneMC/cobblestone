@@ -264,7 +264,7 @@ Each trip is named by the shortest part of its address that tells it apart from 
 `/stone hud` with no argument switches it on or off; your choice is remembered.
 
 To tell several trails apart, stand still for a second: the name of each trip appears where its
-trail starts (or the guide back to it), named the same way as in the HUD, as `↑ Steve ↑`. With one
+trail starts (or the guide back to it), named the same way as in the HUD, as `✦ Steve ✦`. With one
 trip to a player named Steve it reads `Steve`; add a trip to a town also named Steve and they read
 `player Steve` and `town Steve`. A label only appears where you can see it, follows its trail if
 the route changes, and goes away as soon as you move, so it stays out of your way while you follow

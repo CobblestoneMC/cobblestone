@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Boat;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -84,6 +85,14 @@ final class PaperPlayer implements CobblestonePlayer {
   @Override
   public boolean isInBoat() {
     return player().map(player -> player.getVehicle() instanceof Boat).orElse(false);
+  }
+
+  @Override
+  public int soulSpeedLevel() {
+    return player()
+        .map(player -> player.getInventory().getBoots())
+        .map(boots -> boots.getEnchantmentLevel(Enchantment.SOUL_SPEED))
+        .orElse(0);
   }
 
   @Override

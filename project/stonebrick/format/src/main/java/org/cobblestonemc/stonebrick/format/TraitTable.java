@@ -34,7 +34,7 @@ import org.jetbrains.annotations.Nullable;
  * lets the benchmark platform read a capture with no server and no third-party jar present.
  *
  * <pre>
- *   #stonebrick-traits 1
+ *   #stonebrick-traits 2
  *   #state	bits	breakTimeSeconds	speedFactor	damagePerSecond
  *   minecraft:air	0x3f0000	Infinity	1.0	0.0
  * </pre>
@@ -49,12 +49,11 @@ public final class TraitTable {
    * and a search that never boards one. Refusing to read an old table is the only way that failure
    * gets noticed.
    *
-   * <p>Held at 1 while nothing has shipped: a capture is machine-local and regenerable, so a change
-   * to the bits is answered by deleting the corpus and re-capturing rather than by growing a
-   * version history. ⚠️ That only works if the corpus really is deleted -- a table left behind from
-   * before such a change carries this same header and will be read as current.
+   * <p>Bump it when a bit is added or a platform changes what it answers for a block, and {@code
+   * captureCorpus} re-captures every table written before. Version 2: soul sand and soul soil
+   * answer the Soul Speed bit, and soul soil no longer drags.
    */
-  private static final String HEADER = "#stonebrick-traits 1";
+  private static final String HEADER = "#stonebrick-traits 2";
 
   private static final String COLUMNS =
       "#state\tbits\tbreakTimeSeconds\tspeedFactor\tdamagePerSecond";

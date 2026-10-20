@@ -69,7 +69,8 @@ Essentials' `/warp` is, at 3 seconds each. Tier 1 then picks between walking and
 the landings inside the capture.
 
 Loadouts in `data/agents.yml` describe the player: `canFly`, `canGlide`, `hasBoat`, `inBoat`,
-`permissions`, `excludedModes`, and `only` to limit a loadout to scenarios with one of those tags.
+`soulSpeed` (the level on the boots), `permissions`, `excludedModes`, and `only` to limit a loadout
+to scenarios with one of those tags.
 
 ## Adding a heuristic
 
