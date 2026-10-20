@@ -12,12 +12,12 @@ auto-navigate: true
 # trail; particles/colors below only apply to it.
 navigator: trail
 
-# The particle types the trail is drawn with (only DUST is colored). Bukkit Particle names.
+# The particle types the trail is drawn with (only TRAIL and DUST are colored). Bukkit Particle
+# names.
 particles:
-  - SCRAPE
-  - WAX_OFF
+  - TRAIL
 
-# The colors DUST particles are randomly drawn in, as RRGGBB hex.
+# The colors TRAIL and DUST particles are randomly drawn in, as RRGGBB hex.
 colors:
   - FFD54F
   - 4FC3F7

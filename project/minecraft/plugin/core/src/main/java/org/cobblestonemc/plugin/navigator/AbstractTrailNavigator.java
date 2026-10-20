@@ -771,9 +771,10 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   }
 
   /**
-   * Spawns ~{@code density} Gaussian-scattered particles per block of {@code length} around a
-   * random point on segment {@code i} of {@code path} as drawn, between fractions {@code from} and
-   * {@code to} of it, flowing along it. A fractional count is probabilistic (0.7 → 70%).
+   * Spawns ~{@code density} particles per block of {@code length} on segment {@code i} of {@code
+   * path} as drawn, each at its own random point between fractions {@code from} and {@code to} of
+   * it, Gaussian-scattered around it and flowing along it, so the drawn stretch fills evenly right
+   * up to the trail head. A fractional count is probabilistic (0.7 → 70%).
    */
   private void scatter(
       SmoothedTrail path, int i, double from, double to, double length, ThreadLocalRandom random) {
@@ -782,13 +783,10 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     if (random.nextDouble() < floatCount - count) {
       count++;
     }
-    if (count == 0) {
-      return;
-    }
-    TrailCurve.Sample sample = path.sample(i, from + (to - from) * random.nextDouble());
-    var center = sample.point();
-    var velocity = sample.direction().times(PARTICLE_FLOW_SPEED);
     for (int p = 0; p < count; p++) {
+      TrailCurve.Sample sample = path.sample(i, from + (to - from) * random.nextDouble());
+      var center = sample.point();
+      var velocity = sample.direction().times(PARTICLE_FLOW_SPEED);
       spawnTrailParticle(
           center.x() + random.nextGaussian() * SPREAD_HORIZONTAL,
           center.y() + random.nextGaussian() * SPREAD_VERTICAL,

@@ -146,6 +146,9 @@ public final class ConfigKeys {
   /** Average particles per trail cell each tick; may be fractional (probabilistic). Mutable. */
   public final ConfigKey<Double> trailDensity;
 
+  /** How many ticks each {@code TRAIL} particle lasts. Mutable. */
+  public final ConfigKey<Integer> trailParticleTicks;
+
   /**
    * Registers every shared key on the given manager.
    *
@@ -483,12 +486,14 @@ public final class ConfigKeys {
             .register();
     this.trailParticles =
         manager
-            .key("navigators.trail.particles", List.of("SCRAPE", "WAX_OFF"), Codec.ofStringList())
+            .key("navigators.trail.particles", List.of("TRAIL"), Codec.ofStringList())
             .comment(
                 """
-                Particle types used for the trail; one is picked at random per particle. "DUST" is
-                colored by the palette below; other types (e.g. GLOW, END_ROD) are drawn as-is.
-                Particles that need extra data beyond a color are not supported.""")
+                Particle types used for the trail; one is picked at random per particle. "TRAIL"
+                (Paper only) and "DUST" are colored by the palette below; a TRAIL particle drifts
+                along the trail and lasts exactly particle_ticks, so it never lingers by the player.
+                Other types (e.g. GLOW, END_ROD) are drawn as-is, and last as long as they do.
+                Particles that need other extra data are not supported.""")
             .mutable()
             .register();
     this.trailHighlightParticles =
@@ -505,7 +510,7 @@ public final class ConfigKeys {
                 Codec.ofStringList())
             .comment(
                 """
-                Dust colors as hex RRGGBB; one is picked at random for each DUST particle (no
+                Colors as hex RRGGBB; one is picked at random for each TRAIL or DUST particle (no
                 blending).""")
             .mutable()
             .register();
@@ -517,6 +522,15 @@ public final class ConfigKeys {
                 Average particles per cell each tick, scattered with a Gaussian falloff for column
                 width. May be fractional: 0.7 means each block has a 70% chance of one particle per
                 tick — a way to thin the trail without lowering the tick rate.""")
+            .mutable()
+            .register();
+    this.trailParticleTicks =
+        manager
+            .key("navigators.trail.particle_ticks", 10, Codec.ofInt())
+            .comment(
+                """
+                How many ticks each TRAIL particle lasts before it is gone. Shorter keeps the trail
+                crisp ahead of a player on the move; longer makes it fuller.""")
             .mutable()
             .register();
   }
