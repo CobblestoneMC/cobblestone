@@ -77,7 +77,7 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   static final double MIN_GAP = 3.0;
 
   /** How many seconds of travel at the player's recent speed the trail starts ahead of them. */
-  static final double LEAD_SECONDS = 2.0;
+  static final double LEAD_SECONDS = 1.0;
 
   /** The furthest ahead the trail starts, in blocks. */
   static final double MAX_GAP = 32.0;

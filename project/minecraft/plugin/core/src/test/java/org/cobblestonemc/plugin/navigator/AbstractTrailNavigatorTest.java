@@ -68,16 +68,16 @@ class AbstractTrailNavigatorTest {
   }
 
   @Test
-  void theTrailStartsTwoSecondsAheadOfAMovingPlayer() {
+  void theTrailStartsFurtherAheadOfAMovingPlayer() {
     var navigator = new TestNavigator(straightPath(40, -1));
-    for (int tick = 0; tick < 100; tick++) {
-      navigator.player = new Vec3(0.5 + tick * 0.25, 0, 0.5); // 5 blocks a second
+    for (int tick = 0; tick < 60; tick++) {
+      navigator.player = new Vec3(0.5 + tick * 0.4, 0, 0.5); // 8 blocks a second
       navigator.tick();
     }
 
     double gap = navigator.trailHead().x() - navigator.player.x();
     // Measured along the trail from the point of it nearest the player, a little ahead of them.
-    assertEquals(AbstractTrailNavigator.LEAD_SECONDS * 5, gap, 0.5, "ten blocks ahead");
+    assertEquals(AbstractTrailNavigator.LEAD_SECONDS * 8, gap, 0.5, "a second's travel ahead");
   }
 
   @Test
@@ -99,13 +99,13 @@ class AbstractTrailNavigatorTest {
       steps.add(walk(new Vec3(2, 0, z)));
     }
     var open = new TestNavigator(new Path<>(new Vec3(0, 0, 0), steps));
-    open.speed = 6; // a gap of about 12 blocks: well up the corridor
+    open.speed = 12; // a gap of about 12 blocks: well up the corridor
     open.tick();
     assertTrue(open.trailHead().z() < -5, "without the wall: " + open.trailHead());
 
     var walled = new TestNavigator(new Path<>(new Vec3(0, 0, 0), steps));
     walled.probe = (x, y, z) -> y < 0 || (x <= 1 && z <= -1) ? TrailBlock.SOLID : TrailBlock.OPEN;
-    walled.speed = 6;
+    walled.speed = 12;
     walled.tick();
     Vec3 head = walled.trailHead();
     assertTrue(head.z() < 0.5 && head.z() > -2.0, "a stub around the corner: " + head);

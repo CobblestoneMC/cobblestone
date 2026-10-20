@@ -490,7 +490,8 @@ public final class ConfigKeys {
             .comment(
                 """
                 Particle types used for the trail; one is picked at random per particle. "TRAIL"
-                (Paper only) and "DUST" are colored by the palette below; a TRAIL particle drifts
+                and "DUST" are colored by the palette below (TRAIL needs Minecraft 1.21.2 or later;
+                DUST stands in before that); a TRAIL particle drifts
                 along the trail and lasts exactly particle_ticks, so it never lingers by the player.
                 Other types (e.g. GLOW, END_ROD) are drawn as-is, and last as long as they do.
                 Particles that need other extra data are not supported.""")
@@ -504,14 +505,11 @@ public final class ConfigKeys {
             .register();
     this.trailColors =
         manager
-            .key(
-                "navigators.trail.colors",
-                List.of("55FFFF", "FFAA00", "FFFFFF"),
-                Codec.ofStringList())
+            .key("navigators.trail.colors", List.of("FFFFFF", "4AA8FF"), Codec.ofStringList())
             .comment(
                 """
                 Colors as hex RRGGBB; one is picked at random for each TRAIL or DUST particle (no
-                blending).""")
+                blending). The default is white and Cobblestone's blue.""")
             .mutable()
             .register();
     this.trailDensity =

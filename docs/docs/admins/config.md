@@ -189,15 +189,16 @@ own configuration.
 | `navigators.trail.buffer_cells` | `256` | live |
 | `navigators.trail.particles` | `[TRAIL]` | live |
 | `navigators.trail.highlight_particles` | `[END_ROD]` | live |
-| `navigators.trail.colors` | `[55FFFF, FFAA00, FFFFFF]` | live |
+| `navigators.trail.colors` | `[FFFFFF, 4AA8FF]` | live |
 | `navigators.trail.density` | `0.2` | live |
 | `navigators.trail.particle_ticks` | `10` | live |
 
 - **`buffer_cells`**: Length of the rendered path segment ahead of the player.
 - **`particles`**: Particle types, chosen at random per particle. `TRAIL` and `DUST` use `colors`;
   other types render as-is. A `TRAIL` particle drifts along the trail and lasts exactly
-  `particle_ticks`, so the trail stays crisp ahead of a moving player. `TRAIL` is Paper only;
-  Sponge draws `DUST` in its place. Particles requiring other data are not supported.
+  `particle_ticks`, so the trail stays crisp ahead of a moving player. On a server too old to
+  have `TRAIL` (before 1.21.2, such as Sponge for 1.21.1), `DUST` is drawn in its place. Particles
+  requiring other data are not supported.
 - **`highlight_particles`**: Particles at highlighted points, such as action steps.
 - **`colors`**: `TRAIL` and `DUST` colors as `RRGGBB`, chosen at random per particle.
 - **`density`**: Mean particles per cell per tick. Fractional values are probabilities: `0.7` means

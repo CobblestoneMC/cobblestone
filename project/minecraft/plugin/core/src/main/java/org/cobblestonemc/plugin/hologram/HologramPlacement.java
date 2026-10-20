@@ -21,11 +21,17 @@ import org.cobblestonemc.plugin.navigator.Vec3;
  */
 final class HologramPlacement {
 
-  /** How far above the trail (which runs at body height) the name floats, in blocks. */
-  static final double HEIGHT = 1.0;
+  /**
+   * How far above the trail (which runs at body height) the name floats, in blocks: just over it,
+   * so it reads as part of the trail.
+   */
+  static final double HEIGHT = 0.25;
 
-  /** How far above the name its {@code Cancel} line floats, out of the way. */
-  static final double CANCEL_RISE = 0.5;
+  /**
+   * How far above the name its {@code Cancel} line floats. Over level ground that puts it just
+   * below the player's eyes, so they look down a little to hit it rather than meeting it head on.
+   */
+  static final double CANCEL_RISE = 0.35;
 
   /** The vertical gap between two lines of text. */
   static final double LINE_SPACING = 0.3;
