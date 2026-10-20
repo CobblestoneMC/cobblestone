@@ -136,7 +136,7 @@ class TrailLabelManagerTest {
     assertEquals(20, updatesToShow() * TrailLabelManager.PERIOD_TICKS, "a second");
 
     FakeHologram cancel = platform.cancels().getFirst();
-    assertEquals(OVER.plus(new Vec3(0, HologramPlacement.CANCEL_RISE, 0)), cancel.at, "above");
+    assertEquals(OVER.minus(new Vec3(0, HologramPlacement.CANCEL_DROP, 0)), cancel.at, "below");
     assertEquals(NamedTextColor.RED, cancel.text.color());
   }
 
@@ -193,7 +193,7 @@ class TrailLabelManagerTest {
     assertFalse(label.removed, "the same label");
     Vec3 over = moved.plus(new Vec3(0, HologramPlacement.HEIGHT, 0));
     assertEquals(over, label.at);
-    assertEquals(over.plus(new Vec3(0, HologramPlacement.CANCEL_RISE, 0)), cancel.at);
+    assertEquals(over.minus(new Vec3(0, HologramPlacement.CANCEL_DROP, 0)), cancel.at);
     assertEquals(1, label.moves);
   }
 
@@ -430,7 +430,7 @@ class TrailLabelManagerTest {
   @Test
   void swingingBeforeTheLabelShowsDoesNothing() {
     start(address("player", "Steve"), new AheadNavigator(AHEAD));
-    platform.lookAt(OVER.plus(new Vec3(0, HologramPlacement.CANCEL_RISE, 0)));
+    platform.lookAt(OVER.minus(new Vec3(0, HologramPlacement.CANCEL_DROP, 0)));
     assertFalse(labels.swing(player.uuid()));
     assertEquals(1, trips.trips(player.uuid()).size());
   }

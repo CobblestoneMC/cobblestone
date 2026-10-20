@@ -13,7 +13,7 @@ import org.cobblestonemc.plugin.api.Navigator;
 
 /**
  * Where a trail navigator floats its trip's labels. One names the trip over the trail head, shown
- * while the player stands still; hitting {@code Cancel} above it cancels the trip. The other names
+ * while the player stands still; hitting {@code Cancel} below it cancels the trip. The other names
  * the destination over it, once the player is close. A navigator attaches while its trip runs and
  * says where its trail is; the labels are placed, named and stacked against the player's other
  * trips here.

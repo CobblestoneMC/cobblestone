@@ -138,7 +138,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     this.tripManager =
         new TripManager<>(platformApi.scheduler(), config.get(keys.tripsMaxActivePerPlayer));
     // Each trail floats its trip's name over itself while the player stands still; hitting the
-    // Cancel line above it cancels the trip.
+    // Cancel line below it cancels the trip.
     this.holograms = new PaperHolograms(this);
     TrailLabelManager<Entity, PaperTripAgent, Location> trailLabels =
         new TrailLabelManager<>(

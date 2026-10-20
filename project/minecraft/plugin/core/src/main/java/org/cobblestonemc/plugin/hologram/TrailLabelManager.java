@@ -45,7 +45,7 @@ import org.cobblestonemc.plugin.trip.TripTarget;
  * more than {@link #GLIDE_LIMIT} away; all go away as soon as the player leaves the block. Someone
  * following a trail knows where it goes; one who stops may not.
  *
- * <p>Each trail label reads {@code Cancel} in red above the trip's name, and hitting that cancels
+ * <p>Each trail label reads {@code Cancel} in red below the trip's name, and hitting that cancels
  * the trip. The client can't hit a label (see {@link LabelHit}), so the platform reports every left
  * click to {@link #swing}, which works out what it landed on.
  *
@@ -353,7 +353,7 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
     return goal.map(platform::point).map(point -> point.plus(new Vec3(0, GOAL_HEIGHT, 0)));
   }
 
-  /** Places a trip's label, its name at {@code at} and {@code Cancel} above. */
+  /** Places a trip's label, its name at {@code at} and {@code Cancel} below. */
   private Optional<Shown<E, A, L>> spawn(A agent, Trip<E, A, L> trip, Vec3 at, Component text) {
     String cancelText = messages.raw(agent.locale(), CobblestoneMessages.HOLOGRAM_CANCEL.key());
     Optional<Hologram> name = platform.spawn(agent, at, text);

@@ -16,28 +16,25 @@ import org.cobblestonemc.plugin.navigator.Vec3;
 
 /**
  * Where a trip's label floats: over the trail, in a free block the player can see, and clear of the
- * player's other labels. A label is two lines, its trip's name with {@code Cancel} above it; it is
+ * player's other labels. A label is two lines, its trip's name with {@code Cancel} below it; it is
  * placed by the center of the name.
  */
 final class HologramPlacement {
 
-  /**
-   * How far above the trail (which runs at body height) the name floats, in blocks: just over it,
-   * so it reads as part of the trail.
-   */
-  static final double HEIGHT = 0.25;
+  /** How far above the trail (which runs at body height) the name floats, in blocks. */
+  static final double HEIGHT = 0.5;
 
   /**
-   * How far above the name its {@code Cancel} line floats. Over level ground that puts it just
-   * below the player's eyes, so they look down a little to hit it rather than meeting it head on.
+   * How far below the name its {@code Cancel} line floats: down at the trail itself, in front of
+   * the trail head, so the player looks down to it, well below their eyes.
    */
-  static final double CANCEL_RISE = 0.35;
+  static final double CANCEL_DROP = 0.5;
 
   /** The vertical gap between two lines of text. */
   static final double LINE_SPACING = 0.3;
 
-  /** The vertical gap between two labels stacked over the same spot: a name, then a Cancel. */
-  static final double LABEL_SPACING = CANCEL_RISE + LINE_SPACING;
+  /** The vertical gap between two labels stacked over the same spot: a Cancel, then a name. */
+  static final double LABEL_SPACING = CANCEL_DROP + LINE_SPACING;
 
   /** Labels closer than this horizontally are stacked. */
   private static final double STACK_RADIUS = 0.75;
@@ -94,7 +91,7 @@ final class HologramPlacement {
    * @return the center of its {@code Cancel} line
    */
   static Vec3 cancelAt(Vec3 at) {
-    return at.plus(new Vec3(0, CANCEL_RISE, 0));
+    return at.minus(new Vec3(0, CANCEL_DROP, 0));
   }
 
   /** Raises {@code spot} until it overlaps none of {@code taken}; {@code null} if it can't. */

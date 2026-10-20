@@ -71,7 +71,7 @@ name, without extension, in the plugin's data folder.
   has no scoreboard API.
 - **`holograms`**: Floats a label naming each trip where its trail starts (or the guide back to
   it), a few blocks ahead of the player, once they have stood still for a second; the labels go
-  away as soon as they move. Hitting the red `Cancel` above a label cancels its trip, from any
+  away as soon as they move. Hitting the red `Cancel` below a label cancels its trip, from any
   distance. Within 24 blocks of a destination, a label naming it also floats over it, moving or
   not, unless it shows its own name (a player, a named pet). This is the default; a plugin starting a trip can turn its label on or off. Labels are entities.
   On Paper they are seen only by their player and never saved. On Sponge, whose API can't hide an

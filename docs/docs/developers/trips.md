@@ -111,7 +111,7 @@ values fall back to the server configuration.
     ```
 
 `showLabel` decides whether the trip's name floats over its trail while the player stands still
-(where hitting `Cancel` above it cancels the trip). Unset, it follows the server's
+(where hitting `Cancel` below it cancels the trip). Unset, it follows the server's
 `trips.holograms` config.
 
 To use another navigator, build settings for its id:

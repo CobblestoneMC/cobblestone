@@ -268,7 +268,7 @@ trail starts (or the guide back to it), named the same way as in the HUD, as `�
 trip to a player named Steve it reads `Steve`; add a trip to a town also named Steve and they read
 `player Steve` and `town Steve`. A label only appears where you can see it, follows its trail if
 the route changes, and goes away as soon as you move, so it stays out of your way while you follow
-the trail. **Hit the red `Cancel` above a label to cancel that trip**; it works from any distance
+the trail. **Hit the red `Cancel` below a label to cancel that trip**; it works from any distance
 you can see it from.
 
 Once you are within 24 blocks of a destination, a label naming it, as `↓ Steve ↓`, floats over it
