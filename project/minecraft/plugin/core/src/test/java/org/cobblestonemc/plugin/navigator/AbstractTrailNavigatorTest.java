@@ -81,6 +81,29 @@ class AbstractTrailNavigatorTest {
   }
 
   @Test
+  void speedHoldsSteadyWhenMovementArrivesInBursts() {
+    // Sprinting, but the server sees the moves bunched: nothing one tick, two ticks' worth the
+    // next.
+    var navigator = new TestNavigator(straightPath(60, -1));
+    double x = 0.5;
+    double slowest = Double.POSITIVE_INFINITY;
+    double fastest = 0;
+    for (int tick = 0; tick < 80; tick++) {
+      if (tick % 2 == 1) {
+        x += 2 * 0.28; // 5.6 blocks a second on average
+      }
+      navigator.player = new Vec3(x, 0, 0.5);
+      navigator.tick();
+      if (tick >= 40) {
+        slowest = Math.min(slowest, navigator.speed);
+        fastest = Math.max(fastest, navigator.speed);
+      }
+    }
+    assertEquals(5.6, (slowest + fastest) / 2, 0.2);
+    assertTrue(fastest - slowest < 0.3, "the speed swings from " + slowest + " to " + fastest);
+  }
+
+  @Test
   void noParticlesBetweenThePlayerAndTheTrailHead() {
     var navigator = new TestNavigator(straightPath(20, -1));
     navigator.tickMany(200);

@@ -28,7 +28,7 @@ final class HologramPlacement {
    * How far below the name its {@code Cancel} line floats: down at the trail itself, in front of
    * the trail head, so the player looks down to it, well below their eyes.
    */
-  static final double CANCEL_DROP = 0.5;
+  static final double CANCEL_DROP = 0.7;
 
   /** The vertical gap between two lines of text. */
   static final double LINE_SPACING = 0.3;

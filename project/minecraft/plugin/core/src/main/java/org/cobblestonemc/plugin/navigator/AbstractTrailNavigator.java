@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.plugin.navigator;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -88,8 +89,15 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   /** How far short of a destination the player can see the trail stops, in blocks. */
   static final double GOAL_CLEARANCE = 3.0;
 
-  /** The share of the gap to the latest speed taken each tick: a time constant of half a second. */
-  private static final double SPEED_SMOOTHING = 1 - Math.exp(-1 / 10.0);
+  /**
+   * How many ticks of movement the player's speed is measured over. Movement reaches the server in
+   * packets that don't line up with its ticks (a tick can see none, and the next two ticks' worth),
+   * so a single tick's movement swings between nothing and double; over a few ticks it evens out.
+   */
+  private static final int SPEED_WINDOW_TICKS = 6;
+
+  /** The share of the gap to the measured speed taken each tick: a time constant of two ticks. */
+  private static final double SPEED_SMOOTHING = 1 - Math.exp(-1 / 2.0);
 
   /** A move further than this in one tick is a teleport, not travel, in blocks. */
   private static final double MAX_TRAVEL_PER_TICK = 4.0;
@@ -187,6 +195,9 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   // record last prompted instruction so we don't repeat ourselves on a recalculation
   private MinecraftInstruction lastPromptedInstruction;
   private Vec3 lastPlayerVec;
+  // how far the player moved in each of the last SPEED_WINDOW_TICKS ticks, oldest first
+  private final ArrayDeque<Double> recentTravel = new ArrayDeque<>();
+  private double recentTravelTotal;
   double speed; // blocks per second, smoothed; package-private for tests
   private Vec3 trailHead; // where the trail starts this tick, or null if it isn't drawn
   private boolean headFromPlayer; // whether the trail head is measured from the player
@@ -390,7 +401,10 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     render(playerVec, playerWorld, nextStepIsVanilla, probe, random);
   }
 
-  /** Smooths the player's speed toward how far they moved since the last tick. */
+  /**
+   * Measures the player's speed as how far they moved over the last {@link #SPEED_WINDOW_TICKS},
+   * lightly smoothed.
+   */
   private void updateSpeed(Vec3 playerVec) {
     Vec3 last = lastPlayerVec;
     lastPlayerVec = playerVec;
@@ -399,9 +413,17 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     }
     double travelled = playerVec.minus(last).length();
     if (travelled > MAX_TRAVEL_PER_TICK) {
-      return; // a teleport, not travel
+      recentTravel.clear(); // a teleport, not travel: start measuring again from here
+      recentTravelTotal = 0;
+      return;
     }
-    speed += SPEED_SMOOTHING * (travelled * TICKS_PER_SECOND - speed);
+    recentTravel.addLast(travelled);
+    recentTravelTotal += travelled;
+    if (recentTravel.size() > SPEED_WINDOW_TICKS) {
+      recentTravelTotal -= recentTravel.removeFirst();
+    }
+    double measured = recentTravelTotal / recentTravel.size() * TICKS_PER_SECOND;
+    speed += SPEED_SMOOTHING * (measured - speed);
   }
 
   @Override
