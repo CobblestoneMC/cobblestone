@@ -32,6 +32,9 @@ The `town` level is strict: `/nav town riverwood home` is valid; `/nav riverwood
 - **Teleport route steps.** `/town spawn`, `/nation spawn`, and `/town outpost` are offered as route
   steps when the player is permitted to use them under Towny's rules.
 - **Build protection.** Routes do not mine through blocks the player may not break.
+- **Menu items.** In the navigation menu each town shows as a banner in its map color (`/town set
+  mapcolor`), matched to the nearest dye. Change the items under `icons` in
+  `plugins/CobblestoneTowny/config.yml`.
 
 ## EssentialsX
 
@@ -43,6 +46,9 @@ The `town` level is strict: `/nav town riverwood home` is valid; `/nav riverwood
 ```
 
 `/home` and `/spawn` are offered as route steps when the player is permitted to use them.
+
+In the navigation menu each home shows as a little house. Change the items under `icons` in
+`plugins/CobblestoneEssentials/config.yml`.
 
 ## Citizens
 

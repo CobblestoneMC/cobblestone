@@ -24,14 +24,14 @@ All of these behave identically on Paper and Sponge.
 
 ---
 
-## `/cobblestone navigate <destination…> [flags]`
+## `/cobblestone navigate [destination…] [flags]`
 
 Usually typed as `/nav`; `/navigate` and `/cobblestone navigate` are the same command.
 
 **Permission:** `cobblestone.navigate` (default allow) · **Players only**
 
 Resolves the destination, runs a search, and starts a trip if a route is found. With no arguments,
-prints usage.
+opens the [navigation menu](config.md#menu) instead.
 
 ### Destination
 

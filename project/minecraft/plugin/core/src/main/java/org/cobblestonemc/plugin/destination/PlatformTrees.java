@@ -12,12 +12,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.minecraft.api.WorldRegion;
+import org.cobblestonemc.plugin.api.DestinationChild;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
+import org.cobblestonemc.plugin.api.DestinationNode;
 import org.cobblestonemc.plugin.api.DestinationOption;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.cobblestonemc.plugin.api.OptionValues;
@@ -29,7 +30,8 @@ import org.cobblestonemc.plugin.api.Validity;
  * DestinationNode} of {@link NavigationTarget}s, with every region converted from the platform's
  * type to the search's. The view is as lazy as the tree it wraps — nothing is converted until a
  * level is visited or a leaf is built — and each search re-reads the integration's regions, so its
- * moving targets are followed as before.
+ * moving targets are followed as before. Each entry keeps the {@linkplain DestinationChild#display
+ * display} the integration gave it.
  */
 public final class PlatformTrees {
 
@@ -46,14 +48,16 @@ public final class PlatformTrees {
    * @return the view
    */
   public static <W, V> DestinationNode<NavigationTarget> adapt(
-      PlatformDestinationTree<W, V> tree,
+      DestinationNode<MinecraftDestination<W, V>> tree,
       Function<WorldRegion<W, V>, Optional<DomainRegion<MinecraftWorld>>> regions) {
-    Map<String, Supplier<? extends DestinationNode<NavigationTarget>>> subTrees =
-        new LinkedHashMap<>();
-    tree.subTrees().forEach((key, child) -> subTrees.put(key, () -> adapt(child.get(), regions)));
-    Map<String, DestinationLeaf<NavigationTarget>> leaves = new LinkedHashMap<>();
-    tree.leaves().forEach((key, leaf) -> leaves.put(key, new Leaf<>(leaf, regions)));
-    return new DestinationNode.Simple<>(tree.strict(), subTrees, leaves);
+    Map<String, DestinationChild<NavigationTarget>> children = new LinkedHashMap<>();
+    tree.children()
+        .forEach(
+            (key, child) ->
+                children.put(
+                    key,
+                    child.map(leaf -> new Leaf<>(leaf, regions), level -> adapt(level, regions))));
+    return new DestinationNode.Simple<>(tree.strict(), children, tree.aliases());
   }
 
   /**

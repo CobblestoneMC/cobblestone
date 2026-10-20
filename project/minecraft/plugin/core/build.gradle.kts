@@ -9,6 +9,11 @@ dependencies {
     // Adventure (Components/Audience) and SnakeYAML are provided at runtime by the platform plugin —
     // Adventure by the server, SnakeYAML by the paper-plugin loader (MavenLibraryResolver).
     compileOnly(libs.adventure.api)
+    // MiniMessage, for the admin-written navigation menu title; both servers ship it.
+    compileOnly(libs.adventure.minimessage)
+    // Geyser's API, so Bedrock players can open the navigation menu with an emote. Optional: it is
+    // only touched once Geyser is known to be installed (see BedrockEmotes).
+    compileOnly(libs.geyser.api)
     compileOnly(libs.snakeyaml)
     // bStats' platform-neutral chart types (org.bstats.charts.*), for the shared metrics chart set.
     // The platform plugin bundles + relocates the full bStats (bstats-bukkit / bstats-sponge).
@@ -21,4 +26,10 @@ dependencies {
     // Adventure is compileOnly above (server-provided at runtime); destination fixtures in tests build
     // MinecraftDestinations, which expose Adventure Components, so tests need it on their classpath.
     testImplementation(libs.adventure.api)
+    testImplementation(libs.adventure.minimessage)
+}
+
+repositories {
+    // Geyser's API.
+    maven("https://repo.opencollab.dev/main/")
 }

@@ -261,7 +261,7 @@ final class CobblestoneCommand {
         sender,
         messages,
         locale,
-        "/cobblestone navigate <destination...>",
+        "/cobblestone navigate [destination...]",
         "command.cobblestone.help.navigate");
     PaperCommandHelp.line(
         sender,

@@ -16,6 +16,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
+import java.util.function.Function;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
@@ -34,7 +35,10 @@ import org.cobblestonemc.paper.PaperRegions;
 import org.cobblestonemc.paper.PaperTerrain;
 import org.cobblestonemc.paper.api.WholeWorldRegion;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
+import org.cobblestonemc.plugin.api.DestinationNode;
 import org.cobblestonemc.plugin.api.DestinationOption;
+import org.cobblestonemc.plugin.api.Display;
+import org.cobblestonemc.plugin.api.Icon;
 import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.data.DeathLocationDao;
 import org.cobblestonemc.plugin.data.ExpiringCache;
@@ -42,9 +46,9 @@ import org.cobblestonemc.plugin.data.LocationDao;
 import org.cobblestonemc.plugin.data.MountDao;
 import org.cobblestonemc.plugin.data.MountLocation;
 import org.cobblestonemc.plugin.destination.DestinationDetails;
-import org.cobblestonemc.plugin.destination.DestinationNode;
 import org.cobblestonemc.plugin.destination.DestinationProvider;
 import org.cobblestonemc.plugin.destination.NavigationTarget;
+import org.cobblestonemc.plugin.menu.MenuIcons;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Message0;
 import org.cobblestonemc.plugin.message.Message1;
@@ -93,6 +97,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
   private final PaperRegions regions;
   private final BooleanSupplier trackDeaths;
   private final Messages messages;
+  private final Function<String, Icon> icons;
   private final ExpiringCache<UUID, List<Pet>> petsByOwner = new ExpiringCache<>();
 
   public BuiltInDestinations(
@@ -102,7 +107,8 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
       MinecraftScheduler<Entity> scheduler,
       PaperRegions regions,
       BooleanSupplier trackDeaths,
-      Messages messages) {
+      Messages messages,
+      Function<String, Icon> icons) {
     this.locations = locations;
     this.deaths = deaths;
     this.mounts = mounts;
@@ -110,6 +116,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
     this.regions = regions;
     this.trackDeaths = trackDeaths;
     this.messages = messages;
+    this.icons = icons;
   }
 
   @Override
@@ -117,20 +124,41 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
     DestinationNode.Builder<NavigationTarget> root = DestinationNode.builder();
     // With death tracking off there is never a death to go back to, so the key is not offered.
     if (trackDeaths.getAsBoolean()) {
-      root.leaf(DEATH_KEY, DestinationLeaf.ofValidity(() -> death(player)));
+      root.destination(DEATH_KEY, DestinationLeaf.ofValidity(() -> death(player)))
+          .display(DEATH_KEY, icon(MenuIcons.DEATH));
     }
-    return root.leaf(SURFACE_KEY, DestinationLeaf.ofValidity(() -> surface(player)))
-        .leaf(TARGET_KEY, DestinationLeaf.ofValidity(() -> target(player)))
-        .leaf(SPAWN_KEY, DestinationLeaf.of(this::spawn))
-        .leaf(RESPAWN_KEY, DestinationLeaf.ofValidity(() -> respawn(player)))
-        .leaf(MOUNT_KEY, DestinationLeaf.ofValidity(() -> mount(player)))
+    return root.destination(SURFACE_KEY, DestinationLeaf.ofValidity(() -> surface(player)))
+        .display(SURFACE_KEY, icon(MenuIcons.SURFACE))
+        .destination(TARGET_KEY, DestinationLeaf.ofValidity(() -> target(player)))
+        .display(TARGET_KEY, icon(MenuIcons.TARGET))
+        .destination(SPAWN_KEY, DestinationLeaf.of(this::spawn))
+        .display(SPAWN_KEY, icon(MenuIcons.SPAWN))
+        .destination(RESPAWN_KEY, DestinationLeaf.ofValidity(() -> respawn(player)))
+        .display(RESPAWN_KEY, icon(MenuIcons.RESPAWN))
+        .destination(MOUNT_KEY, DestinationLeaf.ofValidity(() -> mount(player)))
+        .display(MOUNT_KEY, icon(MenuIcons.MOUNT))
         .alias(HORSE_ALIAS, MOUNT_KEY)
-        .subtree(PLAYER_TREE_KEY, () -> players(player))
-        .subtree(WORLD_TREE_KEY, () -> worlds(player))
-        .subtree(LOCATION_TREE_KEY, () -> locations(player))
-        .subtree(PET_TREE_KEY, () -> pets(player))
-        .subtree(COORDINATES_TREE_KEY, () -> coordinates(player))
+        .children(PLAYER_TREE_KEY, () -> players(player))
+        .display(PLAYER_TREE_KEY, icon(MenuIcons.PLAYER))
+        .children(WORLD_TREE_KEY, () -> worlds(player))
+        .display(WORLD_TREE_KEY, icon(MenuIcons.WORLD))
+        .children(LOCATION_TREE_KEY, () -> locations(player))
+        .display(LOCATION_TREE_KEY, icon(MenuIcons.LOCATION))
+        .children(PET_TREE_KEY, () -> pets(player))
+        .display(PET_TREE_KEY, icon(MenuIcons.PET))
+        .children(COORDINATES_TREE_KEY, () -> coordinates(player))
+        .display(COORDINATES_TREE_KEY, icon(MenuIcons.COORDINATES))
         .build();
+  }
+
+  @Override
+  public Display display(Player player) {
+    return icon(MenuIcons.COBBLESTONE);
+  }
+
+  /** The navigation menu's display for an entry: just its configured item. */
+  private Display icon(String name) {
+    return Display.of(icons.apply(name));
   }
 
   /** The player's last death; invalid if none is on record. */
@@ -254,8 +282,10 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
   private DestinationNode<NavigationTarget> coordinates(Player player) {
     return DestinationNode.<NavigationTarget>builder()
         .strict()
-        .leaf(BLOCK_KEY, coordinateBlock(player))
-        .leaf(SURFACE_KEY, coordinateSurface(player))
+        .destination(BLOCK_KEY, coordinateBlock(player))
+        .display(BLOCK_KEY, icon(MenuIcons.BLOCK))
+        .destination(SURFACE_KEY, coordinateSurface(player))
+        .display(SURFACE_KEY, icon(MenuIcons.SURFACE))
         .build();
   }
 
@@ -396,7 +426,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
         key = pet.name() + "-" + n;
       }
       String name = key;
-      node.leaf(
+      node.destination(
           key,
           DestinationLeaf.of(
               () -> {
@@ -408,6 +438,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
                     .existence(tracked::alive)
                     .build();
               }));
+      node.display(key, Display.of(Icon.item(pet.type() + "_spawn_egg")));
     }
     return node.build();
   }
@@ -430,7 +461,12 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
           continue;
         }
         Long tamedAt = tameable.getPersistentDataContainer().get(TAMED_AT, PersistentDataType.LONG);
-        pets.add(new Pet(tameable.getUniqueId(), name, tamedAt == null ? Long.MAX_VALUE : tamedAt));
+        pets.add(
+            new Pet(
+                tameable.getUniqueId(),
+                name,
+                tamedAt == null ? Long.MAX_VALUE : tamedAt,
+                tameable.getType().getKey().asString()));
       }
     }
     pets.sort(
@@ -440,7 +476,8 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
     return List.copyOf(pets);
   }
 
-  private record Pet(UUID uuid, String name, long tamedAt) {}
+  /** A pet, and its kind (an entity type key), whose spawn egg stands for it in the menu. */
+  private record Pet(UUID uuid, String name, long tamedAt, String type) {}
 
   private DestinationNode<NavigationTarget> players(Player player) {
     UUID self = player.getUniqueId();
@@ -451,7 +488,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
       }
       UUID uuid = other.getUniqueId();
       String name = other.getName();
-      node.leaf(
+      node.destination(
           name,
           DestinationLeaf.of(
               () ->
@@ -467,6 +504,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
                       .mobile()
                       .existence(() -> Bukkit.getPlayer(uuid) != null)
                       .build()));
+      node.display(name, Display.of(Icon.playerHead(uuid)));
     }
     return node.build();
   }
@@ -480,13 +518,21 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
         continue; // no point navigating to the world you're already in
       }
       String name = world.getName();
-      node.leaf(
+      node.destination(
           name,
           DestinationLeaf.of(
               () ->
                   NavigationTarget.builder(
                           name, () -> regions.of(new WholeWorldRegion(worldKey)).stream().toList())
                       .build()));
+      node.display(
+          name,
+          icon(
+              switch (world.getEnvironment()) {
+                case NETHER -> MenuIcons.WORLD_NETHER;
+                case THE_END -> MenuIcons.WORLD_END;
+                default -> MenuIcons.WORLD_OVERWORLD;
+              }));
     }
     return node.build();
   }
@@ -499,8 +545,10 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
    */
   private DestinationNode<NavigationTarget> locations(Player player) {
     return DestinationNode.<NavigationTarget>builder()
-        .subtree(GLOBAL_TREE_KEY, () -> locations(locations.global()))
-        .subtree(PRIVATE_TREE_KEY, () -> locations(locations.ownedBy(player.getUniqueId())))
+        .children(GLOBAL_TREE_KEY, () -> locations(locations.global()))
+        .display(GLOBAL_TREE_KEY, icon(MenuIcons.GLOBAL))
+        .children(PRIVATE_TREE_KEY, () -> locations(locations.ownedBy(player.getUniqueId())))
+        .display(PRIVATE_TREE_KEY, icon(MenuIcons.PRIVATE))
         .build();
   }
 
@@ -509,7 +557,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
       List<org.cobblestonemc.plugin.data.Location> locations) {
     DestinationNode.Builder<NavigationTarget> node = DestinationNode.builder();
     for (var location : locations) {
-      node.leaf(
+      node.destination(
           location.name(),
           DestinationLeaf.of(
               () ->
@@ -519,6 +567,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
                       location.x(),
                       location.y(),
                       location.z())));
+      node.display(location.name(), icon(MenuIcons.SAVED_LOCATION));
     }
     return node.build();
   }

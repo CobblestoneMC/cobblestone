@@ -1,0 +1,24 @@
+# CobblestoneTowny — connects Towny to Cobblestone.
+#
+# How Towny's destinations look in Cobblestone's navigation menu (/navigate on its own). Each item is
+# an item key ("minecraft:oak_sign") or "head:" followed by a skin texture value, as head databases
+# such as minecraft-heads.com publish them. Restart the server after changing this file.
+icons:
+  # Towny's own entry at the top of the menu.
+  root: "minecraft:bell"
+  # The list of every town.
+  towns: "minecraft:white_banner"
+  # Each town (and your own, under "resident"). "map-color" shows a banner in the town's map color,
+  # the one its mayor sets with /town set mapcolor; or name one item for every town.
+  town: map-color
+  # A town's home block.
+  home: "minecraft:red_bed"
+  # A town's outposts, and each one.
+  outposts: "minecraft:campfire"
+  outpost: "minecraft:campfire"
+  # A town's plot types (shop, bank, …), and each one.
+  plot-types: "minecraft:filled_map"
+  plot-type: "minecraft:map"
+  # A town's named plots, and each one.
+  plots: "minecraft:oak_sign"
+  plot: "minecraft:oak_sign"

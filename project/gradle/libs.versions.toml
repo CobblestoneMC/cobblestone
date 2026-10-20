@@ -12,9 +12,13 @@ snakeyaml = "2.3"
 shadow = "9.0.0"
 h2 = "2.2.224"
 bstats = "3.2.1"
+# Geyser's API, for opening the navigation menu with a Bedrock emote. Optional at runtime.
+geyser = "2.9.5-SNAPSHOT"
 
 [libraries]
 adventure-api = { module = "net.kyori:adventure-api", version.ref = "adventure" }
+adventure-minimessage = { module = "net.kyori:adventure-text-minimessage", version.ref = "adventure" }
+geyser-api = { module = "org.geysermc.geyser:api", version.ref = "geyser" }
 paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
 sponge-latest = { module = "org.spongepowered:spongeapi", version.ref = "sponge" }
 sponge-api12 = { module = "org.spongepowered:spongeapi", version.ref = "sponge12" }

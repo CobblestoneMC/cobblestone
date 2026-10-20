@@ -22,7 +22,7 @@ import org.joml.Vector3i;
 
 /**
  * Surfaces the player's started quests as navigation targets: {@code cobblestonebishopquests → quest →
- * <name>}, one leaf per started quest with a current {@code position} objective. Cobblestone roots the
+ * <name>}, one destination per started quest with a current {@code position} objective. Cobblestone roots the
  * branch at this plugin's own name, which keeps these from colliding with other integrations'
  * trees; its resolver still lets a player type just the quest name when it's unambiguous.
  * Navigating is gated by Cobblestone's {@code cobblestone.navigate.cobblestonebishopquests.quest.*} permission
@@ -53,10 +53,10 @@ final class BishopQuestsDestinationService implements DestinationService {
         continue; // no current position objective — nothing to walk to
       }
       String label = quest.getId();
-      questNode.leaf(slug(label), Destination.at(target, label));
+      questNode.destination(slug(label), Destination.at(target, label));
       any = true;
     }
-    return any ? DestinationTree.builder().subtree(QUEST_KEY, questNode).build() : null;
+    return any ? DestinationTree.builder().children(QUEST_KEY, questNode).build() : null;
   }
 
   /** A single command token from a quest id: lowercase, non-alphanumeric runs become one dash. */

@@ -27,12 +27,12 @@ import org.joml.Vector3i;
 
 /**
  * Surfaces the player's active quest compasses as navigation targets: {@code cobblestonebetonquest
- * → compass → <name>}, one leaf per compass whose location resolves. Cobblestone roots the branch
- * at this plugin's own name, which keeps these from colliding with other integrations' trees; its
- * resolver still lets a player type just the compass name when it's unambiguous. Navigating is
- * gated by Cobblestone's {@code cobblestone.navigate.cobblestonebetonquest.compass.*} permission
- * (default-allow). Targets are snapshotted when the tree is built (on the main thread, as
- * compass-location resolution requires).
+ * → compass → <name>}, one destination per compass whose location resolves. Cobblestone roots the
+ * branch at this plugin's own name, which keeps these from colliding with other integrations'
+ * trees; its resolver still lets a player type just the compass name when it's unambiguous.
+ * Navigating is gated by Cobblestone's {@code cobblestone.navigate.cobblestonebetonquest.compass.*}
+ * permission (default-allow). Targets are snapshotted when the tree is built (on the main thread,
+ * as compass-location resolution requires).
  */
 final class BetonQuestDestinationService implements DestinationService {
 
@@ -59,10 +59,10 @@ final class BetonQuestDestinationService implements DestinationService {
         continue; // location couldn't be resolved — nothing to walk to
       }
       String name = entry.getKey().get();
-      compass.leaf(slug(name), Destination.at(target, name));
+      compass.destination(slug(name), Destination.at(target, name));
       any = true;
     }
-    return any ? DestinationTree.builder().subtree(COMPASS_KEY, compass).build() : null;
+    return any ? DestinationTree.builder().children(COMPASS_KEY, compass).build() : null;
   }
 
   /**

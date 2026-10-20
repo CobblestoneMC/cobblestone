@@ -7,52 +7,72 @@
 
 package org.cobblestonemc.paper.plugin.api;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 import org.bukkit.World;
+import org.cobblestonemc.plugin.api.DestinationChild;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
+import org.cobblestonemc.plugin.api.Display;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.cobblestonemc.plugin.api.PlatformDestinationTree;
 import org.cobblestonemc.plugin.api.Validity;
 import org.joml.Vector3i;
 
 /**
- * A fluent builder for a {@link PlatformDestinationTree} node — so an integration writes its {@code
- * /navigate} structure as structure, not nested {@code Map<String, Supplier<…>>} plumbing:
+ * A fluent builder for one level of a {@link PlatformDestinationTree} — so an integration writes
+ * its {@code /navigate} structure as structure, not nested {@code Map<String, Supplier<…>>}
+ * plumbing:
  *
  * <pre>{@code
  * DestinationTree.builder()
- *     .subtree("town", townList)          // a lazily-built child
- *     .leaf("resident", Destination.at(spawn, "resident"));
+ *     .children("town", towns)                          // a level of further entries
+ *     .destination("spawn", () -> Destination.at(spawn, "spawn"))
+ *     .child("riverwood", DestinationTree.child()       // somewhere to go, with more inside
+ *         .destination(() -> wholeTown(riverwood))
+ *         .children(() -> townDetail(riverwood))
+ *         .label(Component.text("Riverwood"))
+ *         .icon(PaperIcon.of(Material.RED_BANNER)));
  * }</pre>
  *
- * <p>Sub-trees are held behind {@link Supplier}s, so huge sets (every town, every home) are not
- * materialized until a node is actually visited, and a leaf's destination is built only once a
- * player picks it. A key may be both a {@code leaf} and a {@code subtree} — Cobblestone treats "the
- * node itself" as the leaf and "under the node" as the subtree.
+ * <p>Each entry is a destination, a level of further entries, or both; {@link #destination} and
+ * {@link #children} under the same key make one entry with both roles. Levels are held behind
+ * {@link Supplier}s, so huge sets (every town, every home) are not materialized until a level is
+ * actually visited, and a destination is built only once a player picks it. A level is never itself
+ * somewhere to go — only its entries are.
  */
 public final class DestinationTree {
 
   private boolean strict;
-  private final Map<String, Supplier<? extends PlatformDestinationTree<World, Vector3i>>> subTrees =
-      new LinkedHashMap<>();
-  private final Map<String, DestinationLeaf<MinecraftDestination<World, Vector3i>>> leaves =
+  private final Map<String, DestinationChild<MinecraftDestination<World, Vector3i>>> children =
       new LinkedHashMap<>();
 
   private DestinationTree() {}
 
   /**
-   * Begins a node. Its key is chosen by whoever attaches it — see {@link #subtree}.
+   * Begins a level. Its key is chosen by whoever attaches it — see {@link #children}.
    *
-   * @return a new, empty node builder
+   * @return a new, empty level builder
    */
   public static DestinationTree builder() {
     return new DestinationTree();
   }
 
   /**
-   * Marks this level strict — it may never be omitted in commands (no name-promotion).
+   * Begins one entry, for when it needs more than {@link #destination} or {@link #children} give
+   * it: both roles at once, or a {@linkplain DestinationChild.Builder#label label}, {@linkplain
+   * DestinationChild.Builder#description description} or {@linkplain DestinationChild.Builder#icon
+   * icon} in the navigation menu. Add it with {@link #child(String, DestinationChild.Builder)}.
+   *
+   * @return a new, empty entry builder
+   */
+  public static DestinationChild.Builder<MinecraftDestination<World, Vector3i>> child() {
+    return DestinationChild.builder();
+  }
+
+  /**
+   * Marks this level strict — its key may never be omitted in commands (no name-promotion).
    *
    * @return this builder
    */
@@ -62,78 +82,125 @@ public final class DestinationTree {
   }
 
   /**
-   * Adds a leaf, described by {@code leaf} and built once a player picks it — for a leaf with
-   * permissions or options, or one that may be {@linkplain Validity#invalid invalid}.
+   * Adds an entry, replacing any already under its key.
    *
-   * @param key the leaf's key
-   * @param leaf the leaf
+   * @param key the entry's key
+   * @param child the entry
    * @return this builder
    */
-  public DestinationTree leaf(
-      String key, DestinationLeaf<MinecraftDestination<World, Vector3i>> leaf) {
-    leaves.put(key, leaf);
+  public DestinationTree child(
+      String key, DestinationChild<MinecraftDestination<World, Vector3i>> child) {
+    children.put(key, child);
     return this;
   }
 
   /**
-   * Adds a leaf destination, built once a player picks it.
+   * Adds an entry, replacing any already under its key.
    *
-   * @param key the leaf's key
-   * @param destination supplies the destination when the leaf is picked
+   * @param key the entry's key
+   * @param child the entry's builder, built now
    * @return this builder
+   * @throws IllegalStateException if the entry was given neither a destination nor children
    */
-  public DestinationTree leaf(
-      String key, Supplier<MinecraftDestination<World, Vector3i>> destination) {
-    return leaf(key, DestinationLeaf.of(destination));
+  public DestinationTree child(
+      String key, DestinationChild.Builder<MinecraftDestination<World, Vector3i>> child) {
+    return child(key, child.build());
   }
 
   /**
-   * Adds a leaf destination.
+   * Makes the entry under {@code key} a destination, described by {@code destination} and built
+   * once a player picks it — for one with permissions or options, or one that may be {@linkplain
+   * Validity#invalid invalid}.
    *
-   * @param key the leaf's key
+   * @param key the entry's key
    * @param destination the destination
    * @return this builder
    */
-  public DestinationTree leaf(String key, MinecraftDestination<World, Vector3i> destination) {
-    return leaf(key, () -> destination);
-  }
-
-  /**
-   * Adds a child sub-tree, built on demand.
-   *
-   * @param key the sub-tree's key
-   * @param tree supplies the sub-tree when it is visited
-   * @return this builder
-   */
-  public DestinationTree subtree(
-      String key, Supplier<? extends PlatformDestinationTree<World, Vector3i>> tree) {
-    subTrees.put(key, tree);
+  public DestinationTree destination(
+      String key, DestinationLeaf<MinecraftDestination<World, Vector3i>> destination) {
+    children.merge(
+        key,
+        DestinationChild.ofDestination(destination),
+        (existing, added) -> existing.withDestination(destination));
     return this;
   }
 
   /**
-   * Adds a child sub-tree from another builder, under the given key.
+   * Makes the entry under {@code key} a destination, built once a player picks it.
    *
-   * @param key the sub-tree's key
-   * @param child the builder of the sub-tree, built when it is visited
+   * @param key the entry's key
+   * @param destination supplies the destination when it is picked
    * @return this builder
    */
-  public DestinationTree subtree(String key, DestinationTree child) {
-    return subtree(key, child::build);
+  public DestinationTree destination(
+      String key, Supplier<MinecraftDestination<World, Vector3i>> destination) {
+    return destination(key, DestinationLeaf.of(destination));
   }
 
   /**
-   * Builds the immutable tree node.
+   * Makes the entry under {@code key} a destination.
    *
-   * @return the tree node
+   * @param key the entry's key
+   * @param destination the destination
+   * @return this builder
+   */
+  public DestinationTree destination(
+      String key, MinecraftDestination<World, Vector3i> destination) {
+    return destination(key, () -> destination);
+  }
+
+  /**
+   * Gives the entry under {@code key} a level of further entries, built when it is visited.
+   *
+   * @param key the entry's key
+   * @param tree supplies the level when it is visited
+   * @return this builder
+   */
+  public DestinationTree children(
+      String key, Supplier<? extends PlatformDestinationTree<World, Vector3i>> tree) {
+    children.merge(
+        key, DestinationChild.ofChildren(tree), (existing, added) -> existing.withChildren(tree));
+    return this;
+  }
+
+  /**
+   * Gives the entry under {@code key} a level of further entries from another builder.
+   *
+   * @param key the entry's key
+   * @param tree the builder of the level, built when it is visited
+   * @return this builder
+   */
+  public DestinationTree children(String key, DestinationTree tree) {
+    return children(key, tree::build);
+  }
+
+  /**
+   * Sets how the navigation menu shows the entry already added under {@code key}.
+   *
+   * @param key the entry's key
+   * @param display the display
+   * @return this builder
+   * @throws IllegalArgumentException if no entry has that key
+   */
+  public DestinationTree display(String key, Display display) {
+    DestinationChild<MinecraftDestination<World, Vector3i>> child = children.get(key);
+    if (child == null) {
+      throw new IllegalArgumentException("No entry " + key + " to display");
+    }
+    children.put(key, child.withDisplay(display));
+    return this;
+  }
+
+  /**
+   * Builds the immutable level.
+   *
+   * @return the level
    */
   public PlatformDestinationTree<World, Vector3i> build() {
-    return new Node(strict, Map.copyOf(subTrees), Map.copyOf(leaves));
+    return new Node(strict, Collections.unmodifiableMap(new LinkedHashMap<>(children)));
   }
 
   private record Node(
-      boolean strict,
-      Map<String, Supplier<? extends PlatformDestinationTree<World, Vector3i>>> subTrees,
-      Map<String, DestinationLeaf<MinecraftDestination<World, Vector3i>>> leaves)
+      boolean strict, Map<String, DestinationChild<MinecraftDestination<World, Vector3i>>> children)
       implements PlatformDestinationTree<World, Vector3i> {}
 }

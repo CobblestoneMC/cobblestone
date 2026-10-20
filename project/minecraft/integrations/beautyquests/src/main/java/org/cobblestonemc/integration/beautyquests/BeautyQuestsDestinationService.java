@@ -23,7 +23,7 @@ import org.joml.Vector3i;
 
 /**
  * Surfaces the player's started quests as navigation targets: {@code cobblestonebeautyquests →
- * quest → <name>}, one leaf per started quest whose current stage has a precise location.
+ * quest → <name>}, one destination per started quest whose current stage has a precise location.
  * Cobblestone roots the branch at this plugin's own name, which keeps these from colliding with
  * other integrations' trees; its resolver still lets a player type just the quest name when it's
  * unambiguous. Navigating is gated by Cobblestone's {@code
@@ -49,10 +49,10 @@ final class BeautyQuestsDestinationService implements DestinationService {
         continue; // current stage has no precise location — nothing to walk to
       }
       String label = label(quest);
-      quests.leaf(slug(label), Destination.at(target, label));
+      quests.destination(slug(label), Destination.at(target, label));
       any = true;
     }
-    return any ? DestinationTree.builder().subtree(QUEST_KEY, quests).build() : null;
+    return any ? DestinationTree.builder().children(QUEST_KEY, quests).build() : null;
   }
 
   /** A player-facing quest label: its name, or a stable fallback from its id. */

@@ -7,6 +7,8 @@
 
 package org.cobblestonemc.plugin.destination;
 
+import org.cobblestonemc.plugin.api.DestinationNode;
+import org.cobblestonemc.plugin.api.Display;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -27,4 +29,15 @@ public interface DestinationProvider<P> {
    */
   @Nullable
   DestinationNode<NavigationTarget> provide(P player);
+
+  /**
+   * How the navigation menu shows this branch's entry at the top level, where it is filed under its
+   * owner's name.
+   *
+   * @param player the player looking at the menu
+   * @return the display
+   */
+  default Display display(P player) {
+    return Display.none();
+  }
 }

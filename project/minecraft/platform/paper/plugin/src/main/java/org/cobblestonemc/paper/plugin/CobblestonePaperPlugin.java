@@ -35,6 +35,10 @@ import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.DataStores;
 import org.cobblestonemc.plugin.hologram.TrailLabelManager;
 import org.cobblestonemc.plugin.hud.TripHud;
+import org.cobblestonemc.plugin.menu.BedrockEmotes;
+import org.cobblestonemc.plugin.menu.MenuIcons;
+import org.cobblestonemc.plugin.menu.MenuSettings;
+import org.cobblestonemc.plugin.menu.RecentDestinations;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchGate;
 import org.cobblestonemc.plugin.search.SearchRegistry;
@@ -57,6 +61,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
   private PaperHolograms holograms;
   private PaperMetrics metrics;
   private PaperMountListener mountListener;
+  private Runnable stopBedrockEmotes;
   private final SearchRegistry<Location> searchRegistry = new SearchRegistry<>();
 
   @Override
@@ -119,7 +124,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             platformApi.scheduler(),
             platformApi.regions(),
             () -> config.get(keys.deathsTrack),
-            messages));
+            messages,
+            MenuIcons.reader(config, keys.menuIcons)));
     // Each player's last death is recorded so they can navigate back to it.
     getServer()
         .getPluginManager()
@@ -229,22 +235,39 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
         .getServicesManager()
         .register(TripService.class, tripService, this, ServicePriority.Normal);
 
+    // /navigate, and the navigation menu that /navigate opens when typed on its own. The menu
+    // starts trips through the command, so both remember them as the player's recent ones.
+    NavigateCommand navigateCommand =
+        new NavigateCommand(
+            platformApi,
+            tripService,
+            integrationRegistry,
+            searchRegistry,
+            searchGate,
+            searchSettings,
+            logger,
+            messages,
+            new RecentDestinations());
+    PaperNavigationMenus menus =
+        new PaperNavigationMenus(
+            this,
+            navigateCommand,
+            navigateCommand.recents(),
+            messages,
+            () -> MenuSettings.from(config, keys));
+    getServer().getPluginManager().registerEvents(menus, this);
+    // On a server with Geyser, Bedrock players can open the menu by emoting.
+    this.stopBedrockEmotes =
+        BedrockEmotes.listen(
+            this, () -> config.get(keys.menuBedrockEmotes), menus::openLater, logger);
+
     getLifecycleManager()
         .registerEventHandler(
             LifecycleEvents.COMMANDS,
             event -> {
               // /navigate and /location are also /cobblestone subcommands; each node is built
               // once and shared, so both spellings behave alike.
-              var navigate =
-                  NavigateCommand.build(
-                      platformApi,
-                      tripService,
-                      integrationRegistry,
-                      searchRegistry,
-                      searchGate,
-                      searchSettings,
-                      logger,
-                      messages);
+              var navigate = navigateCommand.node(menus::open);
               var location = CobblestoneCommand.location(messages, dataStore.locations());
               var registrar = event.registrar();
               registrar.register(
@@ -283,6 +306,9 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
 
   @Override
   public void onDisable() {
+    if (stopBedrockEmotes != null) {
+      stopBedrockEmotes.run();
+    }
     if (metrics != null) {
       metrics.shutdown();
     }

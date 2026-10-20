@@ -20,8 +20,8 @@ import org.joml.Vector3i;
 
 /**
  * Surfaces the server's Citizens NPCs as navigation targets: {@code cobblestonecitizens → npc →
- * <name>-<id>}, one leaf per NPC. Names aren't unique in Citizens, so each key carries the NPC id
- * to disambiguate. Navigating is gated by Cobblestone's {@code
+ * <name>-<id>}, one destination per NPC. Names aren't unique in Citizens, so each key carries the
+ * NPC id to disambiguate. Navigating is gated by Cobblestone's {@code
  * cobblestone.navigate.cobblestonecitizens.npc.*} permission (default-allow), and — because a
  * server may have hundreds of NPCs — {@code /navigate}'s tab-completion only offers matches once
  * the player has narrowed the set down. Each NPC's location is re-read (by id) when the destination
@@ -41,7 +41,7 @@ final class CitizensDestinationService implements DestinationService {
       int id = npc.getId();
       String label = label(npc);
       // Re-fetch by id at resolution time: the NPC may have moved (or been removed) since listing.
-      npcNode.leaf(
+      npcNode.destination(
           key(npc),
           () -> {
             NPC current = CitizensAPI.getNPCRegistry().getById(id);
@@ -49,7 +49,7 @@ final class CitizensDestinationService implements DestinationService {
           });
       any = true;
     }
-    return any ? DestinationTree.builder().subtree(NPC_KEY, npcNode).build() : null;
+    return any ? DestinationTree.builder().children(NPC_KEY, npcNode).build() : null;
   }
 
   /** The command token for an NPC: its slugged name plus id, unique across same-named NPCs. */

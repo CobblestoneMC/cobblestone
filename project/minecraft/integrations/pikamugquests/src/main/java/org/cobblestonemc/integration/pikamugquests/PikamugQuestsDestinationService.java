@@ -21,8 +21,8 @@ import org.joml.Vector3i;
 
 /**
  * Surfaces the player's active quests as navigation targets: {@code cobblestonepikamugquests →
- * quest → <name>}, one leaf per current quest whose current stage has a locatable objective (a
- * reach-location or kill-within region). Cobblestone roots the branch at this plugin's own name,
+ * quest → <name>}, one destination per current quest whose current stage has a locatable objective
+ * (a reach-location or kill-within region). Cobblestone roots the branch at this plugin's own name,
  * which keeps these from colliding with other integrations' trees; its resolver still lets a player
  * type just the quest name when it's unambiguous. Navigating is gated by Cobblestone's {@code
  * cobblestone.navigate.cobblestonepikamugquests.quest.*} permission (default-allow). Targets
@@ -51,14 +51,14 @@ final class PikamugQuestsDestinationService implements DestinationService {
         continue; // no locatable objective in the current stage — nothing to walk to
       }
       String label = quest.getName();
-      questNode.leaf(
+      questNode.destination(
           slug(label),
           () ->
               Destination.at(
                   QuestTargets.current(quests.getQuester(player.getUniqueId()), quest), label));
       any = true;
     }
-    return any ? DestinationTree.builder().subtree(QUEST_KEY, questNode).build() : null;
+    return any ? DestinationTree.builder().children(QUEST_KEY, questNode).build() : null;
   }
 
   /**

@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.sponge.plugin.api;
 
+import org.cobblestonemc.plugin.api.Display;
 import org.cobblestonemc.plugin.api.PlatformDestinationTree;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
@@ -22,7 +23,7 @@ public interface DestinationService {
    *
    * <p>The root's own key is <b>not</b> chosen here: Cobblestone files the tree under the
    * registering plugin's id, so two plugins offering a {@code warp} level stay distinguishable.
-   * Build the levels below that — {@code DestinationTree.builder().subtree("warp", …)} — not a
+   * Build the levels below that — {@code DestinationTree.builder().children("warp", …)} — not a
    * level named after the plugin itself.
    *
    * @param player the player requesting navigation
@@ -31,4 +32,17 @@ public interface DestinationService {
    */
   @Nullable
   PlatformDestinationTree<ServerWorld, Vector3i> provide(ServerPlayer player);
+
+  /**
+   * How the navigation menu shows this integration's entry at the top level — the one filed under
+   * the registering plugin's name, which opens onto {@link #provide}'s tree. Without one, the menu
+   * shows the plugin's name on a plain item. Called each time the menu opens, so an icon read from
+   * the integration's config follows a reload.
+   *
+   * @param player the player looking at the menu
+   * @return the display
+   */
+  default Display display(ServerPlayer player) {
+    return Display.none();
+  }
 }

@@ -8,6 +8,13 @@ loader: org.cobblestonemc.paper.plugin.CobblestonePaperLoader
 api-version: '1.21'
 folia-supported: true
 
+dependencies:
+  server:
+    # Optional: with Geyser on this server, Bedrock players open the navigation menu by emoting.
+    Geyser-Spigot:
+      load: BEFORE
+      required: false
+
 permissions:
   cobblestone.navigate:
     description: "Use of /navigate and the trip commands that manage its results"

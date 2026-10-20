@@ -16,7 +16,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
+import org.cobblestonemc.plugin.api.DestinationChild;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
+import org.cobblestonemc.plugin.api.DestinationNode;
 import org.cobblestonemc.plugin.api.DestinationOption;
 import org.cobblestonemc.plugin.api.OptionValues;
 
@@ -93,10 +96,19 @@ public final class DestinationResolver {
    * @param leaf the leaf that matched
    * @param values its parsed options
    * @param address the canonical key path that identifies it (for confirmation messages)
+   * @param optionTokens the tokens its options were parsed from, as typed — with the address, all
+   *     it takes to name the same destination again
    * @param <D> what the leaves build
    */
-  public record Resolved<D>(DestinationLeaf<D> leaf, OptionValues values, List<String> address)
-      implements Resolution<D> {}
+  public record Resolved<D>(
+      DestinationLeaf<D> leaf, OptionValues values, List<String> address, List<String> optionTokens)
+      implements Resolution<D> {
+    /** Canonical constructor; copies the lists. */
+    public Resolved {
+      address = List.copyOf(address);
+      optionTokens = List.copyOf(optionTokens);
+    }
+  }
 
   /**
    * More than one destination matched; the player must disambiguate with a fuller path.
@@ -189,7 +201,7 @@ public final class DestinationResolver {
     }
     if (matches.size() == 1) {
       Match<D> match = matches.getFirst();
-      return new Resolved<>(match.leaf(), match.values(), match.address());
+      return new Resolved<>(match.leaf(), match.values(), match.address(), match.tokens());
     }
     // Distinct canonical addresses, first spelling wins. Sorted, so what the player is shown does
     // not depend on the order the roots happened to be iterated in.
@@ -278,18 +290,18 @@ public final class DestinationResolver {
       return; // nothing left to match, and a destination's own key is never optional
     }
     // A destination is named by its exact key (or an alias), followed by nothing but its options.
-    for (String leafKey : leavesNamed(node, args.get(ai))) {
+    for (String leafKey : destinationsNamed(node, args.get(ai))) {
       trail.add(leafKey);
       List<String> address = List.copyOf(trail);
       trail.removeLast();
-      DestinationLeaf<D> leaf = node.leaves().get(leafKey);
+      DestinationLeaf<D> leaf = destinationOf(node, leafKey);
       if (out.allows(address, leaf)) {
         applyOptions(address, leaf, args.subList(ai + 1, args.size()), out);
       }
     }
-    // Sub-trees are still worth descending on the same token: the child's own key may be omitted,
+    // Levels are still worth descending on the same token: the child's own key may be omitted,
     // leaving that token to name a destination inside it.
-    for (var child : node.subTrees().entrySet()) {
+    for (var child : levels(node)) {
       match(child.getKey(), child.getValue().get(), args, ai, trail, out);
     }
   }
@@ -301,35 +313,76 @@ public final class DestinationResolver {
    */
   private static <D> void applyOptions(
       List<String> address, DestinationLeaf<D> leaf, List<String> tokens, Results<D> out) {
-    List<DestinationOption<?>> options = leaf.options();
-    if (options.isEmpty()) {
-      if (tokens.isEmpty()) {
-        out.matches.add(new Match<>(address, leaf, OptionValues.empty()));
-      }
-      return;
+    if (leaf.options().isEmpty() && !tokens.isEmpty()) {
+      return; // takes no options, so the tokens must be meant for something else
     }
+    switch (options(address, leaf, tokens)) {
+      case Resolved<D> resolved ->
+          out.matches.add(new Match<>(address, leaf, resolved.values(), resolved.optionTokens()));
+      case InvalidOptions<D> invalid -> out.invalid.add(invalid);
+      default -> {}
+    }
+  }
+
+  /**
+   * Fits option tokens to a destination already chosen by other means — picked from the navigation
+   * menu, say, rather than typed — exactly as {@link #resolve} would after its key.
+   *
+   * @param address the destination's canonical address
+   * @param leaf the destination
+   * @param tokens one token per option, in order (optional ones may be left off the end)
+   * @param <D> what the leaf builds
+   * @return {@link Resolved} if the tokens fit, otherwise {@link InvalidOptions}
+   */
+  public static <D> Resolution<D> options(
+      List<String> address, DestinationLeaf<D> leaf, List<String> tokens) {
+    List<DestinationOption<?>> options = leaf.options();
     long required = options.stream().filter(DestinationOption::required).count();
     if (tokens.size() < required || tokens.size() > options.size()) {
-      out.invalid.add(new InvalidOptions<>(address, options, null));
-      return;
+      return new InvalidOptions<>(address, options, null);
     }
     Map<DestinationOption<?>, Object> values = new IdentityHashMap<>();
     for (int i = 0; i < tokens.size(); i++) {
       Optional<?> value = options.get(i).parse(tokens.get(i));
       if (value.isEmpty()) {
-        out.invalid.add(new InvalidOptions<>(address, options, tokens.get(i)));
-        return;
+        return new InvalidOptions<>(address, options, tokens.get(i));
       }
       values.put(options.get(i), value.get());
     }
-    out.matches.add(new Match<>(address, leaf, OptionValues.of(values)));
+    OptionValues parsed = values.isEmpty() ? OptionValues.empty() : OptionValues.of(values);
+    return new Resolved<>(leaf, parsed, address, tokens);
   }
 
   /**
-   * One destination matched by the typed args, with the canonical address it is filed under and its
-   * parsed options.
+   * Finds the entry at a canonical address, materializing only the levels along it.
+   *
+   * @param roots the destination-tree roots from every provider
+   * @param address the entry's canonical address (its first key names the root)
+   * @param <D> what the leaves build
+   * @return the entry, or empty if nothing is at that address any more
    */
-  private record Match<D>(List<String> address, DestinationLeaf<D> leaf, OptionValues values) {}
+  public static <D> Optional<DestinationChild<D>> find(
+      Map<String, ? extends DestinationNode<D>> roots, List<String> address) {
+    if (address.size() < 2) {
+      return Optional.empty(); // a root is a provider's level, never an entry of its own
+    }
+    DestinationNode<D> node = roots.get(address.getFirst());
+    for (int i = 1; node != null; i++) {
+      DestinationChild<D> child = node.children().get(address.get(i));
+      if (child == null || i == address.size() - 1) {
+        return Optional.ofNullable(child);
+      }
+      node = child.children().map(Supplier::get).orElse(null);
+    }
+    return Optional.empty();
+  }
+
+  /**
+   * One destination matched by the typed args, with the canonical address it is filed under, its
+   * parsed options, and the tokens they were parsed from.
+   */
+  private record Match<D>(
+      List<String> address, DestinationLeaf<D> leaf, OptionValues values, List<String> tokens) {}
 
   /** What a resolution walk has found so far, and the permission gates it applies. */
   private static final class Results<D> {
@@ -416,7 +469,7 @@ public final class DestinationResolver {
     }
     // A destination with options may already have been named, and the player is now typing them.
     suggestOptions(node, prefix, pi, trail, out, access);
-    for (var child : node.subTrees().entrySet()) {
+    for (var child : levels(node)) {
       suggestFrom(child.getKey(), child.getValue().get(), prefix, pi, trail, out, access);
     }
   }
@@ -433,8 +486,8 @@ public final class DestinationResolver {
       Candidates out,
       Access<D> access) {
     List<String> typedOptions = prefix.subList(pi + 1, prefix.size());
-    for (String leafKey : leavesNamed(node, prefix.get(pi))) {
-      DestinationLeaf<D> leaf = node.leaves().get(leafKey);
+    for (String leafKey : destinationsNamed(node, prefix.get(pi))) {
+      DestinationLeaf<D> leaf = destinationOf(node, leafKey);
       List<DestinationOption<?>> options = leaf.options();
       if (typedOptions.size() >= options.size()) {
         continue; // takes no options, or all of them have been typed
@@ -471,11 +524,14 @@ public final class DestinationResolver {
   private static <D> Candidates collect(
       DestinationNode<D> node, List<String> trail, Access<D> access, int limit) {
     Candidates out = new Candidates();
-    for (Map.Entry<String, DestinationLeaf<D>> entry : node.leaves().entrySet()) {
+    for (Map.Entry<String, DestinationChild<D>> entry : node.children().entrySet()) {
+      if (entry.getValue().destination().isEmpty()) {
+        continue;
+      }
       trail.add(entry.getKey());
       List<String> address = List.copyOf(trail);
       trail.removeLast();
-      DestinationLeaf<D> leaf = entry.getValue();
+      DestinationLeaf<D> leaf = entry.getValue().destination().get();
       if (!access.allows(address, leaf)) {
         continue;
       }
@@ -490,7 +546,7 @@ public final class DestinationResolver {
         return null;
       }
     }
-    for (var supplier : node.subTrees().entrySet()) {
+    for (var supplier : levels(node)) {
       var key = supplier.getKey();
       DestinationNode<D> child = supplier.getValue().get();
       Candidates promoted = null;
@@ -521,7 +577,7 @@ public final class DestinationResolver {
    */
   private static boolean extendable(DestinationNode<?> node, Candidates gathered) {
     if (node.strict() || gathered == null) {
-      return !node.subTrees().isEmpty() || !node.leaves().isEmpty();
+      return !node.children().isEmpty();
     }
     return gathered.size() > 0;
   }
@@ -598,24 +654,44 @@ public final class DestinationResolver {
   // Shared
   // -----------------------------------------------------------------------------------------
 
-  /** The keys of {@code node}'s leaves that {@code token} names, by key or by alias. */
-  private static List<String> leavesNamed(DestinationNode<?> node, String token) {
+  /** The keys of {@code node}'s destinations that {@code token} names, by key or by alias. */
+  private static List<String> destinationsNamed(DestinationNode<?> node, String token) {
     List<String> keys = new ArrayList<>();
-    for (String key : node.leaves().keySet()) {
-      if (key.equalsIgnoreCase(token)) {
-        keys.add(key);
-      }
-    }
+    node.children()
+        .forEach(
+            (key, child) -> {
+              if (key.equalsIgnoreCase(token) && child.destination().isPresent()) {
+                keys.add(key);
+              }
+            });
     node.aliases()
         .forEach(
             (alias, key) -> {
               if (alias.equalsIgnoreCase(token)
-                  && node.leaves().containsKey(key)
+                  && destinationOf(node, key) != null
                   && !keys.contains(key)) {
                 keys.add(key);
               }
             });
     return keys;
+  }
+
+  /** The destination of {@code node}'s entry under {@code key}, or {@code null} if it has none. */
+  private static <D> DestinationLeaf<D> destinationOf(DestinationNode<D> node, String key) {
+    DestinationChild<D> child = node.children().get(key);
+    return child == null ? null : child.destination().orElse(null);
+  }
+
+  /**
+   * {@code node}'s entries that have a level beneath them, each with the supplier of that level.
+   */
+  private static <D> List<Map.Entry<String, Supplier<? extends DestinationNode<D>>>> levels(
+      DestinationNode<D> node) {
+    List<Map.Entry<String, Supplier<? extends DestinationNode<D>>>> levels = new ArrayList<>();
+    node.children()
+        .forEach(
+            (key, child) -> child.children().ifPresent(level -> levels.add(Map.entry(key, level))));
+    return levels;
   }
 
   private static boolean hasAll(Predicate<String> hasPermission, List<String> permissions) {
