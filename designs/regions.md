@@ -3,9 +3,12 @@
 `search.algorithm.heuristic: REGIONS`, the default.
 
 - **The region layer itself** is in `project/core/src/main/java/org/cobblestonemc/regions` and
-  knows no game: it fills cells of one class into regions, joins them with portals, stores them,
-  and searches over them. Two interfaces plug a game in: `RegionTerrain` (which class each cell is,
-  and how classes join: standing, steps, falls) and `RegionAgent` (what a class costs a traveller).
+  knows no game, only a voxel grid under gravity (Y is up): it fills cells of one class into
+  regions, joins them with portals, stores them, and searches over them. Two interfaces plug a
+  game in: `RegionTerrain` (which class each cell is, how classes join: standing, steps, falls, and
+  how wide a column of its terrain is) and `RegionAgent` (what a class costs a traveller).
+  `RegionSpec` gathers everything that decides how one world is cut: the terrain, the world's
+  height and the detour ratio.
 - **Minecraft's side** is in `project/minecraft/core/src/main/java/org/cobblestonemc/minecraft/regions`:
   `MinecraftTerrain` classifies blocks and holds a walking body's rules, `RegionClass` names the
   classes, and `MinecraftAgent` is the agent.
@@ -18,7 +21,7 @@ the terrain ahead. REGIONS reads the terrain ahead.
 - **Regions.** Each chunk column is classed cell by cell (stand, soul sand, soul soil, water, water
   surface, climb, air, and breakable material by mining bucket: soft, soft rock, rock, hard rock,
   obsidian, dirt, wood) and flood-filled into connected regions, one class each, within each
-  16³ section. A region is split
+  16³ section (a section is a cube as wide as the terrain's column). A region is split
   where walking inside it would bend more than 1.5x its straight line (Manhattan against
   Manhattan), so pricing a crossing as a straight line stays honest. Uniform sections skip the fill.
 - **Portals.** Every contact between two regions, as one box: faces touching, a walking step up
@@ -45,23 +48,32 @@ the terrain ahead. REGIONS reads the terrain ahead.
   the river.
 - **Weight.** The estimate is used as it is, under the search weight, 1.7 by default. The weight
   eases to 1 over the last 64 blocks before the target.
-- **Loaded chunks stay in memory.** A chunk's column is built in the background when the chunk
-  loads, and kept in memory while it stays loaded. Searches near players, such as the path back to
-  a trail, never read a column from disk.
+- **Navigating players' surroundings stay in memory.** A trip's searches pin the 9×9 chunks around
+  where they start, under the player's id, until the player's last trip ends. The searches that
+  re-plan around a navigating player, such as the path back to a trail, never build.
 
 ## Storage
-- **One `RegionStore` per world,** shared by every search and agent: memory, then disk, then
-  building from the chunk. Columns of loaded chunks are always in memory; the rest are kept up to
-  128 MB by default, least recently used out.
-- **On disk,** `regions/<world>/r.<x>.<z>.crg`, 32x32 columns a file, each record deflated, about
-  6.4 KB a column. A file is replaced whole through a temporary file. A header that does not match
-  the format, classifier, detour ratio or world height reads as empty and is rebuilt.
+- **One `RegionStore` per world,** shared by every search and agent: memory, then building from the
+  chunk. Pinned columns (above) are kept whatever the budget; the rest are kept up to 128 MB by
+  default, least recently used out. The two are held apart, so evicting never looks past a pin.
 - **Invalidation:** every block change drops its column; the next search to need it rebuilds it.
-  Paper listens for each kind of change event, Sponge for its one. Offline edits are not seen;
-  the admin docs say to delete `regions/` after them.
-- **Writes** every 60 s, on world save and on shutdown. Unwritten columns survive eviction.
-  Chunks that load are built in the background through a bounded queue; when it is full, the column
-  is built when a search first needs it, and then kept like the others.
+  Paper listens for each kind of change event, Sponge for its one. A world that unloads drops its
+  store.
+- **Cell maps:** a section that is one region keeps one number; otherwise a byte per cell, or a
+  short per cell for a section of more than 255 regions, so no section runs out of numbers.
+- **Class ids are explicit,** never ordinals: `RegionClass` and `MiningClass` each give every value a
+  fixed number, which is what a region or a capture stores. A retired class retires its number.
+- Columns are kept on disk across restarts in a follow-up PR.
+
+## Decisions
+- **The agent's rates are its own.** `MinecraftAgent` starts from the fine search's
+  `MovementCosts`, but keeps copies on purpose: the fine search will grow costs regions cannot see
+  (turns, nearby walls, danger) that adjust its base walk, while a region is priced by its class
+  alone. Neither set is a precise constant the other must match. `bench verify` keeps them honest:
+  a drift on either side shows as estimates leaving 0.7–0.95 of the truth.
+- **Adding a terrain class** is one line in `RegionClass` (its id and its `Body`: ground, water,
+  climb, open or solid) and its price in `MinecraftAgent`, whose exhaustive switch will not compile
+  without one; then `MinecraftTerrain.VERSION` is bumped.
 
 ## Measurements
 All on the stonebrick corpus: 22 routes, 58 runs over the loadouts player, flyer,
@@ -118,7 +130,7 @@ destinations are unchanged node for node.
 
 ### Time and memory (2026-10-13, weight 2.0)
 Server time per run, all 58 runs, mean / median / p90 / max in ms, CPU plus modelled disk wait.
-"Warm" is after a restart, reading columns back from disk.
+"Warm" is after a restart, reading columns back from disk (the disk store is a follow-up PR).
 
 | Disk | RUNNING_AVERAGE | REGIONS cold | REGIONS warm |
 | --- | --- | --- | --- |

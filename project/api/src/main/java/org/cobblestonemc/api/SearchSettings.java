@@ -44,33 +44,23 @@ public final class SearchSettings {
   /**
    * Default A* heuristic weight (1.0 = admissible/optimal; &gt;1 = faster, weighted A*).
    *
-   * <p>Tuned for {@link #DEFAULT_HEURISTIC}, whose estimate {@code bench verify} puts at 0.7–0.95
-   * of the true cost and never above. Over 58 runs, scored on the 55 every weight solved (nodes as
-   * a geometric mean, paths against the best any weight found):
-   *
-   * <pre>
-   *   1.275  2,754 nodes   +0.2%   55 of 58 solved
-   *   1.49   1,365 nodes   +1.8%   58 of 58
-   *   1.7      952 nodes   +3.0%   58 of 58
-   * </pre>
-   *
-   * <p>1.7: below about 1.5 the search starts running out of cells, and between the two the choice
-   * is a trade of about 40% more nodes for paths about 1% cheaper. Another heuristic would want its
-   * own weight; this one is only right for estimates about as close as these.
+   * <p>Swept for {@link #DEFAULT_HEURISTIC}, whose estimate {@code bench verify} puts at 0.7–0.95
+   * of the true cost and never above: below about 1.5 the search starts running out of cells, and
+   * above it every step up trades fewer nodes for slightly dearer paths. Another heuristic would
+   * want its own weight. The sweep is in {@code designs/regions.md}.
    */
   public static final double DEFAULT_HEURISTIC_WEIGHT = 1.7;
 
   /**
    * The estimate a search uses unless told otherwise.
    *
-   * <p>{@link Heuristic#REGIONS} by default, from measurement. Over 58 runs (22 routes, four
-   * loadouts) it solves all 58 against the running average's 48, expands about a quarter of the
-   * nodes (geometric mean 1,005 against 3,887), and its paths average +5.5% over the best found
-   * against +17.9%.
+   * <p>{@link Heuristic#REGIONS} by default, from measurement: on the benchmark it solves routes
+   * the running average cannot, expands a fraction of the nodes, and finds cheaper paths. The
+   * numbers are in {@code designs/regions.md}.
    *
    * <p>⚠️ It is not free: a search reads the terrain it reasons over, and the first search over new
-   * terrain has to summarize it, which on a long route is hundreds of chunk reads. Summaries are
-   * shared between searches and kept on disk, so later searches mostly read them back.
+   * terrain has to cut it into regions, which on a long route is hundreds of chunk reads. Regions
+   * are shared between searches, so later searches mostly reuse them.
    */
   public static final Heuristic DEFAULT_HEURISTIC = Heuristic.REGIONS;
 
@@ -197,8 +187,8 @@ public final class SearchSettings {
      *
      * <p>Prices the journey from terrain it has actually looked at rather than from terrain it has
      * just crossed, and knows a wall from a tunnel. Costs chunk reads and CPU to classify the
-     * terrain -- a long route touches hundreds of columns -- once: summaries are shared between
-     * searches and kept on disk.
+     * terrain -- a long route touches hundreds of columns -- once: regions are shared between
+     * searches.
      */
     REGIONS
   }

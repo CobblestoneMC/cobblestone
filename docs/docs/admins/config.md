@@ -138,28 +138,19 @@ limit; a manual `/navigate` always runs.
 
 ### `search.regions`
 
-The `REGIONS` heuristic summarizes each chunk once and shares the summary between every search
-until a block in the chunk changes.
+The `REGIONS` heuristic cuts each chunk into regions of terrain once and shares them between every
+search until a block in the chunk changes.
 
 | Setting | Default | |
 | --- | --- | --- |
-| `search.regions.persist` | `true` | restart |
 | `search.regions.memory_megabytes` | `128` | restart |
-| `search.regions.flush_seconds` | `60` | restart |
 
-- **`persist`**: Keep summaries on disk under `plugins/Cobblestone/regions/`, so a restart does not
-  start from nothing. A few kilobytes per chunk, only for chunks searches touched or players
-  loaded. Delete the folder to force everything to be summarized again.
-- **`memory_megabytes`**: Memory each world's summaries may use beyond the chunks players have
-  loaded. Loaded chunks are summarized on a background thread as they load and always kept in
-  memory, about 40 KB each: twenty players at view distance 10 hold around 9,000 chunks, or 350 MB.
-  Beyond them, the least recently used summaries are dropped past this limit and read back from
-  disk when needed.
-- **`flush_seconds`**: How often new summaries are written. They are also written when the world
-  saves and when the server stops.
+- **`memory_megabytes`**: Memory each world's regions may use, least recently used dropped first.
+  The chunks around each navigating player are kept on top of this, about 3 MB a player, until their
+  trip ends, so the searches that re-plan around them stay fast.
 
-Block changes made while the server is running are tracked. Edits made while it is stopped, by
-external tools, are not: delete the `regions` folder after editing a world offline.
+Block changes made while the server is running are tracked. Regions are kept in memory only, so a
+restart builds them again as searches need them.
 
 ### Tuning
 

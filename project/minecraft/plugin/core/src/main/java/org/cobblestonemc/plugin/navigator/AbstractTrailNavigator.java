@@ -50,16 +50,7 @@ import org.cobblestonemc.plugin.message.Messages;
  */
 public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
 
-  /**
-   * How near the route's last cell a trip counts as arrived, in blocks.
-   *
-   * <p>The search ends a route inside its destination, which for a single block buried in rock
-   * means mining it. A player does not need to stand in that block to have got there: one or two
-   * blocks away is arrival.
-   */
-  private static final double COMPLETION_RADIUS = 2.0;
-
-  private static final double COMPLETION_RADIUS_SQUARED = COMPLETION_RADIUS * COMPLETION_RADIUS;
+  private static final double COMPLETION_RADIUS_SQUARED = 4.0; // within 2 blocks of the goal
   private static final double SPREAD_HORIZONTAL = 0.15; // Gaussian sigma across the column
   private static final double SPREAD_VERTICAL = 0.15;
   private static final double NEAR_BUFFER = 1.0; // clear bubble around the player, in blocks
