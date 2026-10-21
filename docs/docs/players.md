@@ -41,7 +41,10 @@ arrive within two blocks of the destination.
 
 ## The trail
 
-The trail renders only the next segment of the route, brightest at the point to head for next.
+The trail renders only the next segment of the route, and it leads: it starts a few blocks ahead
+of you, further the faster you go (about a second of travel), so it is always in front of you
+and never streams past your face. If the way ahead turns a corner, it starts just around the
+corner. It stops a few blocks short of a destination you can see, which glitters.
 
 - **Straying.** If you leave the trail, a short guide path is drawn back to it. Beyond 32 blocks
   (by default), the route is recomputed from your current position.

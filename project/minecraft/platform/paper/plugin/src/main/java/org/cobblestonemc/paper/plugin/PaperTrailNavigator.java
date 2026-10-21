@@ -25,6 +25,7 @@ import org.cobblestonemc.plugin.hologram.TrailLabels;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.navigator.AbstractTrailNavigator;
 import org.cobblestonemc.plugin.navigator.TrailBlock;
+import org.cobblestonemc.plugin.navigator.TrailShape;
 import org.cobblestonemc.plugin.navigator.TrailSmoother;
 import org.cobblestonemc.plugin.navigator.Vec3;
 
@@ -59,8 +60,10 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
       int recalcDistance,
       Messages messages,
       TrailLabels<Location> labels,
+      TrailShape shape,
       BooleanSupplier showLabel) {
-    super(bufferCells, density, recalcDistance, messages, player.locale(), labels, showLabel);
+    super(
+        bufferCells, density, recalcDistance, messages, player.locale(), labels, shape, showLabel);
     this.player = player;
     this.particles = List.copyOf(particleTypes);
     this.highlightParticles = List.copyOf(highlightParticleTypes);
@@ -87,6 +90,12 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
   protected Vec3 playerPoint() {
     Location location = player.getLocation();
     return new Vec3(location.getX(), location.getY(), location.getZ());
+  }
+
+  @Override
+  protected Vec3 playerEye() {
+    Location eye = player.getEyeLocation();
+    return new Vec3(eye.getX(), eye.getY(), eye.getZ());
   }
 
   @Override

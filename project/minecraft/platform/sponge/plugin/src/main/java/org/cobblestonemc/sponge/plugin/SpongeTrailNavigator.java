@@ -21,6 +21,7 @@ import org.cobblestonemc.plugin.hologram.TrailLabels;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.navigator.AbstractTrailNavigator;
 import org.cobblestonemc.plugin.navigator.TrailBlock;
+import org.cobblestonemc.plugin.navigator.TrailShape;
 import org.cobblestonemc.plugin.navigator.TrailSmoother;
 import org.cobblestonemc.plugin.navigator.Vec3;
 import org.spongepowered.api.ResourceKey;
@@ -82,8 +83,10 @@ final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> 
       int recalcDistance,
       Messages messages,
       TrailLabels<ServerLocation> labels,
+      TrailShape shape,
       BooleanSupplier showLabel) {
-    super(bufferCells, density, recalcDistance, messages, player.locale(), labels, showLabel);
+    super(
+        bufferCells, density, recalcDistance, messages, player.locale(), labels, shape, showLabel);
     this.playerId = player.uniqueId();
     this.particles = List.copyOf(particleTypes);
     this.highlightParticles = List.copyOf(highlightParticleTypes);
@@ -111,6 +114,14 @@ final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> 
     return player()
         .map(p -> p.serverLocation())
         .map(l -> new Vec3(l.x(), l.y(), l.z()))
+        .orElse(new Vec3(0, 0, 0));
+  }
+
+  @Override
+  protected Vec3 playerEye() {
+    return player()
+        .map(p -> p.eyePosition().get())
+        .map(eye -> new Vec3(eye.x(), eye.y(), eye.z()))
         .orElse(new Vec3(0, 0, 0));
   }
 

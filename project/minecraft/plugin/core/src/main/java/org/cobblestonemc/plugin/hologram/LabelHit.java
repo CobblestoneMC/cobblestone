@@ -8,6 +8,7 @@
 package org.cobblestonemc.plugin.hologram;
 
 import java.util.OptionalDouble;
+import org.cobblestonemc.plugin.navigator.LineOfSight;
 import org.cobblestonemc.plugin.navigator.TrailSmoother;
 import org.cobblestonemc.plugin.navigator.Vec3;
 
@@ -76,7 +77,7 @@ final class LabelHit {
     double across = offset.x() * -normal.z() + offset.z() * normal.x();
     if (Math.abs(across) > halfWidth
         || Math.abs(offset.y()) > HALF_HEIGHT
-        || !HologramPlacement.inSight(eye, hit, probe)) {
+        || !LineOfSight.clear(eye, hit, probe)) {
       return OptionalDouble.empty();
     }
     return OptionalDouble.of(distance);

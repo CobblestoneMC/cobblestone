@@ -8,8 +8,6 @@
 package org.cobblestonemc.plugin.hologram;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.Optional;
@@ -65,30 +63,6 @@ class HologramPlacementTest {
     TrailSmoother.BlockProbe probe =
         (x, y, z) -> y < 0 || (x == 2 && y >= 1) ? TrailBlock.SOLID : TrailBlock.OPEN;
     assertEquals(Optional.empty(), HologramPlacement.place(EYE, TRAIL, List.of(), probe));
-  }
-
-  @Test
-  void sightIsBlockedBySolidAndUnloadedBlocks() {
-    Vec3 target = new Vec3(5.5, 1.62, 0.5);
-    assertTrue(HologramPlacement.inSight(EYE, target, FLOOR));
-    assertFalse(HologramPlacement.inSight(EYE, target, solidAt(FLOOR, 3, 1, 0)));
-    assertFalse(
-        HologramPlacement.inSight(
-            EYE, target, (x, y, z) -> x == 4 ? TrailBlock.UNLOADED : TrailBlock.OPEN));
-    assertTrue(
-        HologramPlacement.inSight(EYE, target, solidAt(FLOOR, 0, 1, 0)),
-        "the block the eyes are in doesn't count");
-  }
-
-  @Test
-  void sightFollowsDiagonals() {
-    Vec3 target = new Vec3(3.5, 3.5, 3.5);
-    assertTrue(HologramPlacement.inSight(new Vec3(0.5, 0.5, 0.5), target, FLOOR));
-    assertFalse(
-        HologramPlacement.inSight(new Vec3(0.5, 0.5, 0.5), target, solidAt(FLOOR, 2, 2, 2)));
-    assertTrue(
-        HologramPlacement.inSight(new Vec3(0.5, 0.5, 0.5), target, solidAt(FLOOR, 2, 2, 0)),
-        "a block beside the line");
   }
 
   private static TrailSmoother.BlockProbe solidAt(

@@ -454,7 +454,7 @@ class TrailLabelManagerTest {
 
     @Override
     public void start() {
-      labels.attach(player.uuid(), this, distance -> ahead.map(point -> point));
+      labels.attach(player.uuid(), this, () -> ahead);
     }
 
     @Override

@@ -149,6 +149,15 @@ public final class ConfigKeys {
   /** How many ticks each {@code TRAIL} particle lasts. Mutable. */
   public final ConfigKey<Integer> trailParticleTicks;
 
+  /** How far ahead of the player the trail starts at the least, in blocks. Mutable. */
+  public final ConfigKey<Double> trailLeadBlocks;
+
+  /** How many seconds of the player's travel ahead of them the trail starts. Mutable. */
+  public final ConfigKey<Double> trailLeadSeconds;
+
+  /** How far short of a destination in sight the trail stops, in blocks. Mutable. */
+  public final ConfigKey<Double> trailGoalClearance;
+
   /**
    * Registers every shared key on the given manager.
    *
@@ -529,6 +538,34 @@ public final class ConfigKeys {
                 """
                 How many ticks each TRAIL particle lasts before it is gone. Shorter keeps the trail
                 crisp ahead of a player on the move; longer makes it fuller.""")
+            .mutable()
+            .register();
+    this.trailLeadBlocks =
+        manager
+            .key("navigators.trail.lead_blocks", 3.0, Codec.ofDouble())
+            .comment(
+                """
+                How far ahead of the player, along the route, the trail starts at the least, so
+                particles are in front of them rather than at their feet. Set this and lead_seconds
+                to 0 to draw the trail from the player's feet.""")
+            .mutable()
+            .register();
+    this.trailLeadSeconds =
+        manager
+            .key("navigators.trail.lead_seconds", 1.0, Codec.ofDouble())
+            .comment(
+                """
+                How far ahead the trail starts for a moving player, as seconds of travel at their
+                speed, when that is further than lead_blocks (up to 32 blocks).""")
+            .mutable()
+            .register();
+    this.trailGoalClearance =
+        manager
+            .key("navigators.trail.goal_clearance", 3.0, Codec.ofDouble())
+            .comment(
+                """
+                How far short of a destination the player can see the trail stops, in blocks. 0 runs
+                it all the way.""")
             .mutable()
             .register();
   }

@@ -12,10 +12,10 @@ import java.util.UUID;
 import org.cobblestonemc.plugin.api.Navigator;
 
 /**
- * Where a trail navigator floats its trip's label: the trip's name, a few blocks ahead of the
- * player over the trail, shown while they stand still; hitting {@code Cancel} above it cancels the
- * trip. A navigator attaches while its trip runs and says where its trail is; the labels are
- * placed, named and stacked against the player's other trips here.
+ * Where a trail navigator floats its trip's label: the trip's name, where its trail starts ahead of
+ * the player, shown while they stand still; hitting {@code Cancel} above it cancels the trip. A
+ * navigator attaches while its trip runs and says where its trail is; the labels are placed, named
+ * and stacked against the player's other trips here.
  *
  * @param <L> the native location type
  */
@@ -63,12 +63,11 @@ public interface TrailLabels<L> {
   interface Source<L> {
 
     /**
-     * Returns the first point on the trail the player is following (or a guide back to it) that is
-     * {@code distance} blocks from them in a straight line, or empty for no label right now.
+     * Returns the trail head, where the trail the player is following (or the guide back to it)
+     * starts ahead of them, or empty for no label there right now.
      *
-     * @param distance how far from the player, in blocks
      * @return the point, in the player's world
      */
-    Optional<L> labelPoint(double distance);
+    Optional<L> headPoint();
   }
 }
