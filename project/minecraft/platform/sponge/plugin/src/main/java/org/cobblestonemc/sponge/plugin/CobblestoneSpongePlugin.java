@@ -297,15 +297,16 @@ public final class CobblestoneSpongePlugin {
     // /navigate and /location are also /cobblestone subcommands; each command is built once and
     // shared, so both spellings behave alike.
     Command.Parameterized navigate =
-        NavigateCommand.build(
-            navigationService,
-            tripService,
-            integrationRegistry,
-            searchRegistry,
-            searchGate,
-            searchSettings,
-            cobblestoneLogger,
-            messages);
+        new NavigateCommand(
+                navigationService,
+                tripService,
+                integrationRegistry,
+                searchRegistry,
+                searchGate,
+                searchSettings,
+                cobblestoneLogger,
+                messages)
+            .command();
     Command.Parameterized location = CobblestoneCommand.location(messages, dataStore.locations());
     event.register(
         container,
