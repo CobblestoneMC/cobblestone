@@ -236,15 +236,16 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
               // /navigate and /location are also /cobblestone subcommands; each node is built
               // once and shared, so both spellings behave alike.
               var navigate =
-                  NavigateCommand.build(
-                      platformApi,
-                      tripService,
-                      integrationRegistry,
-                      searchRegistry,
-                      searchGate,
-                      searchSettings,
-                      logger,
-                      messages);
+                  new NavigateCommand(
+                          platformApi,
+                          tripService,
+                          integrationRegistry,
+                          searchRegistry,
+                          searchGate,
+                          searchSettings,
+                          logger,
+                          messages)
+                      .node();
               var location = CobblestoneCommand.location(messages, dataStore.locations());
               var registrar = event.registrar();
               registrar.register(

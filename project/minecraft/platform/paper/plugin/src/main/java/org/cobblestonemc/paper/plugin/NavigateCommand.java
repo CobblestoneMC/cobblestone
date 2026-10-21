@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
@@ -40,11 +39,8 @@ import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.paper.PaperNavigationServiceImpl;
-import org.cobblestonemc.paper.plugin.api.NavigatorFactory;
 import org.cobblestonemc.plugin.Permissions;
-import org.cobblestonemc.plugin.api.DestinationLeaf;
 import org.cobblestonemc.plugin.api.NavigatorSettings;
-import org.cobblestonemc.plugin.api.OptionValues;
 import org.cobblestonemc.plugin.api.TripOutcome;
 import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.command.FlagParser;
@@ -52,6 +48,7 @@ import org.cobblestonemc.plugin.command.NavigationFlags;
 import org.cobblestonemc.plugin.destination.DestinationDetails;
 import org.cobblestonemc.plugin.destination.DestinationNode;
 import org.cobblestonemc.plugin.destination.DestinationResolver;
+import org.cobblestonemc.plugin.destination.DestinationRoots;
 import org.cobblestonemc.plugin.destination.NavigationPermissions;
 import org.cobblestonemc.plugin.destination.NavigationTarget;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
@@ -80,9 +77,16 @@ final class NavigateCommand {
           .heuristicWeight(2.0)
           .build();
 
-  private NavigateCommand() {}
+  private final PaperNavigationServiceImpl platformApi;
+  private final PaperTripServiceImpl tripService;
+  private final PaperIntegrationRegistry integrations;
+  private final SearchRegistry<Location> searches;
+  private final SearchGate gate;
+  private final Supplier<SearchSettings> searchSettings;
+  private final CobblestoneLogger log;
+  private final Messages messages;
 
-  static LiteralCommandNode<CommandSourceStack> build(
+  NavigateCommand(
       PaperNavigationServiceImpl platformApi,
       PaperTripServiceImpl tripService,
       PaperIntegrationRegistry integrations,
@@ -91,30 +95,33 @@ final class NavigateCommand {
       Supplier<SearchSettings> searchSettings,
       CobblestoneLogger log,
       Messages messages) {
+    this.platformApi = platformApi;
+    this.tripService = tripService;
+    this.integrations = integrations;
+    this.searches = searches;
+    this.gate = gate;
+    this.searchSettings = searchSettings;
+    this.log = log;
+    this.messages = messages;
+  }
+
+  /**
+   * Builds the command's node.
+   *
+   * @return the node
+   */
+  LiteralCommandNode<CommandSourceStack> node() {
     return Commands.literal("navigate")
         .requires(source -> source.getSender().hasPermission(Permissions.NAVIGATE.value()))
-        .executes(ctx -> navHelp(ctx.getSource().getSender(), messages))
+        .executes(ctx -> navHelp(ctx.getSource().getSender()))
         .then(
             Commands.argument("args", StringArgumentType.greedyString())
-                .suggests(
-                    (suggestCtx, suggestBuilder) ->
-                        suggest(suggestCtx, suggestBuilder, integrations))
-                .executes(
-                    ctx ->
-                        run(
-                            ctx,
-                            platformApi,
-                            tripService,
-                            integrations,
-                            searches,
-                            gate,
-                            searchSettings,
-                            log,
-                            messages)))
+                .suggests(this::suggest)
+                .executes(this::run))
         .build();
   }
 
-  private static int navHelp(CommandSender sender, Messages messages) {
+  private int navHelp(CommandSender sender) {
     Locale locale = localeOf(sender, messages);
     messages.send(sender, locale, CobblestoneMessages.NAVIGATE_HELP_HEADER);
     PaperCommandHelp.line(
@@ -137,16 +144,7 @@ final class NavigateCommand {
     return Command.SINGLE_SUCCESS;
   }
 
-  private static int run(
-      CommandContext<CommandSourceStack> ctx,
-      PaperNavigationServiceImpl platformApi,
-      PaperTripServiceImpl tripService,
-      PaperIntegrationRegistry integrations,
-      SearchRegistry<Location> searches,
-      SearchGate gate,
-      Supplier<SearchSettings> searchSettings,
-      CobblestoneLogger log,
-      Messages messages) {
+  private int run(CommandContext<CommandSourceStack> ctx) {
     CommandSender sender = ctx.getSource().getSender();
     Locale locale = localeOf(sender, messages);
     if (!(sender instanceof Player player)) {
@@ -168,8 +166,7 @@ final class NavigateCommand {
       messages.send(player, locale, CobblestoneMessages.NO_PERMISSION);
       return Command.SINGLE_SUCCESS;
     }
-    NavigatorFactory factory = navigatorFactory(integrations, flags.navigator());
-    if (factory == null) {
+    if (integrations.navigator(flags.navigator()) == null) {
       messages.send(
           player, locale, CobblestoneMessages.NAVIGATE_UNKNOWN_NAVIGATOR, flags.navigator());
       return Command.SINGLE_SUCCESS;
@@ -177,7 +174,7 @@ final class NavigateCommand {
 
     DestinationResolver.Resolution<NavigationTarget> resolution =
         DestinationResolver.resolve(
-            destinationRoots(integrations, player),
+            destinationRoots(player),
             parsed.destination(),
             player::hasPermission,
             canNavigate(player));
@@ -191,15 +188,10 @@ final class NavigateCommand {
       return Command.SINGLE_SUCCESS;
     }
     if (resolution instanceof DestinationResolver.InvalidOptions<NavigationTarget> invalid) {
-      sendUsage(player, locale, messages, invalid);
+      sendUsage(player, invalid);
       return Command.SINGLE_SUCCESS;
     }
-    if (!(resolution
-        instanceof
-        DestinationResolver.Resolved<NavigationTarget>(
-            DestinationLeaf<NavigationTarget> leaf,
-            OptionValues values,
-            List<String> address))) {
+    if (!(resolution instanceof DestinationResolver.Resolved<NavigationTarget> resolved)) {
       messages.send(
           player,
           locale,
@@ -207,11 +199,20 @@ final class NavigateCommand {
           String.join(" ", parsed.destination()));
       return Command.SINGLE_SUCCESS;
     }
+    navigate(player, locale, flags, resolved);
+    return Command.SINGLE_SUCCESS;
+  }
 
+  private void navigate(
+      Player player,
+      Locale locale,
+      NavigationFlags flags,
+      DestinationResolver.Resolved<NavigationTarget> resolved) {
+    List<String> address = resolved.address();
     // Built only now, on the player's own thread, which may read the world around them.
     Validity<NavigationTarget> built;
     try {
-      built = leaf.build(values);
+      built = resolved.leaf().build(resolved.values());
     } catch (RuntimeException e) {
       // Most likely an integration's leaf; the address's first key names the plugin.
       log.error(
@@ -220,13 +221,13 @@ final class NavigateCommand {
           player.getName(),
           String.join(" ", address));
       messages.send(player, locale, CobblestoneMessages.NAVIGATE_ERROR);
-      return Command.SINGLE_SUCCESS;
+      return;
     }
     NavigationTarget destination;
     switch (built) {
       case Validity.Invalid<NavigationTarget>(Component reason) -> {
         player.sendMessage(reason);
-        return Command.SINGLE_SUCCESS;
+        return;
       }
       case Validity.Valid<NavigationTarget>(NavigationTarget valid) -> destination = valid;
     }
@@ -239,39 +240,17 @@ final class NavigateCommand {
           case NO_LIVE -> false;
           case DEFAULT -> destination.mobile();
         };
-    startSearch(
-        player,
-        locale,
-        tripLabel,
-        hover,
-        destination,
-        flags,
-        live,
-        platformApi,
-        tripService,
-        searches,
-        gate,
-        searchSettings,
-        log,
-        messages);
-    return Command.SINGLE_SUCCESS;
+    startSearch(player, locale, tripLabel, hover, destination, flags, live);
   }
 
-  private static void startSearch(
+  private void startSearch(
       Player player,
       Locale locale,
       TripLabel tripLabel,
       Component hover,
       NavigationTarget destination,
       NavigationFlags flags,
-      boolean live,
-      PaperNavigationServiceImpl platformApi,
-      PaperTripServiceImpl tripService,
-      SearchRegistry<Location> searches,
-      SearchGate gate,
-      Supplier<SearchSettings> searchSettings,
-      CobblestoneLogger log,
-      Messages messages) {
+      boolean live) {
     String destinationLabel = tripLabel.text();
     UUID uuid = player.getUniqueId();
     final long startNanos = System.nanoTime();
@@ -350,15 +329,8 @@ final class NavigateCommand {
                           path,
                           tripLabel,
                           settings,
-                          liveSearch(
-                              player,
-                              destination,
-                              flags,
-                              platformApi,
-                              searches,
-                              gate,
-                              searchSettings),
-                          guideSearch(player, flags, platformApi),
+                          liveSearch(player, destination, flags),
+                          guideSearch(player, flags),
                           live,
                           destination::exists)
                       .whenComplete(
@@ -388,8 +360,7 @@ final class NavigateCommand {
   }
 
   /** Builds the short-range guide search (player -> current step) for off-trail drift. */
-  private static GuideSearch<Location> guideSearch(
-      Player player, NavigationFlags flags, PaperNavigationServiceImpl platformApi) {
+  private GuideSearch<Location> guideSearch(Player player, NavigationFlags flags) {
     return target -> {
       if (!player.isOnline()) {
         return CompletableFuture.completedFuture(Optional.empty());
@@ -411,14 +382,8 @@ final class NavigateCommand {
   /**
    * Builds the re-search behavior for a {@code -live} trip; yields to the per-player search budget.
    */
-  private static LiveSearch<Location> liveSearch(
-      Player player,
-      NavigationTarget destination,
-      NavigationFlags flags,
-      PaperNavigationServiceImpl platformApi,
-      SearchRegistry<Location> searches,
-      SearchGate gate,
-      Supplier<SearchSettings> searchSettings) {
+  private LiveSearch<Location> liveSearch(
+      Player player, NavigationTarget destination, NavigationFlags flags) {
     UUID uuid = player.getUniqueId();
     return () -> {
       if (!player.isOnline() || !gate.tryBegin(uuid)) {
@@ -445,10 +410,8 @@ final class NavigateCommand {
     };
   }
 
-  private static CompletableFuture<Suggestions> suggest(
-      CommandContext<CommandSourceStack> ctx,
-      SuggestionsBuilder builder,
-      PaperIntegrationRegistry integrations) {
+  private CompletableFuture<Suggestions> suggest(
+      CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
     if (!(ctx.getSource().getSender() instanceof Player player)) {
       return builder.buildFuture();
     }
@@ -461,7 +424,7 @@ final class NavigateCommand {
         builder.createOffset(builder.getStart() + remaining.length() - last.length());
 
     if (previous.equals("-navigator")) {
-      navigatorIds(integrations).stream()
+      integrations.navigatorIds().stream()
           .filter(id -> id.startsWith(last))
           .forEach(offset::suggest);
     } else if (previous.equals("-no-mode")) {
@@ -476,22 +439,17 @@ final class NavigateCommand {
         List<String> destination =
             new ArrayList<>(FlagParser.destinationTokens(tokens.subList(0, tokens.size() - 1)));
         destination.add(last);
-        suggestDestinations(integrations, player, destination).forEach(offset::suggest);
+        suggestDestinations(player, destination).forEach(offset::suggest);
       }
     } else {
-      suggestDestinations(integrations, player, FlagParser.destinationTokens(tokens))
-          .forEach(offset::suggest);
+      suggestDestinations(player, FlagParser.destinationTokens(tokens)).forEach(offset::suggest);
     }
     return offset.buildFuture();
   }
 
-  private static List<String> suggestDestinations(
-      PaperIntegrationRegistry integrations, Player player, List<String> destinationTokens) {
+  private List<String> suggestDestinations(Player player, List<String> destinationTokens) {
     return DestinationResolver.suggest(
-        destinationRoots(integrations, player),
-        destinationTokens,
-        player::hasPermission,
-        canNavigate(player));
+        destinationRoots(player), destinationTokens, player::hasPermission, canNavigate(player));
   }
 
   /**
@@ -513,27 +471,8 @@ final class NavigateCommand {
     return !player.isPermissionSet(node) || player.hasPermission(node);
   }
 
-  private static Map<String, DestinationNode<NavigationTarget>> destinationRoots(
-      PaperIntegrationRegistry integrations, Player player) {
-    Map<String, DestinationNode<NavigationTarget>> roots = new TreeMap<>();
-    for (var provider : integrations.destinationProviders().entrySet()) {
-      DestinationNode<NavigationTarget> root = provider.getValue().provide(player);
-      // An empty root would be offered as a token that leads nowhere — drop it instead.
-      if (root == null || (root.subTrees().isEmpty() && root.leaves().isEmpty())) {
-        continue;
-      }
-      roots.put(provider.getKey(), root);
-    }
-    return roots;
-  }
-
-  private static NavigatorFactory navigatorFactory(
-      PaperIntegrationRegistry integrations, String id) {
-    return integrations.navigator(id);
-  }
-
-  private static List<String> navigatorIds(PaperIntegrationRegistry integrations) {
-    return integrations.navigatorIds();
+  private Map<String, DestinationNode<NavigationTarget>> destinationRoots(Player player) {
+    return DestinationRoots.of(integrations.destinationProviders(), player);
   }
 
   private static List<String> flagNames() {
@@ -559,11 +498,13 @@ final class NavigateCommand {
     }
   }
 
-  private static void sendUsage(
-      Player player,
-      Locale locale,
-      Messages messages,
-      DestinationResolver.InvalidOptions<NavigationTarget> invalid) {
+  /**
+   * Tells a player how a destination's options are typed, after they gave it options that do not
+   * fit.
+   */
+  private void sendUsage(
+      Player player, DestinationResolver.InvalidOptions<NavigationTarget> invalid) {
+    Locale locale = player.locale();
     String usage = DestinationResolver.usage(invalid.address(), invalid.options());
     if (invalid.invalidToken() == null) {
       messages.send(player, locale, CobblestoneMessages.NAVIGATE_DESTINATION_USAGE, usage);

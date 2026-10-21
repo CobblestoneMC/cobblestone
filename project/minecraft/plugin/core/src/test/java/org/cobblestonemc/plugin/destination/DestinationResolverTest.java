@@ -400,6 +400,49 @@ class DestinationResolverTest {
   }
 
   @Test
+  void aResolvedDestinationKeepsTheOptionTokensAsTyped() {
+    var roots = roots(node("cobblestone").template("coordinates").leaf("spawn"));
+
+    Resolved<?> resolved =
+        assertInstanceOf(
+            Resolved.class, resolve(roots, List.of("coordinates", "1", "2", "-3", "nether")));
+    assertEquals(List.of("1", "2", "-3", "nether"), resolved.optionTokens());
+
+    resolved = assertInstanceOf(Resolved.class, resolve(roots, List.of("spawn")));
+    assertEquals(List.of(), resolved.optionTokens());
+  }
+
+  @Test
+  void fitsOptionsToADestinationChosenWithoutTyping() {
+    DestinationLeaf<String> template =
+        node("cobblestone").template("coordinates").leaves.get("coordinates");
+    List<String> address = List.of("cobblestone", "coordinates");
+
+    Resolved<?> resolved =
+        assertInstanceOf(
+            Resolved.class, DestinationResolver.options(address, template, List.of("1", "2", "3")));
+    assertEquals(address, resolved.address());
+    assertEquals(List.of("1", "2", "3"), resolved.optionTokens());
+    assertEquals("1 2 3", built(resolved));
+
+    InvalidOptions<?> missing =
+        assertInstanceOf(
+            InvalidOptions.class, DestinationResolver.options(address, template, List.of("1")));
+    assertNull(missing.invalidToken());
+    InvalidOptions<?> unparsable =
+        assertInstanceOf(
+            InvalidOptions.class,
+            DestinationResolver.options(address, template, List.of("1", "2", "3", "moon")));
+    assertEquals("moon", unparsable.invalidToken());
+
+    // A destination without options fits only no tokens at all.
+    DestinationLeaf<String> spawn = node("mco").leaf("spawn").leaves.get("spawn");
+    assertInstanceOf(Resolved.class, DestinationResolver.options(address, spawn, List.of()));
+    assertInstanceOf(
+        InvalidOptions.class, DestinationResolver.options(address, spawn, List.of("1")));
+  }
+
+  @Test
   void aStrictLevelKeepsATemplateApartFromALeafOfTheSameName() {
     // "surface" is the nearest open sky; "coordinates surface <x> <z>" is one column's.
     var roots =

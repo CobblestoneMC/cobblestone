@@ -93,10 +93,19 @@ public final class DestinationResolver {
    * @param leaf the leaf that matched
    * @param values its parsed options
    * @param address the canonical key path that identifies it (for confirmation messages)
+   * @param optionTokens the tokens its options were parsed from, as typed — with the address, all
+   *     it takes to name the same destination again
    * @param <D> what the leaves build
    */
-  public record Resolved<D>(DestinationLeaf<D> leaf, OptionValues values, List<String> address)
-      implements Resolution<D> {}
+  public record Resolved<D>(
+      DestinationLeaf<D> leaf, OptionValues values, List<String> address, List<String> optionTokens)
+      implements Resolution<D> {
+    /** Canonical constructor; copies the lists. */
+    public Resolved {
+      address = List.copyOf(address);
+      optionTokens = List.copyOf(optionTokens);
+    }
+  }
 
   /**
    * More than one destination matched; the player must disambiguate with a fuller path.
@@ -183,18 +192,17 @@ public final class DestinationResolver {
     for (var root : roots.entrySet()) {
       match(root.getKey(), root.getValue(), args, 0, new ArrayList<>(), results);
     }
-    List<Match<D>> matches = results.matches;
+    List<Resolved<D>> matches = results.matches;
     if (matches.isEmpty()) {
       return results.invalid.isEmpty() ? new NotFound<>() : results.invalid.getFirst();
     }
     if (matches.size() == 1) {
-      Match<D> match = matches.getFirst();
-      return new Resolved<>(match.leaf(), match.values(), match.address());
+      return matches.getFirst();
     }
     // Distinct canonical addresses, first spelling wins. Sorted, so what the player is shown does
     // not depend on the order the roots happened to be iterated in.
     Map<String, List<String>> distinct = new TreeMap<>();
-    for (Match<D> candidate : matches) {
+    for (Resolved<D> candidate : matches) {
       distinct.putIfAbsent(
           String.join(" ", candidate.address()).toLowerCase(Locale.ROOT), candidate.address());
     }
@@ -301,39 +309,48 @@ public final class DestinationResolver {
    */
   private static <D> void applyOptions(
       List<String> address, DestinationLeaf<D> leaf, List<String> tokens, Results<D> out) {
-    List<DestinationOption<?>> options = leaf.options();
-    if (options.isEmpty()) {
-      if (tokens.isEmpty()) {
-        out.matches.add(new Match<>(address, leaf, OptionValues.empty()));
-      }
+    if (leaf.options().isEmpty() && !tokens.isEmpty()) {
       return;
     }
+    switch (options(address, leaf, tokens)) {
+      case Resolved<D> resolved -> out.matches.add(resolved);
+      case InvalidOptions<D> invalid -> out.invalid.add(invalid);
+      default -> {}
+    }
+  }
+
+  /**
+   * Fits option tokens to a destination already chosen by other means, exactly as {@link #resolve}
+   * would after its key.
+   *
+   * @param address the destination's canonical address
+   * @param leaf the destination
+   * @param tokens one token per option, in order (optional ones may be left off the end)
+   * @param <D> what the leaf builds
+   * @return {@link Resolved} if the tokens fit, otherwise {@link InvalidOptions}
+   */
+  public static <D> Resolution<D> options(
+      List<String> address, DestinationLeaf<D> leaf, List<String> tokens) {
+    List<DestinationOption<?>> options = leaf.options();
     long required = options.stream().filter(DestinationOption::required).count();
     if (tokens.size() < required || tokens.size() > options.size()) {
-      out.invalid.add(new InvalidOptions<>(address, options, null));
-      return;
+      return new InvalidOptions<>(address, options, null);
     }
     Map<DestinationOption<?>, Object> values = new IdentityHashMap<>();
     for (int i = 0; i < tokens.size(); i++) {
       Optional<?> value = options.get(i).parse(tokens.get(i));
       if (value.isEmpty()) {
-        out.invalid.add(new InvalidOptions<>(address, options, tokens.get(i)));
-        return;
+        return new InvalidOptions<>(address, options, tokens.get(i));
       }
       values.put(options.get(i), value.get());
     }
-    out.matches.add(new Match<>(address, leaf, OptionValues.of(values)));
+    OptionValues parsed = values.isEmpty() ? OptionValues.empty() : OptionValues.of(values);
+    return new Resolved<>(leaf, parsed, address, tokens);
   }
-
-  /**
-   * One destination matched by the typed args, with the canonical address it is filed under and its
-   * parsed options.
-   */
-  private record Match<D>(List<String> address, DestinationLeaf<D> leaf, OptionValues values) {}
 
   /** What a resolution walk has found so far, and the permission gates it applies. */
   private static final class Results<D> {
-    private final List<Match<D>> matches = new ArrayList<>();
+    private final List<Resolved<D>> matches = new ArrayList<>();
     private final List<InvalidOptions<D>> invalid = new ArrayList<>();
     private final Predicate<String> hasPermission;
     private final Predicate<List<String>> canNavigate;

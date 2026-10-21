@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
@@ -31,9 +30,7 @@ import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.plugin.Permissions;
-import org.cobblestonemc.plugin.api.DestinationLeaf;
 import org.cobblestonemc.plugin.api.NavigatorSettings;
-import org.cobblestonemc.plugin.api.OptionValues;
 import org.cobblestonemc.plugin.api.TripOutcome;
 import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.command.FlagParser;
@@ -41,6 +38,7 @@ import org.cobblestonemc.plugin.command.NavigationFlags;
 import org.cobblestonemc.plugin.destination.DestinationDetails;
 import org.cobblestonemc.plugin.destination.DestinationNode;
 import org.cobblestonemc.plugin.destination.DestinationResolver;
+import org.cobblestonemc.plugin.destination.DestinationRoots;
 import org.cobblestonemc.plugin.destination.NavigationPermissions;
 import org.cobblestonemc.plugin.destination.NavigationTarget;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
@@ -69,7 +67,7 @@ import org.spongepowered.api.world.server.ServerLocation;
  */
 final class NavigateCommand {
 
-  // How many words /navigate accepts. Each word is its own parameter (see #build), so this is a
+  // How many words /navigate accepts. Each word is its own parameter (see #command), so this is a
   // hard cap: a destination address with its options, plus a flag or two, fits comfortably.
   private static final int MAX_WORDS = 12;
   // One key per word position. Distinct keys, all read back in order, so every word lands in the
@@ -84,9 +82,16 @@ final class NavigateCommand {
           .heuristicWeight(2.0)
           .build();
 
-  private NavigateCommand() {}
+  private final SpongeNavigationServiceImpl navigationService;
+  private final SpongeTripServiceImpl tripService;
+  private final SpongeIntegrationRegistry integrations;
+  private final SearchRegistry<ServerLocation> searches;
+  private final SearchGate gate;
+  private final Supplier<SearchSettings> searchSettings;
+  private final CobblestoneLogger log;
+  private final Messages messages;
 
-  static Command.Parameterized build(
+  NavigateCommand(
       SpongeNavigationServiceImpl navigationService,
       SpongeTripServiceImpl tripService,
       SpongeIntegrationRegistry integrations,
@@ -95,6 +100,22 @@ final class NavigateCommand {
       Supplier<SearchSettings> searchSettings,
       CobblestoneLogger log,
       Messages messages) {
+    this.navigationService = navigationService;
+    this.tripService = tripService;
+    this.integrations = integrations;
+    this.searches = searches;
+    this.gate = gate;
+    this.searchSettings = searchSettings;
+    this.log = log;
+    this.messages = messages;
+  }
+
+  /**
+   * Builds the command.
+   *
+   * @return the command
+   */
+  Command.Parameterized command() {
     // A chain of single-word parameters, NOT one greedy parameter. Sponge translates a greedy or
     // repeating parameter into nodes that redirect to themselves, and each redirect starts a fresh
     // parse context — so a completer only ever sees the first word, and cannot tell where in the
@@ -105,11 +126,7 @@ final class NavigateCommand {
             .permission(Permissions.NAVIGATE.value());
     for (Parameter.Key<String> key : WORD_KEYS) {
       command.addParameter(
-          Parameter.string()
-              .key(key)
-              .optional()
-              .completer((context, input) -> complete(context, input, integrations))
-              .build());
+          Parameter.string().key(key).optional().completer(this::complete).build());
     }
     return command
         .executor(
@@ -120,17 +137,7 @@ final class NavigateCommand {
                     messages.render(messages.defaultLocale(), CobblestoneMessages.PLAYERS_ONLY));
                 return CommandResult.success();
               }
-              run(
-                  player.get(),
-                  typedWords(context),
-                  navigationService,
-                  tripService,
-                  integrations,
-                  searches,
-                  gate,
-                  searchSettings,
-                  log,
-                  messages);
+              run(player.get(), typedWords(context));
               return CommandResult.success();
             })
         .build();
@@ -153,20 +160,10 @@ final class NavigateCommand {
     return List.copyOf(keys);
   }
 
-  private static void run(
-      ServerPlayer player,
-      List<String> tokens,
-      SpongeNavigationServiceImpl navigationService,
-      SpongeTripServiceImpl tripService,
-      SpongeIntegrationRegistry integrations,
-      SearchRegistry<ServerLocation> searches,
-      SearchGate gate,
-      Supplier<SearchSettings> searchSettings,
-      CobblestoneLogger log,
-      Messages messages) {
+  private void run(ServerPlayer player, List<String> tokens) {
     Locale locale = player.locale();
     if (tokens.isEmpty()) {
-      navHelp(player, locale, messages, integrations);
+      navHelp(player, locale);
       return;
     }
 
@@ -191,7 +188,7 @@ final class NavigateCommand {
 
     DestinationResolver.Resolution<NavigationTarget> resolution =
         DestinationResolver.resolve(
-            destinationRoots(integrations, player),
+            destinationRoots(player),
             parsed.destination(),
             player::hasPermission,
             canNavigate(player));
@@ -205,15 +202,10 @@ final class NavigateCommand {
       return;
     }
     if (resolution instanceof DestinationResolver.InvalidOptions<NavigationTarget> invalid) {
-      sendUsage(player, locale, messages, invalid);
+      sendUsage(player, invalid);
       return;
     }
-    if (!(resolution
-        instanceof
-        DestinationResolver.Resolved<NavigationTarget>(
-            DestinationLeaf<NavigationTarget> leaf,
-            OptionValues values,
-            List<String> address))) {
+    if (!(resolution instanceof DestinationResolver.Resolved<NavigationTarget> resolved)) {
       messages.send(
           player,
           locale,
@@ -221,10 +213,19 @@ final class NavigateCommand {
           String.join(" ", parsed.destination()));
       return;
     }
+    navigate(player, locale, flags, resolved);
+  }
+
+  private void navigate(
+      ServerPlayer player,
+      Locale locale,
+      NavigationFlags flags,
+      DestinationResolver.Resolved<NavigationTarget> resolved) {
+    List<String> address = resolved.address();
     // Built only now, on the player's own thread, which may read the world around them.
     Validity<NavigationTarget> built;
     try {
-      built = leaf.build(values);
+      built = resolved.leaf().build(resolved.values());
     } catch (RuntimeException e) {
       // Most likely an integration's leaf; the address's first key names the plugin.
       log.error(
@@ -258,18 +259,10 @@ final class NavigateCommand {
         destination.destination(),
         destination::exists,
         flags,
-        live,
-        navigationService,
-        tripService,
-        integrations,
-        searches,
-        gate,
-        searchSettings,
-        log,
-        messages);
+        live);
   }
 
-  private static void startSearch(
+  private void startSearch(
       ServerPlayer player,
       Locale locale,
       TripLabel tripLabel,
@@ -277,15 +270,7 @@ final class NavigateCommand {
       Destination<RegionFactory> destination,
       BooleanSupplier targetExists,
       NavigationFlags flags,
-      boolean live,
-      SpongeNavigationServiceImpl navigationService,
-      SpongeTripServiceImpl tripService,
-      SpongeIntegrationRegistry integrations,
-      SearchRegistry<ServerLocation> searches,
-      SearchGate gate,
-      Supplier<SearchSettings> searchSettings,
-      CobblestoneLogger log,
-      Messages messages) {
+      boolean live) {
     String label = tripLabel.text();
     UUID uuid = player.uniqueId();
     long startNanos = System.nanoTime();
@@ -330,15 +315,8 @@ final class NavigateCommand {
                         path,
                         tripLabel,
                         settings,
-                        liveSearch(
-                            player,
-                            destination,
-                            flags,
-                            navigationService,
-                            searches,
-                            gate,
-                            searchSettings),
-                        guideSearch(player, flags, navigationService),
+                        liveSearch(player, destination, flags),
+                        guideSearch(player, flags),
                         live,
                         targetExists)
                     .whenComplete(
@@ -373,14 +351,8 @@ final class NavigateCommand {
     }
   }
 
-  private static LiveSearch<ServerLocation> liveSearch(
-      ServerPlayer player,
-      Destination<RegionFactory> destination,
-      NavigationFlags flags,
-      SpongeNavigationServiceImpl navigationService,
-      SearchRegistry<ServerLocation> searches,
-      SearchGate gate,
-      Supplier<SearchSettings> searchSettings) {
+  private LiveSearch<ServerLocation> liveSearch(
+      ServerPlayer player, Destination<RegionFactory> destination, NavigationFlags flags) {
     UUID uuid = player.uniqueId();
     return () -> {
       if (!player.isOnline() || !gate.tryBegin(uuid)) {
@@ -401,8 +373,7 @@ final class NavigateCommand {
     };
   }
 
-  private static GuideSearch<ServerLocation> guideSearch(
-      ServerPlayer player, NavigationFlags flags, SpongeNavigationServiceImpl navigationService) {
+  private GuideSearch<ServerLocation> guideSearch(ServerPlayer player, NavigationFlags flags) {
     return target -> {
       if (!player.isOnline()) {
         return CompletableFuture.completedFuture(Optional.empty());
@@ -430,11 +401,7 @@ final class NavigateCommand {
         flags.excludedDimensions());
   }
 
-  private static void navHelp(
-      ServerPlayer player,
-      Locale locale,
-      Messages messages,
-      SpongeIntegrationRegistry integrations) {
+  private void navHelp(ServerPlayer player, Locale locale) {
     messages.send(player, locale, CobblestoneMessages.NAVIGATE_HELP_HEADER);
     SpongeCommandHelp.line(
         player, messages, locale, "/navigate <destination…>", "command.navigate.help.destination");
@@ -451,6 +418,10 @@ final class NavigateCommand {
     SpongeCommandHelp.line(player, messages, locale, "-live", "command.navigate.help.live");
   }
 
+  /**
+   * The Cobblestone navigation-gate check for a player: default-allow, so a destination is offered
+   * unless its {@code cobblestone.navigate.<address>} node is explicitly denied.
+   */
   private static Predicate<List<String>> canNavigate(ServerPlayer player) {
     return address ->
         NavigationPermissions.allowed(
@@ -469,23 +440,8 @@ final class NavigateCommand {
         != Tristate.FALSE;
   }
 
-  /**
-   * The destination forest for this player: one root per registered provider, keyed by the plugin
-   * that registered it. The owner is the root key rather than something the provider picks, so two
-   * plugins that both offer a {@code warp} level stay tellable apart.
-   */
-  private static Map<String, DestinationNode<NavigationTarget>> destinationRoots(
-      SpongeIntegrationRegistry integrations, ServerPlayer player) {
-    Map<String, DestinationNode<NavigationTarget>> roots = new TreeMap<>();
-    for (var provider : integrations.destinationProviders().entrySet()) {
-      DestinationNode<NavigationTarget> root = provider.getValue().provide(player);
-      // An empty root would be offered as a token that leads nowhere — drop it instead.
-      if (root == null || (root.subTrees().isEmpty() && root.leaves().isEmpty())) {
-        continue;
-      }
-      roots.put(provider.getKey(), root);
-    }
-    return roots;
+  private Map<String, DestinationNode<NavigationTarget>> destinationRoots(ServerPlayer player) {
+    return DestinationRoots.of(integrations.destinationProviders(), player);
   }
 
   /**
@@ -493,8 +449,7 @@ final class NavigateCommand {
    * is just the word under the cursor — a completion replaces that word alone — and the words
    * before it are readable from the context.
    */
-  private static List<CommandCompletion> complete(
-      CommandContext context, String input, SpongeIntegrationRegistry integrations) {
+  private List<CommandCompletion> complete(CommandContext context, String input) {
     Optional<ServerPlayer> player = context.cause().first(ServerPlayer.class);
     if (player.isEmpty()) {
       return List.of();
@@ -518,7 +473,7 @@ final class NavigateCommand {
     }
     List<String> suggestions =
         DestinationResolver.suggest(
-            destinationRoots(integrations, player.get()),
+            destinationRoots(player.get()),
             destinationTokens,
             player.get()::hasPermission,
             canNavigate(player.get()));
@@ -549,11 +504,13 @@ final class NavigateCommand {
     }
   }
 
-  private static void sendUsage(
-      ServerPlayer player,
-      Locale locale,
-      Messages messages,
-      DestinationResolver.InvalidOptions<NavigationTarget> invalid) {
+  /**
+   * Tells a player how a destination's options are typed, after they gave it options that do not
+   * fit.
+   */
+  private void sendUsage(
+      ServerPlayer player, DestinationResolver.InvalidOptions<NavigationTarget> invalid) {
+    Locale locale = player.locale();
     String usage = DestinationResolver.usage(invalid.address(), invalid.options());
     if (invalid.invalidToken() == null) {
       messages.send(player, locale, CobblestoneMessages.NAVIGATE_DESTINATION_USAGE, usage);
