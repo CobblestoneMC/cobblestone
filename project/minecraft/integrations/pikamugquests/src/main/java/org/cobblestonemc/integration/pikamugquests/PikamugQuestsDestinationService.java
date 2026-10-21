@@ -15,8 +15,8 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.paper.plugin.api.Destination;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
-import org.cobblestonemc.paper.plugin.api.DestinationTree;
-import org.cobblestonemc.plugin.api.PlatformDestinationTree;
+import org.cobblestonemc.plugin.api.DestinationTree;
+import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.joml.Vector3i;
 
 /**
@@ -39,12 +39,12 @@ final class PikamugQuestsDestinationService implements DestinationService {
   }
 
   @Override
-  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
+  public DestinationTree<MinecraftDestination<World, Vector3i>> provide(Player player) {
     Quester quester = quests.getQuester(player.getUniqueId());
     if (quester == null) {
       return null;
     }
-    DestinationTree questNode = DestinationTree.builder();
+    var questNode = Destination.tree();
     boolean any = false;
     for (Quest quest : quester.getCurrentQuests().keySet()) {
       if (QuestTargets.current(quester, quest) == null) {
@@ -58,7 +58,7 @@ final class PikamugQuestsDestinationService implements DestinationService {
                   QuestTargets.current(quests.getQuester(player.getUniqueId()), quest), label));
       any = true;
     }
-    return any ? DestinationTree.builder().children(QUEST_KEY, questNode).build() : null;
+    return any ? Destination.tree().subtree(QUEST_KEY, questNode).build() : null;
   }
 
   /**

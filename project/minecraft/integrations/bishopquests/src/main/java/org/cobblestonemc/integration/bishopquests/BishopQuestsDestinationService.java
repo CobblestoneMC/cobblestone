@@ -7,14 +7,14 @@
 
 package org.cobblestonemc.integration.bishopquests;
 
+import org.cobblestonemc.plugin.api.MinecraftDestination;
+import org.cobblestonemc.plugin.api.DestinationTree;
 import com.leonardobishop.quests.common.player.QPlayer;
 import com.leonardobishop.quests.common.plugin.Quests;
 import com.leonardobishop.quests.common.quest.Quest;
 import java.util.Locale;
 import org.cobblestonemc.paper.plugin.api.Destination;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
-import org.cobblestonemc.paper.plugin.api.DestinationTree;
-import org.cobblestonemc.plugin.api.PlatformDestinationTree;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -40,12 +40,12 @@ final class BishopQuestsDestinationService implements DestinationService {
   }
 
   @Override
-  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
+  public DestinationTree<MinecraftDestination<World, Vector3i>> provide(Player player) {
     QPlayer qPlayer = quests.getPlayerManager().getPlayer(player.getUniqueId());
     if (qPlayer == null) {
       return null;
     }
-    DestinationTree questNode = DestinationTree.builder();
+    var questNode = Destination.tree();
     boolean any = false;
     for (Quest quest : qPlayer.getQuestProgressFile().getStartedQuests()) {
       Location target = QuestTargets.current(qPlayer, quest);
@@ -53,10 +53,10 @@ final class BishopQuestsDestinationService implements DestinationService {
         continue; // no current position objective — nothing to walk to
       }
       String label = quest.getId();
-      questNode.destination(slug(label), Destination.at(target, label));
+      questNode.destination(slug(label), () -> Destination.at(target, label));
       any = true;
     }
-    return any ? DestinationTree.builder().children(QUEST_KEY, questNode).build() : null;
+    return any ? Destination.tree().subtree(QUEST_KEY, questNode).build() : null;
   }
 
   /** A single command token from a quest id: lowercase, non-alphanumeric runs become one dash. */

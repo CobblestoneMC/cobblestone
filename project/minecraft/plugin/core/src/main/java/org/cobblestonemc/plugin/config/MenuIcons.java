@@ -11,8 +11,8 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
-import org.cobblestonemc.plugin.api.DestinationChild;
-import org.cobblestonemc.plugin.api.DestinationNode;
+import org.cobblestonemc.plugin.api.DestinationEntry;
+import org.cobblestonemc.plugin.api.DestinationTree;
 import org.cobblestonemc.plugin.api.Display;
 import org.cobblestonemc.plugin.api.Icon;
 
@@ -163,26 +163,25 @@ public final class MenuIcons {
   }
 
   /**
-   * Gives each entry of a level of Cobblestone's own its configured item, where the entry's key
+   * Gives each entry of a tree of Cobblestone's own its configured item, where the entry's key
    * names one and it has no display of its own.
    *
-   * @param level the level
+   * @param tree the tree
    * @param icons looks up an item by its name here, as {@link #reader} reads them
-   * @param <D> what the level's destinations build
-   * @return the level, with its entries' items
+   * @param <D> what the tree's destinations build
+   * @return the tree, with its entries' items
    */
-  public static <D> DestinationNode<D> withIcons(
-      DestinationNode<D> level, Function<String, Icon> icons) {
-    Map<String, DestinationChild<D>> children = new LinkedHashMap<>();
-    level
-        .children()
+  public static <D> DestinationTree<D> withIcons(
+      DestinationTree<D> tree, Function<String, Icon> icons) {
+    Map<String, DestinationEntry<D>> entries = new LinkedHashMap<>();
+    tree.entries()
         .forEach(
-            (key, child) ->
-                children.put(
+            (key, entry) ->
+                entries.put(
                     key,
-                    DEFAULTS.containsKey(key) && child.display().equals(Display.none())
-                        ? child.withDisplay(Display.of(icons.apply(key)))
-                        : child));
-    return new DestinationNode.Simple<>(level.strict(), children, level.aliases());
+                    DEFAULTS.containsKey(key) && entry.display().equals(Display.none())
+                        ? entry.withDisplay(Display.of(icons.apply(key)))
+                        : entry));
+    return new DestinationTree.Simple<>(tree.strict(), entries, tree.aliases());
   }
 }

@@ -21,10 +21,10 @@ import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import org.cobblestonemc.CobblestoneLogger;
-import org.cobblestonemc.plugin.api.DestinationChild;
+import org.cobblestonemc.plugin.api.DestinationEntry;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
-import org.cobblestonemc.plugin.api.DestinationNode;
 import org.cobblestonemc.plugin.api.DestinationOption;
+import org.cobblestonemc.plugin.api.DestinationTree;
 import org.cobblestonemc.plugin.api.Display;
 import org.cobblestonemc.plugin.api.Icon;
 import org.cobblestonemc.plugin.config.MenuIcons;
@@ -71,7 +71,7 @@ class NavigationMenuTest {
                 Map.of(
                     "essentials",
                     level()
-                        .children(
+                        .subtree(
                             "home", () -> level().destination("base", destination()).build()))));
     Map<Integer, MenuItem> items = menu.render();
     assertEquals("base", name(items.get(FIRST)));
@@ -81,10 +81,10 @@ class NavigationMenuTest {
 
   @Test
   void anEntryThatIsAlsoADestinationListsItselfFirst() {
-    DestinationNode<NavigationTarget> riverwood =
+    DestinationTree<NavigationTarget> riverwood =
         level()
             .destination("home", destination())
-            .children(
+            .subtree(
                 "outpost",
                 () ->
                     level()
@@ -93,15 +93,15 @@ class NavigationMenuTest {
                         .destination("1", destination())
                         .build())
             .build();
-    DestinationNode.Builder<NavigationTarget> towns = level();
-    towns.destination("riverwood", destination()).children("riverwood", () -> riverwood);
+    DestinationTree.Builder<NavigationTarget> towns = level();
+    towns.destination("riverwood", destination()).subtree("riverwood", () -> riverwood);
     towns.destination("ashford", destination());
     NavigationMenu menu =
         menu(
             roots(
                 Map.of(
                     "towny",
-                    level().children("town", towns::build),
+                    level().subtree("town", towns::build),
                     "other",
                     level().destination("elsewhere", destination()))));
 
@@ -134,13 +134,13 @@ class NavigationMenuTest {
 
   @Test
   void destinationsThePlayerMayNotUseAreLeftOut() {
-    DestinationNode.Builder<NavigationTarget> cobblestone =
+    DestinationTree.Builder<NavigationTarget> cobblestone =
         level()
             .destination("death", destination())
             .destination(
                 "vault", DestinationLeaf.<NavigationTarget>of(() -> null).withPermissions("vault"))
             .destination("spawn", destination())
-            .children("spawn", () -> level().destination("inner", destination()).build());
+            .subtree("spawn", () -> level().destination("inner", destination()).build());
     NavigationMenu menu =
         new NavigationMenu(
             Locale.ENGLISH,
@@ -176,12 +176,12 @@ class NavigationMenuTest {
                     "cobblestone",
                     level()
                         .destination("death", destination())
-                        .children("vaults", () -> level().destination("vault", vault).build())
-                        .children(
+                        .subtree("vaults", () -> level().destination("vault", vault).build())
+                        .subtree(
                             "deeper",
                             () ->
                                 level()
-                                    .children(
+                                    .subtree(
                                         "vaults", () -> level().destination("vault", vault).build())
                                     .build()))),
             Map.of(),
@@ -246,7 +246,7 @@ class NavigationMenuTest {
   @Test
   void recentsOpenTheFirstPageAndPagesTurn() {
     DestinationOption<Integer> x = DestinationOption.integer("x", () -> 0);
-    DestinationNode.Builder<NavigationTarget> cobblestone = level();
+    DestinationTree.Builder<NavigationTarget> cobblestone = level();
     cobblestone.destination("block", DestinationLeaf.withOptions(List.of(x), values -> null));
     for (int i = 0; i < 40; i++) {
       cobblestone.destination("place-" + i, destination());
@@ -293,10 +293,10 @@ class NavigationMenuTest {
         Display.of(Icon.head("abc"))
             .withLabel(Component.text("Home Sweet Home"))
             .withDescription(List.of(Component.text("Where the heart is")));
-    DestinationNode.Builder<NavigationTarget> homes = level();
-    homes.child(
+    DestinationTree.Builder<NavigationTarget> homes = level();
+    homes.entry(
         "base",
-        DestinationChild.<NavigationTarget>builder()
+        DestinationEntry.<NavigationTarget>builder()
             .destination(destination())
             .display(display)
             .build());
@@ -323,7 +323,7 @@ class NavigationMenuTest {
 
   // -----------------------------------------------------------------------------------------
 
-  private static NavigationMenu menu(Map<String, DestinationNode<NavigationTarget>> roots) {
+  private static NavigationMenu menu(Map<String, DestinationTree<NavigationTarget>> roots) {
     return new NavigationMenu(
         Locale.ENGLISH,
         MESSAGES,
@@ -335,15 +335,15 @@ class NavigationMenuTest {
         address -> true);
   }
 
-  private static Map<String, DestinationNode<NavigationTarget>> roots(
-      Map<String, DestinationNode.Builder<NavigationTarget>> builders) {
-    Map<String, DestinationNode<NavigationTarget>> roots = new TreeMap<>();
+  private static Map<String, DestinationTree<NavigationTarget>> roots(
+      Map<String, DestinationTree.Builder<NavigationTarget>> builders) {
+    Map<String, DestinationTree<NavigationTarget>> roots = new TreeMap<>();
     builders.forEach((key, builder) -> roots.put(key, builder.build()));
     return roots;
   }
 
-  private static DestinationNode.Builder<NavigationTarget> level() {
-    return DestinationNode.builder();
+  private static DestinationTree.Builder<NavigationTarget> level() {
+    return DestinationTree.builder();
   }
 
   /** A destination that must never be built: the menu only builds what the player picks. */

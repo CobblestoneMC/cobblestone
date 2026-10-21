@@ -21,9 +21,9 @@ import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
-import org.cobblestonemc.plugin.api.DestinationChild;
+import org.cobblestonemc.plugin.api.DestinationEntry;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
-import org.cobblestonemc.plugin.api.DestinationNode;
+import org.cobblestonemc.plugin.api.DestinationTree;
 import org.cobblestonemc.plugin.api.Display;
 import org.cobblestonemc.plugin.api.Icon;
 import org.cobblestonemc.plugin.config.MenuIcons;
@@ -73,7 +73,7 @@ public final class NavigationMenu {
   private final Locale locale;
   private final Messages messages;
   private final MenuSettings settings;
-  private final Map<String, ? extends DestinationNode<NavigationTarget>> roots;
+  private final Map<String, ? extends DestinationTree<NavigationTarget>> roots;
   private final Predicate<String> hasPermission;
   private final Predicate<List<String>> canNavigate;
   private final List<Entry> recents;
@@ -97,7 +97,7 @@ public final class NavigationMenu {
       Locale locale,
       Messages messages,
       MenuSettings settings,
-      Map<String, ? extends DestinationNode<NavigationTarget>> roots,
+      Map<String, ? extends DestinationTree<NavigationTarget>> roots,
       Map<String, Display> rootDisplays,
       List<RecentDestinations.Recent> recents,
       Predicate<String> hasPermission,
@@ -239,9 +239,9 @@ public final class NavigationMenu {
 
   /** Opens the level beneath an entry, skipping through any that offer only one way on. */
   private Level open(Entry entry) {
-    DestinationNode<NavigationTarget> node = entry.level.get();
+    DestinationTree<NavigationTarget> node = entry.subtree.get();
     List<Entry> entries = new ArrayList<>();
-    node.children()
+    node.entries()
         .forEach(
             (key, child) -> {
               Entry seen = entry(entry.address, key, child);
@@ -261,7 +261,7 @@ public final class NavigationMenu {
   private Level elide(Level level) {
     while (level.entries.size() == 1) {
       Entry only = level.entries.getFirst();
-      if (only.destination != null || only.level == null) {
+      if (only.destination != null || only.subtree == null) {
         break;
       }
       level = open(only);
@@ -273,28 +273,28 @@ public final class NavigationMenu {
    * An entry as this player may see it: without its destination if they may not navigate there,
    * without its level if nothing in it is theirs to pick, and not at all if that leaves nothing.
    */
-  private Entry entry(List<String> parent, String key, DestinationChild<NavigationTarget> child) {
+  private Entry entry(List<String> parent, String key, DestinationEntry<NavigationTarget> child) {
     List<String> address = append(parent, key);
     DestinationLeaf<NavigationTarget> destination =
         child.destination().filter(leaf -> allowed(address, leaf)).orElse(null);
-    Supplier<DestinationNode<NavigationTarget>> level =
-        child.children().map(NavigationMenu::once).orElse(null);
-    if (level != null && !leadsAnywhere(address, level.get())) {
-      level = null;
+    Supplier<DestinationTree<NavigationTarget>> subtree =
+        child.subtree().map(NavigationMenu::once).orElse(null);
+    if (subtree != null && !leadsAnywhere(address, subtree.get())) {
+      subtree = null;
     }
-    if (destination == null && level == null) {
+    if (destination == null && subtree == null) {
       return null;
     }
-    return new Entry(key, address, child.display(), destination, level, List.of());
+    return new Entry(key, address, child.display(), destination, subtree, List.of());
   }
 
   /**
    * Whether a level has anything in it the player could pick: a destination they may navigate to,
    * or a further level. That further level is not looked into, so only the one level is built.
    */
-  private boolean leadsAnywhere(List<String> address, DestinationNode<NavigationTarget> level) {
-    for (var child : level.children().entrySet()) {
-      if (child.getValue().children().isPresent()
+  private boolean leadsAnywhere(List<String> address, DestinationTree<NavigationTarget> level) {
+    for (var child : level.entries().entrySet()) {
+      if (child.getValue().subtree().isPresent()
           || child
               .getValue()
               .destination()
@@ -307,13 +307,13 @@ public final class NavigationMenu {
   }
 
   /** Builds a level at most once, however often it is asked for. */
-  private static Supplier<DestinationNode<NavigationTarget>> once(
-      Supplier<? extends DestinationNode<NavigationTarget>> level) {
+  private static Supplier<DestinationTree<NavigationTarget>> once(
+      Supplier<? extends DestinationTree<NavigationTarget>> level) {
     return new Supplier<>() {
-      private DestinationNode<NavigationTarget> built;
+      private DestinationTree<NavigationTarget> built;
 
       @Override
-      public DestinationNode<NavigationTarget> get() {
+      public DestinationTree<NavigationTarget> get() {
         if (built == null) {
           built = Objects.requireNonNull(level.get(), "level");
         }
@@ -354,7 +354,7 @@ public final class NavigationMenu {
   private List<Entry> recents(List<RecentDestinations.Recent> recents) {
     List<Entry> entries = new ArrayList<>();
     for (RecentDestinations.Recent recent : recents) {
-      DestinationChild<NavigationTarget> child =
+      DestinationEntry<NavigationTarget> child =
           DestinationResolver.<NavigationTarget>find(roots, recent.address()).orElse(null);
       DestinationLeaf<NavigationTarget> destination =
           child == null ? null : child.destination().orElse(null);
@@ -377,7 +377,7 @@ public final class NavigationMenu {
   // -----------------------------------------------------------------------------------------
 
   private void put(Map<Integer, MenuItem> items, int slot, Entry entry, boolean recent) {
-    boolean opens = entry.level != null;
+    boolean opens = entry.subtree != null;
     Icon icon =
         entry
             .display
@@ -468,7 +468,7 @@ public final class NavigationMenu {
    * @param address its canonical address
    * @param display how it is shown
    * @param destination where it goes, if it is a destination this player may use
-   * @param level the level it opens, if any
+   * @param subtree the subtree it opens, if any
    * @param optionTokens for a recent destination, the options it was last given
    */
   private record Entry(
@@ -476,7 +476,7 @@ public final class NavigationMenu {
       List<String> address,
       Display display,
       DestinationLeaf<NavigationTarget> destination,
-      Supplier<? extends DestinationNode<NavigationTarget>> level,
+      Supplier<? extends DestinationTree<NavigationTarget>> subtree,
       List<String> optionTokens) {
 
     static final Comparator<Entry> ORDER = Comparator.comparing(Entry::key, NaturalOrder.INSTANCE);

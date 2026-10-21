@@ -14,29 +14,30 @@ import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 
 /**
- * One named entry in a {@link DestinationNode}: a destination, a further level of entries, or both.
+ * One named entry in a {@link DestinationTree}: a destination, a subtree of further entries, or
+ * both.
  *
  * <p>An entry with both roles is one place that also contains other places. Both {@code /navigate
  * <entry>} and {@code /navigate <entry> <inner>} then name it, the first going to the place itself.
  *
  * <p>An entry always has at least one of the two; {@link Builder#build} refuses one with neither.
- * The level beneath an entry is held behind a {@link Supplier}, so a large one is built only when
- * it is visited, and a destination is built only once a player picks it.
+ * Its subtree is held behind a {@link Supplier}, so a large one is built only when it is visited,
+ * and its destination is built only once a player picks it.
  *
  * @param <D> what the destinations build
  */
-public final class DestinationChild<D> {
+public final class DestinationEntry<D> {
 
   private final DestinationLeaf<D> destination;
-  private final Supplier<? extends DestinationNode<D>> children;
+  private final Supplier<? extends DestinationTree<D>> subtree;
   private final Display display;
 
-  private DestinationChild(
+  private DestinationEntry(
       DestinationLeaf<D> destination,
-      Supplier<? extends DestinationNode<D>> children,
+      Supplier<? extends DestinationTree<D>> subtree,
       Display display) {
     this.destination = destination;
-    this.children = children;
+    this.subtree = subtree;
     this.display = Objects.requireNonNull(display, "display");
   }
 
@@ -50,29 +51,15 @@ public final class DestinationChild<D> {
     return new Builder<>();
   }
 
-  /**
-   * An entry that is only a destination.
-   *
-   * @param destination the destination
-   * @param <D> what the destinations build
-   * @return the entry
-   */
-  public static <D> DestinationChild<D> ofDestination(DestinationLeaf<D> destination) {
-    return new DestinationChild<>(
+  /** An entry that is only a destination. */
+  static <D> DestinationEntry<D> ofDestination(DestinationLeaf<D> destination) {
+    return new DestinationEntry<>(
         Objects.requireNonNull(destination, "destination"), null, Display.none());
   }
 
-  /**
-   * An entry that only holds a further level.
-   *
-   * @param children builds the level when it is visited
-   * @param <D> what the destinations build
-   * @return the entry
-   */
-  public static <D> DestinationChild<D> ofChildren(
-      Supplier<? extends DestinationNode<D>> children) {
-    return new DestinationChild<>(
-        null, Objects.requireNonNull(children, "children"), Display.none());
+  /** An entry that only holds a subtree. */
+  static <D> DestinationEntry<D> ofSubtree(Supplier<? extends DestinationTree<D>> subtree) {
+    return new DestinationEntry<>(null, Objects.requireNonNull(subtree, "subtree"), Display.none());
   }
 
   /**
@@ -85,12 +72,12 @@ public final class DestinationChild<D> {
   }
 
   /**
-   * The level beneath this entry, if it has one — not built until the supplier is called.
+   * The subtree beneath this entry, if it has one — not built until the supplier is called.
    *
-   * @return builds the level
+   * @return builds the subtree
    */
-  public Optional<Supplier<? extends DestinationNode<D>>> children() {
-    return Optional.ofNullable(children);
+  public Optional<Supplier<? extends DestinationTree<D>>> subtree() {
+    return Optional.ofNullable(subtree);
   }
 
   /**
@@ -103,46 +90,35 @@ public final class DestinationChild<D> {
   }
 
   /**
-   * Returns a copy that is (also) the given destination.
-   *
-   * @param destination the destination
-   * @return the copy
-   */
-  public DestinationChild<D> withDestination(DestinationLeaf<D> destination) {
-    return new DestinationChild<>(
-        Objects.requireNonNull(destination, "destination"), children, display);
-  }
-
-  /**
-   * Returns a copy that (also) holds the given level.
-   *
-   * @param children builds the level when it is visited
-   * @return the copy
-   */
-  public DestinationChild<D> withChildren(Supplier<? extends DestinationNode<D>> children) {
-    return new DestinationChild<>(
-        destination, Objects.requireNonNull(children, "children"), display);
-  }
-
-  /**
    * Returns a copy shown with the given display.
    *
    * @param display the display
    * @return the copy
    */
-  public DestinationChild<D> withDisplay(Display display) {
-    return new DestinationChild<>(destination, children, display);
+  public DestinationEntry<D> withDisplay(Display display) {
+    return new DestinationEntry<>(destination, subtree, display);
+  }
+
+  /** A copy that is (also) the given destination. */
+  DestinationEntry<D> withDestination(DestinationLeaf<D> destination) {
+    return new DestinationEntry<>(
+        Objects.requireNonNull(destination, "destination"), subtree, display);
+  }
+
+  /** A copy that (also) holds the given subtree. */
+  DestinationEntry<D> withSubtree(Supplier<? extends DestinationTree<D>> subtree) {
+    return new DestinationEntry<>(destination, Objects.requireNonNull(subtree, "subtree"), display);
   }
 
   /**
-   * Builds a {@link DestinationChild}.
+   * Builds a {@link DestinationEntry}.
    *
    * @param <D> what the destinations build
    */
   public static final class Builder<D> {
 
     private DestinationLeaf<D> destination;
-    private Supplier<? extends DestinationNode<D>> children;
+    private Supplier<? extends DestinationTree<D>> subtree;
     private Display display = Display.none();
 
     private Builder() {}
@@ -170,13 +146,13 @@ public final class DestinationChild<D> {
     }
 
     /**
-     * Gives the entry a level beneath it, built when it is visited.
+     * Gives the entry a subtree, built when it is visited.
      *
-     * @param children builds the level
+     * @param subtree supplies the subtree
      * @return this builder
      */
-    public Builder<D> children(Supplier<? extends DestinationNode<D>> children) {
-      this.children = Objects.requireNonNull(children, "children");
+    public Builder<D> subtree(Supplier<? extends DestinationTree<D>> subtree) {
+      this.subtree = Objects.requireNonNull(subtree, "subtree");
       return this;
     }
 
@@ -238,14 +214,14 @@ public final class DestinationChild<D> {
      * Builds the entry.
      *
      * @return the entry
-     * @throws IllegalStateException if it was given neither a destination nor children
+     * @throws IllegalStateException if it was given neither a destination nor a subtree
      */
-    public DestinationChild<D> build() {
-      if (destination == null && children == null) {
+    public DestinationEntry<D> build() {
+      if (destination == null && subtree == null) {
         throw new IllegalStateException(
-            "A destination child needs a destination, children, or both");
+            "A destination entry needs a destination, a subtree, or both");
       }
-      return new DestinationChild<>(destination, children, display);
+      return new DestinationEntry<>(destination, subtree, display);
     }
   }
 }
