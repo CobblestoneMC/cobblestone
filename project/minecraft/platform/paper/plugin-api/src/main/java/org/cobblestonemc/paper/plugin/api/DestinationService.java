@@ -22,7 +22,7 @@ public interface DestinationService {
    *
    * <p>The root's own key is <b>not</b> chosen here: Cobblestone files the tree under the
    * registering plugin's name, so two plugins offering a {@code warp} level stay distinguishable.
-   * Build the levels below that — {@code DestinationTree.builder().subtree("town", …)} — not a
+   * Build the levels below that — {@code DestinationTree.builder().children("town", …)} — not a
    * level named after the plugin itself.
    *
    * @param player the player requesting navigation

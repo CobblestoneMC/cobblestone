@@ -51,14 +51,14 @@ final class PikamugQuestsDestinationService implements DestinationService {
         continue; // no locatable objective in the current stage — nothing to walk to
       }
       String label = quest.getName();
-      questNode.leaf(
+      questNode.destination(
           slug(label),
           () ->
               Destination.at(
                   QuestTargets.current(quests.getQuester(player.getUniqueId()), quest), label));
       any = true;
     }
-    return any ? DestinationTree.builder().subtree(QUEST_KEY, questNode).build() : null;
+    return any ? DestinationTree.builder().children(QUEST_KEY, questNode).build() : null;
   }
 
   /**

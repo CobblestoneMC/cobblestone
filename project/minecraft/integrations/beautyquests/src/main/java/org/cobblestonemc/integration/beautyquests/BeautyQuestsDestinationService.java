@@ -49,10 +49,10 @@ final class BeautyQuestsDestinationService implements DestinationService {
         continue; // current stage has no precise location — nothing to walk to
       }
       String label = label(quest);
-      quests.leaf(slug(label), Destination.at(target, label));
+      quests.destination(slug(label), Destination.at(target, label));
       any = true;
     }
-    return any ? DestinationTree.builder().subtree(QUEST_KEY, quests).build() : null;
+    return any ? DestinationTree.builder().children(QUEST_KEY, quests).build() : null;
   }
 
   /** A player-facing quest label: its name, or a stable fallback from its id. */

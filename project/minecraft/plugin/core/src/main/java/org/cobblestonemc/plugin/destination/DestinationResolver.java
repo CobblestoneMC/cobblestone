@@ -16,7 +16,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
+import org.cobblestonemc.plugin.api.DestinationChild;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
+import org.cobblestonemc.plugin.api.DestinationNode;
 import org.cobblestonemc.plugin.api.DestinationOption;
 import org.cobblestonemc.plugin.api.OptionValues;
 
@@ -286,18 +289,18 @@ public final class DestinationResolver {
       return; // nothing left to match, and a destination's own key is never optional
     }
     // A destination is named by its exact key (or an alias), followed by nothing but its options.
-    for (String leafKey : leavesNamed(node, args.get(ai))) {
+    for (String leafKey : destinationsNamed(node, args.get(ai))) {
       trail.add(leafKey);
       List<String> address = List.copyOf(trail);
       trail.removeLast();
-      DestinationLeaf<D> leaf = node.leaves().get(leafKey);
+      DestinationLeaf<D> leaf = destinationOf(node, leafKey);
       if (out.allows(address, leaf)) {
         applyOptions(address, leaf, args.subList(ai + 1, args.size()), out);
       }
     }
-    // Sub-trees are still worth descending on the same token: the child's own key may be omitted,
+    // Levels are still worth descending on the same token: the child's own key may be omitted,
     // leaving that token to name a destination inside it.
-    for (var child : node.subTrees().entrySet()) {
+    for (var child : levels(node)) {
       match(child.getKey(), child.getValue().get(), args, ai, trail, out);
     }
   }
@@ -433,7 +436,7 @@ public final class DestinationResolver {
     }
     // A destination with options may already have been named, and the player is now typing them.
     suggestOptions(node, prefix, pi, trail, out, access);
-    for (var child : node.subTrees().entrySet()) {
+    for (var child : levels(node)) {
       suggestFrom(child.getKey(), child.getValue().get(), prefix, pi, trail, out, access);
     }
   }
@@ -450,8 +453,8 @@ public final class DestinationResolver {
       Candidates out,
       Access<D> access) {
     List<String> typedOptions = prefix.subList(pi + 1, prefix.size());
-    for (String leafKey : leavesNamed(node, prefix.get(pi))) {
-      DestinationLeaf<D> leaf = node.leaves().get(leafKey);
+    for (String leafKey : destinationsNamed(node, prefix.get(pi))) {
+      DestinationLeaf<D> leaf = destinationOf(node, leafKey);
       List<DestinationOption<?>> options = leaf.options();
       if (typedOptions.size() >= options.size()) {
         continue; // takes no options, or all of them have been typed
@@ -488,11 +491,14 @@ public final class DestinationResolver {
   private static <D> Candidates collect(
       DestinationNode<D> node, List<String> trail, Access<D> access, int limit) {
     Candidates out = new Candidates();
-    for (Map.Entry<String, DestinationLeaf<D>> entry : node.leaves().entrySet()) {
+    for (Map.Entry<String, DestinationChild<D>> entry : node.children().entrySet()) {
+      if (entry.getValue().destination().isEmpty()) {
+        continue;
+      }
       trail.add(entry.getKey());
       List<String> address = List.copyOf(trail);
       trail.removeLast();
-      DestinationLeaf<D> leaf = entry.getValue();
+      DestinationLeaf<D> leaf = entry.getValue().destination().get();
       if (!access.allows(address, leaf)) {
         continue;
       }
@@ -507,7 +513,7 @@ public final class DestinationResolver {
         return null;
       }
     }
-    for (var supplier : node.subTrees().entrySet()) {
+    for (var supplier : levels(node)) {
       var key = supplier.getKey();
       DestinationNode<D> child = supplier.getValue().get();
       Candidates promoted = null;
@@ -538,7 +544,7 @@ public final class DestinationResolver {
    */
   private static boolean extendable(DestinationNode<?> node, Candidates gathered) {
     if (node.strict() || gathered == null) {
-      return !node.subTrees().isEmpty() || !node.leaves().isEmpty();
+      return !node.children().isEmpty();
     }
     return gathered.size() > 0;
   }
@@ -615,24 +621,44 @@ public final class DestinationResolver {
   // Shared
   // -----------------------------------------------------------------------------------------
 
-  /** The keys of {@code node}'s leaves that {@code token} names, by key or by alias. */
-  private static List<String> leavesNamed(DestinationNode<?> node, String token) {
+  /** The keys of {@code node}'s destinations that {@code token} names, by key or by alias. */
+  private static List<String> destinationsNamed(DestinationNode<?> node, String token) {
     List<String> keys = new ArrayList<>();
-    for (String key : node.leaves().keySet()) {
-      if (key.equalsIgnoreCase(token)) {
-        keys.add(key);
-      }
-    }
+    node.children()
+        .forEach(
+            (key, child) -> {
+              if (key.equalsIgnoreCase(token) && child.destination().isPresent()) {
+                keys.add(key);
+              }
+            });
     node.aliases()
         .forEach(
             (alias, key) -> {
               if (alias.equalsIgnoreCase(token)
-                  && node.leaves().containsKey(key)
+                  && destinationOf(node, key) != null
                   && !keys.contains(key)) {
                 keys.add(key);
               }
             });
     return keys;
+  }
+
+  /** The destination of {@code node}'s entry under {@code key}, or {@code null} if it has none. */
+  private static <D> DestinationLeaf<D> destinationOf(DestinationNode<D> node, String key) {
+    DestinationChild<D> child = node.children().get(key);
+    return child == null ? null : child.destination().orElse(null);
+  }
+
+  /**
+   * {@code node}'s entries that have a level beneath them, each with the supplier of that level.
+   */
+  private static <D> List<Map.Entry<String, Supplier<? extends DestinationNode<D>>>> levels(
+      DestinationNode<D> node) {
+    List<Map.Entry<String, Supplier<? extends DestinationNode<D>>>> levels = new ArrayList<>();
+    node.children()
+        .forEach(
+            (key, child) -> child.children().ifPresent(level -> levels.add(Map.entry(key, level))));
+    return levels;
   }
 
   private static boolean hasAll(Predicate<String> hasPermission, List<String> permissions) {

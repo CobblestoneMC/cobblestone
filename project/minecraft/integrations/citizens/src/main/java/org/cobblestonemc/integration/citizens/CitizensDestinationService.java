@@ -41,7 +41,7 @@ final class CitizensDestinationService implements DestinationService {
       int id = npc.getId();
       String label = label(npc);
       // Re-fetch by id at resolution time: the NPC may have moved (or been removed) since listing.
-      npcNode.leaf(
+      npcNode.destination(
           key(npc),
           () -> {
             NPC current = CitizensAPI.getNPCRegistry().getById(id);
@@ -49,7 +49,7 @@ final class CitizensDestinationService implements DestinationService {
           });
       any = true;
     }
-    return any ? DestinationTree.builder().subtree(NPC_KEY, npcNode).build() : null;
+    return any ? DestinationTree.builder().children(NPC_KEY, npcNode).build() : null;
   }
 
   /** The command token for an NPC: its slugged name plus id, unique across same-named NPCs. */

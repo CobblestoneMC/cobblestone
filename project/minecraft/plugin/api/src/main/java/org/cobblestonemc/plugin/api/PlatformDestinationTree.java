@@ -7,42 +7,13 @@
 
 package org.cobblestonemc.plugin.api;
 
-import java.util.Map;
-import java.util.function.Supplier;
-
 /**
- * A lazily-evaluated tree of navigation targets. Sub-trees and leaves are keyed by unique strings
- * (upper-case allowed, no special characters; spaces are allowed but discouraged).
- *
- * <p>Sub-trees are exposed as {@link Supplier}s so that huge sets — every town, every player home —
- * are not materialized until the node is actually visited during command traversal or
- * tab-completion. Leaves only describe themselves until they are {@linkplain DestinationLeaf#build
- * built}, which happens once a player has picked one.
+ * One level of an integration's destination tree, in the platform's own world and vector types —
+ * what a platform's {@code DestinationService} hands Cobblestone, and what its {@code
+ * DestinationTree} builder builds.
  *
  * @param <W> the platform world type
- * @param <V> the platform block-position type
+ * @param <V> the platform vector type
  */
-public interface PlatformDestinationTree<W, V> {
-
-  /**
-   * Returns whether this level is strict: a strict level may never be omitted in commands (it is
-   * never a candidate for name-promotion).
-   *
-   * @return {@code true} if strict
-   */
-  boolean strict();
-
-  /**
-   * Returns the child sub-trees, keyed by their key, each behind a supplier.
-   *
-   * @return the sub-trees
-   */
-  Map<String, Supplier<? extends PlatformDestinationTree<W, V>>> subTrees();
-
-  /**
-   * Returns the leaves at this node, keyed by their key.
-   *
-   * @return the leaves
-   */
-  Map<String, DestinationLeaf<MinecraftDestination<W, V>>> leaves();
-}
+public interface PlatformDestinationTree<W, V>
+    extends DestinationNode<MinecraftDestination<W, V>> {}

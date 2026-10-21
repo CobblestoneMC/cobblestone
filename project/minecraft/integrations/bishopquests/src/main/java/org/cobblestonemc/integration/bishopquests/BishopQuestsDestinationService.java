@@ -53,10 +53,10 @@ final class BishopQuestsDestinationService implements DestinationService {
         continue; // no current position objective — nothing to walk to
       }
       String label = quest.getId();
-      questNode.leaf(slug(label), Destination.at(target, label));
+      questNode.destination(slug(label), Destination.at(target, label));
       any = true;
     }
-    return any ? DestinationTree.builder().subtree(QUEST_KEY, questNode).build() : null;
+    return any ? DestinationTree.builder().children(QUEST_KEY, questNode).build() : null;
   }
 
   /** A single command token from a quest id: lowercase, non-alphanumeric runs become one dash. */

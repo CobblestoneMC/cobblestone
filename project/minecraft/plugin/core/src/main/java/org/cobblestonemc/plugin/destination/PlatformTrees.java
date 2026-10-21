@@ -12,12 +12,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.minecraft.api.WorldRegion;
+import org.cobblestonemc.plugin.api.DestinationChild;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
+import org.cobblestonemc.plugin.api.DestinationNode;
 import org.cobblestonemc.plugin.api.DestinationOption;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.cobblestonemc.plugin.api.OptionValues;
@@ -46,14 +47,20 @@ public final class PlatformTrees {
    * @return the view
    */
   public static <W, V> DestinationNode<NavigationTarget> adapt(
-      PlatformDestinationTree<W, V> tree,
+      DestinationNode<MinecraftDestination<W, V>> tree,
       Function<WorldRegion<W, V>, Optional<DomainRegion<MinecraftWorld>>> regions) {
-    Map<String, Supplier<? extends DestinationNode<NavigationTarget>>> subTrees =
-        new LinkedHashMap<>();
-    tree.subTrees().forEach((key, child) -> subTrees.put(key, () -> adapt(child.get(), regions)));
-    Map<String, DestinationLeaf<NavigationTarget>> leaves = new LinkedHashMap<>();
-    tree.leaves().forEach((key, leaf) -> leaves.put(key, new Leaf<>(leaf, regions)));
-    return new DestinationNode.Simple<>(tree.strict(), subTrees, leaves);
+    Map<String, DestinationChild<NavigationTarget>> children = new LinkedHashMap<>();
+    tree.children().forEach((key, child) -> children.put(key, adapt(child, regions)));
+    return new DestinationNode.Simple<>(tree.strict(), children, tree.aliases());
+  }
+
+  private static <W, V> DestinationChild<NavigationTarget> adapt(
+      DestinationChild<MinecraftDestination<W, V>> child,
+      Function<WorldRegion<W, V>, Optional<DomainRegion<MinecraftWorld>>> regions) {
+    DestinationChild.Builder<NavigationTarget> adapted = DestinationChild.builder();
+    child.destination().ifPresent(leaf -> adapted.destination(new Leaf<>(leaf, regions)));
+    child.children().ifPresent(level -> adapted.children(() -> adapt(level.get(), regions)));
+    return adapted.build();
   }
 
   /**

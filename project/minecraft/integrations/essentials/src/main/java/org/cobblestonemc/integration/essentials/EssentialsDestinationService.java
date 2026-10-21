@@ -39,11 +39,11 @@ final class EssentialsDestinationService implements DestinationService {
   public PlatformDestinationTree<World, Vector3i> provide(Player player) {
     DestinationTree homes = DestinationTree.builder().strict();
     for (String home : essentials.homes(player)) {
-      homes.leaf(home, () -> Destination.at(essentials.home(player, home), home));
+      homes.destination(home, () -> Destination.at(essentials.home(player, home), home));
     }
-    DestinationTree root = DestinationTree.builder().subtree(HOME_KEY, homes);
+    DestinationTree root = DestinationTree.builder().children(HOME_KEY, homes);
     if (essentials.hasSpawn()) {
-      root.leaf(SPAWN_KEY, () -> Destination.at(essentials.spawn(player), "spawn"));
+      root.destination(SPAWN_KEY, () -> Destination.at(essentials.spawn(player), "spawn"));
     }
     return root.build();
   }

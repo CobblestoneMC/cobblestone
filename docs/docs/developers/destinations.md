@@ -13,12 +13,16 @@ A **destination** is a named location that `/navigate` can route to. Destination
 ```mermaid
 flowchart LR
     A[DestinationService] -->|provide player| B[DestinationTree]
-    B --> C[sub-trees]
-    B --> D[leaves]
-    C --> B
+    B --> C[children, by key]
+    C -->|a destination| D[DestinationLeaf]
+    C -->|more children| B
     D --> E[MinecraftDestination]
     E --> F["regions() — where it actually is"]
 ```
+
+A tree is a set of **children**, each named by a key. A child is a destination, a level of further
+children, or both — a town is somewhere to go, and also holds its home and plots. A tree itself is
+never a destination; only its children are.
 
 ## Minimal example
 
@@ -37,7 +41,7 @@ A single destination at a fixed location:
       public void onEnable() {
         CobblestonePaperApi.registrar().registerDestinations(this, player ->
             DestinationTree.builder()
-                .leaf("market", () -> Destination.at(marketLocation(), "Market"))
+                .destination("market", () -> Destination.at(marketLocation(), "Market"))
                 .build());
       }
     }
@@ -56,7 +60,7 @@ A single destination at a fixed location:
     public void onStartedEngine(StartedEngineEvent<Server> event) {
       CobblestoneSpongeApi.registrar().registerDestinations(container, player ->
           DestinationTree.builder()
-              .leaf("market", () -> Destination.at(marketLocation(), Component.text("Market")))
+              .destination("market", () -> Destination.at(marketLocation(), Component.text("Market")))
               .build());
     }
     ```
@@ -71,17 +75,18 @@ For a plugin named `Shops`, the address is `shops market`. Players may use `/nav
 
 ## Trees
 
-`DestinationTree.builder()` creates leaves and subtrees, each keyed by a string:
+`DestinationTree.builder()` adds children, each keyed by a string: `destination(key, …)` for
+somewhere to go, `children(key, …)` for a further level.
 
 === "Paper"
 
     ``` { .java .annotate }
     DestinationTree.builder()
-        .subtree("warp", () -> warps(player))
-        .subtree("dungeon", DestinationTree.builder()
+        .children("warp", () -> warps(player))
+        .children("dungeon", DestinationTree.builder()
             .strict()                                     // (1)!
-            .leaf("crypt", () -> Destination.at(crypt, "The Crypt"))
-            .leaf("mines", () -> Destination.at(mines, "Deep Mines"))
+            .destination("crypt", () -> Destination.at(crypt, "The Crypt"))
+            .destination("mines", () -> Destination.at(mines, "Deep Mines"))
             .build())
         .build();
     ```
@@ -92,11 +97,11 @@ For a plugin named `Shops`, the address is `shops market`. Players may use `/nav
 
     ``` { .java .annotate }
     DestinationTree.builder()
-        .subtree("warp", () -> warps(player))
-        .subtree("dungeon", DestinationTree.builder()
+        .children("warp", () -> warps(player))
+        .children("dungeon", DestinationTree.builder()
             .strict()                                     // (1)!
-            .leaf("crypt", () -> Destination.at(crypt, Component.text("The Crypt")))
-            .leaf("mines", () -> Destination.at(mines, Component.text("Deep Mines")))
+            .destination("crypt", () -> Destination.at(crypt, Component.text("The Crypt")))
+            .destination("mines", () -> Destination.at(mines, Component.text("Deep Mines")))
             .build())
         .build();
     ```
@@ -111,6 +116,24 @@ Rules:
 - **Return `null`** from `provide` when there are no destinations for the player. Empty trees are
   omitted.
 - **Mark large levels `strict()`.** Strict levels are skipped when computing suggestions.
+- **`alias(other, key)`** lets a destination answer to another name players may guess. An alias
+  is never suggested, and the destination keeps its own key in messages and permissions.
+
+### Both at once
+
+A child may be a destination and hold more children. Calling `destination` and `children` with
+the same key makes one such child, or build it in one go with `DestinationTree.child()`:
+
+```java
+for (Town town : towns()) {
+  tree.child(town.name(), DestinationTree.child()
+      .destination(() -> Destination.regions(() -> claims(town), town.name()))
+      .children(() -> townDetail(town)));      // its home, outposts, plots
+}
+```
+
+`/nav town riverwood` goes to the whole town; `/nav town riverwood home` goes to its home. A child
+must have a destination, children, or both; `build()` refuses one with neither.
 
 ### Lazy levels
 
@@ -120,8 +143,8 @@ Rules:
     private PlatformDestinationTree<World, Vector3i> warps(Player player) {
       DestinationTree tree = DestinationTree.builder().strict();
       for (Warp warp : store.visibleTo(player)) {
-        // The lambda body runs only if this leaf is actually traversed.
-        tree.leaf(warp.name(), () -> Destination.at(warp.location(), warp.name()));
+        // The lambda body runs only if this destination is actually picked.
+        tree.destination(warp.name(), () -> Destination.at(warp.location(), warp.name()));
       }
       return tree.build();
     }
@@ -133,8 +156,8 @@ Rules:
     private PlatformDestinationTree<ServerWorld, Vector3i> warps(ServerPlayer player) {
       DestinationTree tree = DestinationTree.builder().strict();
       for (Warp warp : store.visibleTo(player)) {
-        // The lambda body runs only if this leaf is actually traversed.
-        tree.leaf(warp.name(), () -> Destination.at(warp.location(), Component.text(warp.name())));
+        // The lambda body runs only if this destination is actually picked.
+        tree.destination(warp.name(), () -> Destination.at(warp.location(), Component.text(warp.name())));
       }
       return tree.build();
     }
@@ -206,9 +229,9 @@ are its defaults to override.
 
 ### Leaves
 
-`leaf(key, () -> destination)` is the common case: a leaf with no options or permissions that is
-always valid. For anything more, pass a `DestinationLeaf`. A leaf describes itself (its
-permissions and options) and builds its destination only once a player picks it:
+`destination(key, () -> destination)` is the common case: a destination with no options or
+permissions that is always valid. For anything more, pass a `DestinationLeaf`. A leaf describes
+itself (its permissions and options) and builds its destination only once a player picks it:
 
 - Tab completion reads every leaf's description on each keystroke, possibly off the server
   thread, so the description must be cheap and must not read the world.
@@ -217,7 +240,7 @@ permissions and options) and builds its destination only once a player picks it:
   destination, or the reason there is nothing to navigate to right now.
 
 ```java
-// Always valid, nothing typed after the key; the same as leaf(key, () -> ...).
+// Always valid, nothing typed after the key; the same as destination(key, () -> ...).
 DestinationLeaf.of(() -> Destination.at(market, "Market"));
 
 // May be invalid.
@@ -243,7 +266,7 @@ DestinationOption<Outpost> outpost =
         partial -> town.outposts().stream().map(Outpost::name).toList(),
         token -> Optional.ofNullable(town.outpost(token)));
 
-tree.leaf(
+tree.destination(
     "outpost",
     DestinationLeaf.withOptions(
         List.of(outpost),

@@ -21,6 +21,7 @@ import java.util.TreeMap;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
+import org.cobblestonemc.plugin.api.DestinationNode;
 import org.cobblestonemc.plugin.api.DestinationOption;
 import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.destination.DestinationResolver.Ambiguous;
@@ -584,7 +585,8 @@ class DestinationResolverTest {
 
   @Test
   void anAliasMustNameALeafAndNotShadowAKey() {
-    DestinationNode.Builder<String> builder = DestinationNode.<String>builder().leaf("mount", null);
+    DestinationNode.Builder<String> builder =
+        DestinationNode.<String>builder().destination("mount", DestinationLeaf.of(() -> "mount"));
     assertThrows(IllegalArgumentException.class, () -> builder.alias("horse", "pet"));
     assertThrows(IllegalArgumentException.class, () -> builder.alias("mount", "mount"));
   }
@@ -688,7 +690,14 @@ class DestinationResolverTest {
     }
 
     DestinationNode<String> build() {
-      return new DestinationNode.Simple<>(strict, subs, leaves, aliases);
+      DestinationNode.Builder<String> node = DestinationNode.builder();
+      if (strict) {
+        node.strict();
+      }
+      leaves.forEach(node::destination);
+      subs.forEach(node::children);
+      aliases.forEach(node::alias);
+      return node.build();
     }
   }
 }

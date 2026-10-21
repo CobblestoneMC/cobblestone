@@ -9,6 +9,7 @@ package org.cobblestonemc.plugin.destination;
 
 import java.util.Map;
 import java.util.TreeMap;
+import org.cobblestonemc.plugin.api.DestinationNode;
 
 /** Gathers the roots of the destination tree a player navigates, one per registered provider. */
 public final class DestinationRoots {
@@ -32,7 +33,7 @@ public final class DestinationRoots {
         (owner, provider) -> {
           DestinationNode<NavigationTarget> root = provider.provide(player);
           // An empty root would be offered as a token that leads nowhere — drop it instead.
-          if (root != null && !(root.subTrees().isEmpty() && root.leaves().isEmpty())) {
+          if (root != null && !root.children().isEmpty()) {
             roots.put(owner, root);
           }
         });

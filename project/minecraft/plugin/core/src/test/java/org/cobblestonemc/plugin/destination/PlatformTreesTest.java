@@ -26,7 +26,9 @@ import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.WorldRegion;
+import org.cobblestonemc.plugin.api.DestinationChild;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
+import org.cobblestonemc.plugin.api.DestinationNode;
 import org.cobblestonemc.plugin.api.DestinationOption;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.cobblestonemc.plugin.api.OptionValues;
@@ -62,7 +64,8 @@ class PlatformTreesTest {
     DestinationNode<NavigationTarget> adapted =
         PlatformTrees.adapt(tree(false, Map.of(), Map.of("dungeon", leaf)), regions);
 
-    DestinationLeaf<NavigationTarget> seen = adapted.leaves().get("dungeon");
+    DestinationLeaf<NavigationTarget> seen =
+        adapted.children().get("dungeon").destination().orElseThrow();
     assertEquals(List.of("quests.dungeon"), seen.permissions());
     assertEquals(List.of(level), seen.options());
 
@@ -83,7 +86,8 @@ class PlatformTreesTest {
                 Map.of("dungeon", DestinationLeaf.ofValidity(() -> invalid(reason)))),
             regions);
 
-    Validity<NavigationTarget> built = adapted.leaves().get("dungeon").build(OptionValues.empty());
+    Validity<NavigationTarget> built =
+        adapted.children().get("dungeon").destination().orElseThrow().build(OptionValues.empty());
     assertEquals(reason, assertInstanceOf(Validity.Invalid.class, built).reason());
   }
 
@@ -99,8 +103,80 @@ class PlatformTreesTest {
         PlatformTrees.adapt(tree(false, Map.of("town", child), Map.of()), regions);
 
     assertFalse(visited.get());
-    assertTrue(adapted.subTrees().get("town").get().strict());
+    assertTrue(adapted.children().get("town").children().orElseThrow().get().strict());
     assertTrue(visited.get());
+  }
+
+  @Test
+  void entriesKeepBothRoles() {
+    DestinationChild<MinecraftDestination<String, Integer>> town =
+        DestinationChild.<MinecraftDestination<String, Integer>>builder()
+            .destination(() -> destination("riverwood", List::of))
+            .children(() -> tree(true, Map.of(), Map.of()))
+            .build();
+    PlatformDestinationTree<String, Integer> root =
+        new PlatformDestinationTree<>() {
+          @Override
+          public boolean strict() {
+            return false;
+          }
+
+          @Override
+          public Map<String, DestinationChild<MinecraftDestination<String, Integer>>> children() {
+            return Map.of("riverwood", town);
+          }
+        };
+
+    DestinationChild<NavigationTarget> adapted =
+        PlatformTrees.adapt(root, regions).children().get("riverwood");
+    assertTrue(adapted.destination().isPresent());
+    assertTrue(adapted.children().orElseThrow().get().strict());
+  }
+
+  @Test
+  void aChildNeedsADestinationOrChildren() {
+    assertThrows(IllegalStateException.class, () -> DestinationChild.<String>builder().build());
+  }
+
+  @Test
+  void aDestinationAndChildrenUnderOneKeyMakeOneEntryWhicheverComesFirst() {
+    DestinationLeaf<String> leaf = DestinationLeaf.of(() -> "riverwood");
+    Supplier<DestinationNode<String>> level = () -> DestinationNode.<String>builder().build();
+
+    for (DestinationNode<String> node :
+        List.of(
+            DestinationNode.<String>builder()
+                .destination("riverwood", leaf)
+                .children("riverwood", level)
+                .build(),
+            DestinationNode.<String>builder()
+                .children("riverwood", level)
+                .destination("riverwood", leaf)
+                .build())) {
+      DestinationChild<String> riverwood = node.children().get("riverwood");
+      assertEquals(1, node.children().size());
+      assertEquals(Optional.of(leaf), riverwood.destination());
+      assertEquals(Optional.of(level), riverwood.children());
+    }
+  }
+
+  @Test
+  void aLevelKeepsItsEntriesInTheOrderAdded() {
+    DestinationNode<String> node =
+        DestinationNode.<String>builder()
+            .destination("spawn", DestinationLeaf.of(() -> "spawn"))
+            .children("town", () -> DestinationNode.<String>builder().build())
+            .destination("arena", DestinationLeaf.of(() -> "arena"))
+            .build();
+    assertEquals(List.of("spawn", "town", "arena"), List.copyOf(node.children().keySet()));
+  }
+
+  @Test
+  void onlyADestinationTakesAnAlias() {
+    DestinationNode.Builder<String> node =
+        DestinationNode.<String>builder()
+            .children("town", () -> DestinationNode.<String>builder().build());
+    assertThrows(IllegalArgumentException.class, () -> node.alias("towns", "town"));
   }
 
   @Test
@@ -169,6 +245,11 @@ class PlatformTreesTest {
       boolean strict,
       Map<String, Supplier<? extends PlatformDestinationTree<String, Integer>>> subTrees,
       Map<String, DestinationLeaf<MinecraftDestination<String, Integer>>> leaves) {
+    DestinationNode.Builder<MinecraftDestination<String, Integer>> node = DestinationNode.builder();
+    leaves.forEach(node::destination);
+    subTrees.forEach(node::children);
+    Map<String, DestinationChild<MinecraftDestination<String, Integer>>> children =
+        node.build().children();
     return new PlatformDestinationTree<>() {
       @Override
       public boolean strict() {
@@ -176,13 +257,8 @@ class PlatformTreesTest {
       }
 
       @Override
-      public Map<String, Supplier<? extends PlatformDestinationTree<String, Integer>>> subTrees() {
-        return subTrees;
-      }
-
-      @Override
-      public Map<String, DestinationLeaf<MinecraftDestination<String, Integer>>> leaves() {
-        return leaves;
+      public Map<String, DestinationChild<MinecraftDestination<String, Integer>>> children() {
+        return children;
       }
     };
   }

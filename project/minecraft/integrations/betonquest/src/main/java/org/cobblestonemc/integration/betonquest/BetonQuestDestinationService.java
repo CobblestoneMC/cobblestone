@@ -59,10 +59,10 @@ final class BetonQuestDestinationService implements DestinationService {
         continue; // location couldn't be resolved — nothing to walk to
       }
       String name = entry.getKey().get();
-      compass.leaf(slug(name), Destination.at(target, name));
+      compass.destination(slug(name), Destination.at(target, name));
       any = true;
     }
-    return any ? DestinationTree.builder().subtree(COMPASS_KEY, compass).build() : null;
+    return any ? DestinationTree.builder().children(COMPASS_KEY, compass).build() : null;
   }
 
   /**

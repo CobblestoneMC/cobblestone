@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.plugin.destination;
 
+import org.cobblestonemc.plugin.api.DestinationNode;
 import org.jetbrains.annotations.Nullable;
 
 /**

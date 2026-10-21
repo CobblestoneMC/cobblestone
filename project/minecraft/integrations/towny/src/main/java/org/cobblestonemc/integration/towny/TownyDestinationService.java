@@ -52,16 +52,16 @@ final class TownyDestinationService implements DestinationService {
     DestinationTree towns = DestinationTree.builder();
     for (Town town : TownyAPI.getInstance().getTowns()) {
       String name = town.getName();
-      // The whole town is a leaf; its home/outpost/type/plot are a sub-tree — same key, both roles.
-      towns.leaf(name, () -> wholeTown(town));
-      towns.subtree(name, () -> townDetail(town));
+      // A town is somewhere to go, and also holds its home, outposts and plots.
+      towns.destination(name, () -> wholeTown(town));
+      towns.children(name, () -> townDetail(town));
     }
 
-    DestinationTree root = DestinationTree.builder().subtree("town", towns);
+    DestinationTree root = DestinationTree.builder().children("town", towns);
     Town own = ownTown(player);
     if (own != null) {
-      root.subtree("resident", () -> townDetail(own));
-      root.leaf("resident", () -> wholeTown(own));
+      root.children("resident", () -> townDetail(own));
+      root.destination("resident", () -> wholeTown(own));
     }
     return root.build();
   }
@@ -69,10 +69,10 @@ final class TownyDestinationService implements DestinationService {
   private static PlatformDestinationTree<World, Vector3i> townDetail(Town town) {
     return DestinationTree.builder()
         .strict()
-        .leaf("home", () -> Destination.at(town.getSpawnOrNull(), "home"))
-        .subtree("outpost", () -> outposts(town))
-        .subtree("type", () -> plots(town, TownBlock::getTypeName))
-        .subtree("plot", () -> plots(town, TownBlock::getName))
+        .destination("home", () -> Destination.at(town.getSpawnOrNull(), "home"))
+        .children("outpost", () -> outposts(town))
+        .children("type", () -> plots(town, TownBlock::getTypeName))
+        .children("plot", () -> plots(town, TownBlock::getName))
         .build();
   }
 
@@ -81,7 +81,7 @@ final class TownyDestinationService implements DestinationService {
     List<Location> spawns = town.getAllOutpostSpawns();
     for (int i = 0; i < spawns.size(); i++) {
       Location spawn = spawns.get(i);
-      tree.leaf(Integer.toString(i + 1), () -> Destination.at(spawn, "outpost"));
+      tree.destination(Integer.toString(i + 1), () -> Destination.at(spawn, "outpost"));
     }
     return tree.build();
   }
@@ -98,7 +98,7 @@ final class TownyDestinationService implements DestinationService {
       }
     }
     for (String key : keys) {
-      tree.leaf(
+      tree.destination(
           key,
           () ->
               Destination.regions(

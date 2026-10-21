@@ -22,6 +22,7 @@ import java.util.function.Predicate;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
+import org.cobblestonemc.plugin.api.DestinationNode;
 import org.cobblestonemc.plugin.api.DestinationOption;
 import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.data.DeathLocationDao;
@@ -31,7 +32,6 @@ import org.cobblestonemc.plugin.data.LocationDao;
 import org.cobblestonemc.plugin.data.MountDao;
 import org.cobblestonemc.plugin.data.MountLocation;
 import org.cobblestonemc.plugin.destination.DestinationDetails;
-import org.cobblestonemc.plugin.destination.DestinationNode;
 import org.cobblestonemc.plugin.destination.DestinationProvider;
 import org.cobblestonemc.plugin.destination.NavigationTarget;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
@@ -119,19 +119,19 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
     DestinationNode.Builder<NavigationTarget> root = DestinationNode.builder();
     // With death tracking off there is never a death to go back to, so the key is not offered.
     if (trackDeaths.getAsBoolean()) {
-      root.leaf(DEATH_KEY, DestinationLeaf.ofValidity(() -> death(player)));
+      root.destination(DEATH_KEY, DestinationLeaf.ofValidity(() -> death(player)));
     }
-    return root.leaf(SURFACE_KEY, DestinationLeaf.ofValidity(() -> surface(player)))
-        .leaf(TARGET_KEY, DestinationLeaf.ofValidity(() -> target(player)))
-        .leaf(SPAWN_KEY, DestinationLeaf.of(this::spawn))
-        .leaf(RESPAWN_KEY, DestinationLeaf.ofValidity(() -> respawn(player)))
-        .leaf(MOUNT_KEY, DestinationLeaf.ofValidity(() -> mount(player)))
+    return root.destination(SURFACE_KEY, DestinationLeaf.ofValidity(() -> surface(player)))
+        .destination(TARGET_KEY, DestinationLeaf.ofValidity(() -> target(player)))
+        .destination(SPAWN_KEY, DestinationLeaf.of(this::spawn))
+        .destination(RESPAWN_KEY, DestinationLeaf.ofValidity(() -> respawn(player)))
+        .destination(MOUNT_KEY, DestinationLeaf.ofValidity(() -> mount(player)))
         .alias(HORSE_ALIAS, MOUNT_KEY)
-        .subtree(PLAYER_TREE_KEY, () -> players(player))
-        .subtree(WORLD_TREE_KEY, () -> worlds(player))
-        .subtree(LOCATION_TREE_KEY, () -> locations(player))
-        .subtree(PET_TREE_KEY, () -> pets(player))
-        .subtree(COORDINATES_TREE_KEY, () -> coordinates(player))
+        .children(PLAYER_TREE_KEY, () -> players(player))
+        .children(WORLD_TREE_KEY, () -> worlds(player))
+        .children(LOCATION_TREE_KEY, () -> locations(player))
+        .children(PET_TREE_KEY, () -> pets(player))
+        .children(COORDINATES_TREE_KEY, () -> coordinates(player))
         .build();
   }
 
@@ -203,8 +203,8 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
   private DestinationNode<NavigationTarget> coordinates(ServerPlayer player) {
     return DestinationNode.<NavigationTarget>builder()
         .strict()
-        .leaf(BLOCK_KEY, coordinateBlock(player))
-        .leaf(SURFACE_KEY, coordinateSurface(player))
+        .destination(BLOCK_KEY, coordinateBlock(player))
+        .destination(SURFACE_KEY, coordinateSurface(player))
         .build();
   }
 
@@ -347,7 +347,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
         key = pet.name() + "-" + n;
       }
       String name = key;
-      node.leaf(
+      node.destination(
           key,
           DestinationLeaf.of(
               () -> {
@@ -402,7 +402,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
       }
       UUID uuid = other.uniqueId();
       String name = other.name();
-      node.leaf(
+      node.destination(
           name,
           DestinationLeaf.of(
               () ->
@@ -434,7 +434,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
       String worldKey = key.asString();
       namespaces
           .computeIfAbsent(key.namespace(), namespace -> DestinationNode.builder())
-          .leaf(
+          .destination(
               key.value(),
               DestinationLeaf.of(
                   () ->
@@ -444,7 +444,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
                           .build()));
     }
     DestinationNode.Builder<NavigationTarget> node = DestinationNode.builder();
-    namespaces.forEach((namespace, worlds) -> node.subtree(namespace, worlds::build));
+    namespaces.forEach((namespace, worlds) -> node.children(namespace, worlds::build));
     return node.build();
   }
 
@@ -456,8 +456,8 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
    */
   private DestinationNode<NavigationTarget> locations(ServerPlayer player) {
     return DestinationNode.<NavigationTarget>builder()
-        .subtree(GLOBAL_TREE_KEY, () -> locations(locations.global()))
-        .subtree(PRIVATE_TREE_KEY, () -> locations(locations.ownedBy(player.uniqueId())))
+        .children(GLOBAL_TREE_KEY, () -> locations(locations.global()))
+        .children(PRIVATE_TREE_KEY, () -> locations(locations.ownedBy(player.uniqueId())))
         .build();
   }
 
@@ -465,7 +465,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
   private DestinationNode<NavigationTarget> locations(List<Location> locations) {
     DestinationNode.Builder<NavigationTarget> node = DestinationNode.builder();
     for (Location location : locations) {
-      node.leaf(
+      node.destination(
           location.name(),
           DestinationLeaf.of(
               () ->
