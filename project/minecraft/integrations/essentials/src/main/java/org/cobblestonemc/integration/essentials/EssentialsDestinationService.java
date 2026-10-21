@@ -16,13 +16,13 @@ import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.joml.Vector3i;
 
 /**
- * Surfaces Essentials teleports as navigation targets: {@code cobblestoneessentials → home →
- * <name>} (one leaf per the player's homes) and {@code cobblestoneessentials → spawn}. Navigating
- * to one is gated by Cobblestone's own {@code cobblestone.navigate.cobblestoneessentials.*}
- * permission (default-allow) rather than the Essentials teleport permission — so a player can walk
- * to a place even where {@code /home}/{@code /spawn} is revoked (the teleport transition still
- * requires the Essentials permission). Destinations re-resolve on query, so moving a home or the
- * spawn is reflected without a restart.
+ * Surfaces Essentials teleports as navigation targets: {@code essentials → home → <name>} (one leaf
+ * per the player's homes) and {@code essentials → spawn}. Navigating to one is gated by
+ * Cobblestone's own {@code cobblestone.navigate.essentials.*} permission (default-allow) rather
+ * than the Essentials teleport permission — so a player can walk to a place even where {@code
+ * /home}/{@code /spawn} is revoked (the teleport transition still requires the Essentials
+ * permission). Destinations re-resolve on query, so moving a home or the spawn is reflected without
+ * a restart.
  */
 final class EssentialsDestinationService implements DestinationService {
 

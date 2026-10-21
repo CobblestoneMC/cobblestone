@@ -28,22 +28,22 @@ import org.joml.Vector3i;
 
 /**
  * Surfaces Towny towns as navigation targets, keyed by the {@code /navigate} tree (Cobblestone
- * roots the branch at this plugin's own name, so nothing here collides with another integration):
+ * roots the branch at Towny's own name, so nothing here collides with another integration):
  *
  * <ul>
- *   <li>{@code cobblestonetowny → town → <town>} — anywhere in the town (all its claimed plots)
- *   <li>{@code cobblestonetowny → town → <town> → home} — the town's home block
- *   <li>{@code cobblestonetowny → town → <town> → outpost → <#>} — an outpost's block
- *   <li>{@code cobblestonetowny → town → <town> → type → <plottype>} — the nearest plot of a type
- *       (bank, shop, …)
- *   <li>{@code cobblestonetowny → town → <town> → plot → <name>} — a named plot
- *   <li>{@code cobblestonetowny → resident → …} — the same, for the player's own town (no need to
- *       type its name)
+ *   <li>{@code towny → town → <town>} — anywhere in the town (all its claimed plots)
+ *   <li>{@code towny → town → <town> → home} — the town's home block
+ *   <li>{@code towny → town → <town> → outpost → <#>} — an outpost's block
+ *   <li>{@code towny → town → <town> → type → <plottype>} — the nearest plot of a type (bank, shop,
+ *       …)
+ *   <li>{@code towny → town → <town> → plot → <name>} — a named plot
+ *   <li>{@code towny → resident → …} — the same, for the player's own town (no need to type its
+ *       name)
  * </ul>
  *
- * <p>Navigability is gated by Cobblestone's {@code cobblestone.navigate.cobblestonetowny.*}
- * permission (default-allow), not by whether the player may teleport there. Regions are read from
- * Towny lazily, on the search-initiating thread.
+ * <p>Navigability is gated by Cobblestone's {@code cobblestone.navigate.towny.*} permission
+ * (default-allow), not by whether the player may teleport there. Regions are read from Towny
+ * lazily, on the search-initiating thread.
  */
 final class TownyDestinationService implements DestinationService {
 
