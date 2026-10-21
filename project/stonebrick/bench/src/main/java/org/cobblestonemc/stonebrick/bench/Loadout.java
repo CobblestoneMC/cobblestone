@@ -19,6 +19,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
+import org.cobblestonemc.minecraft.lod.RegionCost;
 import org.cobblestonemc.stonebrick.platform.StonebrickPlayer;
 import org.yaml.snakeyaml.Yaml;
 
@@ -65,6 +66,18 @@ public record Loadout(
       }
     }
     return false;
+  }
+
+  /**
+   * Returns what crossing the terrain costs this loadout, as production prices it.
+   *
+   * <p>Here rather than beside each caller so the heuristic and the verification both price the
+   * same agent the same way.
+   *
+   * @return the cost model
+   */
+  public RegionCost cost() {
+    return RegionCost.forPlayer(player(), excludedModes);
   }
 
   /**

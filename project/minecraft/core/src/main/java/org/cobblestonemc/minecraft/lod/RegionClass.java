@@ -1,0 +1,156 @@
+/*
+ * Cobblestone — a Minecraft navigation plugin.
+ * Copyright (c) 2026 whimxiqal.
+ *
+ * Licensed under the MIT License. See the LICENSE file in the project root for full text.
+ */
+
+package org.cobblestonemc.minecraft.lod;
+
+import org.cobblestonemc.minecraft.MiningClass;
+import org.jetbrains.annotations.Nullable;
+
+/**
+ * A kind of terrain, as the region layer sees it. A tag, with no costs of its own: {@link
+ * RegionCost} says what each class costs one agent.
+ *
+ * <p><b>Exactly one class per cell.</b> Every cell belongs to one region of one class. A flyer and
+ * a walker read the same regions; they just price them differently, and the walker cannot enter
+ * {@link #AIR} at all.
+ *
+ * <p><b>A kind of terrain earns a class when some agent would pay differently for it.</b> Soul sand
+ * and soul soil are both ground, but soul sand drags a walker and soul soil does not, while Soul
+ * Speed boots make both fast: two classes. Breakable material is bucketed by {@link MiningClass},
+ * because a pickaxe makes stone fast and dirt no faster. Water and its surface are both swum, but
+ * only the surface carries a boat. Terrain no agent prices differently from an existing class
+ * belongs to that class.
+ *
+ * <p>The order is stored: a region keeps its class as {@link #ordinal()}. Adding or reordering a
+ * class needs {@link MinecraftTerrain#VERSION} bumped.
+ */
+public enum RegionClass {
+
+  /** A cell a body can stand in: a solid top below, room for a two-block body. */
+  STAND,
+
+  /** {@link #STAND}, on soul sand: it drags a walker, but not one in Soul Speed boots. */
+  SOUL_SAND,
+
+  /** {@link #STAND}, on soul soil: ordinary ground to a walker, and fast in Soul Speed boots. */
+  SOUL_SOIL,
+
+  /** Water with water above it: only swum. */
+  WATER,
+
+  /** Water open to the air above: swum, or crossed by boat. */
+  WATER_SURFACE,
+
+  /** Ladders, vines and scaffolding. */
+  CLIMB,
+
+  /** Open space nothing stands in: crossed by flying, or fallen through. */
+  AIR,
+
+  /** Breakable by hand: leaves, glass, wool. */
+  SOFT(MiningClass.SOFT),
+
+  /** Soft rock: netherrack and its ores. */
+  SOFT_ROCK(MiningClass.SOFT_ROCK),
+
+  /** Rock: stone and its ores. */
+  ROCK(MiningClass.ROCK),
+
+  /**
+   * Rock and hard rock mixed: where deepslate is dithered into stone. Never a block's own class,
+   * only a region's; see {@link MinecraftTerrain#label}.
+   */
+  MIXED_ROCK(true, null),
+
+  /** Hard rock: deepslate and its ores, end stone. */
+  HARD_ROCK(MiningClass.HARD_ROCK),
+
+  /** Obsidian, and whatever else needs a diamond pickaxe. */
+  OBSIDIAN(MiningClass.OBSIDIAN),
+
+  /** Dirt, sand and gravel. */
+  DIRT(MiningClass.DIRT),
+
+  /** Wood. */
+  WOOD(MiningClass.WOOD);
+
+  /** Every class, cached; {@code values()} allocates. */
+  public static final RegionClass[] ALL = values();
+
+  private final boolean solid;
+  private final @Nullable MiningClass mining;
+
+  RegionClass() {
+    this(false, null);
+  }
+
+  RegionClass(MiningClass mining) {
+    this(true, mining);
+  }
+
+  RegionClass(boolean solid, @Nullable MiningClass mining) {
+    this.solid = solid;
+    this.mining = mining;
+  }
+
+  /**
+   * Returns the class of breakable material in a mining bucket.
+   *
+   * @param mining the bucket
+   * @return the class
+   */
+  public static RegionClass solid(MiningClass mining) {
+    return switch (mining) {
+      case SOFT -> SOFT;
+      case SOFT_ROCK -> SOFT_ROCK;
+      case ROCK -> ROCK;
+      case HARD_ROCK -> HARD_ROCK;
+      case OBSIDIAN -> OBSIDIAN;
+      case DIRT -> DIRT;
+      case WOOD -> WOOD;
+    };
+  }
+
+  /**
+   * Returns the mining bucket a block of this class is in, or {@code null} for a class no block is,
+   * such as {@link #MIXED_ROCK}, or one that is not breakable material.
+   *
+   * @return the bucket
+   */
+  public @Nullable MiningClass mining() {
+    return mining;
+  }
+
+  /**
+   * Returns whether this class is breakable material, dug through or, for an agent that cannot dig,
+   * a wall at a price.
+   *
+   * @return {@code true} for the mining buckets and mixed rock
+   */
+  public boolean solid() {
+    return solid;
+  }
+
+  /**
+   * Returns whether a walking body stands in cells of this class, so moves between them step up and
+   * down as well as across.
+   *
+   * @return {@code true} for the classes of ground
+   */
+  public boolean standing() {
+    return this == STAND || this == SOUL_SAND || this == SOUL_SOIL;
+  }
+
+  /**
+   * Returns whether this class is water, surface or not.
+   *
+   * @return {@code true} for {@link #WATER} and {@link #WATER_SURFACE}
+   */
+  public boolean water() {
+    return this == WATER || this == WATER_SURFACE;
+  }
+}

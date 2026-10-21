@@ -35,12 +35,21 @@ import org.cobblestonemc.api.TraversalState;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
+import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
+import org.cobblestonemc.minecraft.lod.MinecraftTerrain;
+import org.cobblestonemc.minecraft.lod.RegionCost;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
+import org.cobblestonemc.regions.RegionColumnBuilder;
+import org.cobblestonemc.regions.RegionFiles;
+import org.cobblestonemc.regions.RegionGraph;
+import org.cobblestonemc.regions.RegionHeuristic;
+import org.cobblestonemc.regions.RegionSearch;
+import org.cobblestonemc.regions.RegionStore;
 import org.cobblestonemc.stonebrick.format.CaptureDirectory;
 import org.cobblestonemc.stonebrick.format.CorpusLayout;
 import org.cobblestonemc.stonebrick.platform.Capture;
@@ -48,6 +57,7 @@ import org.cobblestonemc.stonebrick.platform.DeterministicScheduler;
 import org.cobblestonemc.stonebrick.platform.StonebrickPlatformApi;
 import org.cobblestonemc.stonebrick.platform.StonebrickPlayer;
 import org.cobblestonemc.stonebrick.platform.StonebrickSolve;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Runs one scenario, once, and reports what it cost.
@@ -167,6 +177,7 @@ public final class ScenarioRunner {
           counting.opened.get(),
           counting.closed.get(),
           platform.ioStats().reads(),
+          platform.profileReads(),
           platform.ioStats().coldReads(),
           scheduler.millis(),
           platform.ioStats().totalDelayMicros(),
@@ -193,9 +204,9 @@ public final class ScenarioRunner {
     Set<MinecraftStepType> excluded = loadout.excludedModes();
     // A chunk cache of the search's own, as in production: how it hits and misses is part of what
     // the benchmark measures.
+    ChunkProvider chunks = new ChunkProvider(platform, platform.settings());
     MinecraftMovementBehavior behavior =
-        MinecraftMovementBehavior.forPlayer(
-            new ChunkProvider(platform, platform.settings()), player, excluded);
+        MinecraftMovementBehavior.forPlayer(chunks, player, excluded);
 
     Cell goal = scenario.destination();
     int radius = scenario.destinationRadius();
@@ -235,7 +246,10 @@ public final class ScenarioRunner {
                 heuristicFor(
                     scenario,
                     behavior,
-                    new MinecraftSearchSettings(settings, excluded, Set.of(), Set.of()))),
+                    chunks,
+                    player,
+                    new MinecraftSearchSettings(settings, excluded, Set.of(), Set.of()),
+                    platform)),
             settings,
             observer);
   }
@@ -318,21 +332,182 @@ public final class ScenarioRunner {
   }
 
   /**
+   * The column source the last run used, or {@code null} if it did not run on regions.
+   *
+   * <p>Exposed rather than folded into {@link RunResult} because the region layer's reads are not
+   * gated, and recording them as a deterministic metric would imply a rigour they do not have. The
+   * sweep prints them so the cost is at least visible.
+   */
+  private @Nullable CaptureChunkColumns lastRegionColumns;
+
+  /**
+   * Returns how many chunk columns the last run's region layer read.
+   *
+   * @return the column count, or 0 if the last run read none
+   */
+  public int lastRegionColumns() {
+    return lastRegionColumns == null ? 0 : lastRegionColumns.chunkColumns();
+  }
+
+  private @Nullable RegionHeuristic<MinecraftChunk> lastRegionHeuristic;
+
+  /**
+   * Returns where the last run's region layer spent its time and memory, or {@code null} if it did
+   * not run on regions.
+   *
+   * <p>Wall-clock, so it varies from machine to machine and run to run; it is reported, never
+   * gated. The parts nest: reading a column happens inside building the graph, and building it
+   * happens inside answering a query, so each is subtracted from the one around it.
+   *
+   * @return the breakdown, as {@code key=value} pairs
+   */
+  public @Nullable String lastRegionBreakdown() {
+    if (lastRegionColumns == null || lastRegionHeuristic == null) {
+      return null;
+    }
+    long queries = 0;
+    long searchNanos = 0;
+    long placeNanos = 0;
+    long seamNanos = 0;
+    long bytes = 0;
+    long regions = 0;
+    long portals = 0;
+    long expansions = 0;
+    for (RegionSearch search : lastRegionHeuristic.searches()) {
+      queries += search.queries();
+      searchNanos += search.searchNanos();
+      expansions += search.expansions();
+      placeNanos += search.graph().placeNanos();
+      seamNanos += search.graph().seamNanos();
+      bytes += search.graph().footprintBytes();
+      regions += search.graph().regions();
+      portals += search.graph().portals();
+    }
+    RegionStore.Stats store = lastRegionStore.stats();
+    long fetchNanos = lastRegionColumns.fetchNanos();
+
+    return String.format(
+        Locale.ROOT,
+        "readMs=%.1f buildMs=%.1f diskMs=%.1f placeMs=%.1f seamMs=%.1f searchMs=%.1f queries=%d"
+            + " settled=%d built=%d fromDisk=%d diskKB=%d regions=%d portals=%d graphKB=%d"
+            + " storeKB=%d",
+        fetchNanos / 1e6,
+        store.buildNanos() / 1e6,
+        store.diskNanos() / 1e6,
+        placeNanos / 1e6,
+        seamNanos / 1e6,
+        searchNanos / 1e6,
+        queries,
+        expansions,
+        store.builds(),
+        store.diskLoads(),
+        store.diskBytesRead() / 1024,
+        regions,
+        portals,
+        bytes / 1024,
+        store.bytesInMemory() / 1024);
+  }
+
+  /**
+   * Writes the last run's built columns to its cache on disk, if it has one.
+   *
+   * <p>What a server's periodic flush does; a warm sweep calls it between the run that fills the
+   * cache and the run it measures.
+   */
+  public void flushRegionCache() {
+    if (lastRegionStore != null) {
+      lastRegionStore.flush().join();
+      lastRegionStore.close().join();
+    }
+  }
+
+  /**
+   * Sets a directory to keep built columns in across runs, as a server keeps them across restarts;
+   * {@code null} to build every column afresh each run.
+   *
+   * @param directory the cache directory, or {@code null}
+   */
+  public void regionCache(@Nullable Path directory) {
+    if (lastRegionStore != null) {
+      lastRegionStore.close().join(); // released, so the directory can be deleted
+    }
+    this.regionCache = directory;
+  }
+
+  private @Nullable RegionStore<MinecraftChunk> lastRegionStore;
+
+  private @Nullable Path regionCache;
+
+  /**
+   * The detour a region may hold before the fill splits it, from {@code -Dregions.detour}; a tuning
+   * knob being measured, not a part of any route.
+   */
+  static final double REGION_DETOUR =
+      Double.parseDouble(
+          System.getProperty("regions.detour", String.valueOf(RegionGraph.DEFAULT_DETOUR_RATIO)));
+
+  /**
    * Builds the estimate the scenario asked for.
    *
    * <p>Chosen per scenario rather than globally so that two estimates can be compared over
    * identical terrain, with identical settings, in one run of the suite — which is the only way a
    * difference in expanded nodes means the heuristic rather than the world.
    *
-   * <p>Everything but {@link Scenario.Heuristic#ZERO} is built by {@link MinecraftHeuristics}, the
-   * same factory Paper and Sponge use, so the bench measures the estimate a server would run.
+   * <p>Every production estimate but REGIONS is built by {@link MinecraftHeuristics}, the same
+   * factory Paper and Sponge use. REGIONS is built here with the factory's parameters, but over the
+   * bench's own column source and store, so that a run can report what the region layer read, built
+   * and kept.
    */
-  private static HeuristicStrategy heuristicFor(
-      Scenario scenario, MinecraftMovementBehavior behavior, MinecraftSearchSettings settings) {
+  private HeuristicStrategy heuristicFor(
+      Scenario scenario,
+      MinecraftMovementBehavior behavior,
+      ChunkProvider chunks,
+      StonebrickPlayer player,
+      MinecraftSearchSettings settings,
+      StonebrickPlatformApi platform) {
+    // Cleared first, so a run without the region layer does not report the last one's reads.
+    lastRegionColumns = null;
+    lastRegionHeuristic = null;
+    lastRegionStore = null;
     if (scenario.heuristic().production() == null) {
       return Heuristics.zero();
     }
-    return MinecraftHeuristics.forPlayer(behavior, settings);
+    if (scenario.heuristic() != Scenario.Heuristic.REGIONS) {
+      return MinecraftHeuristics.forPlayer(behavior, chunks, player, scenario.origin(), settings);
+    }
+    CaptureChunkColumns columns = new CaptureChunkColumns(platform, scenario.world());
+    lastRegionColumns = columns;
+    // One store for the run, on this thread: a cold start, or a restart over a cache on disk.
+    MinecraftWorld world = platform.world(scenario.world());
+    lastRegionStore =
+        new RegionStore<>(
+            MinecraftTerrain.INSTANCE,
+            world.minY(),
+            world.maxY(),
+            REGION_DETOUR,
+            Long.MAX_VALUE,
+            regionCache == null
+                ? null
+                : new RegionFiles(
+                    regionCache.resolve(
+                        RegionFiles.directoryName(scenario.capture() + "-" + scenario.world())),
+                    RegionColumnBuilder.columnMinY(world.minY()),
+                    RegionColumnBuilder.sections(world.minY(), world.maxY()),
+                    REGION_DETOUR,
+                    MinecraftTerrain.INSTANCE),
+            Runnable::run,
+            Runnable::run);
+    RegionStore<MinecraftChunk> store = lastRegionStore;
+    lastRegionHeuristic =
+        new RegionHeuristic<>(
+            MinecraftTerrain.INSTANCE,
+            region -> columns,
+            region -> store,
+            RegionCost.forPlayer(player, settings.excludedModes()),
+            REGION_DETOUR,
+            behavior.cheapestCostPerBlock(),
+            true);
+    return lastRegionHeuristic;
   }
 
   /**

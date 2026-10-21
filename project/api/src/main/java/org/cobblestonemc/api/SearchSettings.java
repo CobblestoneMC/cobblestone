@@ -41,11 +41,38 @@ public final class SearchSettings {
   /** Default window width for the running-average heuristic. */
   public static final int DEFAULT_RUNNING_AVERAGE_WIDTH = 5;
 
-  /** Default A* heuristic weight (1.0 = admissible/optimal; &gt;1 = faster, weighted A*). */
-  public static final double DEFAULT_HEURISTIC_WEIGHT = 1.5;
+  /**
+   * Default A* heuristic weight (1.0 = admissible/optimal; &gt;1 = faster, weighted A*).
+   *
+   * <p>Tuned for {@link #DEFAULT_HEURISTIC}, whose estimate {@code bench verify} puts at 0.7–0.95
+   * of the true cost and never above. Over 58 runs, scored on the 55 every weight solved (nodes as
+   * a geometric mean, paths against the best any weight found):
+   *
+   * <pre>
+   *   1.275  2,754 nodes   +0.2%   55 of 58 solved
+   *   1.49   1,365 nodes   +1.8%   58 of 58
+   *   1.7      952 nodes   +3.0%   58 of 58
+   * </pre>
+   *
+   * <p>1.7: below about 1.5 the search starts running out of cells, and between the two the choice
+   * is a trade of about 40% more nodes for paths about 1% cheaper. Another heuristic would want its
+   * own weight; this one is only right for estimates about as close as these.
+   */
+  public static final double DEFAULT_HEURISTIC_WEIGHT = 1.7;
 
-  /** The estimate a search uses unless told otherwise. */
-  public static final Heuristic DEFAULT_HEURISTIC = Heuristic.RUNNING_AVERAGE;
+  /**
+   * The estimate a search uses unless told otherwise.
+   *
+   * <p>{@link Heuristic#REGIONS} by default, from measurement. Over 58 runs (22 routes, four
+   * loadouts) it solves all 58 against the running average's 48, expands about a quarter of the
+   * nodes (geometric mean 1,005 against 3,887), and its paths average +5.5% over the best found
+   * against +17.9%.
+   *
+   * <p>⚠️ It is not free: a search reads the terrain it reasons over, and the first search over new
+   * terrain has to summarize it, which on a long route is hundreds of chunk reads. Summaries are
+   * shared between searches and kept on disk, so later searches mostly read them back.
+   */
+  public static final Heuristic DEFAULT_HEURISTIC = Heuristic.REGIONS;
 
   private final int maxCellsVisited;
   private final long maxWallClockMillis;
@@ -161,7 +188,19 @@ public final class SearchSettings {
      * price a long journey at the rate of a river it is currently swimming down, because the river
      * really is cheap and simply does not go anywhere.
      */
-    RUNNING_AVERAGE
+    RUNNING_AVERAGE,
+
+    /**
+     * A search over connected terrain regions -- patches of ground, water, rock and air joined
+     * where a body can cross between them -- run backwards from the destination and resumed as the
+     * fine search asks.
+     *
+     * <p>Prices the journey from terrain it has actually looked at rather than from terrain it has
+     * just crossed, and knows a wall from a tunnel. Costs chunk reads and CPU to classify the
+     * terrain -- a long route touches hundreds of columns -- once: summaries are shared between
+     * searches and kept on disk.
+     */
+    REGIONS
   }
 
   /** A fluent builder for {@link SearchSettings}. */
