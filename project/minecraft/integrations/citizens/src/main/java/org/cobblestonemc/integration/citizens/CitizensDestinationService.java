@@ -14,8 +14,8 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.paper.plugin.api.Destination;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
-import org.cobblestonemc.paper.plugin.api.DestinationTree;
-import org.cobblestonemc.plugin.api.PlatformDestinationTree;
+import org.cobblestonemc.plugin.api.DestinationTree;
+import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.joml.Vector3i;
 
 /**
@@ -32,10 +32,10 @@ final class CitizensDestinationService implements DestinationService {
   static final String NPC_KEY = "npc";
 
   @Override
-  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
+  public DestinationTree<MinecraftDestination<World, Vector3i>> provide(Player player) {
     // Strict: a server can hold hundreds of NPCs, and none of them should be promoted to the
     // root of /navigate — the player asks for "npc" first.
-    DestinationTree npcNode = DestinationTree.builder().strict();
+    var npcNode = Destination.tree().strict();
     boolean any = false;
     for (NPC npc : CitizensAPI.getNPCRegistry().sorted()) {
       int id = npc.getId();
@@ -49,7 +49,7 @@ final class CitizensDestinationService implements DestinationService {
           });
       any = true;
     }
-    return any ? DestinationTree.builder().children(NPC_KEY, npcNode).build() : null;
+    return any ? Destination.tree().subtree(NPC_KEY, npcNode).build() : null;
   }
 
   /** The command token for an NPC: its slugged name plus id, unique across same-named NPCs. */

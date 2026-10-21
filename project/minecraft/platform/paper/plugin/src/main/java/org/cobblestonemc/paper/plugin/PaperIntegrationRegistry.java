@@ -18,7 +18,7 @@ import org.cobblestonemc.paper.PaperRegions;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
 import org.cobblestonemc.paper.plugin.api.IntegrationRegistrar;
 import org.cobblestonemc.paper.plugin.api.NavigatorFactory;
-import org.cobblestonemc.plugin.api.DestinationNode;
+import org.cobblestonemc.plugin.api.DestinationTree;
 import org.cobblestonemc.plugin.api.Display;
 import org.cobblestonemc.plugin.destination.DestinationProvider;
 import org.cobblestonemc.plugin.destination.NavigationTarget;
@@ -64,7 +64,7 @@ public final class PaperIntegrationRegistry implements IntegrationRegistrar {
         owner,
         new DestinationProvider<>() {
           @Override
-          public DestinationNode<NavigationTarget> provide(Player player) {
+          public DestinationTree<NavigationTarget> provide(Player player) {
             var tree = provider.provide(player);
             return tree == null ? null : PlatformTrees.adapt(tree, regions::of);
           }

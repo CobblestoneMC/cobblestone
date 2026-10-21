@@ -21,8 +21,8 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.paper.plugin.api.Destination;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
-import org.cobblestonemc.paper.plugin.api.DestinationTree;
-import org.cobblestonemc.plugin.api.PlatformDestinationTree;
+import org.cobblestonemc.plugin.api.DestinationTree;
+import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.joml.Vector3i;
 
 /**
@@ -45,13 +45,13 @@ final class BetonQuestDestinationService implements DestinationService {
   }
 
   @Override
-  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
+  public DestinationTree<MinecraftDestination<World, Vector3i>> provide(Player player) {
     OnlineProfile profile = api.profiles().getProfile(player);
     if (profile == null) {
       return null;
     }
     Map<CompassIdentifier, QuestCompass> compasses = api.compasses().forProfile(profile);
-    DestinationTree compass = DestinationTree.builder();
+    var compass = Destination.tree();
     boolean any = false;
     for (Map.Entry<CompassIdentifier, QuestCompass> entry : compasses.entrySet()) {
       Location target = CompassTargets.locationOf(entry.getValue(), profile);
@@ -59,10 +59,10 @@ final class BetonQuestDestinationService implements DestinationService {
         continue; // location couldn't be resolved — nothing to walk to
       }
       String name = entry.getKey().get();
-      compass.destination(slug(name), Destination.at(target, name));
+      compass.destination(slug(name), () -> Destination.at(target, name));
       any = true;
     }
-    return any ? DestinationTree.builder().children(COMPASS_KEY, compass).build() : null;
+    return any ? Destination.tree().subtree(COMPASS_KEY, compass).build() : null;
   }
 
   /**

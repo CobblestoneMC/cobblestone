@@ -17,9 +17,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Predicate;
 import net.kyori.adventure.text.Component;
-import org.cobblestonemc.plugin.api.DestinationChild;
+import org.cobblestonemc.plugin.api.DestinationEntry;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
-import org.cobblestonemc.plugin.api.DestinationNode;
+import org.cobblestonemc.plugin.api.DestinationTree;
 import org.cobblestonemc.plugin.api.Display;
 import org.cobblestonemc.plugin.api.Icon;
 import org.cobblestonemc.plugin.config.MenuIcons;
@@ -51,22 +51,22 @@ class NavigationMenusTest {
   @Test
   void cobblestonesOwnEntriesTakeTheirConfiguredItem() {
     Display own = Display.of(Icon.item("minecraft:dirt"));
-    DestinationNode<String> level =
+    DestinationTree<String> level =
         MenuIcons.withIcons(
-            DestinationNode.<String>builder()
+            DestinationTree.<String>builder()
                 .destination("spawn", DestinationLeaf.of(() -> "spawn"))
                 .destination("market", DestinationLeaf.of(() -> "market"))
-                .child(
+                .entry(
                     "death",
-                    DestinationChild.<String>builder()
+                    DestinationEntry.<String>builder()
                         .destination(() -> "death")
                         .display(own)
                         .build())
                 .build(),
             name -> Icon.item("minecraft:" + name));
-    assertEquals(Display.of(Icon.item("minecraft:spawn")), level.children().get("spawn").display());
-    assertEquals(Display.none(), level.children().get("market").display(), "not one of ours");
-    assertEquals(own, level.children().get("death").display(), "already chose its own");
+    assertEquals(Display.of(Icon.item("minecraft:spawn")), level.entries().get("spawn").display());
+    assertEquals(Display.none(), level.entries().get("market").display(), "not one of ours");
+    assertEquals(own, level.entries().get("death").display(), "already chose its own");
   }
 
   /** Menus over one provider offering {@code spawn}, whose player is a name. */
@@ -78,7 +78,7 @@ class NavigationMenusTest {
               Map.<String, DestinationProvider<String>>of(
                   "cobblestone",
                   player ->
-                      DestinationNode.<NavigationTarget>builder()
+                      DestinationTree.<NavigationTarget>builder()
                           .destination("spawn", DestinationLeaf.of(() -> null))
                           .build()),
           new RecentDestinations(),

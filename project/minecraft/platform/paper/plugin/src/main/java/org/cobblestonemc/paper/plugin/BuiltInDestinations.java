@@ -34,10 +34,10 @@ import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.paper.PaperRegions;
 import org.cobblestonemc.paper.PaperTerrain;
 import org.cobblestonemc.paper.api.WholeWorldRegion;
-import org.cobblestonemc.plugin.api.DestinationChild;
+import org.cobblestonemc.plugin.api.DestinationEntry;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
-import org.cobblestonemc.plugin.api.DestinationNode;
 import org.cobblestonemc.plugin.api.DestinationOption;
+import org.cobblestonemc.plugin.api.DestinationTree;
 import org.cobblestonemc.plugin.api.Display;
 import org.cobblestonemc.plugin.api.Icon;
 import org.cobblestonemc.plugin.api.Validity;
@@ -121,8 +121,8 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
   }
 
   @Override
-  public DestinationNode<NavigationTarget> provide(Player player) {
-    DestinationNode.Builder<NavigationTarget> root = DestinationNode.builder();
+  public DestinationTree<NavigationTarget> provide(Player player) {
+    DestinationTree.Builder<NavigationTarget> root = DestinationTree.builder();
     // With death tracking off there is never a death to go back to, so the key is not offered.
     if (trackDeaths.getAsBoolean()) {
       root.destination(DEATH_KEY, DestinationLeaf.ofValidity(() -> death(player)));
@@ -133,11 +133,11 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
         .destination(RESPAWN_KEY, DestinationLeaf.ofValidity(() -> respawn(player)))
         .destination(MOUNT_KEY, DestinationLeaf.ofValidity(() -> mount(player)))
         .alias(HORSE_ALIAS, MOUNT_KEY)
-        .children(PLAYER_TREE_KEY, () -> players(player))
-        .children(WORLD_TREE_KEY, () -> worlds(player))
-        .children(LOCATION_TREE_KEY, () -> locations(player))
-        .children(PET_TREE_KEY, () -> pets(player))
-        .children(COORDINATES_TREE_KEY, () -> coordinates(player));
+        .subtree(PLAYER_TREE_KEY, () -> players(player))
+        .subtree(WORLD_TREE_KEY, () -> worlds(player))
+        .subtree(LOCATION_TREE_KEY, () -> locations(player))
+        .subtree(PET_TREE_KEY, () -> pets(player))
+        .subtree(COORDINATES_TREE_KEY, () -> coordinates(player));
     return MenuIcons.withIcons(root.build(), icons);
   }
 
@@ -152,9 +152,9 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
   }
 
   /** An entry that is a destination, shown with the given item. */
-  private static DestinationChild<NavigationTarget> shown(
+  private static DestinationEntry<NavigationTarget> shown(
       Display display, DestinationLeaf<NavigationTarget> destination) {
-    return DestinationChild.<NavigationTarget>builder()
+    return DestinationEntry.<NavigationTarget>builder()
         .destination(destination)
         .display(display)
         .build();
@@ -278,9 +278,9 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
    * Strict, so {@code coordinates} must be typed: {@code surface} alone means the nearest open sky,
    * and a bare {@code block} would mean nothing.
    */
-  private DestinationNode<NavigationTarget> coordinates(Player player) {
+  private DestinationTree<NavigationTarget> coordinates(Player player) {
     return MenuIcons.withIcons(
-        DestinationNode.<NavigationTarget>builder()
+        DestinationTree.<NavigationTarget>builder()
             .strict()
             .destination(BLOCK_KEY, coordinateBlock(player))
             .destination(SURFACE_KEY, coordinateSurface(player))
@@ -415,9 +415,9 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
    * tab-completion keystroke, so the scan is cached per player for a second. Each pet's location is
    * still looked up live when a search is made.
    */
-  private DestinationNode<NavigationTarget> pets(Player player) {
+  private DestinationTree<NavigationTarget> pets(Player player) {
     List<Pet> pets = petsByOwner.get(player.getUniqueId(), BuiltInDestinations::scanPets);
-    DestinationNode.Builder<NavigationTarget> node = DestinationNode.builder();
+    DestinationTree.Builder<NavigationTarget> node = DestinationTree.builder();
     Set<String> taken = new HashSet<>();
     for (Pet pet : pets) {
       String key = pet.name();
@@ -425,7 +425,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
         key = pet.name() + "-" + n;
       }
       String name = key;
-      node.child(
+      node.entry(
           key,
           shown(
               Display.of(Icon.item(pet.type() + "_spawn_egg")),
@@ -480,16 +480,16 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
   /** A pet, and its kind (an entity type key). */
   private record Pet(UUID uuid, String name, long tamedAt, String type) {}
 
-  private DestinationNode<NavigationTarget> players(Player player) {
+  private DestinationTree<NavigationTarget> players(Player player) {
     UUID self = player.getUniqueId();
-    DestinationNode.Builder<NavigationTarget> node = DestinationNode.builder();
+    DestinationTree.Builder<NavigationTarget> node = DestinationTree.builder();
     for (Player other : Bukkit.getOnlinePlayers()) {
       if (other.getUniqueId().equals(self)) {
         continue;
       }
       UUID uuid = other.getUniqueId();
       String name = other.getName();
-      node.child(
+      node.entry(
           name,
           shown(
               Display.of(Icon.playerHead(uuid)),
@@ -511,16 +511,16 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
     return node.build();
   }
 
-  private DestinationNode<NavigationTarget> worlds(Player player) {
+  private DestinationTree<NavigationTarget> worlds(Player player) {
     String currentKey = player.getWorld().getKey().asString();
-    DestinationNode.Builder<NavigationTarget> node = DestinationNode.builder();
+    DestinationTree.Builder<NavigationTarget> node = DestinationTree.builder();
     for (World world : Bukkit.getWorlds()) {
       String worldKey = world.getKey().asString();
       if (worldKey.equals(currentKey)) {
         continue; // no point navigating to the world you're already in
       }
       String name = world.getName();
-      node.child(
+      node.entry(
           name,
           shown(
               icon(
@@ -545,21 +545,21 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
    * silently shadowing the other. Neither level is strict, so plain {@code location home} still
    * works whenever only one of the two exists.
    */
-  private DestinationNode<NavigationTarget> locations(Player player) {
+  private DestinationTree<NavigationTarget> locations(Player player) {
     return MenuIcons.withIcons(
-        DestinationNode.<NavigationTarget>builder()
-            .children(GLOBAL_TREE_KEY, () -> locations(locations.global()))
-            .children(PRIVATE_TREE_KEY, () -> locations(locations.ownedBy(player.getUniqueId())))
+        DestinationTree.<NavigationTarget>builder()
+            .subtree(GLOBAL_TREE_KEY, () -> locations(locations.global()))
+            .subtree(PRIVATE_TREE_KEY, () -> locations(locations.ownedBy(player.getUniqueId())))
             .build(),
         icons);
   }
 
   /** Location names are unique within a scope (the table's primary key), so this cannot collide. */
-  private DestinationNode<NavigationTarget> locations(
+  private DestinationTree<NavigationTarget> locations(
       List<org.cobblestonemc.plugin.data.Location> locations) {
-    DestinationNode.Builder<NavigationTarget> node = DestinationNode.builder();
+    DestinationTree.Builder<NavigationTarget> node = DestinationTree.builder();
     for (var location : locations) {
-      node.child(
+      node.entry(
           location.name(),
           shown(
               icon(MenuIcons.SAVED_LOCATION),
