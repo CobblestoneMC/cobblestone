@@ -247,10 +247,53 @@ public final class Messages {
     return out.append(secs).append(template("format.duration.short.seconds", locale)).toString();
   }
 
+  /**
+   * Renders a parameterless message without the prefix badge — for text that is not a chat line,
+   * such as the name or description of an item in a menu.
+   *
+   * @param locale the recipient's locale
+   * @param message the message
+   * @return the component
+   */
+  public Component renderBare(Locale locale, Message0 message) {
+    return format(message, locale, NO_ARGS, false);
+  }
+
+  /**
+   * Renders a one-parameter message without the prefix badge; see {@link #renderBare(Locale,
+   * Message0)}.
+   *
+   * @param locale the recipient's locale
+   * @param message the message
+   * @param arg1 the first parameter
+   * @return the component
+   */
+  public Component renderBare(Locale locale, Message1 message, Object arg1) {
+    return format(message, locale, new Object[] {arg1}, false);
+  }
+
+  /**
+   * Renders a two-parameter message without the prefix badge; see {@link #renderBare(Locale,
+   * Message0)}.
+   *
+   * @param locale the recipient's locale
+   * @param message the message
+   * @param arg1 the first parameter
+   * @param arg2 the second parameter
+   * @return the component
+   */
+  public Component renderBare(Locale locale, Message2 message, Object arg1, Object arg2) {
+    return format(message, locale, new Object[] {arg1, arg2}, false);
+  }
+
   private Component format(Message message, Locale locale, Object[] args) {
+    return format(message, locale, args, showPrefix);
+  }
+
+  private Component format(Message message, Locale locale, Object[] args, boolean prefix) {
     String template = template(message.key(), locale);
     TextComponent.Builder builder = Component.text();
-    if (showPrefix) {
+    if (prefix) {
       builder.append(PREFIX);
     }
     appendTemplate(builder, template, message.category(), args);

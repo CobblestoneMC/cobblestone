@@ -234,5 +234,56 @@ public final class CobblestoneMessages {
   public static final Message1 PORTALS_CLEARED =
       Message1.success("command.cobblestone.portals.cleared");
 
+  /** The navigation menu's hint on an entry that opens a further level. */
+  public static final Message0 MENU_OPEN = Message0.info("menu.open");
+
+  /** The navigation menu's hint on a destination. */
+  public static final Message0 MENU_NAVIGATE = Message0.info("menu.navigate");
+
+  /** The hint on a destination that asks for more ({@code {0}} = its options' usage). */
+  public static final Message1 MENU_FILL_IN = Message1.info("menu.fill_in");
+
+  /** The line on a recently used destination ({@code {0}} = what it would be typed as). */
+  public static final Message1 MENU_RECENT = Message1.info("menu.recent");
+
+  /** The navigation menu's back button. */
+  public static final Message0 MENU_BACK = Message0.info("menu.back");
+
+  /** The navigation menu's previous-page button. */
+  public static final Message0 MENU_PREVIOUS = Message0.info("menu.previous");
+
+  /** The navigation menu's next-page button. */
+  public static final Message0 MENU_NEXT = Message0.info("menu.next");
+
+  /** Which page of the menu is showing ({@code {0}} = this page, {@code {1}} = how many). */
+  public static final Message2 MENU_PAGE = Message2.info("menu.page");
+
+  /** The navigation menu's close button. */
+  public static final Message0 MENU_CLOSE = Message0.info("menu.close");
+
+  /** Stands in for the entries of a menu level that has none. */
+  public static final Message0 MENU_EMPTY = Message0.info("menu.empty");
+
+  /** The button that submits a destination's options in its dialog. */
+  public static final Message0 MENU_DIALOG_NAVIGATE = Message0.info("menu.dialog.navigate");
+
+  /** The button that dismisses a destination's options dialog. */
+  public static final Message0 MENU_DIALOG_CANCEL = Message0.info("menu.dialog.cancel");
+
+  /** The label of an option that may be left out ({@code {0}} = the option's name). */
+  public static final Message1 MENU_DIALOG_OPTIONAL = Message1.info("menu.dialog.optional");
+
+  /** The choice that leaves an optional option out. */
+  public static final Message0 MENU_DIALOG_UNSET = Message0.info("menu.dialog.unset");
+
+  /**
+   * Where no dialog can be shown, the chat line that fills in the rest of a destination's command
+   * when clicked ({@code {0}} = its usage).
+   */
+  public static final Message1 MENU_FILL_IN_CHAT = Message1.info("menu.fill_in.chat");
+
+  /** The hover on {@link #MENU_FILL_IN_CHAT}. */
+  public static final Message0 MENU_FILL_IN_CHAT_HOVER = Message0.info("menu.fill_in.chat.hover");
+
   private CobblestoneMessages() {}
 }

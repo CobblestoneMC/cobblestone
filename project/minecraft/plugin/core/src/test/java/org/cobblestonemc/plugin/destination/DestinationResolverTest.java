@@ -444,6 +444,38 @@ class DestinationResolverTest {
   }
 
   @Test
+  void findsAnEntryByItsCanonicalAddressBuildingOnlyTheLevelsAlongIt() {
+    var roots =
+        roots(
+            node("towny")
+                .sub(
+                    node("town")
+                        .leaf("riverwood")
+                        .sub(node("riverwood").leaf("home"))
+                        .sub(node("oakvale").leaf("home"))));
+
+    // Both roles under one key: the entry is found whole, as a destination with a level beneath.
+    var riverwood = DestinationResolver.find(roots, List.of("towny", "town", "riverwood"));
+    assertTrue(riverwood.orElseThrow().destination().isPresent());
+    assertTrue(riverwood.orElseThrow().children().isPresent());
+    assertEquals(1, nodesBuilt); // just "town"
+
+    assertTrue(
+        DestinationResolver.find(roots, List.of("towny", "town", "riverwood", "home"))
+            .orElseThrow()
+            .destination()
+            .isPresent());
+    // Nothing there, a missing level along the way, an address past a destination, a bare root.
+    assertTrue(DestinationResolver.find(roots, List.of("towny", "town", "ashford")).isEmpty());
+    assertTrue(DestinationResolver.find(roots, List.of("towny", "city", "riverwood")).isEmpty());
+    assertTrue(
+        DestinationResolver.find(roots, List.of("towny", "town", "riverwood", "home", "door"))
+            .isEmpty());
+    assertTrue(DestinationResolver.find(roots, List.of("towny")).isEmpty());
+    assertTrue(DestinationResolver.find(roots, List.of("essentials", "home")).isEmpty());
+  }
+
+  @Test
   void aStrictLevelKeepsATemplateApartFromALeafOfTheSameName() {
     // "surface" is the nearest open sky; "coordinates surface <x> <z>" is one column's.
     var roots =

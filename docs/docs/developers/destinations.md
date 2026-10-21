@@ -309,7 +309,7 @@ and to players who log off.
 
 ## In the navigation menu
 
-Players can also pick destinations from a chest menu of the same tree. By default each child shows
+Typing `/navigate` on its own opens a chest menu of the same tree. By default each child shows
 as its key on a plain item. Give it a label, a description and an icon to make it look like yours:
 
 === "Paper"
@@ -360,6 +360,10 @@ public final class ShopsDestinations implements DestinationService {
   }
 }
 ```
+
+A destination with required options, such as coordinates, asks for them before navigating, using
+the options' names and suggestions. An option with a handful of suggestions is a choice among them;
+one with a single suggestion is text that starts as that suggestion.
 
 ## Permissions
 

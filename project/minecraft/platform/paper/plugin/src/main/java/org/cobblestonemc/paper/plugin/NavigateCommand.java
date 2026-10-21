@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
@@ -51,6 +52,7 @@ import org.cobblestonemc.plugin.destination.DestinationResolver;
 import org.cobblestonemc.plugin.destination.DestinationRoots;
 import org.cobblestonemc.plugin.destination.NavigationPermissions;
 import org.cobblestonemc.plugin.destination.NavigationTarget;
+import org.cobblestonemc.plugin.menu.RecentDestinations;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Message0;
 import org.cobblestonemc.plugin.message.Messages;
@@ -65,7 +67,7 @@ import org.cobblestonemc.plugin.trip.TripLabel;
  * The {@code /navigate} (alias {@code /nav}) user command: parse flags, resolve the destination
  * through the registered providers, run the search, and — on success — create the chosen navigator
  * and start a {@link Trip}. All the non-Brigadier logic lives in platform-neutral plugin-core
- * helpers (flag parsing, destination resolution).
+ * helpers (flag parsing, destination resolution). Typed on its own, it opens the navigation menu.
  */
 final class NavigateCommand {
   // A tiny, greedy search for the off-trail "guide" path: bounded and heavily weighted so it's
@@ -77,6 +79,9 @@ final class NavigateCommand {
           .heuristicWeight(2.0)
           .build();
 
+  // Typed alone, prints the command's help rather than being read as a destination.
+  private static final String HELP_FLAG = "-help";
+
   private final PaperNavigationServiceImpl platformApi;
   private final PaperTripServiceImpl tripService;
   private final PaperIntegrationRegistry integrations;
@@ -85,6 +90,7 @@ final class NavigateCommand {
   private final Supplier<SearchSettings> searchSettings;
   private final CobblestoneLogger log;
   private final Messages messages;
+  private final RecentDestinations recents;
 
   NavigateCommand(
       PaperNavigationServiceImpl platformApi,
@@ -94,7 +100,8 @@ final class NavigateCommand {
       SearchGate gate,
       Supplier<SearchSettings> searchSettings,
       CobblestoneLogger log,
-      Messages messages) {
+      Messages messages,
+      RecentDestinations recents) {
     this.platformApi = platformApi;
     this.tripService = tripService;
     this.integrations = integrations;
@@ -103,17 +110,26 @@ final class NavigateCommand {
     this.searchSettings = searchSettings;
     this.log = log;
     this.messages = messages;
+    this.recents = recents;
   }
 
   /**
    * Builds the command's node.
    *
+   * @param openMenu opens the navigation menu, for a player who types the command on its own
    * @return the node
    */
-  LiteralCommandNode<CommandSourceStack> node() {
+  LiteralCommandNode<CommandSourceStack> node(Consumer<Player> openMenu) {
     return Commands.literal("navigate")
         .requires(source -> source.getSender().hasPermission(Permissions.NAVIGATE.value()))
-        .executes(ctx -> navHelp(ctx.getSource().getSender()))
+        .executes(
+            ctx -> {
+              if (ctx.getSource().getSender() instanceof Player player) {
+                openMenu.accept(player);
+                return Command.SINGLE_SUCCESS;
+              }
+              return navHelp(ctx.getSource().getSender());
+            })
         .then(
             Commands.argument("args", StringArgumentType.greedyString())
                 .suggests(this::suggest)
@@ -124,6 +140,7 @@ final class NavigateCommand {
   private int navHelp(CommandSender sender) {
     Locale locale = localeOf(sender, messages);
     messages.send(sender, locale, CobblestoneMessages.NAVIGATE_HELP_HEADER);
+    PaperCommandHelp.line(sender, messages, locale, "/navigate", "command.navigate.help.menu");
     PaperCommandHelp.line(
         sender,
         messages,
@@ -141,6 +158,7 @@ final class NavigateCommand {
         "-no-world <world> / -no-dimension <dim>",
         "command.navigate.help.no_world");
     PaperCommandHelp.line(sender, messages, locale, "-live", "command.navigate.help.live");
+    PaperCommandHelp.line(sender, messages, locale, "-help", "command.navigate.help.help");
     return Command.SINGLE_SUCCESS;
   }
 
@@ -152,8 +170,11 @@ final class NavigateCommand {
       return Command.SINGLE_SUCCESS;
     }
 
-    FlagParser.Result parseResult =
-        FlagParser.parse(tokenize(StringArgumentType.getString(ctx, "args")));
+    List<String> args = tokenize(StringArgumentType.getString(ctx, "args"));
+    if (args.equals(List.of(HELP_FLAG))) {
+      return navHelp(player);
+    }
+    FlagParser.Result parseResult = FlagParser.parse(args);
     if (parseResult instanceof FlagParser.Invalid invalid) {
       sendFlagError(player, locale, messages, invalid);
       return Command.SINGLE_SUCCESS;
@@ -203,6 +224,18 @@ final class NavigateCommand {
     return Command.SINGLE_SUCCESS;
   }
 
+  /**
+   * Navigates a player to a destination picked without typing, as though they had typed it with no
+   * flags. Call on the player's own thread: the destination is built here, and may read the world
+   * around them.
+   *
+   * @param player the player
+   * @param destination the destination, with its options parsed
+   */
+  void navigate(Player player, DestinationResolver.Resolved<NavigationTarget> destination) {
+    navigate(player, player.locale(), NavigationFlags.defaults(), destination);
+  }
+
   private void navigate(
       Player player,
       Locale locale,
@@ -240,7 +273,15 @@ final class NavigateCommand {
           case NO_LIVE -> false;
           case DEFAULT -> destination.mobile();
         };
-    startSearch(player, locale, tripLabel, hover, destination, flags, live);
+    startSearch(
+        player,
+        locale,
+        tripLabel,
+        hover,
+        destination,
+        flags,
+        live,
+        new RecentDestinations.Recent(address, resolved.optionTokens()));
   }
 
   private void startSearch(
@@ -250,7 +291,8 @@ final class NavigateCommand {
       Component hover,
       NavigationTarget destination,
       NavigationFlags flags,
-      boolean live) {
+      boolean live,
+      RecentDestinations.Recent recent) {
     String destinationLabel = tripLabel.text();
     UUID uuid = player.getUniqueId();
     final long startNanos = System.nanoTime();
@@ -335,6 +377,9 @@ final class NavigateCommand {
                           destination::exists)
                       .whenComplete(
                           (outcome, tripError) -> {
+                            if (tripError == null && outcome instanceof TripOutcome.Started) {
+                              recents.record(uuid, recent);
+                            }
                             if (tripError != null || outcome instanceof TripOutcome.Failed) {
                               messages.send(player, locale, CobblestoneMessages.NAVIGATE_ERROR);
                             } else if (outcome instanceof TripOutcome.TripLimitReached) {
@@ -455,8 +500,11 @@ final class NavigateCommand {
   /**
    * The Cobblestone navigation-gate check for a player: default-allow, so a destination is offered
    * unless its {@code cobblestone.navigate.<address>} node is explicitly denied.
+   *
+   * @param player the player
+   * @return tests a canonical address
    */
-  private static Predicate<List<String>> canNavigate(Player player) {
+  static Predicate<List<String>> canNavigate(Player player) {
     return address ->
         NavigationPermissions.allowed(address, player::isPermissionSet, player::hasPermission);
   }
@@ -477,7 +525,8 @@ final class NavigateCommand {
 
   private static List<String> flagNames() {
     List<String> flags =
-        new ArrayList<>(List.of("-navigator", "-no-world", "-no-dimension", "-no-mode", "-live"));
+        new ArrayList<>(
+            List.of("-navigator", "-no-world", "-no-dimension", "-no-mode", "-live", HELP_FLAG));
     FlagParser.modeWords().stream().sorted().forEach(word -> flags.add("-no-" + word));
     return flags;
   }
@@ -501,9 +550,11 @@ final class NavigateCommand {
   /**
    * Tells a player how a destination's options are typed, after they gave it options that do not
    * fit.
+   *
+   * @param player the player
+   * @param invalid what did not fit
    */
-  private void sendUsage(
-      Player player, DestinationResolver.InvalidOptions<NavigationTarget> invalid) {
+  void sendUsage(Player player, DestinationResolver.InvalidOptions<NavigationTarget> invalid) {
     Locale locale = player.locale();
     String usage = DestinationResolver.usage(invalid.address(), invalid.options());
     if (invalid.invalidToken() == null) {

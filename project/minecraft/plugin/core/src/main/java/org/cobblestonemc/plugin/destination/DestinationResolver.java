@@ -351,6 +351,30 @@ public final class DestinationResolver {
     return new Resolved<>(leaf, parsed, address, tokens);
   }
 
+  /**
+   * Finds the entry at a canonical address, building only the levels along it.
+   *
+   * @param roots the destination-tree roots from every provider
+   * @param address the entry's canonical address (its first key names the root)
+   * @param <D> what the leaves build
+   * @return the entry, or empty if nothing is at that address any more
+   */
+  public static <D> Optional<DestinationChild<D>> find(
+      Map<String, ? extends DestinationNode<D>> roots, List<String> address) {
+    if (address.size() < 2) {
+      return Optional.empty(); // a root is a provider's level, never an entry of its own
+    }
+    DestinationNode<D> node = roots.get(address.getFirst());
+    for (int i = 1; node != null; i++) {
+      DestinationChild<D> child = node.children().get(address.get(i));
+      if (child == null || i == address.size() - 1) {
+        return Optional.ofNullable(child);
+      }
+      node = child.children().map(Supplier::get).orElse(null);
+    }
+    return Optional.empty();
+  }
+
   /** What a resolution walk has found so far, and the permission gates it applies. */
   private static final class Results<D> {
     private final List<Resolved<D>> matches = new ArrayList<>();
