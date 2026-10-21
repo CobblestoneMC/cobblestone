@@ -17,15 +17,15 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import org.cobblestonemc.plugin.api.DestinationChild;
+import org.cobblestonemc.plugin.api.DestinationEntry;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
-import org.cobblestonemc.plugin.api.DestinationNode;
 import org.cobblestonemc.plugin.api.DestinationOption;
+import org.cobblestonemc.plugin.api.DestinationTree;
 import org.cobblestonemc.plugin.api.OptionValues;
 
 /**
  * Turns the arguments a player typed into the {@link DestinationLeaf} they picked, walking the
- * {@link DestinationNode}s gathered from every registered provider.
+ * {@link DestinationTree}s gathered from every registered provider.
  *
  * <h2>Addressing</h2>
  *
@@ -36,7 +36,7 @@ import org.cobblestonemc.plugin.api.OptionValues;
  * Ambiguous}), and the player must type a fuller path. Two things block promotion outright:
  *
  * <ul>
- *   <li>a node's own key is always required when the node is {@linkplain DestinationNode#strict()
+ *   <li>a node's own key is always required when the node is {@linkplain DestinationTree#strict()
  *       strict}, and
  *   <li>the destination's own key is always required.
  * </ul>
@@ -50,7 +50,7 @@ import org.cobblestonemc.plugin.api.OptionValues;
  * tokens after it do not fit its options, and nothing else matches, the result is {@link
  * InvalidOptions} so the player can be shown how to use it.
  *
- * <p>A level may also give a destination {@linkplain DestinationNode#aliases() aliases}: other
+ * <p>A level may also give a destination {@linkplain DestinationTree#aliases() aliases}: other
  * names a player might guess, such as {@code horse} for {@code mount}. An alias stands in for the
  * destination's own key when typed, and the destination is still addressed by its key. Aliases are
  * never suggested.
@@ -165,7 +165,7 @@ public final class DestinationResolver {
    * @return the resolution
    */
   public static <D> Resolution<D> resolve(
-      Map<String, ? extends DestinationNode<D>> roots,
+      Map<String, ? extends DestinationTree<D>> roots,
       List<String> args,
       Predicate<String> hasPermission) {
     return resolve(roots, args, hasPermission, address -> true);
@@ -184,7 +184,7 @@ public final class DestinationResolver {
    * @return the resolution
    */
   public static <D> Resolution<D> resolve(
-      Map<String, ? extends DestinationNode<D>> roots,
+      Map<String, ? extends DestinationTree<D>> roots,
       List<String> args,
       Predicate<String> hasPermission,
       Predicate<List<String>> canNavigate) {
@@ -223,7 +223,7 @@ public final class DestinationResolver {
    * @return the candidate tokens, alphabetically
    */
   public static <D> List<String> suggest(
-      Map<String, ? extends DestinationNode<D>> roots,
+      Map<String, ? extends DestinationTree<D>> roots,
       List<String> args,
       Predicate<String> hasPermission) {
     return suggest(roots, args, hasPermission, address -> true);
@@ -240,7 +240,7 @@ public final class DestinationResolver {
    * @return the candidate tokens, alphabetically
    */
   public static <D> List<String> suggest(
-      Map<String, ? extends DestinationNode<D>> roots,
+      Map<String, ? extends DestinationTree<D>> roots,
       List<String> args,
       Predicate<String> hasPermission,
       Predicate<List<String>> canNavigate) {
@@ -267,7 +267,7 @@ public final class DestinationResolver {
    */
   private static <D> void match(
       String key,
-      DestinationNode<D> node,
+      DestinationTree<D> node,
       List<String> args,
       int ai,
       List<String> trail,
@@ -284,7 +284,7 @@ public final class DestinationResolver {
 
   /** Matches the remaining args against {@code node}'s children; {@code trail} ends at the node. */
   private static <D> void matchChildren(
-      DestinationNode<D> node, List<String> args, int ai, List<String> trail, Results<D> out) {
+      DestinationTree<D> node, List<String> args, int ai, List<String> trail, Results<D> out) {
     if (ai >= args.size()) {
       return; // nothing left to match, and a destination's own key is never optional
     }
@@ -298,9 +298,9 @@ public final class DestinationResolver {
         applyOptions(address, leaf, args.subList(ai + 1, args.size()), out);
       }
     }
-    // Levels are still worth descending on the same token: the child's own key may be omitted,
+    // Subtrees are still worth descending on the same token: the child's own key may be omitted,
     // leaving that token to name a destination inside it.
-    for (var child : levels(node)) {
+    for (var child : subtrees(node)) {
       match(child.getKey(), child.getValue().get(), args, ai, trail, out);
     }
   }
@@ -391,7 +391,7 @@ public final class DestinationResolver {
    */
   private static <D> void suggestFrom(
       String key,
-      DestinationNode<D> node,
+      DestinationTree<D> node,
       List<String> prefix,
       int pi,
       List<String> trail,
@@ -419,7 +419,7 @@ public final class DestinationResolver {
 
   /** Continues the prefix walk into {@code node}'s children; {@code trail} ends at the node. */
   private static <D> void suggestChildren(
-      DestinationNode<D> node,
+      DestinationTree<D> node,
       List<String> prefix,
       int pi,
       List<String> trail,
@@ -436,7 +436,7 @@ public final class DestinationResolver {
     }
     // A destination with options may already have been named, and the player is now typing them.
     suggestOptions(node, prefix, pi, trail, out, access);
-    for (var child : levels(node)) {
+    for (var child : subtrees(node)) {
       suggestFrom(child.getKey(), child.getValue().get(), prefix, pi, trail, out, access);
     }
   }
@@ -446,7 +446,7 @@ public final class DestinationResolver {
    * option token typed after it so far is valid, offers the candidates of the option being typed.
    */
   private static <D> void suggestOptions(
-      DestinationNode<D> node,
+      DestinationTree<D> node,
       List<String> prefix,
       int pi,
       List<String> trail,
@@ -489,9 +489,9 @@ public final class DestinationResolver {
    *     them (in which case the walk stopped early)
    */
   private static <D> Candidates collect(
-      DestinationNode<D> node, List<String> trail, Access<D> access, int limit) {
+      DestinationTree<D> node, List<String> trail, Access<D> access, int limit) {
     Candidates out = new Candidates();
-    for (Map.Entry<String, DestinationChild<D>> entry : node.children().entrySet()) {
+    for (Map.Entry<String, DestinationEntry<D>> entry : node.entries().entrySet()) {
       if (entry.getValue().destination().isEmpty()) {
         continue;
       }
@@ -513,9 +513,9 @@ public final class DestinationResolver {
         return null;
       }
     }
-    for (var supplier : levels(node)) {
+    for (var supplier : subtrees(node)) {
       var key = supplier.getKey();
-      DestinationNode<D> child = supplier.getValue().get();
+      DestinationTree<D> child = supplier.getValue().get();
       Candidates promoted = null;
       if (!child.strict()) { // a strict child's key is mandatory: nothing below it belongs here
         trail.add(key);
@@ -542,9 +542,9 @@ public final class DestinationResolver {
    * is a dead end and should not be offered. A strict level is never gathered (that is the point of
    * marking it), so its structure is all there is to go on.
    */
-  private static boolean extendable(DestinationNode<?> node, Candidates gathered) {
+  private static boolean extendable(DestinationTree<?> node, Candidates gathered) {
     if (node.strict() || gathered == null) {
-      return !node.children().isEmpty();
+      return !node.entries().isEmpty();
     }
     return gathered.size() > 0;
   }
@@ -622,12 +622,12 @@ public final class DestinationResolver {
   // -----------------------------------------------------------------------------------------
 
   /** The keys of {@code node}'s destinations that {@code token} names, by key or by alias. */
-  private static List<String> destinationsNamed(DestinationNode<?> node, String token) {
+  private static List<String> destinationsNamed(DestinationTree<?> node, String token) {
     List<String> keys = new ArrayList<>();
-    node.children()
+    node.entries()
         .forEach(
-            (key, child) -> {
-              if (key.equalsIgnoreCase(token) && child.destination().isPresent()) {
+            (key, entry) -> {
+              if (key.equalsIgnoreCase(token) && entry.destination().isPresent()) {
                 keys.add(key);
               }
             });
@@ -644,21 +644,20 @@ public final class DestinationResolver {
   }
 
   /** The destination of {@code node}'s entry under {@code key}, or {@code null} if it has none. */
-  private static <D> DestinationLeaf<D> destinationOf(DestinationNode<D> node, String key) {
-    DestinationChild<D> child = node.children().get(key);
-    return child == null ? null : child.destination().orElse(null);
+  private static <D> DestinationLeaf<D> destinationOf(DestinationTree<D> node, String key) {
+    DestinationEntry<D> entry = node.entries().get(key);
+    return entry == null ? null : entry.destination().orElse(null);
   }
 
-  /**
-   * {@code node}'s entries that have a level beneath them, each with the supplier of that level.
-   */
-  private static <D> List<Map.Entry<String, Supplier<? extends DestinationNode<D>>>> levels(
-      DestinationNode<D> node) {
-    List<Map.Entry<String, Supplier<? extends DestinationNode<D>>>> levels = new ArrayList<>();
-    node.children()
+  /** {@code node}'s entries that have a subtree, each with the supplier of that subtree. */
+  private static <D> List<Map.Entry<String, Supplier<? extends DestinationTree<D>>>> subtrees(
+      DestinationTree<D> node) {
+    List<Map.Entry<String, Supplier<? extends DestinationTree<D>>>> subtrees = new ArrayList<>();
+    node.entries()
         .forEach(
-            (key, child) -> child.children().ifPresent(level -> levels.add(Map.entry(key, level))));
-    return levels;
+            (key, entry) ->
+                entry.subtree().ifPresent(subtree -> subtrees.add(Map.entry(key, subtree))));
+    return subtrees;
   }
 
   private static boolean hasAll(Predicate<String> hasPermission, List<String> permissions) {
