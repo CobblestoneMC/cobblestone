@@ -7,9 +7,11 @@
 
 package org.cobblestonemc.plugin.api;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
+import net.kyori.adventure.text.Component;
 
 /**
  * One named entry in a {@link DestinationNode}: a destination, a further level of entries, or both.
@@ -27,11 +29,15 @@ public final class DestinationChild<D> {
 
   private final DestinationLeaf<D> destination;
   private final Supplier<? extends DestinationNode<D>> children;
+  private final Display display;
 
   private DestinationChild(
-      DestinationLeaf<D> destination, Supplier<? extends DestinationNode<D>> children) {
+      DestinationLeaf<D> destination,
+      Supplier<? extends DestinationNode<D>> children,
+      Display display) {
     this.destination = destination;
     this.children = children;
+    this.display = Objects.requireNonNull(display, "display");
   }
 
   /**
@@ -52,7 +58,8 @@ public final class DestinationChild<D> {
    * @return the entry
    */
   public static <D> DestinationChild<D> ofDestination(DestinationLeaf<D> destination) {
-    return new DestinationChild<>(Objects.requireNonNull(destination, "destination"), null);
+    return new DestinationChild<>(
+        Objects.requireNonNull(destination, "destination"), null, Display.none());
   }
 
   /**
@@ -64,7 +71,8 @@ public final class DestinationChild<D> {
    */
   public static <D> DestinationChild<D> ofChildren(
       Supplier<? extends DestinationNode<D>> children) {
-    return new DestinationChild<>(null, Objects.requireNonNull(children, "children"));
+    return new DestinationChild<>(
+        null, Objects.requireNonNull(children, "children"), Display.none());
   }
 
   /**
@@ -86,13 +94,23 @@ public final class DestinationChild<D> {
   }
 
   /**
+   * How the navigation menu shows this entry.
+   *
+   * @return the display
+   */
+  public Display display() {
+    return display;
+  }
+
+  /**
    * Returns a copy that is (also) the given destination.
    *
    * @param destination the destination
    * @return the copy
    */
   public DestinationChild<D> withDestination(DestinationLeaf<D> destination) {
-    return new DestinationChild<>(Objects.requireNonNull(destination, "destination"), children);
+    return new DestinationChild<>(
+        Objects.requireNonNull(destination, "destination"), children, display);
   }
 
   /**
@@ -102,7 +120,18 @@ public final class DestinationChild<D> {
    * @return the copy
    */
   public DestinationChild<D> withChildren(Supplier<? extends DestinationNode<D>> children) {
-    return new DestinationChild<>(destination, Objects.requireNonNull(children, "children"));
+    return new DestinationChild<>(
+        destination, Objects.requireNonNull(children, "children"), display);
+  }
+
+  /**
+   * Returns a copy shown with the given display.
+   *
+   * @param display the display
+   * @return the copy
+   */
+  public DestinationChild<D> withDisplay(Display display) {
+    return new DestinationChild<>(destination, children, display);
   }
 
   /**
@@ -114,6 +143,7 @@ public final class DestinationChild<D> {
 
     private DestinationLeaf<D> destination;
     private Supplier<? extends DestinationNode<D>> children;
+    private Display display = Display.none();
 
     private Builder() {}
 
@@ -151,6 +181,60 @@ public final class DestinationChild<D> {
     }
 
     /**
+     * Sets everything the menu shows for the entry at once.
+     *
+     * @param display the display
+     * @return this builder
+     */
+    public Builder<D> display(Display display) {
+      this.display = Objects.requireNonNull(display, "display");
+      return this;
+    }
+
+    /**
+     * Sets the name the menu shows, in place of the entry's key.
+     *
+     * @param label the name
+     * @return this builder
+     */
+    public Builder<D> label(Component label) {
+      this.display = display.withLabel(label);
+      return this;
+    }
+
+    /**
+     * Sets the lines the menu shows beneath the name.
+     *
+     * @param description the lines
+     * @return this builder
+     */
+    public Builder<D> description(List<Component> description) {
+      this.display = display.withDescription(description);
+      return this;
+    }
+
+    /**
+     * Sets the lines the menu shows beneath the name.
+     *
+     * @param description the lines
+     * @return this builder
+     */
+    public Builder<D> description(Component... description) {
+      return description(List.of(description));
+    }
+
+    /**
+     * Sets the item the menu shows.
+     *
+     * @param icon the item, or {@code null} for the menu's default
+     * @return this builder
+     */
+    public Builder<D> icon(Icon icon) {
+      this.display = display.withIcon(icon);
+      return this;
+    }
+
+    /**
      * Builds the entry.
      *
      * @return the entry
@@ -161,7 +245,7 @@ public final class DestinationChild<D> {
         throw new IllegalStateException(
             "A destination child needs a destination, children, or both");
       }
-      return new DestinationChild<>(destination, children);
+      return new DestinationChild<>(destination, children, display);
     }
   }
 }

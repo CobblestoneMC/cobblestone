@@ -9,6 +9,7 @@ package org.cobblestonemc.paper.plugin.api;
 
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.cobblestonemc.plugin.api.Display;
 import org.cobblestonemc.plugin.api.PlatformDestinationTree;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3i;
@@ -31,4 +32,17 @@ public interface DestinationService {
    */
   @Nullable
   PlatformDestinationTree<World, Vector3i> provide(Player player);
+
+  /**
+   * How the navigation menu shows this integration's entry at the top level — the one filed under
+   * the registering plugin's name, which opens onto {@link #provide}'s tree. Without one, the menu
+   * shows the plugin's name on a plain item. Called each time the menu opens, so an icon read from
+   * the integration's config follows a reload.
+   *
+   * @param player the player looking at the menu
+   * @return the display
+   */
+  default Display display(Player player) {
+    return Display.none();
+  }
 }

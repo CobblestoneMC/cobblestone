@@ -29,7 +29,9 @@ import org.joml.Vector3i;
  *     .destination("spawn", () -> Destination.at(spawn, "spawn"))
  *     .child("riverwood", DestinationTree.child()       // somewhere to go, with more inside
  *         .destination(() -> wholeTown(riverwood))
- *         .children(() -> townDetail(riverwood)));
+ *         .children(() -> townDetail(riverwood))
+ *         .label(Component.text("Riverwood"))
+ *         .icon(PaperIcon.of(Material.RED_BANNER)));
  * }</pre>
  *
  * <p>Each entry is a destination, a level of further entries, or both; {@link #destination} and
@@ -56,7 +58,9 @@ public final class DestinationTree {
 
   /**
    * Begins one entry, for when it needs more than {@link #destination} or {@link #children} give
-   * it. Add it with {@link #child(String, DestinationChild.Builder)}.
+   * it: both roles at once, or a {@linkplain DestinationChild.Builder#label label}, {@linkplain
+   * DestinationChild.Builder#description description} or {@linkplain DestinationChild.Builder#icon
+   * icon} in the navigation menu. Add it with {@link #child(String, DestinationChild.Builder)}.
    *
    * @return a new, empty entry builder
    */
