@@ -373,6 +373,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
                     .stream()
                     .toList())
         .mobile()
+        .anchor(tracked::labelPoint) // a mount has no name over it, so its label follows it
         .existence(tracked::alive)
         .build();
   }
@@ -405,6 +406,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
                 return NavigationTarget.builder(
                         name, () -> tracked.location().flatMap(regions::block).stream().toList())
                     .mobile()
+                    .labeled() // its name shows over it
                     .existence(tracked::alive)
                     .build();
               }));
@@ -465,6 +467,7 @@ public class BuiltInDestinations implements DestinationProvider<Player> {
                                   .stream()
                                   .toList())
                       .mobile()
+                      .labeled() // their name tag
                       .existence(() -> Bukkit.getPlayer(uuid) != null)
                       .build()));
     }

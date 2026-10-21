@@ -14,6 +14,8 @@ import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
+import org.cobblestonemc.plugin.navigator.Vec3;
+import org.cobblestonemc.plugin.trip.TripTarget;
 
 /**
  * An entity a destination follows — a pet or a mount — read safely from any thread.
@@ -29,6 +31,9 @@ import org.cobblestonemc.minecraft.MinecraftScheduler;
  */
 final class PaperTrackedEntity {
 
+  /** How far above the top of an entity its name tag floats, in blocks. */
+  private static final double NAME_TAG_RISE = 0.5;
+
   private final UUID uuid;
   private final MinecraftScheduler<Entity> scheduler;
 
@@ -41,6 +46,7 @@ final class PaperTrackedEntity {
   // ends the trip a check later.
   private volatile Entity lastSeen;
   private volatile Location lastLocation;
+  private volatile double lastHeight;
 
   PaperTrackedEntity(UUID uuid, MinecraftScheduler<Entity> scheduler) {
     this.uuid = uuid;
@@ -56,6 +62,20 @@ final class PaperTrackedEntity {
     refresh();
     Location location = lastLocation;
     return location == null ? Optional.empty() : Optional.of(location.clone());
+  }
+
+  /**
+   * Where a label naming the entity floats: just above it, where a name tag would be.
+   *
+   * @return the point, or empty if it has not been seen loaded
+   */
+  Optional<TripTarget.Point> labelPoint() {
+    return location()
+        .map(
+            at ->
+                new TripTarget.Point(
+                    at.getWorld().getKey().asString(),
+                    new Vec3(at.getX(), at.getY() + lastHeight + NAME_TAG_RISE, at.getZ())));
   }
 
   /**
@@ -89,6 +109,7 @@ final class PaperTrackedEntity {
 
   private void read(Entity entity) {
     if (entity.isValid()) {
+      lastHeight = entity.getHeight();
       lastLocation = entity.getLocation();
     }
   }
