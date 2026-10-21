@@ -12,10 +12,10 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.paper.plugin.api.Destination;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
-import org.cobblestonemc.paper.plugin.api.DestinationTree;
+import org.cobblestonemc.plugin.api.DestinationTree;
 import org.cobblestonemc.plugin.api.Display;
 import org.cobblestonemc.plugin.api.Icon;
-import org.cobblestonemc.plugin.api.PlatformDestinationTree;
+import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.joml.Vector3i;
 
 /**
@@ -43,24 +43,23 @@ final class EssentialsDestinationService implements DestinationService {
   }
 
   @Override
-  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
+  public DestinationTree<MinecraftDestination<World, Vector3i>> provide(Player player) {
     Display home = display("home");
-    DestinationTree homes = DestinationTree.builder().strict();
+    var homes = Destination.tree().strict();
     for (String name : essentials.homes(player)) {
-      homes.child(
+      homes.entry(
           name,
-          DestinationTree.child()
+          Destination.entry()
               .destination(() -> Destination.at(essentials.home(player, name), name))
               .display(home));
     }
-    DestinationTree root =
-        DestinationTree.builder()
-            .child(
-                HOME_KEY, DestinationTree.child().children(homes::build).display(display("homes")));
+    var root =
+        Destination.tree()
+            .entry(HOME_KEY, Destination.entry().subtree(homes::build).display(display("homes")));
     if (essentials.hasSpawn()) {
-      root.child(
+      root.entry(
           SPAWN_KEY,
-          DestinationTree.child()
+          Destination.entry()
               .destination(() -> Destination.at(essentials.spawn(player), "spawn"))
               .display(display("spawn")));
     }

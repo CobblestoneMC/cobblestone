@@ -17,8 +17,8 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.paper.plugin.api.Destination;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
-import org.cobblestonemc.paper.plugin.api.DestinationTree;
-import org.cobblestonemc.plugin.api.PlatformDestinationTree;
+import org.cobblestonemc.plugin.api.DestinationTree;
+import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.joml.Vector3i;
 
 /**
@@ -35,12 +35,12 @@ final class BeautyQuestsDestinationService implements DestinationService {
   static final String QUEST_KEY = "quest";
 
   @Override
-  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
+  public DestinationTree<MinecraftDestination<World, Vector3i>> provide(Player player) {
     PlayerAccount account = PlayersManager.getPlayerAccount(player);
     if (account == null) {
       return null;
     }
-    DestinationTree quests = DestinationTree.builder();
+    var quests = Destination.tree();
     boolean any = false;
     for (Quest quest : QuestsAPI.getAPI().getQuestsManager().getQuestsStarted(account)) {
       Location target = QuestTargets.current(account, quest);
@@ -48,10 +48,10 @@ final class BeautyQuestsDestinationService implements DestinationService {
         continue; // current stage has no precise location — nothing to walk to
       }
       String label = label(quest);
-      quests.destination(slug(label), Destination.at(target, label));
+      quests.destination(slug(label), () -> Destination.at(target, label));
       any = true;
     }
-    return any ? DestinationTree.builder().children(QUEST_KEY, quests).build() : null;
+    return any ? Destination.tree().subtree(QUEST_KEY, quests).build() : null;
   }
 
   /** A player-facing quest label: its name, or a stable fallback from its id. */

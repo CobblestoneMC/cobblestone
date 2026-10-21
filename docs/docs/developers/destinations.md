@@ -13,16 +13,16 @@ A **destination** is a named location that `/navigate` can route to. Destination
 ```mermaid
 flowchart LR
     A[DestinationService] -->|provide player| B[DestinationTree]
-    B --> C[children, by key]
+    B --> C[entries, by key]
     C -->|a destination| D[DestinationLeaf]
-    C -->|more children| B
+    C -->|a subtree| B
     D --> E[MinecraftDestination]
     E --> F["regions() — where it actually is"]
 ```
 
-A tree is a set of **children**, each named by a key. A child is a destination, a level of further
-children, or both — a town is somewhere to go, and also holds its home and plots. A tree itself is
-never a destination; only its children are.
+A tree is a set of **entries**, each named by a key. An entry is a destination, a subtree of
+further entries, or both — a town is somewhere to go, and also holds its home and plots. A tree
+itself is never a destination; only its entries are.
 
 ## Minimal example
 
@@ -34,13 +34,12 @@ A single destination at a fixed location:
     import org.cobblestonemc.paper.plugin.api.CobblestonePaperApi;
     import org.cobblestonemc.paper.plugin.api.Destination;
     import org.cobblestonemc.paper.plugin.api.DestinationService;
-    import org.cobblestonemc.paper.plugin.api.DestinationTree;
 
     public final class ShopsPlugin extends JavaPlugin {
       @Override
       public void onEnable() {
         CobblestonePaperApi.registrar().registerDestinations(this, player ->
-            DestinationTree.builder()
+            Destination.tree()
                 .destination("market", () -> Destination.at(marketLocation(), "Market"))
                 .build());
       }
@@ -54,12 +53,11 @@ A single destination at a fixed location:
     import org.cobblestonemc.sponge.plugin.api.CobblestoneSpongeApi;
     import org.cobblestonemc.sponge.plugin.api.Destination;
     import org.cobblestonemc.sponge.plugin.api.DestinationService;
-    import org.cobblestonemc.sponge.plugin.api.DestinationTree;
 
     @Listener
     public void onStartedEngine(StartedEngineEvent<Server> event) {
       CobblestoneSpongeApi.registrar().registerDestinations(container, player ->
-          DestinationTree.builder()
+          Destination.tree()
               .destination("market", () -> Destination.at(marketLocation(), Component.text("Market")))
               .build());
     }
@@ -70,78 +68,76 @@ For a plugin named `Shops`, the address is `shops market`. Players may use `/nav
 
 !!! note
 
-    The tree is already registered under the owner plugin's name. Do not add a top-level node for
+    The tree is already registered under the owner plugin's name. Do not add a top-level entry for
     it.
 
 ## Trees
 
-`DestinationTree.builder()` adds children, each keyed by a string: `destination(key, …)` for
-somewhere to go, `children(key, …)` for a further level.
+`Destination.tree()` begins a tree. Add entries to it, each keyed by a string: `destination(key, …)`
+for somewhere to go, `subtree(key, …)` for a tree of further entries beneath it.
 
 === "Paper"
 
     ``` { .java .annotate }
-    DestinationTree.builder()
-        .children("warp", () -> warps(player))
-        .children("dungeon", DestinationTree.builder()
+    Destination.tree()
+        .subtree("warp", () -> warps(player))
+        .subtree("dungeon", Destination.tree()
             .strict()                                     // (1)!
             .destination("crypt", () -> Destination.at(crypt, "The Crypt"))
-            .destination("mines", () -> Destination.at(mines, "Deep Mines"))
-            .build())
+            .destination("mines", () -> Destination.at(mines, "Deep Mines")))
         .build();
     ```
 
-    1. A strict level cannot be omitted: `/nav dungeon crypt` is valid; `/nav crypt` is not.
+    1. A strict tree's key cannot be omitted: `/nav dungeon crypt` is valid; `/nav crypt` is not.
 
 === "Sponge"
 
     ``` { .java .annotate }
-    DestinationTree.builder()
-        .children("warp", () -> warps(player))
-        .children("dungeon", DestinationTree.builder()
+    Destination.tree()
+        .subtree("warp", () -> warps(player))
+        .subtree("dungeon", Destination.tree()
             .strict()                                     // (1)!
             .destination("crypt", () -> Destination.at(crypt, Component.text("The Crypt")))
-            .destination("mines", () -> Destination.at(mines, Component.text("Deep Mines")))
-            .build())
+            .destination("mines", () -> Destination.at(mines, Component.text("Deep Mines"))))
         .build();
     ```
 
-    1. A strict level cannot be omitted: `/nav dungeon crypt` is valid; `/nav crypt` is not.
+    1. A strict tree's key cannot be omitted: `/nav dungeon crypt` is valid; `/nav crypt` is not.
 
 Rules:
 
 - **Keys** are single tokens. Upper case is permitted; special characters are not. Spaces are
   permitted but discouraged, since keys appear in commands and permission nodes.
-- **Children are suppliers**, evaluated only when traversed.
+- **Subtrees are suppliers**, evaluated only when traversed.
 - **Return `null`** from `provide` when there are no destinations for the player. Empty trees are
   omitted.
-- **Mark large levels `strict()`.** Strict levels are skipped when computing suggestions.
+- **Mark large trees `strict()`.** Strict trees are skipped when computing suggestions.
 - **`alias(other, key)`** lets a destination answer to another name players may guess. An alias
   is never suggested, and the destination keeps its own key in messages and permissions.
 
 ### Both at once
 
-A child may be a destination and hold more children. Calling `destination` and `children` with
-the same key makes one such child, or build it in one go with `DestinationTree.child()`:
+An entry may be a destination and hold a subtree. Calling `destination` and `subtree` with the
+same key makes one such entry, or build it in one go with `Destination.entry()`:
 
 ```java
 for (Town town : towns()) {
-  tree.child(town.name(), DestinationTree.child()
+  tree.entry(town.name(), Destination.entry()
       .destination(() -> Destination.regions(() -> claims(town), town.name()))
-      .children(() -> townDetail(town)));      // its home, outposts, plots
+      .subtree(() -> townDetail(town)));       // its home, outposts, plots
 }
 ```
 
-`/nav town riverwood` goes to the whole town; `/nav town riverwood home` goes to its home. A child
-must have a destination, children, or both; `build()` refuses one with neither.
+`/nav town riverwood` goes to the whole town; `/nav town riverwood home` goes to its home. An entry
+must have a destination, a subtree, or both; `build()` refuses one with neither.
 
-### Lazy levels
+### Lazy subtrees
 
 === "Paper"
 
     ```java
-    private PlatformDestinationTree<World, Vector3i> warps(Player player) {
-      DestinationTree tree = DestinationTree.builder().strict();
+    private DestinationTree<MinecraftDestination<World, Vector3i>> warps(Player player) {
+      var tree = Destination.tree().strict();
       for (Warp warp : store.visibleTo(player)) {
         // The lambda body runs only if this destination is actually picked.
         tree.destination(warp.name(), () -> Destination.at(warp.location(), warp.name()));
@@ -153,8 +149,8 @@ must have a destination, children, or both; `build()` refuses one with neither.
 === "Sponge"
 
     ```java
-    private PlatformDestinationTree<ServerWorld, Vector3i> warps(ServerPlayer player) {
-      DestinationTree tree = DestinationTree.builder().strict();
+    private DestinationTree<MinecraftDestination<ServerWorld, Vector3i>> warps(ServerPlayer player) {
+      var tree = Destination.tree().strict();
       for (Warp warp : store.visibleTo(player)) {
         // The lambda body runs only if this destination is actually picked.
         tree.destination(warp.name(), () -> Destination.at(warp.location(), Component.text(warp.name())));
@@ -309,15 +305,15 @@ and to players who log off.
 
 ## In the navigation menu
 
-Typing `/navigate` on its own opens a chest menu of the same tree. By default each child shows
+Typing `/navigate` on its own opens a chest menu of the same tree. By default each entry shows
 as its key on a plain item. Give it a label, a description and an icon to make it look like yours:
 
 === "Paper"
 
     ```java
-    tree.child("riverwood", DestinationTree.child()
+    tree.entry("riverwood", Destination.entry()
         .destination(() -> wholeTown(riverwood))
-        .children(() -> townDetail(riverwood))
+        .subtree(() -> townDetail(riverwood))
         .label(Component.text("Riverwood"))
         .description(Component.text("Founded by the river folk"))
         .icon(PaperIcon.of(Material.BLUE_BANNER)));
@@ -326,9 +322,9 @@ as its key on a plain item. Give it a label, a description and an icon to make i
 === "Sponge"
 
     ```java
-    tree.child("riverwood", DestinationTree.child()
+    tree.entry("riverwood", Destination.entry()
         .destination(() -> wholeTown(riverwood))
-        .children(() -> townDetail(riverwood))
+        .subtree(() -> townDetail(riverwood))
         .label(Component.text("Riverwood"))
         .description(Component.text("Founded by the river folk"))
         .icon(SpongeIcon.of(ItemTypes.BLUE_BANNER.get())));
@@ -352,7 +348,7 @@ Your plugin's own entry at the top of the menu is shown with `DestinationService
 ```java
 public final class ShopsDestinations implements DestinationService {
   @Override
-  public PlatformDestinationTree<World, Vector3i> provide(Player player) { … }
+  public DestinationTree<MinecraftDestination<World, Vector3i>> provide(Player player) { … }
 
   @Override
   public Display display(Player player) {
@@ -377,6 +373,6 @@ one with a single suggestion is text that starts as that suggestion.
 Players may omit leading words of an address if the remainder is unambiguous.
 
 - The final key is always required.
-- `strict()` levels are always required.
+- `strict()` trees are always required.
 - Keys that collide across plugins are resolved by the player using the full address.
 - Matching is case-insensitive; `quest` and `Quest` collide.
