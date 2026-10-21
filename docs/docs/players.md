@@ -54,7 +54,8 @@ The trail renders only the next segment of the route, brightest at the point to 
 ## The navigation menu
 
 Type `/nav` on its own to open a menu of everywhere you can go. `/nav -help` lists the flags
-`/nav` takes.
+`/nav` takes. On a server with the Geyser integration, Bedrock players can open the menu without
+typing by doing the **Simple Clap** emote.
 
 - Items marked **»** open a further list. Others start navigating as soon as you click them.
 - Something that is both a place and a list opens, and lists the place itself first.

@@ -97,3 +97,5 @@ include(":minecraft:integrations:typewriter")
 project(":minecraft:integrations:typewriter").name = "cobblestone-typewriter"
 include(":minecraft:integrations:citizens")
 project(":minecraft:integrations:citizens").name = "cobblestone-citizens"
+include(":minecraft:integrations:geyser")
+project(":minecraft:integrations:geyser").name = "cobblestone-geyser"
