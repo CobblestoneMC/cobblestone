@@ -21,6 +21,7 @@ import org.spongepowered.api.entity.display.BillboardTypes;
 import org.spongepowered.api.entity.display.TextDisplay;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.world.chunk.ChunkEvent;
+import org.spongepowered.api.util.Ticks;
 import org.spongepowered.api.world.server.ServerWorld;
 import org.spongepowered.math.vector.Vector3d;
 
@@ -30,9 +31,9 @@ import org.spongepowered.math.vector.Vector3d;
  *
  * <p>Each line is a {@link TextDisplay}, tagged {@value #TAG}. It turns to face whoever looks at
  * it, is lit like a name tag whatever the light around it, and is hidden behind blocks like the
- * world around it. It has no hitbox, so nothing can hit or use it; what a player means to hit is
- * worked out from where they look. SpongeAPI can't show an entity to one player only, so everyone
- * nearby sees it.
+ * world around it, and glides to where it is moved over {@link #GLIDE_TICKS}. It has no hitbox, so
+ * nothing can hit or use it; what a player means to hit is worked out from where they look.
+ * SpongeAPI can't show an entity to one player only, so everyone nearby sees it.
  */
 public final class SpongeHolograms {
 
@@ -46,6 +47,9 @@ public final class SpongeHolograms {
 
   private static final int FULL_BRIGHTNESS = 15;
 
+  /** How long a label takes to glide to where it is moved: as often as labels are updated. */
+  private static final int GLIDE_TICKS = 2;
+
   private final Map<UUID, Label> byEntity = new ConcurrentHashMap<>();
 
   /**
@@ -57,14 +61,13 @@ public final class SpongeHolograms {
    * @return the label, or empty if it couldn't be spawned
    */
   public Optional<SpongeHologram> spawn(ServerWorld world, Vector3d at, Component text) {
-    TextDisplay display =
-        world.createEntity(
-            EntityTypes.TEXT_DISPLAY, new Vector3d(at.x(), at.y() - TEXT_CENTER, at.z()));
+    TextDisplay display = world.createEntity(EntityTypes.TEXT_DISPLAY, entityAt(at));
     display.offer(Keys.DISPLAY_NAME, text);
     display.offer(Keys.BILLBOARD_TYPE, BillboardTypes.CENTER.get());
     display.offer(Keys.SEE_THROUGH_BLOCKS, false);
     display.offer(Keys.BLOCK_LIGHT, FULL_BRIGHTNESS);
     display.offer(Keys.SKY_LIGHT, FULL_BRIGHTNESS);
+    display.offer(Keys.TELEPORT_DURATION, Ticks.of(GLIDE_TICKS));
     display.offer(Keys.SCOREBOARD_TAGS, Set.of(TAG));
     if (!world.spawnEntity(display)) {
       return Optional.empty();
@@ -72,6 +75,10 @@ public final class SpongeHolograms {
     Label label = new Label(display);
     byEntity.put(display.uniqueId(), label);
     return Optional.of(label);
+  }
+
+  private static Vector3d entityAt(Vector3d at) {
+    return new Vector3d(at.x(), at.y() - TEXT_CENTER, at.z());
   }
 
   /** Removes every label, e.g. on shutdown. */
@@ -103,6 +110,13 @@ public final class SpongeHolograms {
     public void text(Component text) {
       if (!removed) {
         display.offer(Keys.DISPLAY_NAME, text);
+      }
+    }
+
+    @Override
+    public void move(Vector3d to) {
+      if (!removed) {
+        display.setPosition(entityAt(to));
       }
     }
 

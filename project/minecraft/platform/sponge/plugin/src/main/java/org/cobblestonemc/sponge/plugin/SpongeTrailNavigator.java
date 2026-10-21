@@ -84,9 +84,18 @@ final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> 
       Messages messages,
       TrailLabels<ServerLocation> labels,
       TrailShape shape,
-      BooleanSupplier showLabel) {
+      BooleanSupplier showTrailLabel,
+      BooleanSupplier showDestinationLabel) {
     super(
-        bufferCells, density, recalcDistance, messages, player.locale(), labels, shape, showLabel);
+        bufferCells,
+        density,
+        recalcDistance,
+        messages,
+        player.locale(),
+        labels,
+        shape,
+        showTrailLabel,
+        showDestinationLabel);
     this.playerId = player.uniqueId();
     this.particles = List.copyOf(particleTypes);
     this.highlightParticles = List.copyOf(highlightParticleTypes);

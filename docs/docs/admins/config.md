@@ -56,7 +56,8 @@ name, without extension, in the plugin's data folder.
 | `trips.live_interval_ticks` | `100` | live |
 | `trips.recalculate_distance` | `32` | live |
 | `trips.hud` | `true` | live |
-| `trips.holograms` | `true` | live |
+| `trips.trail_labels` | `true` | live |
+| `trips.destination_labels` | `true` | live |
 
 - **`max_active_per_player`**: Maximum concurrent trips per player.
 - **`live_interval_ticks`**: Interval between re-searches for live trips. Live re-searches are the
@@ -69,11 +70,15 @@ name, without extension, in the plugin's data folder.
   of their own, so they do not see the server's main scoreboard (its sidebar, or teams it uses for
   name colors). Turn this off if another plugin relies on that. It is never shown on Folia, which
   has no scoreboard API.
-- **`holograms`**: Floats a label naming each trip over its trail (or the guide back to it), a
-  few blocks ahead of the player, once they have stood still for a second; the labels go away as
-  soon as they move. Hitting the red `Cancel` above a label cancels its trip, from any distance.
-  This is the default; a plugin starting a trip can turn its label on or off. Labels are entities.
-  On Paper they are seen only by their player and never saved. On Sponge, whose API can't hide an
+- **`trail_labels`**: Floats a label naming each trip where its trail starts (or the guide back
+  to it), ahead of the player, once they have stood still for a second; the labels go away as soon
+  as they move. Hitting the red `Cancel` below a label cancels its trip, from any distance.
+- **`destination_labels`**: Within 24 blocks of a destination, floats a label naming it over it,
+  moving or not, unless it shows its own name (a player, a named pet). It goes once the player
+  heads back past 32 blocks.
+
+Both are the default; a plugin starting a trip can turn either label on or off for it. Labels are
+entities. On Paper they are seen only by their player and never saved. On Sponge, whose API can't hide an
   entity from other players, **everyone nearby sees them** (only the owner's hit does anything);
   any left behind by a crash are removed when their chunk loads.
 
@@ -212,6 +217,6 @@ own configuration.
   travel in `lead_seconds` if that is further (up to 32 blocks). Around a corner it starts just
   past what they can see. Set both to `0` to draw the trail from the player's feet.
 - **`goal_clearance`**: How far short of a destination the player can see the trail stops, where
-  it glitters. `0` runs it all the way.
+  the destination's label takes over. `0` runs it all the way.
 
 Particle names follow the server's particle registry.

@@ -58,8 +58,11 @@ public final class ConfigKeys {
   /** Whether players' active trips are shown in a HUD. Mutable. */
   public final ConfigKey<Boolean> tripsHud;
 
-  /** Whether to float a label naming each trip over its trail. Mutable. */
-  public final ConfigKey<Boolean> tripsHolograms;
+  /** Whether to float a label naming each trip over its trail head. Mutable. */
+  public final ConfigKey<Boolean> tripsTrailLabels;
+
+  /** Whether to float a label naming each trip's destination over it, up close. Mutable. */
+  public final ConfigKey<Boolean> tripsDestinationLabels;
 
   /** The most concurrent searches (manual + live) one player may run. Requires a restart. */
   public final ConfigKey<Integer> searchMaxConcurrentPerPlayer;
@@ -264,13 +267,24 @@ public final class ConfigKeys {
             .mutable()
             .register();
 
-    this.tripsHolograms =
+    this.tripsTrailLabels =
         manager
-            .key("trips.holograms", true, Codec.ofBoolean())
+            .key("trips.trail_labels", true, Codec.ofBoolean())
             .comment(
                 """
-                Whether to float a label naming each trip over its trail, a few blocks ahead of the
-                player. It shows only while they stand still, and hitting it cancels the trip.""")
+                Whether to float a label naming each trip where its trail starts, ahead of the
+                player. It shows only while they stand still, and hitting the red Cancel below it
+                cancels the trip.""")
+            .mutable()
+            .register();
+    this.tripsDestinationLabels =
+        manager
+            .key("trips.destination_labels", true, Codec.ofBoolean())
+            .comment(
+                """
+                Whether to float a label naming each trip's destination over it once the player is
+                within 24 blocks, moving or not. A destination that shows its own name, such as a
+                player, gets none.""")
             .mutable()
             .register();
 

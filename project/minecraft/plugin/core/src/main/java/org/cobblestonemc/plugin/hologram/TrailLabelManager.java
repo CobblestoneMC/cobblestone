@@ -30,6 +30,7 @@ import org.cobblestonemc.plugin.trip.Trip;
 import org.cobblestonemc.plugin.trip.TripAgent;
 import org.cobblestonemc.plugin.trip.TripLabels;
 import org.cobblestonemc.plugin.trip.TripManager;
+import org.cobblestonemc.plugin.trip.TripTarget;
 
 /**
  * The {@link TrailLabels} shared by every trail navigator. Labels are shortened against each other
@@ -37,16 +38,21 @@ import org.cobblestonemc.plugin.trip.TripManager;
  * the same name, {@code player Steve} and {@code town Steve}; labels over the same spot are
  * stacked.
  *
- * <p>Labels show only while the player stands still: once they have stayed in one block for {@link
- * #STILL_TICKS}, each trail's label appears over its trail head, where its trail starts ahead of
- * them, in an open block they can see (see {@link HologramPlacement}); a trail with no such spot
- * yet gets its label as soon as it has one. Labels stay where they appeared, and all go away as
- * soon as the player leaves the block. Someone following a trail knows where it goes; one who stops
- * may not.
+ * <p>Trail labels show only while the player stands still: once they have stayed in one block for
+ * {@link #STILL_TICKS}, each trail's label appears over its trail head, in an open block they can
+ * see (see {@link HologramPlacement}); a trail with no such spot yet gets its label as soon as it
+ * has one. A label follows its trail head as the route changes, gliding there, or jumping if it is
+ * more than {@link #GLIDE_LIMIT} away; all go away as soon as the player leaves the block. Someone
+ * following a trail knows where it goes; one who stops may not.
  *
- * <p>Each label reads {@code Cancel} in red above the trip's name, and hitting that cancels the
- * trip. The client can't hit a label (see {@link LabelHit}), so the platform reports every left
+ * <p>Each trail label reads {@code Cancel} in red below the trip's name, and hitting that cancels
+ * the trip. The client can't hit a label (see {@link LabelHit}), so the platform reports every left
  * click to {@link #swing}, which works out what it landed on.
+ *
+ * <p>Once the player comes within {@link #GOAL_SHOW_DISTANCE} of a trip's destination, a label
+ * naming it floats over it, moving or not, and follows it if it moves. It goes only if they head
+ * back past {@link #GOAL_HIDE_DISTANCE}. A destination that shows its own name, as a player does,
+ * gets none.
  *
  * @param <E> the native entity type
  * @param <A> the trip-agent type wrapping a player
@@ -60,6 +66,24 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
   /** How often a player's labels are updated while any of their trails is attached. */
   static final long PERIOD_TICKS = 2L;
 
+  /** A trail label that would move further than this at once jumps there instead of gliding. */
+  static final double GLIDE_LIMIT = 1.0;
+
+  /** A destination label that would move further than this at once jumps there. */
+  static final double GOAL_GLIDE_LIMIT = 8.0;
+
+  /** How close the player must come to a destination, in blocks, for its label to appear. */
+  static final double GOAL_SHOW_DISTANCE = 24.0;
+
+  /** How far the player must head back from a destination, in blocks, for its label to go. */
+  static final double GOAL_HIDE_DISTANCE = 32.0;
+
+  /** How far above the end of the route a destination's label floats, in blocks. */
+  static final double GOAL_HEIGHT = 1.0;
+
+  /** A label that would move less than this stays put. */
+  private static final double MIN_MOVE = 0.01;
+
   private final TripManager<E, A, L> trips;
   private final MinecraftScheduler<E> scheduler;
   private final Messages messages;
@@ -72,7 +96,7 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
   /**
    * Creates the label manager.
    *
-   * @param trips the trips whose trails are labelled, for each label's name and for cancelling
+   * @param trips the trips whose trails are labeled, for each label's name and for cancelling
    * @param scheduler the entity scheduler
    * @param messages the message renderer
    * @param platform places labels and reads where the player is
@@ -118,7 +142,12 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
     if (shown != null) {
       shown.remove();
     }
+    Goal goal = session.goals.remove(navigator);
+    if (goal != null) {
+      goal.hologram().remove();
+    }
     if (session.sources.isEmpty()) {
+      session.clear();
       session.ticker.cancel();
       sessions.remove(player);
     }
@@ -181,13 +210,19 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
 
   private void render(Session<E, A, L> session, List<Trip<E, A, L>> active, List<String> labels) {
     Optional<PlayerPosition> position = platform.position(session.agent);
-    if (position.isEmpty()
-        || session.position == null
-        || !position.get().sameBlock(session.position)) {
-      // Moving (or gone): no labels, and the wait starts over.
-      session.position = position.orElse(null);
+    if (position.isEmpty()) {
+      session.position = null;
       session.stillTicks = 0;
       session.clear();
+      return;
+    }
+    Vec3 eye = position.get().eye();
+    renderGoals(session, active, labels, eye);
+    if (session.position == null || !position.get().sameBlock(session.position)) {
+      // Moving: no trail labels, and the wait starts over.
+      session.position = position.get();
+      session.stillTicks = 0;
+      session.clearTrailLabels();
       return;
     }
     if (session.stillTicks < STILL_TICKS) {
@@ -196,9 +231,9 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
         return;
       }
     }
-    Vec3 eye = position.get().eye();
+    TrailSmoother.BlockProbe probe = platform.probe(session.agent);
     Map<Navigator<L>, Shown<E, A, L>> shown = session.shown;
-    List<Vec3> taken = new ArrayList<>(shown.values().stream().map(Shown::at).toList());
+    List<Vec3> taken = new ArrayList<>();
     for (int i = 0; i < active.size(); i++) {
       Trip<E, A, L> trip = active.get(i);
       Navigator<L> navigator = trip.navigator();
@@ -212,33 +247,113 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
               .append(Component.text(labels.get(i)).color(NamedTextColor.WHITE))
               .append(Component.text(" ✦").color(CobblestoneColors.PRIMARY));
       Shown<E, A, L> current = shown.get(navigator);
-      if (current != null) {
-        if (!text.equals(current.text())) {
-          current.name().text(text); // another trip started or ended
-          shown.put(navigator, current.withText(text));
-        }
-        continue;
-      }
       Optional<Vec3> spot =
           source
               .headPoint()
               .map(platform::point)
-              .flatMap(
-                  point ->
-                      HologramPlacement.place(eye, point, taken, platform.probe(session.agent)));
+              .flatMap(point -> HologramPlacement.place(eye, point, taken, probe));
       if (spot.isEmpty()) {
-        continue; // nowhere to put it yet; try again next time
+        if (current != null) {
+          taken.add(current.at()); // keep it where it is until the trail has a spot again
+        }
+        continue;
       }
-      spawn(session.agent, trip, spot.get(), text)
-          .ifPresent(
-              label -> {
-                shown.put(navigator, label);
-                taken.add(spot.get());
-              });
+      if (current != null && current.at().minus(spot.get()).length() > GLIDE_LIMIT) {
+        current.remove(); // the route changed a lot: jump, rather than swing across
+        shown.remove(navigator);
+        current = null;
+      }
+      if (current == null) {
+        spawn(session.agent, trip, spot.get(), text)
+            .ifPresent(label -> shown.put(navigator, label));
+      } else {
+        if (!text.equals(current.text())) {
+          current.name().text(text); // another trip started or ended
+          current = current.withText(text);
+        }
+        if (current.at().minus(spot.get()).length() > MIN_MOVE) {
+          current.name().move(spot.get());
+          current.cancel().move(HologramPlacement.cancelAt(spot.get()));
+          current = current.withAt(spot.get());
+        }
+        shown.put(navigator, current);
+      }
+      taken.add(spot.get());
     }
   }
 
-  /** Places a trip's label, its name at {@code at} and {@code Cancel} above. */
+  /**
+   * Shows, moves and removes the labels over the destinations the player is close to, whether or
+   * not they are moving.
+   */
+  private void renderGoals(
+      Session<E, A, L> session, List<Trip<E, A, L>> active, List<String> labels, Vec3 eye) {
+    for (int i = 0; i < active.size(); i++) {
+      Trip<E, A, L> trip = active.get(i);
+      Navigator<L> navigator = trip.navigator();
+      Source<L> source = session.sources.get(navigator);
+      if (source == null) {
+        continue; // not a labeled trail
+      }
+      Goal current = session.goals.get(navigator);
+      Optional<Vec3> spot = goalSpot(session.agent, trip, source);
+      double distance = spot.map(at -> at.minus(eye).length()).orElse(Double.POSITIVE_INFINITY);
+      if (current == null ? distance > GOAL_SHOW_DISTANCE : distance > GOAL_HIDE_DISTANCE) {
+        if (current != null) {
+          current.hologram().remove(); // headed back, or labels are off
+          session.goals.remove(navigator);
+        }
+        continue;
+      }
+      // Arrows down at the place itself, styled like the trail labels.
+      Component text =
+          Component.text("↓ ")
+              .color(CobblestoneColors.PRIMARY)
+              .append(Component.text(labels.get(i)).color(NamedTextColor.WHITE))
+              .append(Component.text(" ↓").color(CobblestoneColors.PRIMARY));
+      Vec3 at = spot.get();
+      if (current != null && current.at().minus(at).length() > GOAL_GLIDE_LIMIT) {
+        current.hologram().remove(); // it was teleported: jump there
+        current = null;
+      }
+      if (current == null) {
+        platform
+            .spawn(session.agent, at, text)
+            .ifPresent(hologram -> session.goals.put(navigator, new Goal(hologram, at, text)));
+        continue;
+      }
+      if (!text.equals(current.text())) {
+        current.hologram().text(text);
+      }
+      Vec3 now = current.at();
+      if (now.minus(at).length() > MIN_MOVE) {
+        current.hologram().move(at);
+        now = at;
+      }
+      session.goals.put(navigator, new Goal(current.hologram(), now, text));
+    }
+  }
+
+  /**
+   * Where the label naming a trip's destination floats: where the destination says, if it moves, or
+   * else over the end of the route. Empty for a destination that shows its own name, one in another
+   * world, or while labels are off.
+   */
+  private Optional<Vec3> goalSpot(A agent, Trip<E, A, L> trip, Source<L> source) {
+    Optional<L> goal = source.goalPoint(); // empty while labels are off, too
+    if (trip.target().labeled() || goal.isEmpty()) {
+      return Optional.empty();
+    }
+    Optional<TripTarget.Point> anchor = trip.target().anchor().get();
+    if (anchor.isPresent()) {
+      return anchor.get().world().equals(platform.worldKey(agent))
+          ? Optional.of(anchor.get().at())
+          : Optional.empty();
+    }
+    return goal.map(platform::point).map(point -> point.plus(new Vec3(0, GOAL_HEIGHT, 0)));
+  }
+
+  /** Places a trip's label, its name at {@code at} and {@code Cancel} below. */
   private Optional<Shown<E, A, L>> spawn(A agent, Trip<E, A, L> trip, Vec3 at, Component text) {
     String cancelText = messages.raw(agent.locale(), CobblestoneMessages.HOLOGRAM_CANCEL.key());
     Optional<Hologram> name = platform.spawn(agent, at, text);
@@ -293,6 +408,7 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
     final ScheduledTaskHandle ticker;
     final Map<Navigator<L>, Source<L>> sources = new LinkedHashMap<>(); // in attach order
     final Map<Navigator<L>, Shown<E, A, L>> shown = new HashMap<>();
+    final Map<Navigator<L>, Goal> goals = new HashMap<>();
     PlayerPosition position; // where the player was at the last update, or null
     int stillTicks; // how long they have been in that block
 
@@ -301,9 +417,15 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
       this.ticker = ticker;
     }
 
-    void clear() {
+    void clearTrailLabels() {
       shown.values().forEach(Shown::remove);
       shown.clear();
+    }
+
+    void clear() {
+      clearTrailLabels();
+      goals.values().forEach(goal -> goal.hologram().remove());
+      goals.clear();
     }
   }
 
@@ -329,9 +451,16 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
       return new Shown<>(name, cancel, at, text, trip, cancelHalfWidth);
     }
 
+    Shown<E, A, L> withAt(Vec3 at) {
+      return new Shown<>(name, cancel, at, text, trip, cancelHalfWidth);
+    }
+
     void remove() {
       name.remove();
       cancel.remove();
     }
   }
+
+  /** A label over a trip's destination, as shown. */
+  private record Goal(Hologram hologram, Vec3 at, Component text) {}
 }
