@@ -26,11 +26,11 @@ import org.cobblestonemc.plugin.api.PlatformDestinationTree;
 import org.joml.Vector3i;
 
 /**
- * Surfaces the player's active quest compasses as navigation targets: {@code cobblestonebetonquest
- * → compass → <name>}, one leaf per compass whose location resolves. Cobblestone roots the branch
- * at this plugin's own name, which keeps these from colliding with other integrations' trees; its
+ * Surfaces the player's active quest compasses as navigation targets: {@code betonquest → compass →
+ * <name>}, one leaf per compass whose location resolves. Cobblestone roots the branch at
+ * BetonQuest's own name, which keeps these from colliding with other integrations' trees; its
  * resolver still lets a player type just the compass name when it's unambiguous. Navigating is
- * gated by Cobblestone's {@code cobblestone.navigate.cobblestonebetonquest.compass.*} permission
+ * gated by Cobblestone's {@code cobblestone.navigate.betonquest.compass.*} permission
  * (default-allow). Targets are snapshotted when the tree is built (on the main thread, as
  * compass-location resolution requires).
  */
