@@ -20,6 +20,7 @@ import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
+import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.paper.PaperNavigationServiceImpl;
 import org.cobblestonemc.paper.plugin.api.NavigatorFactory;
 import org.cobblestonemc.paper.plugin.api.TrailNavigatorSettings;
@@ -42,6 +43,7 @@ public final class PaperTripServiceImpl
 
   private final PaperNavigationServiceImpl platformApi;
   private final PaperIntegrationRegistry integrations;
+  private final RegionStores regionStores;
 
   PaperTripServiceImpl(
       PaperNavigationServiceImpl platformApi,
@@ -50,10 +52,12 @@ public final class PaperTripServiceImpl
       SearchRegistry<Location> searches,
       SearchGate gate,
       Supplier<SearchSettings> searchSettings,
-      long liveIntervalMillis) {
+      long liveIntervalMillis,
+      RegionStores regionStores) {
     super(trips, searches, gate, searchSettings, liveIntervalMillis);
     this.platformApi = platformApi;
     this.integrations = integrations;
+    this.regionStores = regionStores;
   }
 
   @Override
@@ -74,6 +78,10 @@ public final class PaperTripServiceImpl
   @Override
   protected SearchHandle<Location, MinecraftStepPayload> navigate(
       Player player, Location destination, MinecraftSearchSettings settings) {
+    // A trip's searches start where the player is, so their surroundings stay built for the
+    // searches that re-plan around them; released when the player's last trip ends.
+    Position<MinecraftWorld> at = platformApi.position(player.getLocation());
+    regionStores.pin(uuid(player), at.domain(), at.cell().x() >> 4, at.cell().z() >> 4);
     return platformApi.navigatePlayer(player, destination, settings);
   }
 

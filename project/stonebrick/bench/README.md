@@ -30,7 +30,6 @@ seeded Paper server and captures what `data/needed-chunks.yml` asks for.
 | `--heuristic zero` | Dijkstra, for the true optimum; or any production heuristic by name |
 | `--weight 2.0`, `--weights 1,1.5,2` | heuristic weight(s) |
 | `--io sata` | simulated disk: `zero`, `nvme`, `sata`, `spinning`, `busy` |
-| `--warm` | (`sweep`) run each route twice, the second over region columns read back from disk, as after a restart |
 | `--corpus <dir>`, `--scenarios <file>`, `--baselines <dir>` | read from or write to elsewhere |
 
 `-Dregions.detour=<ratio>` sets the region fill's detour ratio, for measuring it. A long Dijkstra

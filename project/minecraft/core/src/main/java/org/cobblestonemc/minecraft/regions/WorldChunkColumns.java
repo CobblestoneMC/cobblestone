@@ -5,7 +5,7 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.minecraft.lod;
+package org.cobblestonemc.minecraft.regions;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -14,16 +14,16 @@ import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.ChunkSource;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
-import org.cobblestonemc.regions.RegionGraph;
+import org.cobblestonemc.regions.TerrainSource;
 
 /**
- * A live world's chunk columns, for a {@link RegionGraph}.
+ * A live world's chunks, as the region layer's columns of terrain.
  *
  * <p>Written against {@link MinecraftWorld} rather than any one platform's classes, so Paper and
  * Sponge both get it without a copy. Nothing is read up front: the graph asks for a column the
  * first time a search needs it, and the fine search parks until it lands.
  */
-public final class WorldChunkColumns implements RegionGraph.ChunkColumns<MinecraftChunk> {
+public final class WorldChunkColumns implements TerrainSource<MinecraftChunk> {
 
   private final ChunkSource chunks;
   private final MinecraftWorld world;
@@ -65,15 +65,5 @@ public final class WorldChunkColumns implements RegionGraph.ChunkColumns<Minecra
         chunk.isImmediate() ? chunk : FutureOr.from(chunk.future().exceptionally(failure -> null));
     columns.put(key, settled);
     return settled;
-  }
-
-  @Override
-  public int minY() {
-    return world.minY();
-  }
-
-  @Override
-  public int maxY() {
-    return world.maxY();
   }
 }

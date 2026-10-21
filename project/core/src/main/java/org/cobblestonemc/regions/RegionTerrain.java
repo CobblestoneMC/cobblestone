@@ -16,10 +16,14 @@ package org.cobblestonemc.regions;
  * cells actually are comes from here. A class is a small number the terrain defines, and what
  * crossing one costs is a {@link RegionAgent}'s answer, never the terrain's.
  *
- * <p><b>The joining rules are movement rules.</b> Cells that touch face to face are always joined.
- * Beyond that a body that stands can step a level up or down, and can drop off a ledge onto
- * something below, which joins cells that do not touch and joins them one way. The terrain says
- * which classes take part.
+ * <p><b>The joining rules are movement rules, under gravity.</b> Y is up, and a body falls toward
+ * lower Y. Cells that touch face to face are always joined. Beyond that a body that stands can step
+ * a level up or down, and can drop off a ledge onto something below, which joins cells that do not
+ * touch and joins them one way. The terrain says which classes take part.
+ *
+ * <p><b>Classes are small numbers the terrain chooses,</b> from 0 up to {@link #classes()}, with
+ * gaps allowed: a terrain that retires a class should retire its number with it, rather than
+ * renumber the others.
  *
  * <p>Must be safe to call from several threads at once: builds run in parallel.
  *
@@ -36,18 +40,28 @@ public interface RegionTerrain<C> {
   int version();
 
   /**
-   * Returns how many classes there are. Classes are numbered from 0, and fewer than 128.
+   * Returns one more than the highest class number. Classes are numbered from 0, and fewer than
+   * 128.
    *
-   * @return the class count
+   * @return the bound on class numbers
    */
   int classes();
 
   /**
+   * Returns the base-2 log of how wide a column of this terrain is along X and Z: 4 for a column 16
+   * cells wide. The region layer's sections are cubes of that size.
+   *
+   * @return the shift, from 1 to 5
+   */
+  int columnShift();
+
+  /**
    * Classifies every cell of a column.
    *
-   * <p>Cell {@code (x, y, z)} of the column, with {@code y} counted from {@code columnMinY}, is
-   * {@code classes[(y << 8) | (z << 4) | x]}: its class, or {@code -1} for a cell that belongs to
-   * no region, such as one outside the world or one nothing can enter or break.
+   * <p>With {@code s} the {@link #columnShift()}, cell {@code (x, y, z)} of the column, with {@code
+   * y} counted from {@code columnMinY}, is {@code classes[(y << 2s) | (z << s) | x]}: its class, or
+   * {@code -1} for a cell that belongs to no region, such as one outside the world or one nothing
+   * can enter or break.
    *
    * @param column the column
    * @param worldMinY the world's lowest Y, inclusive
@@ -60,6 +74,10 @@ public interface RegionTerrain<C> {
   /**
    * Returns whether a body stands in cells of this class, so that steps a level up or down join
    * them as well as faces.
+   *
+   * <p>A standing class must never fill a whole section: the builder skips the inside of a section
+   * that is one class edge to edge, and would miss the steps down out of its bottom layer. Standing
+   * means something solid underfoot, so for any terrain under gravity this holds by itself.
    *
    * @param klass the class
    * @return {@code true} if it is ground

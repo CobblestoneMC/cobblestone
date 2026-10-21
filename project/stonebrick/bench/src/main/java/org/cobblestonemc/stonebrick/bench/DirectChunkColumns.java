@@ -11,7 +11,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.MinecraftChunk;
-import org.cobblestonemc.regions.RegionGraph;
+import org.cobblestonemc.regions.TerrainSource;
 import org.cobblestonemc.stonebrick.format.CaptureFormatException;
 import org.cobblestonemc.stonebrick.format.ChunkColumn;
 import org.cobblestonemc.stonebrick.platform.Capture;
@@ -24,19 +24,15 @@ import org.cobblestonemc.stonebrick.platform.CaptureChunks;
  * what the terrain costs to fetch, and routing it through the IO model would charge reads to a
  * solve nobody is timing.
  */
-final class DirectChunkColumns implements RegionGraph.ChunkColumns<MinecraftChunk> {
+final class DirectChunkColumns implements TerrainSource<MinecraftChunk> {
 
   private final Capture capture;
   private final String world;
-  private final int minY;
-  private final int maxY;
   private final Map<Long, MinecraftChunk> chunks = new HashMap<>();
 
-  DirectChunkColumns(Capture capture, String world, int minY, int maxY) {
+  DirectChunkColumns(Capture capture, String world) {
     this.capture = capture;
     this.world = world;
-    this.minY = minY;
-    this.maxY = maxY;
   }
 
   @Override
@@ -57,15 +53,5 @@ final class DirectChunkColumns implements RegionGraph.ChunkColumns<MinecraftChun
     }
     chunks.put(key, chunk);
     return FutureOr.of(chunk);
-  }
-
-  @Override
-  public int minY() {
-    return minY;
-  }
-
-  @Override
-  public int maxY() {
-    return maxY;
   }
 }

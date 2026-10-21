@@ -30,21 +30,18 @@ import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
-import org.cobblestonemc.minecraft.ChunkFetch;
-import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.ChunkSource;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
-import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
-import org.cobblestonemc.minecraft.lod.RegionStores;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
+import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.minecraft.registry.OwnedRegistry;
 import org.cobblestonemc.sponge.api.BoxWorldRegion;
 import org.cobblestonemc.sponge.api.BreakChecker;
@@ -53,7 +50,6 @@ import org.cobblestonemc.sponge.api.PassChecker;
 import org.cobblestonemc.sponge.api.SearchModificationRegistrar;
 import org.cobblestonemc.sponge.api.SearchModificationService;
 import org.cobblestonemc.sponge.api.Transition;
-import org.jetbrains.annotations.Nullable;
 import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockState;
@@ -87,7 +83,7 @@ public final class SpongeNavigationServiceImpl
 
   private final Map<String, MinecraftWorld> worldCache = new ConcurrentHashMap<>();
   private final OwnedRegistry<SearchModificationService> searchModifiers = new OwnedRegistry<>();
-  private volatile @Nullable RegionStores regionStores;
+  private final RegionStores regionStores;
 
   /**
    * Creates the API for a plugin.
@@ -98,14 +94,17 @@ public final class SpongeNavigationServiceImpl
    * @param maxChunkLoadRequests how many chunk loading tickets may be held at once
    * @param offline how to read an unloaded chunk on this Minecraft version, or {@link
    *     OfflineChunkSource#UNAVAILABLE} to always go through a chunk loading ticket
+   * @param regionStores the server's region stores, shared by every search
    */
   public SpongeNavigationServiceImpl(
       PluginContainer plugin,
       CobblestoneLogger logger,
       ChunkProviderSettings chunkSettings,
       IntSupplier maxChunkLoadRequests,
-      OfflineChunkSource offline) {
+      OfflineChunkSource offline,
+      RegionStores regionStores) {
     this.logger = logger;
+    this.regionStores = regionStores;
     int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
     this.scheduler = new SpongeScheduler(plugin, workerThreads);
     this.platform = new SpongePlatformApi(scheduler, logger, maxChunkLoadRequests, offline);
@@ -127,31 +126,6 @@ public final class SpongeNavigationServiceImpl
    */
   public void surveyWorlds() {
     platform.surveyWorlds();
-  }
-
-  /**
-   * Shares built region summaries between this server's searches, and with the next start if the
-   * stores keep them on disk. Without, each search summarizes its own terrain.
-   *
-   * @param stores the server's region stores
-   */
-  public void useRegionStores(RegionStores stores) {
-    this.regionStores = stores;
-  }
-
-  /**
-   * Reads a chunk the server already has loaded, off the server thread, without loading anything.
-   *
-   * @param world the world
-   * @param chunkX the chunk X
-   * @param chunkZ the chunk Z
-   * @return the chunk, or {@code null} if it is not loaded or cannot be read
-   */
-  public CompletableFuture<MinecraftChunk> readLoaded(ServerWorld world, int chunkX, int chunkZ) {
-    return platform
-        .fetchChunk(chunkX, chunkZ, wrap(world), ChunkLoadPolicy.LOADED_ONLY, false)
-        .thenApply(fetch -> fetch instanceof ChunkFetch.Success success ? success.chunk() : null)
-        .exceptionally(failure -> null);
   }
 
   @Override

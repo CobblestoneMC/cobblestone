@@ -125,7 +125,8 @@ public final class StonebrickSolve {
             chunks,
             player,
             origin.cell(),
-            new MinecraftSearchSettings(settings, Set.of(), Set.of(), Set.of()));
+            new MinecraftSearchSettings(settings, Set.of(), Set.of(), Set.of()),
+            null);
     return CobblestoneApi.load()
         .navigate(
             logger,

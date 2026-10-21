@@ -8,9 +8,6 @@
 package org.cobblestonemc.paper.plugin;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import org.bukkit.Chunk;
-import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
@@ -33,44 +30,32 @@ import org.bukkit.event.block.LeavesDecayEvent;
 import org.bukkit.event.block.SpongeAbsorbEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
-import org.bukkit.event.world.ChunkLoadEvent;
-import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.event.world.StructureGrowEvent;
-import org.bukkit.event.world.WorldSaveEvent;
-import org.cobblestonemc.minecraft.MinecraftChunk;
-import org.cobblestonemc.minecraft.MinecraftWorld;
-import org.cobblestonemc.minecraft.lod.RegionStores;
+import org.bukkit.event.world.WorldUnloadEvent;
+import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.paper.WorldWrapper;
 
 /**
- * Keeps the region summaries honest, and gets them made early.
+ * Keeps the regions honest.
  *
- * <p><b>Every way a block changes forgets its chunk's summary.</b> A summary is a fact about the
- * blocks it was made from, and one made before a player dug a tunnel would route the next search
- * around a wall that is gone. Forgetting is cheap — a map removal — so it is done for every event
- * that changes a block, not only the common ones; the summary is made again when a search next
- * needs it. Changes no event reports, from other plugins writing blocks directly or from editing
- * the world while the server is stopped, are not seen.
+ * <p><b>Every way a block changes forgets its chunk's regions.</b> A column of regions is a fact
+ * about the blocks it was built from, and one built before a player dug a tunnel would route the
+ * next search around a wall that is gone. Forgetting is cheap — a map removal — so it is done for
+ * every event that changes a block, not only the common ones; the column is built again when a
+ * search next needs it. Changes no event reports, from other plugins writing blocks directly, are
+ * not seen.
  *
- * <p><b>A loaded chunk's summary stays in memory while the chunk does.</b> A chunk that loads is
- * summarized in the background if it is not already known, while the background queue has room, so
- * terrain players walk through is ready before anyone navigates it, and searches near players never
- * read a summary from disk. When the chunk unloads, its summary is kept only as the memory budget
- * allows.
- *
- * <p>Everything here runs at {@link EventPriority#MONITOR} and ignores cancelled events: it reacts
- * to what happened, never to what was attempted.
+ * <p>Block events run at {@link EventPriority#MONITOR} and ignore cancelled events: they react to
+ * what happened, never to what was attempted.
  */
 final class PaperRegionListener implements Listener {
 
   private final RegionStores stores;
   private final WorldWrapper worlds;
-  private final LoadedChunks chunks;
 
-  PaperRegionListener(RegionStores stores, WorldWrapper worlds, LoadedChunks chunks) {
+  PaperRegionListener(RegionStores stores, WorldWrapper worlds) {
     this.stores = stores;
     this.worlds = worlds;
-    this.chunks = chunks;
   }
 
   private void changed(Block block) {
@@ -186,40 +171,9 @@ final class PaperRegionListener implements Listener {
     }
   }
 
-  /** The world is saving: write the summaries too, so a crash after it loses nothing. */
-  @EventHandler(priority = EventPriority.MONITOR)
-  public void onSave(WorldSaveEvent event) {
-    stores.flush();
-  }
-
-  @EventHandler(priority = EventPriority.MONITOR)
-  public void onChunkLoad(ChunkLoadEvent event) {
-    Chunk chunk = event.getChunk();
-    MinecraftWorld world = worlds.wrap(chunk.getWorld());
-    stores.chunkLoaded(world, chunk.getX(), chunk.getZ());
-    if (!stores.prebuildRoom() || stores.known(world, chunk.getX(), chunk.getZ())) {
-      return;
-    }
-    // Read the way searches read: the chunk is loaded, so this is a copy, not a load, and the
-    // copy and the build both happen off the server thread.
-    chunks
-        .readLoaded(chunk.getWorld(), chunk.getX(), chunk.getZ())
-        .thenAccept(
-            read -> {
-              if (read != null) {
-                stores.prebuild(world, chunk.getX(), chunk.getZ(), read);
-              }
-            });
-  }
-
-  @EventHandler(priority = EventPriority.MONITOR)
-  public void onChunkUnload(ChunkUnloadEvent event) {
-    Chunk chunk = event.getChunk();
-    stores.chunkUnloaded(worlds.wrap(chunk.getWorld()), chunk.getX(), chunk.getZ());
-  }
-
-  /** Reads a chunk the server has loaded, without loading anything. */
-  interface LoadedChunks {
-    CompletableFuture<MinecraftChunk> readLoaded(World world, int chunkX, int chunkZ);
+  /** A world that unloads takes its regions with it. */
+  @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+  public void onWorldUnload(WorldUnloadEvent event) {
+    stores.worldUnloaded(worlds.wrap(event.getWorld()).key());
   }
 }

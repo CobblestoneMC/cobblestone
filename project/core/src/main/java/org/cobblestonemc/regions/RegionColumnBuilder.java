@@ -20,18 +20,17 @@ import org.jetbrains.annotations.Nullable;
  *   <li><b>Classify</b> gives every cell one class, by the {@link RegionTerrain}.
  *   <li><b>Fill</b> groups touching cells of one family into regions, section by section, refusing
  *       a cell whose walk from the region's seed is much longer than the straight line ({@link
- *       RegionGraph#DEFAULT_DETOUR_RATIO}), because a region is priced in straight lines. A family
- *       is usually one class; the terrain gives a region filled from a larger one its class from
- *       the mix of its cells.
+ *       RegionSpec#detourRatio()}), because a region is priced in straight lines. A family is
+ *       usually one class; the terrain gives a region filled from a larger one its class from the
+ *       mix of its cells.
  *   <li><b>Contacts</b> scans for neighbouring cells in different regions — and for walking steps a
  *       level up or down, and ledges a body can drop from — and turns each touching pair into a
  *       portal whose box covers every cell where they meet. Which steps and drops count is the
  *       terrain's to say.
  * </ol>
  *
- * <p><b>Change the rules, bump {@link #FILL_VERSION} or the terrain's version.</b> Columns are kept
- * on disk, and a stored column built under different rules is a different graph: read back
- * silently, it would mix two models in one search.
+ * <p><b>Change the rules, bump {@link #FILL_VERSION} or the terrain's version.</b> A built column
+ * is a fact about the rules it was built by; one built under others is a different graph.
  *
  * <p>Not thread-safe: it reuses a column's worth of scratch between builds. One per thread.
  *
@@ -41,30 +40,28 @@ public final class RegionColumnBuilder<C> {
 
   /**
    * The version of how this fills regions and finds contacts, apart from the terrain's own rules.
-   * Stored columns built by any other version are rebuilt.
    */
-  public static final int FILL_VERSION = 2;
+  public static final int FILL_VERSION = 3;
 
   /**
    * Blocks of detour allowed regardless of distance, so a seed's immediate neighbours never split.
    */
   private static final double DETOUR_SLACK = 3.0;
 
-  /** Regions a section can hold, as an unsigned byte with {@code 0xFF} reserved for none. */
-  private static final int MAX_SECTION_REGIONS = 255;
-
   /** A section whose cells are not all one class. */
   private static final byte MIXED = -2;
 
   private static final int[][] HORIZONTAL = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 
+  private final RegionSpec<C> spec;
   private final RegionTerrain<C> terrain;
-  private final int worldMinY;
-  private final int worldMaxY;
-  private final double detourRatio;
   private final int minY;
-  private final int height;
   private final int sections;
+  private final int shift;
+  private final int width;
+  private final int mask;
+  private final int area;
+  private final int sectionVolume;
 
   // --- scratch, reused between builds ---
   private final byte[] cls;
@@ -77,8 +74,8 @@ public final class RegionColumnBuilder<C> {
 
   private final byte[] sectionClass;
   private final int[] regionOf;
-  private final int[] queue = new int[16 * 16 * 16];
-  private final int[] steps = new int[16 * 16 * 16];
+  private final int[] queue;
+  private final int[] steps;
   private final RegionContacts contacts = new RegionContacts();
 
   // --- the column being built ---
@@ -92,89 +89,45 @@ public final class RegionColumnBuilder<C> {
   private int[] portalBox = new int[256 * 6];
 
   /**
-   * Returns the lowest Y a column counts its cells from: the world's floor, rounded down to a
-   * section.
+   * Creates a builder for one world.
    *
-   * @param worldMinY the world's lowest Y, inclusive
-   * @return the column floor
+   * @param spec how the world's terrain is cut into regions
    */
-  public static int columnMinY(int worldMinY) {
-    return Math.floorDiv(worldMinY, 16) * 16;
-  }
-
-  /**
-   * Returns how many sections tall a column is.
-   *
-   * @param worldMinY the world's lowest Y, inclusive
-   * @param worldMaxY the world's highest Y, inclusive
-   * @return the section count
-   */
-  public static int sections(int worldMinY, int worldMaxY) {
-    return Math.floorDiv(worldMaxY, 16) - Math.floorDiv(worldMinY, 16) + 1;
-  }
-
-  /**
-   * Creates a builder for a world of the given height.
-   *
-   * @param terrain what the cells are, and how they join
-   * @param worldMinY the world's lowest Y, inclusive
-   * @param worldMaxY the world's highest Y, inclusive
-   * @param detourRatio how much longer than a straight line a walk inside one region may be
-   */
-  public RegionColumnBuilder(
-      RegionTerrain<C> terrain, int worldMinY, int worldMaxY, double detourRatio) {
-    this.terrain = terrain;
-    this.worldMinY = worldMinY;
-    this.worldMaxY = worldMaxY;
-    this.detourRatio = detourRatio;
-    int minSection = Math.floorDiv(worldMinY, 16);
-    this.sections = Math.floorDiv(worldMaxY, 16) - minSection + 1;
-    // Whole sections, so a section never straddles the world's floor or ceiling; the cells outside
-    // the build range are classified as nothing.
-    this.minY = minSection * 16;
-    this.height = sections * 16;
-    int volume = height * 256;
+  public RegionColumnBuilder(RegionSpec<C> spec) {
+    this.spec = spec;
+    this.terrain = spec.terrain();
+    this.minY = spec.columnMinY();
+    this.sections = spec.sections();
+    this.shift = spec.shift();
+    this.width = spec.width();
+    this.mask = width - 1;
+    this.area = width * width;
+    this.sectionVolume = spec.sectionVolume();
+    int volume = sections * sectionVolume;
     this.cls = new byte[volume];
     this.family = new byte[volume];
     this.counts = new int[terrain.classes()];
     this.regionOf = new int[volume];
     this.sectionClass = new byte[sections];
-  }
-
-  /**
-   * Returns the lowest Y a column counts its cells from: the world's floor, rounded down to a
-   * section.
-   *
-   * @return the column floor
-   */
-  public int minY() {
-    return minY;
-  }
-
-  /**
-   * Returns how many sections tall a column is.
-   *
-   * @return the section count
-   */
-  public int sections() {
-    return sections;
+    this.queue = new int[sectionVolume];
+    this.steps = new int[sectionVolume];
   }
 
   /**
    * Builds one column.
    *
-   * @param chunkX the chunk X
-   * @param chunkZ the chunk Z
-   * @param chunk the column of terrain, or {@code null} if it cannot be read
+   * @param columnX the column X
+   * @param columnZ the column Z
+   * @param terrainColumn the column of terrain, or {@code null} if it cannot be read
    * @return the column
    */
-  public RegionColumn build(int chunkX, int chunkZ, @Nullable C chunk) {
-    if (chunk == null) {
+  public RegionColumn build(int columnX, int columnZ, @Nullable C terrainColumn) {
+    if (terrainColumn == null) {
       // A column that cannot be read is nothing at all: no regions, so no portals into it. The
       // search routes around it, as the fine search will have to.
-      return RegionColumn.empty(chunkX, chunkZ, minY, sections);
+      return RegionColumn.empty(spec, columnX, columnZ);
     }
-    terrain.classify(chunk, worldMinY, worldMaxY, minY, cls);
+    terrain.classify(terrainColumn, spec.worldMinY(), spec.worldMaxY(), minY, cls);
     for (int cell = 0; cell < cls.length; cell++) {
       family[cell] = cls[cell] < 0 ? -1 : (byte) terrain.family(cls[cell]);
     }
@@ -185,37 +138,40 @@ public final class RegionColumnBuilder<C> {
     int[] uniform = new int[sections];
     int[] base = new int[sections];
     byte[][] cells = new byte[sections][];
+    short[][] wideCells = new short[sections][];
+    int ox = columnX << shift;
+    int oz = columnZ << shift;
     for (int s = 0; s < sections; s++) {
       int first = regionCount;
-      int from = s << 12;
+      int from = s * sectionVolume;
       if (sectionClass[s] != MIXED) {
-        // Solid stone, open sky, deep water: one class edge to edge. A full cube is convex and
+        // Solid rock, open sky, deep water: one class edge to edge. A full cube is convex and
         // connected, so the fill would make it one region anyway; this skips the fill.
         uniform[s] = RegionColumn.NONE;
         if (sectionClass[s] >= 0) {
-          whole(s, chunkX, chunkZ);
+          whole(s, ox, oz);
           uniform[s] = first;
         }
         continue;
       }
-      for (int cell = from; cell < from + 4096; cell++) {
-        if (regionOf[cell] == RegionColumn.NONE
-            && cls[cell] >= 0
-            && regionCount - first < MAX_SECTION_REGIONS) {
-          fill(cell, s, chunkX, chunkZ);
+      for (int cell = from; cell < from + sectionVolume; cell++) {
+        if (regionOf[cell] == RegionColumn.NONE && cls[cell] >= 0) {
+          fill(cell, s, ox, oz);
         }
       }
-      store(s, first, from, uniform, base, cells);
+      store(s, first, from, uniform, base, cells, wideCells);
     }
-    columnContacts(chunkX, chunkZ);
+    columnContacts(ox, oz);
     contacts.flush(this::newPortal);
     return new RegionColumn(
-        chunkX,
-        chunkZ,
+        columnX,
+        columnZ,
         minY,
+        shift,
         uniform,
         base,
         cells,
+        wideCells,
         Arrays.copyOf(regionClass, regionCount),
         Arrays.copyOf(regionBox, regionCount * 6),
         Arrays.copyOf(portalA, portalCount),
@@ -224,43 +180,62 @@ public final class RegionColumnBuilder<C> {
         Arrays.copyOf(portalBox, portalCount * 6));
   }
 
-  /** Keeps a mixed section's cells, or a single number if the fill made it one region after all. */
-  private void store(int section, int first, int from, int[] uniform, int[] base, byte[][] cells) {
+  /**
+   * Keeps a mixed section's cells: a single number if the fill made it one region after all, a byte
+   * per cell if its regions fit, a short per cell if not.
+   */
+  private void store(
+      int section,
+      int first,
+      int from,
+      int[] uniform,
+      int[] base,
+      byte[][] cells,
+      short[][] wideCells) {
     int region = regionOf[from];
     boolean same = true;
-    for (int cell = from + 1; cell < from + 4096 && same; cell++) {
+    for (int cell = from + 1; cell < from + sectionVolume && same; cell++) {
       same = regionOf[cell] == region;
     }
     if (same) {
       uniform[section] = region;
       return;
     }
-    byte[] local = new byte[4096];
-    for (int i = 0; i < 4096; i++) {
-      int r = regionOf[from + i];
-      local[i] = (byte) (r == RegionColumn.NONE ? 0xFF : r - first);
-    }
     base[section] = first;
-    cells[section] = local;
+    if (regionCount - first < RegionColumn.NARROW_NONE) {
+      byte[] narrow = new byte[sectionVolume];
+      for (int i = 0; i < sectionVolume; i++) {
+        int r = regionOf[from + i];
+        narrow[i] = (byte) (r == RegionColumn.NONE ? RegionColumn.NARROW_NONE : r - first);
+      }
+      cells[section] = narrow;
+    } else {
+      short[] wide = new short[sectionVolume];
+      for (int i = 0; i < sectionVolume; i++) {
+        int r = regionOf[from + i];
+        wide[i] = (short) (r == RegionColumn.NONE ? RegionColumn.WIDE_NONE : r - first);
+      }
+      wideCells[section] = wide;
+    }
   }
 
   /** Makes a uniform section one region, without filling it. */
-  private void whole(int section, int chunkX, int chunkZ) {
+  private void whole(int section, int ox, int oz) {
     int id = newRegion(sectionClass[section]);
-    int from = section << 12;
-    Arrays.fill(regionOf, from, from + 4096, id);
-    int y = minY + (section << 4);
-    int[] box = {chunkX * 16, y, chunkZ * 16, chunkX * 16 + 15, y + 15, chunkZ * 16 + 15};
+    int from = section * sectionVolume;
+    Arrays.fill(regionOf, from, from + sectionVolume, id);
+    int y = minY + (section << shift);
+    int[] box = {ox, y, oz, ox + mask, y + mask, oz + mask};
     System.arraycopy(box, 0, regionBox, id * 6, 6);
   }
 
   /** Notes which sections hold one class edge to edge, which need no fill. */
   private void uniformSections() {
     for (int s = 0; s < sections; s++) {
-      int from = s << 12;
+      int from = s * sectionVolume;
       byte first = cls[from];
       byte uniform = first;
-      for (int cell = from + 1; cell < from + 4096; cell++) {
+      for (int cell = from + 1; cell < from + sectionVolume; cell++) {
         if (cls[cell] != first) {
           uniform = MIXED;
           break;
@@ -276,17 +251,17 @@ public final class RegionColumnBuilder<C> {
    * <p>Breadth-first, so the first time a cell is reached is by its shortest walk from the seed,
    * and that is the walk the detour cap is measured on.
    */
-  private void fill(int seed, int section, int chunkX, int chunkZ) {
+  private void fill(int seed, int section, int ox, int oz) {
     int c = family[seed];
     boolean standing = terrain.standing(c);
     boolean capped = terrain.convex(c);
     int id = newRegion(c);
     Arrays.fill(counts, 0);
-    int sx = seed & 15;
-    int sz = (seed >> 4) & 15;
-    int sy = seed >> 8;
-    int floor = section << 4;
-    int ceiling = floor + 15;
+    int sx = seed & mask;
+    int sz = (seed >> shift) & mask;
+    int sy = seed >> (2 * shift);
+    int floor = section << shift;
+    int ceiling = floor + mask;
 
     int head = 0;
     int tail = 0;
@@ -304,15 +279,15 @@ public final class RegionColumnBuilder<C> {
     while (head < tail) {
       int cell = queue[head];
       int walked = steps[head++];
-      int x = cell & 15;
-      int z = (cell >> 4) & 15;
-      int y = cell >> 8;
-      RegionContacts.grow(box, chunkX * 16 + x, minY + y, chunkZ * 16 + z);
+      int x = cell & mask;
+      int z = (cell >> shift) & mask;
+      int y = cell >> (2 * shift);
+      RegionContacts.grow(box, ox + x, minY + y, oz + z);
       counts[cls[cell]]++;
       for (int[] h : HORIZONTAL) {
         int nx = x + h[0];
         int nz = z + h[1];
-        if (nx < 0 || nx > 15 || nz < 0 || nz > 15) {
+        if (nx < 0 || nx > mask || nz < 0 || nz > mask) {
           continue;
         }
         tail = offer(nx, y, nz, c, id, walked, tail, sx, sy, sz, capped);
@@ -349,7 +324,7 @@ public final class RegionColumnBuilder<C> {
       int sy,
       int sz,
       boolean capped) {
-    int cell = (y << 8) | (z << 4) | x;
+    int cell = (y << (2 * shift)) | (z << shift) | x;
     if (regionOf[cell] != RegionColumn.NONE || family[cell] != c) {
       return tail;
     }
@@ -359,7 +334,7 @@ public final class RegionColumnBuilder<C> {
       // against 26 blocks — and open sky and water split into regions for no reason. Measured in
       // the same metric as the walk, a convex patch never splits and a cave that bends back does.
       int straight = Math.abs(x - sx) + Math.abs(y - sy) + Math.abs(z - sz);
-      if (walked + 1 > detourRatio * straight + DETOUR_SLACK) {
+      if (walked + 1 > spec.detourRatio() * straight + DETOUR_SLACK) {
         return tail; // left for a later seed, which will start a region of its own
       }
     }
@@ -370,34 +345,34 @@ public final class RegionColumnBuilder<C> {
   }
 
   /** Finds every contact between two regions inside the column just filled. */
-  private void columnContacts(int chunkX, int chunkZ) {
-    int volume = height * 256;
-    int ox = chunkX * 16;
-    int oz = chunkZ * 16;
+  private void columnContacts(int ox, int oz) {
+    int volume = cls.length;
+    int layer = 2 * shift;
     for (int cell = 0; cell < volume; cell++) {
-      if (sectionClass[cell >> 12] != MIXED && ((cell >> 8) & 15) != 15) {
+      if (sectionClass[cell / sectionVolume] != MIXED && ((cell >> layer) & mask) != mask) {
         // Inside a uniform section every neighbour is the same region, and no standing cell can
-        // be one: only its top layer, against the section above, can touch anything else.
-        cell = (cell & ~0xFFF) | 0xEFF; // the loop's increment lands on the top layer's first cell
+        // be one: only its top layer, against the section above, can touch anything else. The
+        // loop's increment lands on the top layer's first cell.
+        cell = (cell - cell % sectionVolume) + sectionVolume - area - 1;
         continue;
       }
       int r = regionOf[cell];
       if (r == RegionColumn.NONE) {
         continue;
       }
-      int x = cell & 15;
-      int z = (cell >> 4) & 15;
-      int ly = cell >> 8;
+      int x = cell & mask;
+      int z = (cell >> shift) & mask;
+      int ly = cell >> layer;
       int y = minY + ly;
       // Each face once, in the positive direction.
-      if (x < 15) {
+      if (x < mask) {
         contacts.touch(r, regionOf[cell + 1], ox + x, y, oz + z, ox + x + 1, y, oz + z);
       }
-      if (z < 15) {
-        contacts.touch(r, regionOf[cell + 16], ox + x, y, oz + z, ox + x, y, oz + z + 1);
+      if (z < mask) {
+        contacts.touch(r, regionOf[cell + width], ox + x, y, oz + z, ox + x, y, oz + z + 1);
       }
-      if (cell + 256 < volume) {
-        contacts.touch(r, regionOf[cell + 256], ox + x, y, oz + z, ox + x, y + 1, oz + z);
+      if (cell + area < volume) {
+        contacts.touch(r, regionOf[cell + area], ox + x, y, oz + z, ox + x, y + 1, oz + z);
       }
       if (!terrain.standing(cls[cell])) {
         continue;
@@ -405,16 +380,16 @@ public final class RegionColumnBuilder<C> {
       for (int[] h : HORIZONTAL) {
         int nx = x + h[0];
         int nz = z + h[1];
-        if (nx < 0 || nx > 15 || nz < 0 || nz > 15) {
+        if (nx < 0 || nx > mask || nz < 0 || nz > mask) {
           continue; // across a seam; the graph finds it
         }
-        int beside = (ly << 8) | (nz << 4) | nx;
+        int beside = (ly << layer) | (nz << shift) | nx;
         // Steps: a standing cell joins whatever it can walk into a level above or below.
-        if (ly + 1 < height) {
-          step(r, beside + 256, ox + x, y, oz + z, ox + nx, y + 1, oz + nz);
+        if (beside + area < volume) {
+          step(r, beside + area, ox + x, y, oz + z, ox + nx, y + 1, oz + nz);
         }
-        if (ly > 0) {
-          step(r, beside - 256, ox + x, y, oz + z, ox + nx, y - 1, oz + nz);
+        if (beside >= area) {
+          step(r, beside - area, ox + x, y, oz + z, ox + nx, y - 1, oz + nz);
         }
         if (cls[beside] >= 0 && terrain.open(cls[beside])) {
           dropInto(r, ox + x, y, oz + z, ox + nx, oz + nz, beside);
@@ -441,8 +416,8 @@ public final class RegionColumnBuilder<C> {
    * ground does not reach the ledge.
    */
   private void dropInto(int from, int x, int y, int z, int airX, int airZ, int air) {
-    for (int k = 1; k <= terrain.deepestFall() && air - k * 256 >= 0; k++) {
-      int below = air - k * 256;
+    for (int k = 1; k <= terrain.deepestFall() && air - k * area >= 0; k++) {
+      int below = air - k * area;
       int c = cls[below];
       if (c >= 0 && terrain.open(c)) {
         continue;

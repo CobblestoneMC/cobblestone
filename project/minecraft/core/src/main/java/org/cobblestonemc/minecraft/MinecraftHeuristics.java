@@ -12,13 +12,13 @@ import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.Heuristics;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
-import org.cobblestonemc.minecraft.lod.MinecraftTerrain;
-import org.cobblestonemc.minecraft.lod.RegionCost;
-import org.cobblestonemc.minecraft.lod.RegionStores;
-import org.cobblestonemc.minecraft.lod.WorldChunkColumns;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
-import org.cobblestonemc.regions.RegionGraph;
+import org.cobblestonemc.minecraft.regions.MinecraftAgent;
+import org.cobblestonemc.minecraft.regions.MinecraftTerrain;
+import org.cobblestonemc.minecraft.regions.RegionStores;
+import org.cobblestonemc.minecraft.regions.WorldChunkColumns;
 import org.cobblestonemc.regions.RegionHeuristic;
+import org.cobblestonemc.regions.RegionStore;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -33,27 +33,7 @@ public final class MinecraftHeuristics {
   private MinecraftHeuristics() {}
 
   /**
-   * Builds the heuristic the settings select, for one player, each solve building its own terrain.
-   *
-   * @param behavior how the player moves
-   * @param chunks where the search reads blocks from
-   * @param agent the navigating player
-   * @param origin where the search starts
-   * @param settings the search settings, which select the heuristic and the excluded modes
-   * @return the heuristic strategy
-   */
-  public static HeuristicStrategy forPlayer(
-      MinecraftMovementBehavior behavior,
-      ChunkSource chunks,
-      CobblestonePlayer agent,
-      Cell origin,
-      MinecraftSearchSettings settings) {
-    return forPlayer(behavior, chunks, agent, origin, settings, null);
-  }
-
-  /**
-   * Builds the heuristic the settings select, for one player, reading built terrain from a server's
-   * shared stores.
+   * Builds the heuristic the settings select, for one player.
    *
    * <p>Per-player, not a shared constant: the bound has to reflect what this player can actually
    * do, or Tier 1 prices every route as if they could fly.
@@ -65,8 +45,8 @@ public final class MinecraftHeuristics {
    * estimate whose chunks have not arrived, the same way it parks waiting for blocks, so the
    * terrain that gets classified is the terrain the search actually asks about.
    *
-   * <p>With stores, terrain any earlier search built — before the last restart too, if they keep it
-   * on disk — is read back rather than built again. Without, each solve builds its own.
+   * <p>With a server's stores, terrain any earlier search built is read back rather than built
+   * again. Without, as on the benchmark, each solve builds its own.
    *
    * @param behavior how the player moves
    * @param chunks where the search reads blocks from
@@ -86,18 +66,20 @@ public final class MinecraftHeuristics {
     return switch (settings.settings().heuristic()) {
       case RUNNING_AVERAGE -> Heuristics.runningAverage(behavior.cheapestCostPerBlock());
       case REGIONS ->
-          new RegionHeuristic<>(
-              MinecraftTerrain.INSTANCE,
+          new RegionHeuristic<MinecraftChunk>(
+              // The domain of a Tier-3 target region is always the world that leg runs in; the
+              // casts are the price of HeuristicStrategy being domain-agnostic.
               target ->
-                  // The domain of a Tier-3 target region is always the world that leg runs in; the
-                  // cast is the price of HeuristicStrategy being domain-agnostic.
                   new WorldChunkColumns(
                       chunks, (MinecraftWorld) target.domain(), target.nearestBoundaryCell(origin)),
-              stores == null ? null : target -> stores.of((MinecraftWorld) target.domain()),
-              RegionCost.forPlayer(agent, settings.excludedModes()),
-              RegionGraph.DEFAULT_DETOUR_RATIO,
+              target ->
+                  stores == null
+                      ? RegionStore.inMemory(
+                          MinecraftTerrain.spec((MinecraftWorld) target.domain()))
+                      : stores.of((MinecraftWorld) target.domain()),
+              MinecraftAgent.forPlayer(agent, settings.excludedModes()),
               behavior.cheapestCostPerBlock(),
-              false);
+              search -> {});
     };
   }
 }

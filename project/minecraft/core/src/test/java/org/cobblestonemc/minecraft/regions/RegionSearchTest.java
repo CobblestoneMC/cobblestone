@@ -5,7 +5,7 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.minecraft.lod;
+package org.cobblestonemc.minecraft.regions;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -21,6 +21,9 @@ import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.cobblestonemc.regions.RegionGraph;
 import org.cobblestonemc.regions.RegionSearch;
+import org.cobblestonemc.regions.RegionSpec;
+import org.cobblestonemc.regions.RegionStore;
+import org.cobblestonemc.regions.TerrainSource;
 import org.junit.jupiter.api.Test;
 
 class RegionSearchTest {
@@ -64,7 +67,7 @@ class RegionSearchTest {
     MinecraftBlock at(int x, int y, int z);
   }
 
-  private static final class World implements RegionGraph.ChunkColumns<MinecraftChunk> {
+  private static final class World implements TerrainSource<MinecraftChunk> {
     private final Terrain terrain;
     int read;
 
@@ -78,16 +81,6 @@ class RegionSearchTest {
       MinecraftChunk chunk = (x, y, z) -> terrain.at(chunkX * 16 + x, y, chunkZ * 16 + z);
       return FutureOr.of(chunk);
     }
-
-    @Override
-    public int minY() {
-      return 0;
-    }
-
-    @Override
-    public int maxY() {
-      return 47;
-    }
   }
 
   private static MinecraftBlock flat(int x, int y, int z) {
@@ -95,19 +88,20 @@ class RegionSearchTest {
   }
 
   private static RegionGraph<MinecraftChunk> graph(World world) {
-    return new RegionGraph<>(world, MinecraftTerrain.INSTANCE);
+    return new RegionGraph<>(
+        RegionStore.inMemory(new RegionSpec<>(MinecraftTerrain.INSTANCE, 0, 47)), world);
   }
 
-  private static RegionSearch search(Terrain terrain, RegionCost agent, Cell goal, Cell from) {
-    return new RegionSearch(graph(new World(terrain)), agent, goal, from);
+  private static RegionSearch search(Terrain terrain, MinecraftAgent agent, Cell goal, Cell from) {
+    return new RegionSearch(graph(new World(terrain)), agent, goal, from, goal::equals);
   }
 
-  private static RegionCost walker() {
-    return RegionCost.forPlayer(TestPlayer.walker(), Set.of());
+  private static MinecraftAgent walker() {
+    return MinecraftAgent.forPlayer(TestPlayer.walker(), Set.of());
   }
 
-  private static RegionCost walkerWithoutPickaxe() {
-    return RegionCost.forPlayer(TestPlayer.walker(), Set.of(MinecraftStepType.MINE));
+  private static MinecraftAgent walkerWithoutPickaxe() {
+    return MinecraftAgent.forPlayer(TestPlayer.walker(), Set.of(MinecraftStepType.MINE));
   }
 
   @Test
@@ -174,7 +168,7 @@ class RegionSearchTest {
     // With no pickaxe there is no way back up at all; the graph prices the face as rock at the
     // fallback rate, so at least a couple of blocks of it.
     assertTrue(
-        up > down + 1.5 * RegionCost.FALLBACK_COST_PER_BLOCK,
+        up > down + 1.5 * MinecraftAgent.FALLBACK_COST_PER_BLOCK,
         "and climbing back is not: " + up + " vs " + down);
   }
 
@@ -190,7 +184,8 @@ class RegionSearchTest {
         };
     Cell goal = new Cell(300, GROUND, 4);
     Cell from = new Cell(0, GROUND, 4);
-    RegionCost boater = RegionCost.forPlayer(TestPlayer.create(false, true, false), Set.of());
+    MinecraftAgent boater =
+        MinecraftAgent.forPlayer(TestPlayer.create(false, true, false), Set.of());
 
     double boat = search(river, boater, goal, from).costToGoal(from);
     double swim = search(river, walker(), goal, from).costToGoal(from);
@@ -219,7 +214,7 @@ class RegionSearchTest {
     Cell goal = new Cell(0, FEET, 0);
     Cell from = new Cell(400, FEET, 0);
     World world = new World(RegionSearchTest::flat);
-    RegionSearch search = new RegionSearch(graph(world), walker(), goal, from);
+    RegionSearch search = new RegionSearch(graph(world), walker(), goal, from, goal::equals);
 
     search.costToGoal(from);
 
@@ -244,9 +239,11 @@ class RegionSearchTest {
         cell -> cell.x() > 100 && cell.x() < 160 && cell.z() > -30 && cell.z() < 30;
     Cell from = new Cell(60, FEET, 0);
     Cell nearest = new Cell(101, FEET, 0);
-    RegionCost cost = walker();
+    MinecraftAgent cost = walker();
 
-    double toPoint = new RegionSearch(graph(new World(town)), cost, nearest, from).costToGoal(from);
+    double toPoint =
+        new RegionSearch(graph(new World(town)), cost, nearest, from, nearest::equals)
+            .costToGoal(from);
     double toArea =
         new RegionSearch(graph(new World(town)), cost, nearest, from, inside).costToGoal(from);
 

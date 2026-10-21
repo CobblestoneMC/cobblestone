@@ -5,10 +5,12 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.minecraft.lod;
+package org.cobblestonemc.minecraft.regions;
 
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftChunk;
+import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.regions.RegionSpec;
 import org.cobblestonemc.regions.RegionTerrain;
 
 /**
@@ -33,7 +35,10 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
   public static final MinecraftTerrain INSTANCE = new MinecraftTerrain();
 
   /** The version of these rules; see {@link RegionTerrain#version()}. */
-  public static final int VERSION = 4;
+  public static final int VERSION = 5;
+
+  /** A chunk is 16 blocks along X and Z: {@code 1 << 4}. */
+  private static final int CHUNK_SHIFT = 4;
 
   /**
    * The deepest drop onto ground a fall portal joins.
@@ -59,7 +64,22 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
 
   @Override
   public int classes() {
-    return RegionClass.ALL.length;
+    return RegionClass.ID_BOUND;
+  }
+
+  @Override
+  public int columnShift() {
+    return CHUNK_SHIFT;
+  }
+
+  /**
+   * Returns how a world's terrain is cut into regions.
+   *
+   * @param world the world
+   * @return its spec
+   */
+  public static RegionSpec<MinecraftChunk> spec(MinecraftWorld world) {
+    return new RegionSpec<>(INSTANCE, world.minY(), world.maxY());
   }
 
   @Override
@@ -71,10 +91,14 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
       blocks = new MinecraftBlock[volume];
       scratch.set(blocks);
     }
+    int layer = 1 << (2 * CHUNK_SHIFT);
+    int mask = (1 << CHUNK_SHIFT) - 1;
     for (int cell = 0; cell < volume; cell++) {
-      int y = columnMinY + (cell >> 8);
+      int y = columnMinY + (cell >> (2 * CHUNK_SHIFT));
       blocks[cell] =
-          y >= worldMinY && y <= worldMaxY ? chunk.block(cell & 15, y, (cell >> 4) & 15) : null;
+          y >= worldMinY && y <= worldMaxY
+              ? chunk.block(cell & mask, y, (cell >> CHUNK_SHIFT) & mask)
+              : null;
     }
     for (int cell = 0; cell < volume; cell++) {
       MinecraftBlock block = blocks[cell];
@@ -84,18 +108,18 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
       }
       if (block.isWater()) {
         // The surface is where a boat floats: open to the air, as BoatMode wants it.
-        MinecraftBlock above = cell + 256 < volume ? blocks[cell + 256] : null;
+        MinecraftBlock above = cell + layer < volume ? blocks[cell + layer] : null;
         boolean open = above == null || (above.isPassable() && !above.isWater());
-        classes[cell] = (byte) (open ? RegionClass.WATER_SURFACE : RegionClass.WATER).ordinal();
+        classes[cell] = (byte) (open ? RegionClass.WATER_SURFACE : RegionClass.WATER).id();
       } else if (block.isClimbable() || block.isScaffolding()) {
-        classes[cell] = (byte) RegionClass.CLIMB.ordinal();
+        classes[cell] = (byte) RegionClass.CLIMB.id();
       } else if (block.isPassable()) {
-        MinecraftBlock floor = cell >= 256 ? blocks[cell - 256] : null;
-        MinecraftBlock head = cell + 256 < volume ? blocks[cell + 256] : null;
+        MinecraftBlock floor = cell >= layer ? blocks[cell - layer] : null;
+        MinecraftBlock head = cell + layer < volume ? blocks[cell + layer] : null;
         boolean stands = floor != null && floor.isSolidTop() && (head == null || head.isPassable());
-        classes[cell] = (byte) (stands ? ground(floor) : RegionClass.AIR).ordinal();
+        classes[cell] = (byte) (stands ? ground(floor) : RegionClass.AIR).id();
       } else if (!block.isLava() && !Double.isInfinite(block.breakTimeSeconds())) {
-        classes[cell] = (byte) RegionClass.solid(block.miningClass()).ordinal();
+        classes[cell] = (byte) RegionClass.solid(block.miningClass()).id();
       }
       // Lava, and unbreakable blocks such as bedrock: nothing, not a region a miner could be priced
       // through.
@@ -115,29 +139,35 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
     return floor.speedFactor() < 1 ? RegionClass.SOUL_SAND : RegionClass.SOUL_SOIL;
   }
 
+  /** The class stored as a number; the builder only asks about numbers it was given. */
+  private static RegionClass of(int klass) {
+    return RegionClass.byId(klass);
+  }
+
   @Override
   public boolean standing(int klass) {
-    return RegionClass.ALL[klass].standing();
+    return of(klass).body().standing();
   }
 
   @Override
   public boolean steppable(int klass) {
-    RegionClass c = RegionClass.ALL[klass];
-    return c.standing() || c.water() || c == RegionClass.CLIMB;
+    return of(klass).body().steppable();
   }
 
   @Override
   public boolean open(int klass) {
-    return klass == RegionClass.AIR.ordinal();
+    return of(klass).body().open();
   }
 
   @Override
   public boolean landing(int klass, int depth) {
-    RegionClass c = RegionClass.ALL[klass];
-    // One block down is a step, already joined by the step contacts.
-    return (c.standing() && depth >= 2 && depth <= MAX_DROP)
-        || c.water()
-        || (c == RegionClass.CLIMB && depth <= MAX_DROP);
+    // One block down onto ground is a step, already joined by the step contacts.
+    return switch (of(klass).body()) {
+      case GROUND -> depth >= 2 && depth <= MAX_DROP;
+      case WATER -> true;
+      case CLIMB -> depth <= MAX_DROP;
+      case OPEN, SOLID -> false;
+    };
   }
 
   @Override
@@ -152,8 +182,8 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
    */
   @Override
   public int family(int klass) {
-    return switch (RegionClass.ALL[klass]) {
-      case SOFT_ROCK, ROCK, MIXED_ROCK, HARD_ROCK -> RegionClass.ROCK.ordinal();
+    return switch (of(klass)) {
+      case SOFT_ROCK, ROCK, MIXED_ROCK, HARD_ROCK -> RegionClass.ROCK.id();
       default -> klass;
     };
   }
@@ -165,14 +195,14 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
    */
   @Override
   public int label(int family, int[] counts) {
-    if (family != RegionClass.ROCK.ordinal()) {
+    if (family != RegionClass.ROCK.id()) {
       return family;
     }
     double sum = 0;
     int cells = 0;
     for (RegionClass band : ROCK_BANDS) {
-      sum += counts[band.ordinal()] * hardness(band);
-      cells += counts[band.ordinal()];
+      sum += counts[band.id()] * hardness(band);
+      cells += counts[band.id()];
     }
     double mean = sum / cells;
     RegionClass nearest = ROCK_BANDS[0];
@@ -181,7 +211,7 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
         nearest = band;
       }
     }
-    return nearest.ordinal();
+    return nearest.id();
   }
 
   /** The classes a rock region can be, softest first. */
@@ -214,7 +244,6 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
 
   @Override
   public boolean convex(int klass) {
-    // Rock is dug through in straight lines whatever its shape, so its regions need not be convex.
-    return !RegionClass.ALL[klass].solid();
+    return of(klass).body().convex();
   }
 }

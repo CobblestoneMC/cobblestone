@@ -103,16 +103,11 @@ public final class ConfigKeys {
    */
   public final ConfigKey<Integer> chunksFetchAttempts;
 
-  /** Whether region summaries are kept on disk across restarts. Requires a restart. */
-  public final ConfigKey<Boolean> regionsPersist;
-
-  /** How much memory each world's region summaries may hold, in megabytes. Requires a restart. */
+  /**
+   * How much memory each world's regions may hold beyond navigating players' surroundings, in
+   * megabytes. Requires a restart.
+   */
   public final ConfigKey<Integer> regionsMemoryMegabytes;
-
-  /** How often new region summaries are written to disk, in seconds. Requires a restart. */
-  public final ConfigKey<Integer> regionsFlushSeconds;
-
-  /** Whether chunks are summarized in the background as they load. Requires a restart. */
 
   /** Whether Cobblestone discovers vanilla portal links by watching players teleport. Mutable. */
   public final ConfigKey<Boolean> portalsDiscovery;
@@ -363,7 +358,7 @@ public final class ConfigKeys {
                 REGIONS searches connected patches of ground, water, rock and air backwards from
                 the destination, so it reasons about where the terrain actually goes. It finds much
                 better paths and solves routes RUNNING_AVERAGE cannot solve at all. The terrain it
-                reasons over is summarized once, shared by every search, and kept on disk (see
+                reasons over is cut into regions once and shared by every search (see
                 search.regions), but the first search over new terrain pays for reading it.
 
                 RUNNING_AVERAGE extrapolates from the cost of the last few steps. Nearly free, and
@@ -438,38 +433,17 @@ public final class ConfigKeys {
     manager.section(
         "search.regions",
         """
-        The terrain summaries the REGIONS heuristic searches over. Each chunk is summarized once
-        and kept, shared by every search, until a block in it changes.""");
-    this.regionsPersist =
-        manager
-            .key("search.regions.persist", true, Codec.ofBoolean())
-            .comment(
-                """
-                Whether to keep summaries on disk, under the plugin's data folder, so a restart
-                does not have to summarize the world again. A few kilobytes per chunk, for chunks
-                searches have touched or players have loaded. Off keeps them in memory only.""")
-            .requiresRestart()
-            .register();
+        The terrain regions the REGIONS heuristic searches over. Each chunk is cut into regions
+        once and kept, shared by every search, until a block in it changes.""");
     this.regionsMemoryMegabytes =
         manager
             .key("search.regions.memory_megabytes", 128, Codec.ofInt())
             .comment(
                 """
-                How much memory each world's summaries may hold beyond the chunks players have
-                loaded, in megabytes. Loaded chunks are summarized in the background as they load
-                and always kept, about 40 KB each: twenty players at view distance 10 hold around
-                9,000 chunks, or 350 MB. Beyond them, the least recently used summaries are dropped
-                past this budget and read back from disk when needed.""")
-            .requiresRestart()
-            .register();
-    this.regionsFlushSeconds =
-        manager
-            .key("search.regions.flush_seconds", 60, Codec.ofInt())
-            .comment(
-                """
-                How often new summaries are written to disk, in seconds. They are also written
-                when the world saves and when the server stops; a crash loses at most this much,
-                and what is lost is summarized again when next needed.""")
+                How much memory each world's regions may hold, in megabytes, least recently used
+                dropped first. The chunks around each navigating player are kept on top of this,
+                about 3 MB a player, until their trip ends, so the searches that re-plan around
+                them stay fast.""")
             .requiresRestart()
             .register();
 

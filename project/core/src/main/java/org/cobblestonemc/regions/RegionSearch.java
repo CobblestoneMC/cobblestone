@@ -49,7 +49,7 @@ public final class RegionSearch {
   private static final byte SETTLED = 2;
 
   private final RegionGraph<?> graph;
-  private final RegionAgent cost;
+  private final RegionAgent agent;
   private final Cell goal;
   private final Cell origin;
   private final double cheapest;
@@ -89,18 +89,6 @@ public final class RegionSearch {
   private @Nullable CompletableFuture<Void> pending;
 
   /**
-   * Creates a search seeded at the destination and focused on the origin.
-   *
-   * @param graph the terrain
-   * @param cost the agent
-   * @param goal the destination
-   * @param origin where the fine search starts
-   */
-  public RegionSearch(RegionGraph<?> graph, RegionAgent cost, Cell goal, Cell origin) {
-    this(graph, cost, goal, origin, goal::equals);
-  }
-
-  /**
    * Creates a search seeded at a destination that may be an area, and focused on the origin.
    *
    * <p>The search starts from every region inside the destination that connects to {@code goal},
@@ -108,19 +96,21 @@ public final class RegionSearch {
    * reached by the river, and an estimate measured to the nearest edge alone would steer the fine
    * search away from it.
    *
+   * <p>A destination that is one cell passes {@code goal::equals}.
+   *
    * @param graph the terrain
-   * @param cost the agent
+   * @param agent who is travelling
    * @param goal the destination's cell nearest the origin
    * @param origin where the fine search starts
    * @param inside whether a cell is part of the destination
    */
   public RegionSearch(
-      RegionGraph<?> graph, RegionAgent cost, Cell goal, Cell origin, Predicate<Cell> inside) {
+      RegionGraph<?> graph, RegionAgent agent, Cell goal, Cell origin, Predicate<Cell> inside) {
     this.graph = graph;
-    this.cost = cost;
+    this.agent = agent;
     this.goal = goal;
     this.origin = origin;
-    this.cheapest = cost.cheapest();
+    this.cheapest = agent.cheapest();
     this.inside = inside;
   }
 
@@ -220,7 +210,7 @@ public final class RegionSearch {
 
     // A ceiling, so a region the graph cannot reach does not send the search across the world to
     // prove it: past the price of tunnelling straight there, no answer is worth more search.
-    double answer = cell.distance(goal) * cost.fallback();
+    double answer = cell.distance(goal) * agent.fallback();
     double[] arrival = arrivals.get(region);
     if (arrival != null) {
       answer =
@@ -281,7 +271,7 @@ public final class RegionSearch {
     int a = graph.portalA(onward);
     int b = graph.portalB(onward);
     int other = a == region ? b : a;
-    if (cost.usable(graph.regionClass(other))) {
+    if (agent.usable(graph.regionClass(other))) {
       along = Math.min(along, cross(other, ex, ey, ez, tx, ty, tz));
     }
     // The detour along the contact only when it pays: on uniform terrain it is an L where the
@@ -295,8 +285,9 @@ public final class RegionSearch {
    * holds that connects to it.
    *
    * <p>A flood outward from the goal's region, through regions of any class, keeping each usable
-   * region whose middle is inside the destination; resumed where it left off when it has to wait
-   * for terrain. For a destination that is one cell, only the goal's region.
+   * region whose box's bottom centre is inside the destination: where a body in it stands; resumed
+   * where it left off when it has to wait for terrain. For a destination that is one cell, only the
+   * goal's region.
    *
    * @return a future to wait on, or {@code null} once seeded
    */
@@ -402,7 +393,7 @@ public final class RegionSearch {
    * which matters for anything vertical.
    */
   private void relax(int from, int region) {
-    if (!cost.usable(graph.regionClass(region))) {
+    if (!agent.usable(graph.regionClass(region))) {
       return;
     }
     double fx = px[from];
@@ -472,14 +463,14 @@ public final class RegionSearch {
     if (graph.directed(portal) && graph.portalB(portal) != region) {
       return false;
     }
-    return cost.usable(graph.regionClass(other));
+    return agent.usable(graph.regionClass(other));
   }
 
-  private void label(int portal, double cost, double x, double y, double z) {
-    if (cost >= g[portal]) {
+  private void label(int portal, double g, double x, double y, double z) {
+    if (g >= this.g[portal]) {
       return;
     }
-    g[portal] = cost;
+    this.g[portal] = g;
     px[portal] = x;
     py[portal] = y;
     pz[portal] = z;
@@ -498,7 +489,7 @@ public final class RegionSearch {
 
   private double cross(
       int region, double fx, double fy, double fz, double tx, double ty, double tz) {
-    return cost.traverse(graph.regionClass(region), fx, fy, fz, tx, ty, tz);
+    return agent.traverse(graph.regionClass(region), fx, fy, fz, tx, ty, tz);
   }
 
   /**
@@ -534,7 +525,7 @@ public final class RegionSearch {
   }
 
   private boolean usable(int region) {
-    return region != RegionGraph.NONE && cost.usable(graph.regionClass(region));
+    return region != RegionGraph.NONE && agent.usable(graph.regionClass(region));
   }
 
   private double clamp(double value, int portal, int axis) {

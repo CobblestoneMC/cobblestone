@@ -31,12 +31,12 @@ import org.jetbrains.annotations.Nullable;
  * to be rough.
  *
  * <p><b>Columns come from a {@link RegionStore}; seams are built here.</b> A column — every region
- * and portal inside one chunk — is built once and shared by every search through the store, and
- * kept on disk across restarts. This graph places each column it needs at an offset of its own, and
- * joins neighbouring columns at seams the first time the search needs to leave one: seams need both
- * columns, and are cheap enough to compute per search. A column whose four seams are built is
- * <em>complete</em>: its regions will never gain another portal, which is what lets a search relax
- * across a region once and trust that it saw everything.
+ * and portal inside one column of terrain — is built once and shared by every search through the
+ * store. This graph places each column it needs at an offset of its own, and joins neighbouring
+ * columns at seams the first time the search needs to leave one: seams need both columns, and are
+ * cheap enough to compute per search. A column whose four seams are built is <em>complete</em>: its
+ * regions will never gain another portal, which is what lets a search relax across a region once
+ * and trust that it saw everything.
  *
  * <p><b>Agent-independent.</b> Nothing here knows who is travelling: a region says what the terrain
  * is, and a {@link RegionAgent} decides what that is worth and whether it is passable at all.
@@ -45,24 +45,17 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class RegionGraph<C> {
 
-  /** No region: unbreakable, lava, outside the world, or a chunk that cannot be read. */
+  /** No region: unbreakable, lava, outside the world, or a column that cannot be read. */
   public static final int NONE = -1;
 
-  /**
-   * How much longer than a straight line the walk from a region's seed to one of its cells may be,
-   * by default.
-   *
-   * <p>The region is priced as a straight line, so this is the most it can under-price a crossing
-   * by: half again, plus a few blocks of slack. A cave bending back on itself splits into two
-   * regions joined at the bend, and the bend is then where the route is priced through.
-   */
-  public static final double DEFAULT_DETOUR_RATIO = 1.5;
-
   private final RegionStore<C> store;
+  private final RegionSpec<C> spec;
   private final RegionTerrain<C> terrain;
-  private final ChunkColumns<C> chunks;
+  private final TerrainSource<C> source;
   private final int minY;
   private final int height;
+  private final int shift;
+  private final int mask;
 
   private final Map<Long, Placed> columns = new HashMap<>();
   private final Set<Long> seams = new HashSet<>();
@@ -96,39 +89,21 @@ public final class RegionGraph<C> {
   private long seamNanos;
 
   /**
-   * Creates a graph over a store of its own, keeping everything in memory: one search's worth.
+   * Creates a graph over a store.
    *
-   * @param chunks where columns come from
-   * @param terrain what the cells are, and how they join
+   * @param store where built columns are kept: a world's shared store, or one of the search's own
+   *     ({@link RegionStore#inMemory})
+   * @param source where this search reads a column the store has to build
    */
-  public RegionGraph(ChunkColumns<C> chunks, RegionTerrain<C> terrain) {
-    this(chunks, terrain, DEFAULT_DETOUR_RATIO);
-  }
-
-  /**
-   * Creates a graph over a store of its own that splits regions at a chosen detour.
-   *
-   * @param chunks where columns come from
-   * @param terrain what the cells are, and how they join
-   * @param detourRatio how much longer than a straight line a walk inside one region may be; see
-   *     {@link #DEFAULT_DETOUR_RATIO}
-   */
-  public RegionGraph(ChunkColumns<C> chunks, RegionTerrain<C> terrain, double detourRatio) {
-    this(RegionStore.inMemory(terrain, chunks.minY(), chunks.maxY(), detourRatio), chunks);
-  }
-
-  /**
-   * Creates a graph over a shared store.
-   *
-   * @param store where built columns are kept
-   * @param chunks where this search reads a chunk the store has to build a column from
-   */
-  public RegionGraph(RegionStore<C> store, ChunkColumns<C> chunks) {
+  public RegionGraph(RegionStore<C> store, TerrainSource<C> source) {
     this.store = store;
-    this.terrain = store.terrain();
-    this.chunks = chunks;
-    this.minY = store.columnMinY();
-    this.height = store.sections() * 16;
+    this.spec = store.spec();
+    this.terrain = spec.terrain();
+    this.source = source;
+    this.minY = spec.columnMinY();
+    this.height = spec.height();
+    this.shift = spec.shift();
+    this.mask = spec.width() - 1;
   }
 
   // ------------------------------------------------------------------------------------------
@@ -144,11 +119,11 @@ public final class RegionGraph<C> {
    * @return the region, or {@link #NONE} — including when the column has not been placed
    */
   public int regionAt(int x, int y, int z) {
-    Placed column = columns.get(columnKey(Math.floorDiv(x, 16), Math.floorDiv(z, 16)));
+    Placed column = columns.get(columnKey(x >> shift, z >> shift));
     if (column == null) {
       return NONE;
     }
-    return column.regionAt(x & 15, y - minY, z & 15);
+    return column.regionAt(x & mask, y - minY, z & mask);
   }
 
   /**
@@ -253,7 +228,7 @@ public final class RegionGraph<C> {
   }
 
   /**
-   * Returns how many chunk columns have been placed.
+   * Returns how many columns have been placed.
    *
    * @return the column count
    */
@@ -322,7 +297,7 @@ public final class RegionGraph<C> {
    * @return a future completing when the columns it needs arrive, or {@code null} if it is ready
    */
   public @Nullable CompletableFuture<Void> complete(int x, int z) {
-    return completeColumn(Math.floorDiv(x, 16), Math.floorDiv(z, 16));
+    return completeColumn(x >> shift, z >> shift);
   }
 
   /**
@@ -378,7 +353,7 @@ public final class RegionGraph<C> {
     }
     RegionColumn ready = arrived.remove(key);
     if (ready == null) {
-      FutureOr<RegionColumn> column = store.column(cx, cz, chunks);
+      FutureOr<RegionColumn> column = store.column(cx, cz, source);
       if (!column.isImmediate()) {
         // Kept as it lands, so the search finds it on waking whatever the store does meanwhile. A
         // failure is a column that cannot be known, like an ungenerated one.
@@ -386,8 +361,7 @@ public final class RegionGraph<C> {
             .future()
             .handle(
                 (built, failure) -> {
-                  arrived.put(
-                      key, built != null ? built : RegionColumn.empty(cx, cz, minY, height / 16));
+                  arrived.put(key, built != null ? built : RegionColumn.empty(spec, cx, cz));
                   return null;
                 });
       }
@@ -402,7 +376,7 @@ public final class RegionGraph<C> {
   /** Copies a column's regions and portals in at this graph's numbering. */
   private Placed placed(RegionColumn column) {
     int base = regionCount;
-    long key = columnKey(column.chunkX, column.chunkZ);
+    long key = columnKey(column.columnX, column.columnZ);
     for (int r = 0; r < column.regionClass.length; r++) {
       int id = newRegion(column.regionClass[r], key);
       System.arraycopy(column.regionBox, r * 6, regionBox, id * 6, 6);
@@ -432,20 +406,21 @@ public final class RegionGraph<C> {
     }
     Placed low = columns.get(columnKey(cx, cz));
     Placed high = columns.get(alongX ? columnKey(cx + 1, cz) : columnKey(cx, cz + 1));
-    int ox = cx * 16;
-    int oz = cz * 16;
+    int ox = cx << shift;
+    int oz = cz << shift;
+    int width = mask + 1;
     for (int ly = 0; ly < height; ly++) {
       int y = minY + ly;
-      for (int t = 0; t < 16; t++) {
+      for (int t = 0; t < width; t++) {
         // a is the low column's edge cell, b the high column's, face to face.
-        int ax = alongX ? 15 : t;
-        int az = alongX ? t : 15;
+        int ax = alongX ? mask : t;
+        int az = alongX ? t : mask;
         int bx = alongX ? 0 : t;
         int bz = alongX ? t : 0;
         int wax = ox + ax;
         int waz = oz + az;
-        int wbx = alongX ? ox + 16 : ox + t;
-        int wbz = alongX ? oz + t : oz + 16;
+        int wbx = alongX ? ox + width : ox + t;
+        int wbz = alongX ? oz + t : oz + width;
         int ra = low.regionAt(ax, ly, az);
         int rb = high.regionAt(bx, ly, bz);
         contacts.touch(ra, rb, wax, y, waz, wbx, y, wbz);
@@ -576,39 +551,5 @@ public final class RegionGraph<C> {
       int local = column.regionAt(lx, ly, lz);
       return local == RegionColumn.NONE ? NONE : base + local;
     }
-  }
-
-  /**
-   * Where the graph gets its terrain: one chunk column at a time.
-   *
-   * @param <C> the platform's column of terrain
-   *     <p>⚠️ <b>An implementation must remember what it fetched.</b> Once a returned future has
-   *     completed, a later call for the same column has to answer immediately, or the search parks
-   *     on the same column forever.
-   */
-  public interface ChunkColumns<C> {
-
-    /**
-     * Returns a chunk column, or an immediate {@code null} if it cannot be known.
-     *
-     * @param chunkX the chunk X
-     * @param chunkZ the chunk Z
-     * @return the chunk
-     */
-    FutureOr<C> column(int chunkX, int chunkZ);
-
-    /**
-     * Returns the lowest world Y, inclusive.
-     *
-     * @return the floor
-     */
-    int minY();
-
-    /**
-     * Returns the highest world Y, inclusive.
-     *
-     * @return the ceiling
-     */
-    int maxY();
   }
 }

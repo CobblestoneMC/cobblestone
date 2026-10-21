@@ -9,11 +9,9 @@ package org.cobblestonemc.paper.plugin;
 
 import io.papermc.paper.ServerBuildInfo;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
-import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import net.kyori.adventure.key.Key;
@@ -23,7 +21,7 @@ import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
-import org.cobblestonemc.minecraft.lod.RegionStores;
+import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.paper.PaperNavigationServiceImpl;
 import org.cobblestonemc.paper.api.NavigationService;
 import org.cobblestonemc.paper.api.SearchModificationRegistrar;
@@ -33,6 +31,7 @@ import org.cobblestonemc.paper.plugin.api.TrailNavigatorSettings;
 import org.cobblestonemc.paper.plugin.api.TripService;
 import org.cobblestonemc.plugin.config.ConfigKeys;
 import org.cobblestonemc.plugin.config.ConfigManager;
+import org.cobblestonemc.plugin.config.RegionConfig;
 import org.cobblestonemc.plugin.data.DataStore;
 import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.DataStores;
@@ -42,7 +41,6 @@ import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchGate;
 import org.cobblestonemc.plugin.search.SearchRegistry;
 import org.cobblestonemc.plugin.trip.TripManager;
-import org.jetbrains.annotations.Nullable;
 
 /**
  * The Cobblestone Paper/Folia plugin entry point.
@@ -62,7 +60,6 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
   private PaperMetrics metrics;
   private PaperMountListener mountListener;
   private RegionStores regionStores;
-  private ScheduledTask regionFlush;
   private final SearchRegistry<Location> searchRegistry = new SearchRegistry<>();
 
   @Override
@@ -84,6 +81,10 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
       return;
     }
 
+    // Regions are shared by every search and forgotten when a block in their chunk changes.
+    RegionConfig regionConfig = new RegionConfig(config, keys, getLogger()::warning);
+    this.regionStores = regionConfig.stores();
+
     // The transition registry is owned by the plugin; the platform API only reads from / registers
     // into it. Both are reachable to other plugins via the registered plugin API.
     this.platformApi =
@@ -94,25 +95,11 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                 config.get(keys.chunksCacheSize),
                 config.get(keys.chunksPrefetchDistance),
                 config.get(keys.chunksFetchAttempts),
-                config.get(keys.chunksPolicy)));
-    // Region summaries are shared by every search, kept on disk across restarts, forgotten when a
-    // block in their chunk changes, and made in the background as chunks load.
-    this.regionStores =
-        new RegionStores(
-            config.get(keys.regionsPersist) ? getDataFolder().toPath().resolve("regions") : null,
-            Math.max(16, config.get(keys.regionsMemoryMegabytes)) * 1024L * 1024L,
-            Math.max(1, Runtime.getRuntime().availableProcessors() / 4));
-    platformApi.useRegionStores(regionStores);
+                config.get(keys.chunksPolicy)),
+            regionStores);
     getServer()
         .getPluginManager()
-        .registerEvents(
-            new PaperRegionListener(regionStores, platformApi, platformApi::readLoaded), this);
-    long flushSeconds = Math.max(5, config.get(keys.regionsFlushSeconds));
-    this.regionFlush =
-        getServer()
-            .getAsyncScheduler()
-            .runAtFixedRate(
-                this, task -> regionStores.flush(), flushSeconds, flushSeconds, TimeUnit.SECONDS);
+        .registerEvents(new PaperRegionListener(regionStores, platformApi), this);
 
     PaperIntegrationRegistry integrationRegistry =
         new PaperIntegrationRegistry(platformApi.regions());
@@ -188,7 +175,14 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             () -> !folia && config.get(keys.tripsHud),
             agent -> new PaperHudDisplay(agent.player()),
             logger);
-    tripManager.onChange(tripHud::refresh);
+    tripManager.onChange(
+        agent -> {
+          tripHud.refresh(agent);
+          // A player who has stopped navigating no longer needs their surroundings kept built.
+          if (tripManager.trips(agent.uuid()).isEmpty()) {
+            regionStores.release(agent.uuid());
+          }
+        });
     getServer().getOnlinePlayers().forEach(player -> tripHud.load(player.getUniqueId()));
 
     // Discovered vanilla portals are surfaced to searches as an internal transition provider, and
@@ -237,7 +231,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                 .tier1UnsolvedPessimism(config.get(keys.algorithmTier1UnsolvedPessimism))
                 .runningAverageWidth(config.get(keys.algorithmRunningAverageWidth))
                 .heuristicWeight(config.get(keys.algorithmHeuristicWeight))
-                .heuristic(heuristicFrom(config.get(keys.algorithmHeuristic)))
+                .heuristic(regionConfig.heuristic())
                 .build();
 
     // The trip service is the shared "search-then-guide" code path: the /navigate command and
@@ -250,7 +244,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             searchRegistry,
             searchGate,
             searchSettings,
-            liveIntervalMillis);
+            liveIntervalMillis,
+            regionStores);
     getServer()
         .getServicesManager()
         .register(TripService.class, tripService, this, ServicePriority.Normal);
@@ -325,11 +320,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
       // Cancels in-flight searches and stops the search worker pool.
       platformApi.shutdown();
     }
-    if (regionFlush != null) {
-      regionFlush.cancel();
-    }
     if (regionStores != null) {
-      // After the searches stop, so nothing builds a column behind the final write.
       regionStores.close();
     }
     getServer().getServicesManager().unregisterAll(this);
@@ -344,36 +335,5 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
       dataStore.close();
     }
     getLogger().info("Cobblestone disabled.");
-  }
-
-  /** The heuristic setting last read, so a bad one is warned about once. */
-  private volatile @Nullable String lastHeuristicSetting;
-
-  /**
-   * Reads the configured heuristic, falling back to the default on anything unrecognised.
-   *
-   * <p>A misspelled value should not stop a server from starting, and it should not quietly pick
-   * the other heuristic either -- the two behave differently enough that an operator would be
-   * debugging the wrong thing. So it warns, loudly enough to find, and uses the default.
-   */
-  private SearchSettings.Heuristic heuristicFrom(String configured) {
-    // Read for every search, so the warning below is said once per value rather than per search.
-    String previous = lastHeuristicSetting;
-    lastHeuristicSetting = configured;
-    try {
-      return SearchSettings.Heuristic.valueOf(configured.strip().toUpperCase(Locale.ROOT));
-    } catch (IllegalArgumentException unknown) {
-      if (configured.equals(previous)) {
-        return SearchSettings.DEFAULT_HEURISTIC;
-      }
-      getLogger()
-          .warning(
-              "search.algorithm.heuristic is '"
-                  + configured
-                  + "', which is not a heuristic; using "
-                  + SearchSettings.DEFAULT_HEURISTIC
-                  + ". Valid values: RUNNING_AVERAGE, REGIONS");
-      return SearchSettings.DEFAULT_HEURISTIC;
-    }
   }
 }

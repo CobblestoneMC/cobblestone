@@ -5,7 +5,7 @@
  * Licensed under the MIT License. See the LICENSE file in the project root for full text.
  */
 
-package org.cobblestonemc.minecraft.lod;
+package org.cobblestonemc.minecraft.regions;
 
 import java.util.Set;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
@@ -24,18 +24,22 @@ import org.cobblestonemc.regions.RegionAgent;
  * Every class is priced in one exhaustive {@code switch}, so a new class does not compile until
  * this says what it costs.
  *
- * <p><b>The rates mirror {@code MovementCosts}.</b> They are what the fine search charges for a
- * block of that terrain, not independent guesses, because any gap between the two becomes a flat
- * bias in every estimate. They had drifted once: walking was 0.215 against the search's 0.20 and
+ * <p><b>Its own rates, on purpose.</b> They start from what the fine search charges a block of each
+ * terrain ({@code MovementCosts}), but they are copies, not references, and are meant to drift
+ * apart where the two levels see differently. The fine search will grow costs this layer cannot see
+ * — a turn, a wall close by, danger nearby — that adjust its base walk, while a region is priced
+ * only by its class; neither set of numbers is a precise constant the other must match. What keeps
+ * them honest is measurement: {@code bench verify} compares these estimates with the fine search's
+ * true costs, and a drift of either side shows up there as estimates moving away from 0.7–0.95 of
+ * the truth. They had drifted once, by accident: walking was 0.215 against the search's 0.20 and
  * swimming 0.45 against 0.30, which over-priced dry ground by 7.5% and water by 50% everywhere at
- * once. The fine search may grow costs this layer does not model; a change to either is checked
- * with {@code bench verify} and a sweep.
+ * once. Change either side, run verify and a sweep.
  *
  * <p><b>Every rate is at least {@link #cheapest()} per block of straight-line distance.</b> The
  * backward search focuses itself with that bound, and a crossing priced below it would let the
  * search settle a portal before a cheaper route to it had been seen.
  */
-public final class RegionCost implements RegionAgent {
+public final class MinecraftAgent implements RegionAgent {
 
   /**
    * What a block costs where the agent has no way through but the graph needs a price: rock, for an
@@ -47,7 +51,7 @@ public final class RegionCost implements RegionAgent {
    */
   public static final double FALLBACK_COST_PER_BLOCK = 2.8;
 
-  /** {@code MovementCosts.WALK}. */
+  /** Walking, from {@code MovementCosts.WALK}; see the class comment on why it is a copy. */
   private static final double WALK = 0.20;
 
   /** {@code MovementCosts.SWIM}. */
@@ -68,8 +72,8 @@ public final class RegionCost implements RegionAgent {
   /** Soul sand's speed factor, as the platforms report it: a walker without Soul Speed drags. */
   private static final double SOUL_SAND_SPEED = 0.4;
 
-  /** Per class, by ordinal: the agent's rate in a straight line, or {@code NaN} if it has none. */
-  private final double[] rates = new double[RegionClass.ALL.length];
+  /** Per class, by id: the agent's rate in a straight line, or {@code NaN} if it has none. */
+  private final double[] rates = new double[RegionClass.ID_BOUND];
 
   /** The agent's rate across a water surface by boat, or {@code NaN} without one. */
   private final double boat;
@@ -77,7 +81,7 @@ public final class RegionCost implements RegionAgent {
   private final boolean mine;
   private final double cheapest;
 
-  private RegionCost(
+  private MinecraftAgent(
       double walk,
       double soulSpeed,
       double swim,
@@ -88,7 +92,7 @@ public final class RegionCost implements RegionAgent {
     this.boat = boat;
     this.mine = mine;
     double least = FALLBACK_COST_PER_BLOCK;
-    for (RegionClass klass : RegionClass.ALL) {
+    for (RegionClass klass : RegionClass.values()) {
       double rate =
           switch (klass) {
             case STAND -> least(walk, fly);
@@ -100,7 +104,7 @@ public final class RegionCost implements RegionAgent {
             // Priced by break time and direction; see traverse.
             case SOFT, SOFT_ROCK, ROCK, MIXED_ROCK, HARD_ROCK, OBSIDIAN, DIRT, WOOD -> Double.NaN;
           };
-      rates[klass.ordinal()] = rate;
+      rates[klass.id()] = rate;
       if (has(rate)) {
         least = Math.min(least, rate);
       }
@@ -124,7 +128,8 @@ public final class RegionCost implements RegionAgent {
    * @param excluded the step types an operator has turned off
    * @return the cost model
    */
-  public static RegionCost forPlayer(CobblestonePlayer player, Set<MinecraftStepType> excluded) {
+  public static MinecraftAgent forPlayer(
+      CobblestonePlayer player, Set<MinecraftStepType> excluded) {
     boolean walks = !excluded.contains(MinecraftStepType.WALK);
     int soulSpeed = walks ? player.soulSpeedLevel() : 0;
     boolean flies =
@@ -132,7 +137,7 @@ public final class RegionCost implements RegionAgent {
     boolean boats =
         !excluded.contains(MinecraftStepType.BOAT)
             && (player.hasBoatInInventory() || player.isInBoat());
-    return new RegionCost(
+    return new MinecraftAgent(
         walks ? WALK : Double.NaN,
         soulSpeed > 0 ? WALK / soulSpeedFactor(soulSpeed) : Double.NaN,
         excluded.contains(MinecraftStepType.SWIM) ? Double.NaN : SWIM,
@@ -153,13 +158,14 @@ public final class RegionCost implements RegionAgent {
 
   @Override
   public boolean usable(int klass) {
-    return usable(RegionClass.ALL[klass]);
+    RegionClass known = RegionClass.byId(klass);
+    return known != null && usable(known);
   }
 
   @Override
   public double traverse(
       int klass, double fx, double fy, double fz, double tx, double ty, double tz) {
-    return traverse(RegionClass.ALL[klass], fx, fy, fz, tx, ty, tz);
+    return traverse(RegionClass.byId(klass), fx, fy, fz, tx, ty, tz);
   }
 
   /**
@@ -177,7 +183,7 @@ public final class RegionCost implements RegionAgent {
    */
   public boolean usable(RegionClass klass) {
     return klass.solid()
-        || has(rates[klass.ordinal()])
+        || has(rates[klass.id()])
         || (klass == RegionClass.WATER_SURFACE && has(boat));
   }
 
@@ -208,7 +214,7 @@ public final class RegionCost implements RegionAgent {
           ? Math.max(mining(breakTime, dx, dy, dz), breakTime + FALL)
           : FALLBACK_COST_PER_BLOCK * Math.max(1, length);
     }
-    double rate = rates[klass.ordinal()];
+    double rate = rates[klass.id()];
     double cost = (has(rate) ? rate : FALLBACK_COST_PER_BLOCK) * length;
     if (klass == RegionClass.WATER_SURFACE && has(boat)) {
       // A boat crosses the surface; anything vertical in the crossing, where a surface steps down

@@ -41,14 +41,12 @@ import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
-import org.cobblestonemc.minecraft.lod.MinecraftTerrain;
-import org.cobblestonemc.minecraft.lod.RegionCost;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
-import org.cobblestonemc.regions.RegionColumnBuilder;
-import org.cobblestonemc.regions.RegionFiles;
-import org.cobblestonemc.regions.RegionGraph;
+import org.cobblestonemc.minecraft.regions.MinecraftAgent;
+import org.cobblestonemc.minecraft.regions.MinecraftTerrain;
 import org.cobblestonemc.regions.RegionHeuristic;
 import org.cobblestonemc.regions.RegionSearch;
+import org.cobblestonemc.regions.RegionSpec;
 import org.cobblestonemc.regions.RegionStore;
 import org.cobblestonemc.stonebrick.format.CaptureDirectory;
 import org.cobblestonemc.stonebrick.format.CorpusLayout;
@@ -349,7 +347,8 @@ public final class ScenarioRunner {
     return lastRegionColumns == null ? 0 : lastRegionColumns.chunkColumns();
   }
 
-  private @Nullable RegionHeuristic<MinecraftChunk> lastRegionHeuristic;
+  /** The searches the last run's region heuristic started, one per solve that asked anything. */
+  private final List<RegionSearch> lastRegionSearches = new ArrayList<>();
 
   /**
    * Returns where the last run's region layer spent its time and memory, or {@code null} if it did
@@ -362,7 +361,7 @@ public final class ScenarioRunner {
    * @return the breakdown, as {@code key=value} pairs
    */
   public @Nullable String lastRegionBreakdown() {
-    if (lastRegionColumns == null || lastRegionHeuristic == null) {
+    if (lastRegionColumns == null || lastRegionStore == null) {
       return null;
     }
     long queries = 0;
@@ -373,7 +372,7 @@ public final class ScenarioRunner {
     long regions = 0;
     long portals = 0;
     long expansions = 0;
-    for (RegionSearch search : lastRegionHeuristic.searches()) {
+    for (RegionSearch search : lastRegionSearches) {
       queries += search.queries();
       searchNanos += search.searchNanos();
       expansions += search.expansions();
@@ -388,55 +387,23 @@ public final class ScenarioRunner {
 
     return String.format(
         Locale.ROOT,
-        "readMs=%.1f buildMs=%.1f diskMs=%.1f placeMs=%.1f seamMs=%.1f searchMs=%.1f queries=%d"
-            + " settled=%d built=%d fromDisk=%d diskKB=%d regions=%d portals=%d graphKB=%d"
-            + " storeKB=%d",
+        "readMs=%.1f buildMs=%.1f placeMs=%.1f seamMs=%.1f searchMs=%.1f queries=%d"
+            + " settled=%d built=%d regions=%d portals=%d graphKB=%d storeKB=%d",
         fetchNanos / 1e6,
         store.buildNanos() / 1e6,
-        store.diskNanos() / 1e6,
         placeNanos / 1e6,
         seamNanos / 1e6,
         searchNanos / 1e6,
         queries,
         expansions,
         store.builds(),
-        store.diskLoads(),
-        store.diskBytesRead() / 1024,
         regions,
         portals,
         bytes / 1024,
         store.bytesInMemory() / 1024);
   }
 
-  /**
-   * Writes the last run's built columns to its cache on disk, if it has one.
-   *
-   * <p>What a server's periodic flush does; a warm sweep calls it between the run that fills the
-   * cache and the run it measures.
-   */
-  public void flushRegionCache() {
-    if (lastRegionStore != null) {
-      lastRegionStore.flush().join();
-      lastRegionStore.close().join();
-    }
-  }
-
-  /**
-   * Sets a directory to keep built columns in across runs, as a server keeps them across restarts;
-   * {@code null} to build every column afresh each run.
-   *
-   * @param directory the cache directory, or {@code null}
-   */
-  public void regionCache(@Nullable Path directory) {
-    if (lastRegionStore != null) {
-      lastRegionStore.close().join(); // released, so the directory can be deleted
-    }
-    this.regionCache = directory;
-  }
-
   private @Nullable RegionStore<MinecraftChunk> lastRegionStore;
-
-  private @Nullable Path regionCache;
 
   /**
    * The detour a region may hold before the fill splits it, from {@code -Dregions.detour}; a tuning
@@ -444,7 +411,7 @@ public final class ScenarioRunner {
    */
   static final double REGION_DETOUR =
       Double.parseDouble(
-          System.getProperty("regions.detour", String.valueOf(RegionGraph.DEFAULT_DETOUR_RATIO)));
+          System.getProperty("regions.detour", String.valueOf(RegionSpec.DEFAULT_DETOUR_RATIO)));
 
   /**
    * Builds the estimate the scenario asked for.
@@ -467,47 +434,29 @@ public final class ScenarioRunner {
       StonebrickPlatformApi platform) {
     // Cleared first, so a run without the region layer does not report the last one's reads.
     lastRegionColumns = null;
-    lastRegionHeuristic = null;
+    lastRegionSearches.clear();
     lastRegionStore = null;
     if (scenario.heuristic().production() == null) {
       return Heuristics.zero();
     }
     if (scenario.heuristic() != Scenario.Heuristic.REGIONS) {
-      return MinecraftHeuristics.forPlayer(behavior, chunks, player, scenario.origin(), settings);
+      return MinecraftHeuristics.forPlayer(
+          behavior, chunks, player, scenario.origin(), settings, null);
     }
     CaptureChunkColumns columns = new CaptureChunkColumns(platform, scenario.world());
     lastRegionColumns = columns;
-    // One store for the run, on this thread: a cold start, or a restart over a cache on disk.
+    // One store for the run, on this thread: a cold start.
     MinecraftWorld world = platform.world(scenario.world());
-    lastRegionStore =
-        new RegionStore<>(
-            MinecraftTerrain.INSTANCE,
-            world.minY(),
-            world.maxY(),
-            REGION_DETOUR,
-            Long.MAX_VALUE,
-            regionCache == null
-                ? null
-                : new RegionFiles(
-                    regionCache.resolve(
-                        RegionFiles.directoryName(scenario.capture() + "-" + scenario.world())),
-                    RegionColumnBuilder.columnMinY(world.minY()),
-                    RegionColumnBuilder.sections(world.minY(), world.maxY()),
-                    REGION_DETOUR,
-                    MinecraftTerrain.INSTANCE),
-            Runnable::run,
-            Runnable::run);
-    RegionStore<MinecraftChunk> store = lastRegionStore;
-    lastRegionHeuristic =
-        new RegionHeuristic<>(
-            MinecraftTerrain.INSTANCE,
-            region -> columns,
-            region -> store,
-            RegionCost.forPlayer(player, settings.excludedModes()),
-            REGION_DETOUR,
-            behavior.cheapestCostPerBlock(),
-            true);
-    return lastRegionHeuristic;
+    RegionStore<MinecraftChunk> store =
+        RegionStore.inMemory(
+            new RegionSpec<>(MinecraftTerrain.INSTANCE, world.minY(), world.maxY(), REGION_DETOUR));
+    lastRegionStore = store;
+    return new RegionHeuristic<MinecraftChunk>(
+        region -> columns,
+        region -> store,
+        MinecraftAgent.forPlayer(player, settings.excludedModes()),
+        behavior.cheapestCostPerBlock(),
+        lastRegionSearches::add);
   }
 
   /**

@@ -13,8 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.ChunkFetch;
 import org.cobblestonemc.minecraft.MinecraftChunk;
-import org.cobblestonemc.minecraft.MinecraftWorld;
-import org.cobblestonemc.regions.RegionGraph;
+import org.cobblestonemc.regions.TerrainSource;
 import org.cobblestonemc.stonebrick.platform.MissingCaptureLog;
 import org.cobblestonemc.stonebrick.platform.StonebrickPlatformApi;
 
@@ -26,12 +25,10 @@ import org.cobblestonemc.stonebrick.platform.StonebrickPlatformApi;
  * resident comes back pending and the fine search parks, which is the path a live server is in
  * constantly.
  */
-final class CaptureChunkColumns implements RegionGraph.ChunkColumns<MinecraftChunk> {
+final class CaptureChunkColumns implements TerrainSource<MinecraftChunk> {
 
   private final StonebrickPlatformApi platform;
   private final String world;
-  private final int minY;
-  private final int maxY;
   private final Map<Long, MinecraftChunk> chunks = new HashMap<>();
   private final Map<Long, CompletableFuture<MinecraftChunk>> inFlight = new HashMap<>();
 
@@ -45,9 +42,6 @@ final class CaptureChunkColumns implements RegionGraph.ChunkColumns<MinecraftChu
   CaptureChunkColumns(StonebrickPlatformApi platform, String world) {
     this.platform = platform;
     this.world = world;
-    MinecraftWorld minecraft = platform.world(world);
-    this.minY = minecraft.minY();
-    this.maxY = minecraft.maxY();
   }
 
   /** How many chunk columns were read, for the sweep's report. */
@@ -89,15 +83,5 @@ final class CaptureChunkColumns implements RegionGraph.ChunkColumns<MinecraftChu
     }
     // from(): under a zero-IO profile the read completes on the spot.
     return FutureOr.from(reading);
-  }
-
-  @Override
-  public int minY() {
-    return minY;
-  }
-
-  @Override
-  public int maxY() {
-    return maxY;
   }
 }

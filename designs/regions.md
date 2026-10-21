@@ -6,9 +6,9 @@
   knows no game: it fills cells of one class into regions, joins them with portals, stores them,
   and searches over them. Two interfaces plug a game in: `RegionTerrain` (which class each cell is,
   and how classes join: standing, steps, falls) and `RegionAgent` (what a class costs a traveller).
-- **Minecraft's side** is in `project/minecraft/core/src/main/java/org/cobblestonemc/minecraft/lod`:
+- **Minecraft's side** is in `project/minecraft/core/src/main/java/org/cobblestonemc/minecraft/regions`:
   `MinecraftTerrain` classifies blocks and holds a walking body's rules, `RegionClass` names the
-  classes, and `RegionCost` is the agent.
+  classes, and `MinecraftAgent` is the agent.
 
 ## The idea
 The fine search (`Tier2Search`) needs, for every cell it opens, an estimate of what the rest of
@@ -25,7 +25,7 @@ the terrain ahead. REGIONS reads the terrain ahead.
   or down, and falls of up to 3 blocks (32 into water), which are one-way. Inside a column they are
   built with it; across columns they are built per search at the seams.
 - **Agent-independent.** The graph knows terrain, not travellers. A `RegionClass` is only a tag;
-  `RegionCost` is the agent, built from the player and the operator's exclusions, and says what
+  `MinecraftAgent` is the agent, built from the player and the operator's exclusions, and says what
   each class costs it: soul sand is 2.5x ground on foot and fast in Soul Speed boots, and only a
   water surface takes a boat. A kind of terrain earns its own class only when some agent would pay
   differently for it. Rock for a pickaxe fills as one family, because deepslate is dithered into

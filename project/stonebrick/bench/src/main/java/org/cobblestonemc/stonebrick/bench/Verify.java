@@ -15,9 +15,11 @@ import java.util.Locale;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.SearchObserver;
-import org.cobblestonemc.minecraft.lod.MinecraftTerrain;
+import org.cobblestonemc.minecraft.regions.MinecraftTerrain;
 import org.cobblestonemc.regions.RegionGraph;
 import org.cobblestonemc.regions.RegionSearch;
+import org.cobblestonemc.regions.RegionSpec;
+import org.cobblestonemc.regions.RegionStore;
 import org.cobblestonemc.stonebrick.format.CorpusLayout;
 import org.cobblestonemc.stonebrick.platform.Capture;
 
@@ -139,16 +141,17 @@ final class Verify {
     RegionSearch regions =
         new RegionSearch(
             new RegionGraph<>(
-                new DirectChunkColumns(
-                    capture,
-                    scenario.world(),
-                    capture.minY(scenario.world()),
-                    capture.maxY(scenario.world())),
-                MinecraftTerrain.INSTANCE,
-                ScenarioRunner.REGION_DETOUR),
-            loadout.cost(),
+                RegionStore.inMemory(
+                    new RegionSpec<>(
+                        MinecraftTerrain.INSTANCE,
+                        capture.minY(scenario.world()),
+                        capture.maxY(scenario.world()),
+                        ScenarioRunner.REGION_DETOUR)),
+                new DirectChunkColumns(capture, scenario.world())),
+            loadout.regionAgent(),
             scenario.destination(),
-            path.get(0));
+            path.get(0),
+            scenario.destination()::equals);
 
     System.out.printf(Locale.ROOT, "%n%s@%s%n", scenario.id(), loadout.name());
     System.out.printf(

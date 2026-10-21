@@ -7,11 +7,10 @@
 
 package org.cobblestonemc.regions;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.DomainRegion;
@@ -48,77 +47,47 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
    */
   private static final int CACHE_LIMIT = 1 << 20;
 
-  private final RegionTerrain<C> terrain;
-  private final Function<DomainRegion<?>, RegionGraph.ChunkColumns<C>> columnsFor;
-  private final @Nullable Function<DomainRegion<?>, RegionStore<C>> storeFor;
-  private final RegionAgent cost;
-  private final double detourRatio;
+  private final Function<DomainRegion<?>, TerrainSource<C>> sourceFor;
+  private final Function<DomainRegion<?>, RegionStore<C>> storeFor;
+  private final RegionAgent agent;
   private final double tierOneRate;
-  private final boolean keepSearches;
-  private final List<RegionSearch> searches = new ArrayList<>();
+  private final Consumer<RegionSearch> onSearch;
 
   /**
-   * Creates a heuristic that builds a terrain source per solve, reading built columns from a shared
-   * store, as a server's do.
+   * Creates a heuristic that reads a terrain source and a store per solve.
    *
    * <p>Per solve, not per strategy: one strategy is built per navigate, but a trip may have legs in
    * several worlds, and a source bound to the first would answer every later leg from the wrong
    * terrain without ever failing. The target region knows which world its leg is in.
    *
-   * <p>Without a store each solve builds every column it needs and forgets them; with one, a column
-   * built by any search — or before the server last restarted — is read back instead.
+   * <p>A server's store is its world's, shared by every search, so a column built by any search is
+   * read back instead of built again. A store of each solve's own ({@link RegionStore#inMemory})
+   * builds every column it needs and forgets them.
    *
    * <p>Estimates are the region search's own answers, unscaled. How far the fine search trusts them
    * is the search's heuristic weight, and nothing else.
    *
-   * @param terrain what the cells are, and how they join
-   * @param columnsFor builds a chunk source for a solve's target region, for the columns the store
-   *     has to build
-   * @param storeFor the store for a solve's target region's world, or {@code null} for a store of
-   *     each solve's own
-   * @param cost the agent
-   * @param detourRatio the fill's detour ratio, for a store of each solve's own; a shared store
-   *     carries its own; see {@link RegionGraph#DEFAULT_DETOUR_RATIO}
-   */
-  public RegionHeuristic(
-      RegionTerrain<C> terrain,
-      Function<DomainRegion<?>, RegionGraph.ChunkColumns<C>> columnsFor,
-      @Nullable Function<DomainRegion<?>, RegionStore<C>> storeFor,
-      RegionAgent cost,
-      double detourRatio) {
-    this(terrain, columnsFor, storeFor, cost, detourRatio, cost.cheapest(), false);
-  }
-
-  /**
-   * Creates a heuristic with its Tier-1 bound given, and whether to keep its searches.
-   *
-   * @param terrain what the cells are, and how they join
-   * @param columnsFor builds a chunk source for a solve's target region
-   * @param storeFor the store for a solve's target region's world, or {@code null} for a store of
-   *     each solve's own
-   * @param cost the agent
-   * @param detourRatio the fill's detour ratio, for a store of each solve's own
+   * @param sourceFor the terrain source for a solve's target region, for the columns the store has
+   *     to build
+   * @param storeFor the store for a solve's target region's world
+   * @param agent who is travelling
    * @param tierOneRate the least the agent can pay per block by any movement at all, which Tier 1
    *     prices unsolved legs with: lower than {@link RegionAgent#cheapest()} for an agent who can
    *     move in ways the region layer does not price, such as riding
-   * @param keepSearches whether to keep every solve's search for {@link #searches()}, which holds
-   *     each one's graph for the strategy's life; for measuring, never on a server
+   * @param onSearch receives each solve's search as it starts, for measuring; it holds the solve's
+   *     graph for as long as it is kept
    */
   public RegionHeuristic(
-      RegionTerrain<C> terrain,
-      Function<DomainRegion<?>, RegionGraph.ChunkColumns<C>> columnsFor,
-      @Nullable Function<DomainRegion<?>, RegionStore<C>> storeFor,
-      RegionAgent cost,
-      double detourRatio,
+      Function<DomainRegion<?>, TerrainSource<C>> sourceFor,
+      Function<DomainRegion<?>, RegionStore<C>> storeFor,
+      RegionAgent agent,
       double tierOneRate,
-      boolean keepSearches) {
-    this.terrain = terrain;
-    this.columnsFor = columnsFor;
+      Consumer<RegionSearch> onSearch) {
+    this.sourceFor = sourceFor;
     this.storeFor = storeFor;
-    this.cost = cost;
-    this.detourRatio = detourRatio;
+    this.agent = agent;
     this.tierOneRate = tierOneRate;
-    this.keepSearches = keepSearches;
+    this.onSearch = onSearch;
   }
 
   @Override
@@ -129,25 +98,7 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
 
   @Override
   public SolveHeuristic newSolve(int windowWidth, DomainRegion<?> target) {
-    RegionGraph.ChunkColumns<C> columns = columnsFor.apply(target);
-    RegionStore<C> store =
-        storeFor == null
-            ? RegionStore.inMemory(terrain, columns.minY(), columns.maxY(), detourRatio)
-            : storeFor.apply(target);
-    return new Solve(target, new RegionGraph<>(store, columns));
-  }
-
-  /**
-   * Returns the searches this strategy's solves have run, one per solve that asked anything, if it
-   * was made to keep them.
-   *
-   * <p>For diagnostics: the benchmark reads what each spent on building terrain against searching
-   * it. Kept for the strategy's life, which is one navigate.
-   *
-   * @return the searches, oldest first
-   */
-  public List<RegionSearch> searches() {
-    return List.copyOf(searches);
+    return new Solve(target, new RegionGraph<>(storeFor.apply(target), sourceFor.apply(target)));
   }
 
   /** One solve's view: a search seeded on first use, and the answers it has given. */
@@ -165,7 +116,7 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
 
     @Override
     public double seed() {
-      return cost.cheapest();
+      return agent.cheapest();
     }
 
     @Override
@@ -209,10 +160,9 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
         // Seeded at the first cell asked about, which is the solve's start: the search focuses on
         // it, and the goal cell worth aiming at depends on where the route begins.
         search =
-            new RegionSearch(graph, cost, target.nearestBoundaryCell(from), from, target::contains);
-        if (keepSearches) {
-          searches.add(search);
-        }
+            new RegionSearch(
+                graph, agent, target.nearestBoundaryCell(from), from, target::contains);
+        onSearch.accept(search);
       }
       return search;
     }

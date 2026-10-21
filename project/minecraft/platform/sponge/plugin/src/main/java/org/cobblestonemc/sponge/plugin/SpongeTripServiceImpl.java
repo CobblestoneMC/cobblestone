@@ -17,6 +17,7 @@ import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
+import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.plugin.api.Navigator;
 import org.cobblestonemc.plugin.api.NavigatorSettings;
 import org.cobblestonemc.plugin.search.SearchGate;
@@ -42,6 +43,7 @@ public final class SpongeTripServiceImpl
 
   private final SpongeNavigationServiceImpl navigationService;
   private final SpongeIntegrationRegistry integrations;
+  private final RegionStores regionStores;
 
   SpongeTripServiceImpl(
       SpongeNavigationServiceImpl navigationService,
@@ -50,10 +52,12 @@ public final class SpongeTripServiceImpl
       SearchRegistry<ServerLocation> searches,
       SearchGate gate,
       Supplier<SearchSettings> searchSettings,
-      long liveIntervalMillis) {
+      long liveIntervalMillis,
+      RegionStores regionStores) {
     super(trips, searches, gate, searchSettings, liveIntervalMillis);
     this.navigationService = navigationService;
     this.integrations = integrations;
+    this.regionStores = regionStores;
   }
 
   @Override
@@ -74,6 +78,10 @@ public final class SpongeTripServiceImpl
   @Override
   protected SearchHandle<ServerLocation, MinecraftStepPayload> navigate(
       ServerPlayer player, ServerLocation destination, MinecraftSearchSettings settings) {
+    // A trip's searches start where the player is, so their surroundings stay built for the
+    // searches that re-plan around them; released when the player's last trip ends.
+    Position<MinecraftWorld> at = navigationService.position(player.serverLocation());
+    regionStores.pin(uuid(player), at.domain(), at.cell().x() >> 4, at.cell().z() >> 4);
     return navigationService.navigatePlayer(player, destination, settings);
   }
 
