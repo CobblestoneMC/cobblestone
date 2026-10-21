@@ -177,7 +177,7 @@ public final class CobblestoneSpongePlugin {
         new TripManager<>(navigationService.scheduler(), config.get(keys.tripsMaxActivePerPlayer));
     this.integrationRegistry = new SpongeIntegrationRegistry(navigationService.regions());
     // Each trail floats its trip's name over itself while the player stands still; hitting the
-    // Cancel line above it cancels the trip. SpongeAPI can't show an entity to one player only, so
+    // Cancel line below it cancels the trip. SpongeAPI can't show an entity to one player only, so
     // everyone nearby sees
     // these labels.
     this.holograms = new SpongeHolograms();

@@ -61,9 +61,18 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
       Messages messages,
       TrailLabels<Location> labels,
       TrailShape shape,
-      BooleanSupplier showLabel) {
+      BooleanSupplier showTrailLabel,
+      BooleanSupplier showDestinationLabel) {
     super(
-        bufferCells, density, recalcDistance, messages, player.locale(), labels, shape, showLabel);
+        bufferCells,
+        density,
+        recalcDistance,
+        messages,
+        player.locale(),
+        labels,
+        shape,
+        showTrailLabel,
+        showDestinationLabel);
     this.player = player;
     this.particles = List.copyOf(particleTypes);
     this.highlightParticles = List.copyOf(highlightParticleTypes);

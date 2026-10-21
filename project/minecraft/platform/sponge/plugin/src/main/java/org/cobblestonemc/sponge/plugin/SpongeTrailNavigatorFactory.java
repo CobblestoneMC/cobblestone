@@ -81,11 +81,16 @@ public final class SpongeTrailNavigatorFactory implements NavigatorFactory {
             .get(TrailNavigatorSettings.COLORS)
             .orElseGet(() -> parseColors(config.get(keys.trailColors)));
     // An explicit choice holds for the trip; otherwise the config is followed live.
-    BooleanSupplier showLabel =
+    BooleanSupplier showTrailLabel =
         settings
-            .get(TrailNavigatorSettings.SHOW_LABEL)
+            .get(TrailNavigatorSettings.SHOW_TRAIL_LABEL)
             .<BooleanSupplier>map(show -> () -> show)
-            .orElse(() -> config.get(keys.tripsHolograms));
+            .orElse(() -> config.get(keys.tripsTrailLabels));
+    BooleanSupplier showDestinationLabel =
+        settings
+            .get(TrailNavigatorSettings.SHOW_DESTINATION_LABEL)
+            .<BooleanSupplier>map(show -> () -> show)
+            .orElse(() -> config.get(keys.tripsDestinationLabels));
     TrailShape shape =
         new TrailShape(
             config.get(keys.trailLeadBlocks),
@@ -104,7 +109,8 @@ public final class SpongeTrailNavigatorFactory implements NavigatorFactory {
         messages,
         labels,
         shape,
-        showLabel);
+        showTrailLabel,
+        showDestinationLabel);
   }
 
   /**

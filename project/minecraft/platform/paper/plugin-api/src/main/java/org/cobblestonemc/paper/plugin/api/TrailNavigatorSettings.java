@@ -47,11 +47,18 @@ public final class TrailNavigatorSettings {
       new NavigatorSettingKey<>("trail.colors");
 
   /**
-   * Whether the trip's name floats over the trail while the player stands still, where hitting it
-   * cancels the trip. Unset follows the server's {@code trips.holograms} config.
+   * Whether the trip's name floats where the trail starts while the player stands still, with a
+   * Cancel that cancels the trip. Unset follows the server's {@code trips.trail_labels} config.
    */
-  public static final NavigatorSettingKey<Boolean> SHOW_LABEL =
-      new NavigatorSettingKey<>("trail.show_label");
+  public static final NavigatorSettingKey<Boolean> SHOW_TRAIL_LABEL =
+      new NavigatorSettingKey<>("trail.show_trail_label");
+
+  /**
+   * Whether the destination's name floats over it once the player is close. Unset follows the
+   * server's {@code trips.destination_labels} config.
+   */
+  public static final NavigatorSettingKey<Boolean> SHOW_DESTINATION_LABEL =
+      new NavigatorSettingKey<>("trail.show_destination_label");
 
   private TrailNavigatorSettings() {}
 
@@ -105,14 +112,26 @@ public final class TrailNavigatorSettings {
     }
 
     /**
-     * Sets whether the trip's name floats over the trail while the player stands still, where
-     * hitting it cancels the trip. Unset follows the server's {@code trips.holograms} config.
+     * Sets whether the trip's name floats where the trail starts while the player stands still. See
+     * {@link #SHOW_TRAIL_LABEL}.
      *
      * @param show whether to show it
      * @return this builder
      */
-    public Builder showLabel(boolean show) {
-      delegate.set(SHOW_LABEL, show);
+    public Builder showTrailLabel(boolean show) {
+      delegate.set(SHOW_TRAIL_LABEL, show);
+      return this;
+    }
+
+    /**
+     * Sets whether the destination's name floats over it once the player is close. See {@link
+     * #SHOW_DESTINATION_LABEL}.
+     *
+     * @param show whether to show it
+     * @return this builder
+     */
+    public Builder showDestinationLabel(boolean show) {
+      delegate.set(SHOW_DESTINATION_LABEL, show);
       return this;
     }
 

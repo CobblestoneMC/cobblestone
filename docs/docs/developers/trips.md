@@ -87,7 +87,7 @@ values fall back to the server configuration.
         .particles(List.of(Particle.DUST))
         .colors(List.of(Color.fromRGB(0xFFD54F), Color.fromRGB(0x4FC3F7)))
         .highlightParticles(List.of(Particle.END_ROD))
-        .showLabel(false) // no floating name over the trail for this trip
+        .showTrailLabel(false) // no floating name where the trail starts
         .build();
 
     tripService.navigate(player, objective, settings, "Lost Lantern");
@@ -104,15 +104,16 @@ values fall back to the server configuration.
         .particles(List.of(ParticleTypes.DUST.get()))
         .colors(List.of(Color.ofRgb(0xFFD54F), Color.ofRgb(0x4FC3F7)))
         .highlightParticles(List.of(ParticleTypes.END_ROD.get()))
-        .showLabel(false) // no floating name over the trail for this trip
+        .showTrailLabel(false) // no floating name where the trail starts
         .build();
 
     tripService.navigate(player, objective, settings, "Lost Lantern");
     ```
 
-`showLabel` decides whether the trip's name floats over its trail while the player stands still
-(where hitting `Cancel` above it cancels the trip). Unset, it follows the server's
-`trips.holograms` config.
+`showTrailLabel` decides whether the trip's name floats where its trail starts while the player
+stands still (where hitting `Cancel` below it cancels the trip), and `showDestinationLabel`
+whether the destination's name floats over it once they are close. Unset, they follow the server's
+`trips.trail_labels` and `trips.destination_labels` config.
 
 To use another navigator, build settings for its id:
 

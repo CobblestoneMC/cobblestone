@@ -151,11 +151,10 @@ class AbstractTrailNavigatorTest {
   }
 
   @Test
-  void theDestinationGlitters() {
+  void noGlitterAtTheDestination() {
     var navigator = new TestNavigator(straightPath(10, -1));
     navigator.tickMany(50);
-    assertFalse(navigator.highlights.isEmpty());
-    assertTrue(navigator.highlights.stream().allMatch(point -> point.x() > 9.5), "at the end");
+    assertEquals(0, navigator.highlights.size());
   }
 
   @Test
@@ -163,7 +162,8 @@ class AbstractTrailNavigatorTest {
     var navigator = new TestNavigator(straightPath(10, 2)); // the third step opens a door
     navigator.tickMany(50);
 
-    assertTrue(navigator.highlights.stream().anyMatch(point -> point.x() < 3.5), "at the door");
+    assertFalse(navigator.highlights.isEmpty());
+    assertTrue(navigator.highlights.stream().allMatch(point -> point.x() < 3.5), "at the door");
   }
 
   @Test
@@ -212,11 +212,24 @@ class AbstractTrailNavigatorTest {
   }
 
   @Test
-  void noLabelPointWhileLabelsAreOff() {
+  void eachLabelPointIsTurnedOffOnItsOwn() {
     var navigator = new TestNavigator(straightPath(10, -1));
-    navigator.showLabel.set(false);
+    navigator.showTrailLabel.set(false);
     navigator.tick();
     assertEquals(Optional.empty(), navigator.labelPoint());
+    assertTrue(navigator.goalPoint().isPresent());
+
+    navigator.showTrailLabel.set(true);
+    navigator.showDestinationLabel.set(false);
+    assertTrue(navigator.labelPoint().isPresent());
+    assertEquals(Optional.empty(), navigator.goalPoint());
+  }
+
+  @Test
+  void goalPointIsTheEndOfTheRoute() {
+    var navigator = new TestNavigator(straightPath(10, -1));
+    navigator.tick();
+    assertEquals(Optional.of(new Vec3(10.5, 0.9, 0.5)), navigator.goalPoint());
   }
 
   @Test
@@ -263,7 +276,8 @@ class AbstractTrailNavigatorTest {
 
     Vec3 player = new Vec3(0.5, 0, 0.5);
     TrailSmoother.BlockProbe probe = (x, y, z) -> y < 0 ? TrailBlock.SOLID : TrailBlock.OPEN;
-    final AtomicBoolean showLabel;
+    final AtomicBoolean showTrailLabel;
+    final AtomicBoolean showDestinationLabel;
     final List<Vec3> particles = new ArrayList<>();
     final List<Vec3> highlights = new ArrayList<>();
 
@@ -281,14 +295,15 @@ class AbstractTrailNavigatorTest {
 
     private TestNavigator(
         Path<Vec3, MinecraftStepPayload> path, TrailLabels<Vec3> labels, TrailShape shape) {
-      this(path, labels, shape, new AtomicBoolean(true));
+      this(path, labels, shape, new AtomicBoolean(true), new AtomicBoolean(true));
     }
 
     private TestNavigator(
         Path<Vec3, MinecraftStepPayload> path,
         TrailLabels<Vec3> labels,
         TrailShape shape,
-        AtomicBoolean showLabel) {
+        AtomicBoolean showTrailLabel,
+        AtomicBoolean showDestinationLabel) {
       super(
           64,
           1,
@@ -297,8 +312,10 @@ class AbstractTrailNavigatorTest {
           Locale.ROOT,
           labels,
           shape,
-          showLabel::get);
-      this.showLabel = showLabel;
+          showTrailLabel::get,
+          showDestinationLabel::get);
+      this.showTrailLabel = showTrailLabel;
+      this.showDestinationLabel = showDestinationLabel;
       setPath(path);
     }
 

@@ -42,6 +42,11 @@ final class SpongeHologramPlatform implements HologramPlatform<SpongeTripAgent, 
       }
 
       @Override
+      public void move(Vec3 to) {
+        label.move(vector(to));
+      }
+
+      @Override
       public void remove() {
         label.remove();
       }
@@ -72,6 +77,11 @@ final class SpongeHologramPlatform implements HologramPlatform<SpongeTripAgent, 
 
   private static Vec3 point(Vector3d vector) {
     return new Vec3(vector.x(), vector.y(), vector.z());
+  }
+
+  @Override
+  public String worldKey(SpongeTripAgent agent) {
+    return agent.player().world().key().asString();
   }
 
   @Override

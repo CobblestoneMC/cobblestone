@@ -44,8 +44,8 @@ import org.cobblestonemc.plugin.message.Messages;
  * of the guide back to the trail if they are off it, up to the next teleport), it starts at a
  * <i>trail head</i> some way ahead of them (see {@link TrailShape} and {@link TrailLeg#head}), so
  * the particles are always in front and never stream past their face. It stops short of a
- * destination they can see, which glitters. Highlights before action steps and marks on blocks to
- * mine are drawn however close they are.
+ * destination they can see, where its label takes over (see {@link TrailLabels}). Highlights before
+ * action steps and marks on blocks to mine are drawn however close they are.
  *
  * <p>All the follow geometry, progress, and rendering <i>layout</i> live here; a platform subclass
  * supplies only the handful of native operations — reading the player's position/world, converting
@@ -87,7 +87,8 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   private final Locale locale;
   private final TrailLabels<L> labels;
   private final TrailShape shape;
-  private final BooleanSupplier showLabel;
+  private final BooleanSupplier showTrailLabel;
+  private final BooleanSupplier showDestinationLabel;
   private final SpeedMeter speed = new SpeedMeter();
 
   private List<Step<L, MinecraftStepPayload>> steps;
@@ -117,9 +118,10 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
    * @param recalcDistance how far the player may stray before the route is recalculated; 0 never
    * @param messages the message renderer, for action prompts
    * @param locale the player's locale
-   * @param labels where the trip's label floats over the trail
+   * @param labels where the trip's labels float
    * @param shape where the trail starts and stops around the player
-   * @param showLabel whether to show that label (read whenever it is placed)
+   * @param showTrailLabel whether to label the trail head (read whenever it is placed)
+   * @param showDestinationLabel whether to label the destination (read whenever it is placed)
    */
   protected AbstractTrailNavigator(
       int bufferCells,
@@ -129,7 +131,8 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
       Locale locale,
       TrailLabels<L> labels,
       TrailShape shape,
-      BooleanSupplier showLabel) {
+      BooleanSupplier showTrailLabel,
+      BooleanSupplier showDestinationLabel) {
     this.bufferCells = bufferCells;
     this.density = Math.max(0.0, density);
     this.recalcDistance = recalcDistance;
@@ -137,7 +140,8 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     this.locale = locale;
     this.labels = labels;
     this.shape = shape;
-    this.showLabel = showLabel;
+    this.showTrailLabel = showTrailLabel;
+    this.showDestinationLabel = showDestinationLabel;
   }
 
   // --- platform hooks -------------------------------------------------------
@@ -212,7 +216,20 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   @Override
   public void start() {
     // The first tick renders the trail.
-    labels.attach(playerId(), this, this::labelPoint);
+    labels.attach(
+        playerId(),
+        this,
+        new TrailLabels.Source<>() {
+          @Override
+          public Optional<L> headPoint() {
+            return labelPoint();
+          }
+
+          @Override
+          public Optional<L> goalPoint() {
+            return AbstractTrailNavigator.this.goalPoint();
+          }
+        });
   }
 
   @Override
@@ -362,14 +379,28 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   }
 
   /**
-   * The trail head: where the trip's label goes. Empty while labels are off, or the trail isn't
+   * The trail head: where the trip's label goes. Empty while that label is off, or the trail isn't
    * drawn in the player's world.
    */
   Optional<L> labelPoint() {
-    if (!showLabel.getAsBoolean() || complete || !playerOnline() || trailHead == null) {
+    if (!showTrailLabel.getAsBoolean() || complete || !playerOnline() || trailHead == null) {
       return Optional.empty();
     }
     return Optional.of(location(trailHead));
+  }
+
+  /**
+   * The end of the route, if it is in the player's world: where the label naming the destination
+   * goes, unless the destination says where it is. Empty while that label is off.
+   */
+  Optional<L> goalPoint() {
+    if (!showDestinationLabel.getAsBoolean() || complete || steps.isEmpty() || !playerOnline()) {
+      return Optional.empty();
+    }
+    if (!sameWorld(playerWorldKey(), worldKey(steps.getLast().position()))) {
+      return Optional.empty();
+    }
+    return Optional.of(location(trail.original(trail.size() - 1)));
   }
 
   private boolean reachedGoal(Vec3 playerVec, String playerWorld) {
@@ -455,7 +486,7 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     double head = leg.head(shape.lead(speed.speed()), eye, probe);
     double end = leg.length();
     if (leg.toGoal() && LineOfSight.clear(eye, trail.node(trail.size() - 1), probe)) {
-      end -= shape.goalClearance(); // its glitter marks it from here
+      end -= shape.goalClearance(); // the destination's label takes it from here
     }
     trailHead = leg.at(head);
     leg.forEachDrawn(
@@ -522,7 +553,7 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
 
   /**
    * Highlights where each action step of {@code path} from step {@code from} to {@code to} is
-   * taken, and the destination, and marks each block to mine.
+   * taken, and marks each block to mine.
    */
   private void renderMarks(
       SmoothedTrail path,
@@ -547,8 +578,6 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
       }
       if (i + 1 < to && pathSteps.get(i + 1).payload().stepType().isAction()) {
         highlight(destination, random); // the next step is an action: take it here
-      } else if (pathSteps == steps && i == steps.size() - 1) {
-        highlight(destination, random); // the destination
       }
       if (payload.stepType() == MinecraftStepType.MINE) {
         var feet = BlockPos.of(path.original(i + 1));

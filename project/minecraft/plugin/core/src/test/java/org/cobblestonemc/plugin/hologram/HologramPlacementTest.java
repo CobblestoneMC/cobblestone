@@ -33,10 +33,11 @@ class HologramPlacementTest {
   }
 
   @Test
-  void movesUpOutOfASolidBlock() {
+  void movesAsideOutOfASolidBlock() {
+    // Up a block would leave Cancel, below the name, in the solid block; aside clears both.
     TrailSmoother.BlockProbe probe = solidAt(FLOOR, 3, 1, 0);
     assertEquals(
-        Optional.of(OVER.plus(new Vec3(0, 1, 0))),
+        Optional.of(OVER.plus(new Vec3(-1, 0, 0))),
         HologramPlacement.place(EYE, TRAIL, List.of(), probe));
   }
 
