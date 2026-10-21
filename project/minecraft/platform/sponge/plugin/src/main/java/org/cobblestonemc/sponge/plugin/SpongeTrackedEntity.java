@@ -9,6 +9,8 @@ package org.cobblestonemc.sponge.plugin;
 
 import java.util.Optional;
 import java.util.UUID;
+import org.cobblestonemc.plugin.navigator.Vec3;
+import org.cobblestonemc.plugin.trip.TripTarget;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.data.Keys;
 import org.spongepowered.api.entity.Entity;
@@ -27,6 +29,9 @@ import org.spongepowered.api.world.server.ServerWorld;
  */
 final class SpongeTrackedEntity {
 
+  /** How far above the top of an entity its name tag floats, in blocks. */
+  private static final double NAME_TAG_RISE = 0.5;
+
   private final UUID uuid;
 
   // Written only on the main thread and read by any thread, search threads included. Volatile is
@@ -34,6 +39,7 @@ final class SpongeTrackedEntity {
   // never needed together.
   private volatile Entity lastSeen;
   private volatile ServerLocation lastLocation;
+  private volatile double lastHeight;
 
   SpongeTrackedEntity(UUID uuid) {
     this.uuid = uuid;
@@ -47,6 +53,20 @@ final class SpongeTrackedEntity {
   Optional<ServerLocation> location() {
     refresh();
     return Optional.ofNullable(lastLocation);
+  }
+
+  /**
+   * Where a label naming the entity floats: just above it, where a name tag would be.
+   *
+   * @return the point, or empty if it has not been seen loaded
+   */
+  Optional<TripTarget.Point> labelPoint() {
+    return location()
+        .map(
+            at ->
+                new TripTarget.Point(
+                    at.world().key().asString(),
+                    new Vec3(at.x(), at.y() + lastHeight + NAME_TAG_RISE, at.z())));
   }
 
   /**
@@ -76,6 +96,7 @@ final class SpongeTrackedEntity {
       }
       if (!entity.get().isRemoved()) {
         lastSeen = entity.get();
+        lastHeight = entity.get().boundingBox().map(box -> box.size().y()).orElse(0.0);
         lastLocation = entity.get().serverLocation();
         return;
       }

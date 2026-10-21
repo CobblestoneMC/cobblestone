@@ -376,6 +376,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
                     .stream()
                     .toList())
         .mobile()
+        .anchor(tracked::labelPoint) // a mount has no name over it, so its label follows it
         .existence(tracked::alive)
         .build();
   }
@@ -410,6 +411,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
                     return NavigationTarget.builder(
                             name, () -> tracked.location().map(regions::block).stream().toList())
                         .mobile()
+                        .labeled() // its name shows over it
                         .existence(tracked::alive)
                         .build();
                   })));
@@ -493,6 +495,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
                                       .stream()
                                       .toList())
                           .mobile()
+                          .labeled() // their name tag
                           .existence(() -> Sponge.server().player(uuid).isPresent())
                           .build())));
     }
