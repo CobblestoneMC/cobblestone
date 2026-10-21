@@ -21,9 +21,8 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.paper.plugin.api.Destination;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
-import org.cobblestonemc.paper.plugin.api.DestinationTree;
+import org.cobblestonemc.plugin.api.DestinationTree;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
-import org.cobblestonemc.plugin.api.PlatformDestinationTree;
 import org.joml.Vector3i;
 
 /**
@@ -48,36 +47,36 @@ import org.joml.Vector3i;
 final class TownyDestinationService implements DestinationService {
 
   @Override
-  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
-    DestinationTree towns = DestinationTree.builder();
+  public DestinationTree<MinecraftDestination<World, Vector3i>> provide(Player player) {
+    var towns = Destination.tree();
     for (Town town : TownyAPI.getInstance().getTowns()) {
       String name = town.getName();
       // A town is somewhere to go, and also holds its home, outposts and plots.
       towns.destination(name, () -> wholeTown(town));
-      towns.children(name, () -> townDetail(town));
+      towns.subtree(name, () -> townDetail(town));
     }
 
-    DestinationTree root = DestinationTree.builder().children("town", towns);
+    var root = Destination.tree().subtree("town", towns);
     Town own = ownTown(player);
     if (own != null) {
-      root.children("resident", () -> townDetail(own));
+      root.subtree("resident", () -> townDetail(own));
       root.destination("resident", () -> wholeTown(own));
     }
     return root.build();
   }
 
-  private static PlatformDestinationTree<World, Vector3i> townDetail(Town town) {
-    return DestinationTree.builder()
+  private static DestinationTree<MinecraftDestination<World, Vector3i>> townDetail(Town town) {
+    return Destination.tree()
         .strict()
         .destination("home", () -> Destination.at(town.getSpawnOrNull(), "home"))
-        .children("outpost", () -> outposts(town))
-        .children("type", () -> plots(town, TownBlock::getTypeName))
-        .children("plot", () -> plots(town, TownBlock::getName))
+        .subtree("outpost", () -> outposts(town))
+        .subtree("type", () -> plots(town, TownBlock::getTypeName))
+        .subtree("plot", () -> plots(town, TownBlock::getName))
         .build();
   }
 
-  private static PlatformDestinationTree<World, Vector3i> outposts(Town town) {
-    DestinationTree tree = DestinationTree.builder().strict();
+  private static DestinationTree<MinecraftDestination<World, Vector3i>> outposts(Town town) {
+    var tree = Destination.tree().strict();
     List<Location> spawns = town.getAllOutpostSpawns();
     for (int i = 0; i < spawns.size(); i++) {
       Location spawn = spawns.get(i);
@@ -87,9 +86,9 @@ final class TownyDestinationService implements DestinationService {
   }
 
   /** A sub-tree keyed by a plot attribute (type or name); each leaf unions the matching plots. */
-  private static PlatformDestinationTree<World, Vector3i> plots(
+  private static DestinationTree<MinecraftDestination<World, Vector3i>> plots(
       Town town, Function<TownBlock, String> attribute) {
-    DestinationTree tree = DestinationTree.builder().strict();
+    var tree = Destination.tree().strict();
     Set<String> keys = new LinkedHashSet<>();
     for (TownBlock townBlock : town.getTownBlocks()) {
       String value = attribute.apply(townBlock);

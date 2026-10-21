@@ -7,7 +7,7 @@
 
 package org.cobblestonemc.plugin.destination;
 
-import org.cobblestonemc.plugin.api.DestinationNode;
+import org.cobblestonemc.plugin.api.DestinationTree;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -27,5 +27,5 @@ public interface DestinationProvider<P> {
    * @return the branch, or {@code null} if there is nothing to offer this player right now
    */
   @Nullable
-  DestinationNode<NavigationTarget> provide(P player);
+  DestinationTree<NavigationTarget> provide(P player);
 }
