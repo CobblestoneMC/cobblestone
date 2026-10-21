@@ -23,30 +23,50 @@ import org.cobblestonemc.plugin.navigator.AbstractTrailNavigator;
 import org.cobblestonemc.plugin.navigator.TrailBlock;
 import org.cobblestonemc.plugin.navigator.TrailSmoother;
 import org.cobblestonemc.plugin.navigator.Vec3;
+import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.block.BlockState;
 import org.spongepowered.api.effect.particle.ParticleEffect;
+import org.spongepowered.api.effect.particle.ParticleOption;
 import org.spongepowered.api.effect.particle.ParticleOptions;
 import org.spongepowered.api.effect.particle.ParticleType;
 import org.spongepowered.api.effect.particle.ParticleTypes;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
+import org.spongepowered.api.registry.RegistryTypes;
 import org.spongepowered.api.util.Color;
+import org.spongepowered.api.util.Ticks;
 import org.spongepowered.api.world.server.ServerLocation;
 import org.spongepowered.math.vector.Vector3d;
 
 /**
  * The Sponge binding of {@link AbstractTrailNavigator}: the shared trail geometry with Sponge's
- * native particle spawning. Each configured particle type is drawn per-particle (DUST takes a
- * random colour from the configured palette), shown only to the guided player. The player is
- * re-resolved by UUID each tick so a logout invalidates cleanly. Sponge is single-threaded, so
- * rendering runs on the main server thread.
+ * native particle spawning. Each configured particle type is drawn per-particle (TRAIL, which
+ * drifts along the trail for exactly its configured lifetime, and DUST take a random colour from
+ * the configured palette), shown only to the guided player. The player is re-resolved by UUID each
+ * tick so a logout invalidates cleanly. Sponge is single-threaded, so rendering runs on the main
+ * server thread.
  */
 final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> {
+
+  /**
+   * The {@code trail} particle, from Minecraft 1.21.2, and the option saying where it drifts to.
+   * Looked up rather than named: the SpongeAPI this compiles against predates both.
+   */
+  private static final Optional<ParticleType> TRAIL =
+      Sponge.game().registry(RegistryTypes.PARTICLE_TYPE).findValue(ResourceKey.minecraft("trail"));
+
+  @SuppressWarnings("unchecked")
+  private static final Optional<ParticleOption<Vector3d>> TARGET =
+      Sponge.game()
+          .registry(RegistryTypes.PARTICLE_OPTION)
+          .findValue(ResourceKey.sponge("target"))
+          .map(option -> (ParticleOption<Vector3d>) option);
 
   private final UUID playerId;
   private final List<ParticleType> particles;
   private final List<ParticleType> highlightParticles;
   private final List<Color> colors;
+  private final int particleTicks;
   // Block states are immutable and shared, and a data lookup is slow, so remember each answer.
   private final Map<BlockState, Boolean> solidByState = new HashMap<>();
 
@@ -58,6 +78,7 @@ final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> 
       List<ParticleType> highlightParticleTypes,
       List<Color> palette,
       double density,
+      int particleTicks,
       int recalcDistance,
       Messages messages,
       TrailLabels<ServerLocation> labels,
@@ -66,7 +87,8 @@ final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> 
     this.playerId = player.uniqueId();
     this.particles = List.copyOf(particleTypes);
     this.highlightParticles = List.copyOf(highlightParticleTypes);
-    this.colors = palette.isEmpty() ? List.of(Color.ofRgb(0x55FFFF)) : List.copyOf(palette);
+    this.colors = palette.isEmpty() ? List.of(Color.ofRgb(0x4AA8FF)) : List.copyOf(palette);
+    this.particleTicks = Math.max(1, particleTicks);
     setPath(path);
   }
 
@@ -140,7 +162,14 @@ final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> 
     ThreadLocalRandom random = ThreadLocalRandom.current();
     ParticleType type = types.get(random.nextInt(types.size()));
     ParticleEffect.Builder effect = ParticleEffect.builder().type(type).quantity(1);
-    if (type.equals(ParticleTypes.DUST.get())) {
+    if (TRAIL.isPresent() && TARGET.isPresent() && type.equals(TRAIL.get())) {
+      // Drifts along the trail at its flow speed, then is gone: it lasts exactly particleTicks.
+      double seconds = particleTicks / 20.0;
+      effect
+          .option(ParticleOptions.COLOR.get(), colors.get(random.nextInt(colors.size())))
+          .option(TARGET.get(), new Vector3d(x + vx * seconds, y + vy * seconds, z + vz * seconds))
+          .option(ParticleOptions.TRAVEL_TIME.get(), Ticks.of(particleTicks));
+    } else if (type.equals(ParticleTypes.DUST.get())) {
       effect.option(ParticleOptions.COLOR.get(), colors.get(random.nextInt(colors.size())));
     } else if (vx != 0 || vy != 0 || vz != 0) {
       effect.velocity(new Vector3d(vx, vy, vz));
