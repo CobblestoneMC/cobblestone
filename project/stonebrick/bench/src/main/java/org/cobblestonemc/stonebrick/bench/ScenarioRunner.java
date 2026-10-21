@@ -44,6 +44,7 @@ import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 import org.cobblestonemc.minecraft.regions.MinecraftAgent;
 import org.cobblestonemc.minecraft.regions.MinecraftTerrain;
+import org.cobblestonemc.regions.RegionFiles;
 import org.cobblestonemc.regions.RegionHeuristic;
 import org.cobblestonemc.regions.RegionSearch;
 import org.cobblestonemc.regions.RegionSpec;
@@ -387,23 +388,55 @@ public final class ScenarioRunner {
 
     return String.format(
         Locale.ROOT,
-        "readMs=%.1f buildMs=%.1f placeMs=%.1f seamMs=%.1f searchMs=%.1f queries=%d"
-            + " settled=%d built=%d regions=%d portals=%d graphKB=%d storeKB=%d",
+        "readMs=%.1f buildMs=%.1f diskMs=%.1f placeMs=%.1f seamMs=%.1f searchMs=%.1f queries=%d"
+            + " settled=%d built=%d fromDisk=%d diskKB=%d regions=%d portals=%d graphKB=%d"
+            + " storeKB=%d",
         fetchNanos / 1e6,
         store.buildNanos() / 1e6,
+        store.diskNanos() / 1e6,
         placeNanos / 1e6,
         seamNanos / 1e6,
         searchNanos / 1e6,
         queries,
         expansions,
         store.builds(),
+        store.diskLoads(),
+        store.diskBytesRead() / 1024,
         regions,
         portals,
         bytes / 1024,
         store.bytesInMemory() / 1024);
   }
 
+  /**
+   * Writes the last run's built columns to its cache on disk, if it has one.
+   *
+   * <p>What a server's periodic flush does; a warm sweep calls it between the run that fills the
+   * cache and the run it measures.
+   */
+  public void flushRegionCache() {
+    if (lastRegionStore != null) {
+      lastRegionStore.flush().join();
+      lastRegionStore.close().join();
+    }
+  }
+
+  /**
+   * Sets a directory to keep built columns in across runs, as a server keeps them across restarts;
+   * {@code null} to build every column afresh each run.
+   *
+   * @param directory the cache directory, or {@code null}
+   */
+  public void regionCache(@Nullable Path directory) {
+    if (lastRegionStore != null) {
+      lastRegionStore.close().join(); // released, so the directory can be deleted
+    }
+    this.regionCache = directory;
+  }
+
   private @Nullable RegionStore<MinecraftChunk> lastRegionStore;
+
+  private @Nullable Path regionCache;
 
   /**
    * The detour a region may hold before the fill splits it, from {@code -Dregions.detour}; a tuning
@@ -445,11 +478,18 @@ public final class ScenarioRunner {
     }
     CaptureChunkColumns columns = new CaptureChunkColumns(platform, scenario.world());
     lastRegionColumns = columns;
-    // One store for the run, on this thread: a cold start.
+    // One store for the run, on this thread: a cold start, or a restart over a cache on disk.
     MinecraftWorld world = platform.world(scenario.world());
     RegionStore<MinecraftChunk> store =
-        RegionStore.inMemory(
-            new RegionSpec<>(MinecraftTerrain.INSTANCE, world.minY(), world.maxY(), REGION_DETOUR));
+        new RegionStore<>(
+            new RegionSpec<>(MinecraftTerrain.INSTANCE, world.minY(), world.maxY(), REGION_DETOUR),
+            Long.MAX_VALUE,
+            regionCache == null
+                ? null
+                : regionCache.resolve(
+                    RegionFiles.directoryName(scenario.capture() + "-" + scenario.world())),
+            Runnable::run,
+            Runnable::run);
     lastRegionStore = store;
     return new RegionHeuristic<MinecraftChunk>(
         region -> columns,

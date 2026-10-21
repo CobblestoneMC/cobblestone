@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.plugin.config;
 
+import java.nio.file.Path;
 import java.util.Locale;
 import java.util.function.Consumer;
 import org.cobblestonemc.api.SearchSettings;
@@ -42,12 +43,23 @@ public final class RegionConfig {
   /**
    * Creates the server's region stores from the settings.
    *
+   * @param dataFolder the plugin's data folder, under which regions are kept if they persist
    * @return the stores
    */
-  public RegionStores stores() {
+  public RegionStores stores(Path dataFolder) {
     return new RegionStores(
+        config.get(keys.regionsPersist) ? dataFolder.resolve("regions") : null,
         Math.max(16, config.get(keys.regionsMemoryMegabytes)) * 1024L * 1024L,
         Math.max(1, Runtime.getRuntime().availableProcessors() / 4));
+  }
+
+  /**
+   * Returns how often new regions are written to disk, in seconds.
+   *
+   * @return the interval
+   */
+  public long flushSeconds() {
+    return Math.max(5, config.get(keys.regionsFlushSeconds));
   }
 
   /**

@@ -29,7 +29,7 @@ import org.cobblestonemc.stonebrick.platform.IoProfile;
  *   bench run      [--scenario id] [--tier ci|local] [--tag t]   run and compare against baselines
  *   bench accept   [--scenario id] [--tier ci|local]             run and record the results as accepted
  *   bench list                                                   show the corpus
- *   bench sweep    [--heuristic h] [--weights 1.5,2.0] [--io p]   the nodes-versus-cost curve
+ *   bench sweep    [--heuristic h] [--weights 1.5,2.0] [--io p] [--warm]   the nodes-versus-cost curve
  *   bench verify   [--scenario id] [--agent a]                    estimates against Dijkstra's cost
  *   bench check    [--scenario id]                                 can the bench use a new scenario?
  *   bench path     [--scenario id] [--agent a]                    the cells of the route found
@@ -354,7 +354,8 @@ public final class BenchMain {
       Scenario.Heuristic heuristic,
       double[] weights,
       String agent,
-      IoProfile io) {
+      IoProfile io,
+      boolean warm) {
 
     static Options parse(String[] args) {
       String command = args.length > 0 && !args[0].startsWith("--") ? args[0] : "run";
@@ -369,6 +370,7 @@ public final class BenchMain {
       double[] weights = null;
       String agent = null;
       IoProfile io = null;
+      boolean warm = false;
 
       for (int i = 0; i < args.length; i++) {
         switch (args[i]) {
@@ -391,6 +393,7 @@ public final class BenchMain {
                   "Unknown --io '" + name + "'. Known: zero, nvme, sata, spinning, busy.");
             }
           }
+          case "--warm" -> warm = true;
           default -> {
             // The positional command, already taken. Anything else is a typo, and ignoring it
             // would quietly run something other than what was asked for.
@@ -413,7 +416,8 @@ public final class BenchMain {
           heuristic,
           weights,
           agent,
-          io);
+          io,
+          warm);
     }
 
     private static double[] weights(String value) {

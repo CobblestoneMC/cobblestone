@@ -31,6 +31,7 @@ import org.bukkit.event.block.SpongeAbsorbEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.world.StructureGrowEvent;
+import org.bukkit.event.world.WorldSaveEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
 import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.paper.WorldWrapper;
@@ -171,7 +172,13 @@ final class PaperRegionListener implements Listener {
     }
   }
 
-  /** A world that unloads takes its regions with it. */
+  /** The world is saving: write the regions too, so a crash after it loses nothing. */
+  @EventHandler(priority = EventPriority.MONITOR)
+  public void onSave(WorldSaveEvent event) {
+    stores.flush();
+  }
+
+  /** A world that unloads takes its regions with it, once they are written. */
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   public void onWorldUnload(WorldUnloadEvent event) {
     stores.worldUnloaded(worlds.wrap(event.getWorld()).key());
