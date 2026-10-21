@@ -10,6 +10,7 @@ package org.cobblestonemc.stonebrick.platform;
 import java.util.Arrays;
 import org.cobblestonemc.minecraft.Direction;
 import org.cobblestonemc.minecraft.MinecraftBlock;
+import org.cobblestonemc.minecraft.MiningClass;
 import org.cobblestonemc.stonebrick.format.BlockTraits;
 
 /**
@@ -122,6 +123,13 @@ final class StonebrickBlock implements MinecraftBlock {
   @Override
   public boolean supportsBoat() {
     return traits.has(BlockTraits.SUPPORTS_BOAT);
+  }
+
+  @Override
+  public MiningClass miningClass() {
+    MiningClass klass = MiningClass.byId(traits.miningClass());
+    // A number no class has is a capture from a build with classes this one lacks.
+    return klass == null ? MiningClass.ROCK : klass;
   }
 
   @Override
