@@ -51,7 +51,7 @@ public final class DestinationChild<D> {
    * @param <D> what the destinations build
    * @return the entry
    */
-  public static <D> DestinationChild<D> ofDestination(DestinationLeaf<D> destination) {
+  static <D> DestinationChild<D> ofDestination(DestinationLeaf<D> destination) {
     return new DestinationChild<>(Objects.requireNonNull(destination, "destination"), null);
   }
 
@@ -62,8 +62,7 @@ public final class DestinationChild<D> {
    * @param <D> what the destinations build
    * @return the entry
    */
-  public static <D> DestinationChild<D> ofChildren(
-      Supplier<? extends DestinationNode<D>> children) {
+  static <D> DestinationChild<D> ofChildren(Supplier<? extends DestinationNode<D>> children) {
     return new DestinationChild<>(null, Objects.requireNonNull(children, "children"));
   }
 
@@ -91,7 +90,7 @@ public final class DestinationChild<D> {
    * @param destination the destination
    * @return the copy
    */
-  public DestinationChild<D> withDestination(DestinationLeaf<D> destination) {
+  DestinationChild<D> withDestination(DestinationLeaf<D> destination) {
     return new DestinationChild<>(Objects.requireNonNull(destination, "destination"), children);
   }
 
@@ -101,7 +100,7 @@ public final class DestinationChild<D> {
    * @param children builds the level when it is visited
    * @return the copy
    */
-  public DestinationChild<D> withChildren(Supplier<? extends DestinationNode<D>> children) {
+  DestinationChild<D> withChildren(Supplier<? extends DestinationNode<D>> children) {
     return new DestinationChild<>(destination, Objects.requireNonNull(children, "children"));
   }
 

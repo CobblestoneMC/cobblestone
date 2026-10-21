@@ -33,7 +33,9 @@ public interface DestinationNode<D> {
   boolean strict();
 
   /**
-   * Returns the entries at this level, keyed by their key.
+   * Returns the entries at this level, keyed by their key. A key is a single token typed in
+   * commands and used in permission nodes: upper case is allowed, special characters are not, and
+   * spaces are allowed but discouraged.
    *
    * @return the entries
    */
