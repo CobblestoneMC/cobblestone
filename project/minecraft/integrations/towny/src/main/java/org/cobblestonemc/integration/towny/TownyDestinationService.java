@@ -16,12 +16,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.function.Function;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.paper.plugin.api.Destination;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
 import org.cobblestonemc.paper.plugin.api.DestinationTree;
+import org.cobblestonemc.plugin.api.DestinationChild;
+import org.cobblestonemc.plugin.api.Display;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.cobblestonemc.plugin.api.PlatformDestinationTree;
 import org.joml.Vector3i;
@@ -41,54 +44,82 @@ import org.joml.Vector3i;
  *       name)
  * </ul>
  *
+ * <p>How each entry looks in the navigation menu comes from this plugin's config ({@link
+ * TownyIcons}).
+ *
  * <p>Navigability is gated by Cobblestone's {@code cobblestone.navigate.towny.*} permission
  * (default-allow), not by whether the player may teleport there. Regions are read from Towny
  * lazily, on the search-initiating thread.
  */
 final class TownyDestinationService implements DestinationService {
 
+  private final TownyIcons icons;
+
+  TownyDestinationService(TownyIcons icons) {
+    this.icons = icons;
+  }
+
   @Override
   public PlatformDestinationTree<World, Vector3i> provide(Player player) {
     DestinationTree towns = DestinationTree.builder();
     for (Town town : TownyAPI.getInstance().getTowns()) {
-      String name = town.getName();
-      // A town is somewhere to go, and also holds its home, outposts and plots.
-      towns.destination(name, () -> wholeTown(town));
-      towns.children(name, () -> townDetail(town));
+      towns.child(town.getName(), townEntry(town));
     }
 
-    DestinationTree root = DestinationTree.builder().children("town", towns);
+    DestinationTree root =
+        DestinationTree.builder().child("town", shown(icons.towns()).children(towns::build));
     Town own = ownTown(player);
     if (own != null) {
-      root.children("resident", () -> townDetail(own));
-      root.destination("resident", () -> wholeTown(own));
+      root.child("resident", townEntry(own).label(null));
     }
     return root.build();
   }
 
-  private static PlatformDestinationTree<World, Vector3i> townDetail(Town town) {
+  @Override
+  public Display display(Player player) {
+    return icons.root();
+  }
+
+  /** A town: somewhere to go, which also holds its home, outposts and plots. */
+  private DestinationChild.Builder<MinecraftDestination<World, Vector3i>> townEntry(Town town) {
+    return shown(icons.town(town))
+        .label(label(town))
+        .destination(() -> wholeTown(town))
+        .children(() -> townDetail(town));
+  }
+
+  private PlatformDestinationTree<World, Vector3i> townDetail(Town town) {
     return DestinationTree.builder()
         .strict()
-        .destination("home", () -> Destination.at(town.getSpawnOrNull(), "home"))
-        .children("outpost", () -> outposts(town))
-        .children("type", () -> plots(town, TownBlock::getTypeName))
-        .children("plot", () -> plots(town, TownBlock::getName))
+        .child(
+            "home",
+            shown(icons.home()).destination(() -> Destination.at(town.getSpawnOrNull(), "home")))
+        .child("outpost", shown(icons.outposts()).children(() -> outposts(town)))
+        .child(
+            "type",
+            shown(icons.plotTypes())
+                .children(() -> plots(town, TownBlock::getTypeName, icons.plotType())))
+        .child(
+            "plot",
+            shown(icons.plots()).children(() -> plots(town, TownBlock::getName, icons.plot())))
         .build();
   }
 
-  private static PlatformDestinationTree<World, Vector3i> outposts(Town town) {
+  private PlatformDestinationTree<World, Vector3i> outposts(Town town) {
     DestinationTree tree = DestinationTree.builder().strict();
     List<Location> spawns = town.getAllOutpostSpawns();
     for (int i = 0; i < spawns.size(); i++) {
       Location spawn = spawns.get(i);
-      tree.destination(Integer.toString(i + 1), () -> Destination.at(spawn, "outpost"));
+      tree.child(
+          Integer.toString(i + 1),
+          shown(icons.outpost()).destination(() -> Destination.at(spawn, "outpost")));
     }
     return tree.build();
   }
 
   /** A sub-tree keyed by a plot attribute (type or name); each leaf unions the matching plots. */
   private static PlatformDestinationTree<World, Vector3i> plots(
-      Town town, Function<TownBlock, String> attribute) {
+      Town town, Function<TownBlock, String> attribute, Display display) {
     DestinationTree tree = DestinationTree.builder().strict();
     Set<String> keys = new LinkedHashSet<>();
     for (TownBlock townBlock : town.getTownBlocks()) {
@@ -98,20 +129,33 @@ final class TownyDestinationService implements DestinationService {
       }
     }
     for (String key : keys) {
-      tree.destination(
+      tree.child(
           key,
-          () ->
-              Destination.regions(
+          shown(display)
+              .destination(
                   () ->
-                      TownyRegions.plots(
-                          town, block -> key.equalsIgnoreCase(attribute.apply(block))),
-                  key));
+                      Destination.regions(
+                          () ->
+                              TownyRegions.plots(
+                                  town, block -> key.equalsIgnoreCase(attribute.apply(block))),
+                          key)));
     }
     return tree.build();
   }
 
   private static MinecraftDestination<World, Vector3i> wholeTown(Town town) {
     return Destination.regions(() -> TownyRegions.plots(town, block -> true), town.getName());
+  }
+
+  /** An entry shown with the given display, to give a destination or a level. */
+  private static DestinationChild.Builder<MinecraftDestination<World, Vector3i>> shown(
+      Display display) {
+    return DestinationTree.child().display(display);
+  }
+
+  /** Towny writes spaces in a town's name as underscores. */
+  private static Component label(Town town) {
+    return Component.text(town.getName().replace('_', ' '));
   }
 
   private static Town ownTown(Player player) {
