@@ -51,17 +51,6 @@ public final class DestinationEntry<D> {
     return new Builder<>();
   }
 
-  /** An entry that is only a destination. */
-  static <D> DestinationEntry<D> ofDestination(DestinationLeaf<D> destination) {
-    return new DestinationEntry<>(
-        Objects.requireNonNull(destination, "destination"), null, Display.none());
-  }
-
-  /** An entry that only holds a subtree. */
-  static <D> DestinationEntry<D> ofSubtree(Supplier<? extends DestinationTree<D>> subtree) {
-    return new DestinationEntry<>(null, Objects.requireNonNull(subtree, "subtree"), Display.none());
-  }
-
   /**
    * The destination this entry names, if it is one.
    *
@@ -97,17 +86,6 @@ public final class DestinationEntry<D> {
    */
   public DestinationEntry<D> withDisplay(Display display) {
     return new DestinationEntry<>(destination, subtree, display);
-  }
-
-  /** A copy that is (also) the given destination. */
-  DestinationEntry<D> withDestination(DestinationLeaf<D> destination) {
-    return new DestinationEntry<>(
-        Objects.requireNonNull(destination, "destination"), subtree, display);
-  }
-
-  /** A copy that (also) holds the given subtree. */
-  DestinationEntry<D> withSubtree(Supplier<? extends DestinationTree<D>> subtree) {
-    return new DestinationEntry<>(destination, Objects.requireNonNull(subtree, "subtree"), display);
   }
 
   /**
@@ -208,6 +186,17 @@ public final class DestinationEntry<D> {
     public Builder<D> icon(Icon icon) {
       this.display = display.withIcon(icon);
       return this;
+    }
+
+    /**
+     * Gives the entry a subtree from another builder, built now, once.
+     *
+     * @param subtree the subtree's builder
+     * @return this builder
+     */
+    public Builder<D> subtree(DestinationTree.Builder<D> subtree) {
+      DestinationTree<D> built = subtree.build();
+      return subtree(() -> built);
     }
 
     /**

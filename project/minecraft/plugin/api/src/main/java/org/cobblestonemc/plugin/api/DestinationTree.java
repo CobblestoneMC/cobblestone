@@ -10,6 +10,7 @@ package org.cobblestonemc.plugin.api;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
@@ -93,8 +94,9 @@ public interface DestinationTree<D> {
   /**
    * Builds a {@link DestinationTree}, keeping entries in the order they are added.
    *
-   * <p>{@link #destination} and {@link #subtree} under the same key make one entry with both roles,
-   * whichever comes first.
+   * <p>Each key is added once. For an entry that is both a destination and a subtree, build it with
+   * {@link DestinationEntry#builder()} and add it with {@link #entry(String,
+   * DestinationEntry.Builder)}.
    *
    * @param <D> what the destinations build
    */
@@ -117,23 +119,29 @@ public interface DestinationTree<D> {
     }
 
     /**
-     * Adds an entry, replacing any already under its key.
+     * Adds an entry.
      *
      * @param key its key
      * @param entry the entry
      * @return this builder
+     * @throws IllegalArgumentException if the key is already a key or an alias here
      */
     public Builder<D> entry(String key, DestinationEntry<D> entry) {
+      Objects.requireNonNull(entry, "entry");
+      if (entries.containsKey(key) || aliases.containsKey(key)) {
+        throw new IllegalArgumentException(key + " is already a key or an alias here");
+      }
       entries.put(key, entry);
       return this;
     }
 
     /**
-     * Adds an entry, replacing any already under its key.
+     * Adds an entry.
      *
      * @param key its key
      * @param entry the entry's builder, built now
      * @return this builder
+     * @throws IllegalArgumentException if the key is already a key or an alias here
      * @throws IllegalStateException if the entry was given neither a destination nor a subtree
      */
     public Builder<D> entry(String key, DestinationEntry.Builder<D> entry) {
@@ -141,59 +149,52 @@ public interface DestinationTree<D> {
     }
 
     /**
-     * Makes the entry under {@code key} a destination, described by {@code destination} — for one
-     * with permissions or options, or one that may be {@linkplain Validity#invalid invalid} — and
-     * adds the entry if there is none yet.
+     * Adds an entry that is a destination, described by {@code destination} — for one with
+     * permissions or options, or one that may be {@linkplain Validity#invalid invalid}.
      *
      * @param key its key
      * @param destination the destination
      * @return this builder
+     * @throws IllegalArgumentException if the key is already a key or an alias here
      */
     public Builder<D> destination(String key, DestinationLeaf<D> destination) {
-      entries.merge(
-          key,
-          DestinationEntry.ofDestination(destination),
-          (existing, added) -> existing.withDestination(destination));
-      return this;
+      return entry(key, DestinationEntry.<D>builder().destination(destination));
     }
 
     /**
-     * Makes the entry under {@code key} a destination, built once a player picks it, and adds the
-     * entry if there is none yet.
+     * Adds an entry that is a destination, built once a player picks it.
      *
      * @param key its key
      * @param destination supplies the destination when it is picked
      * @return this builder
+     * @throws IllegalArgumentException if the key is already a key or an alias here
      */
     public Builder<D> destination(String key, Supplier<? extends D> destination) {
       return destination(key, DestinationLeaf.of(destination));
     }
 
     /**
-     * Gives the entry under {@code key} a subtree, built when it is visited, and adds the entry if
-     * there is none yet.
+     * Adds an entry that holds a subtree, built each time it is visited.
      *
      * @param key its key
      * @param subtree supplies the subtree when it is visited
      * @return this builder
+     * @throws IllegalArgumentException if the key is already a key or an alias here
      */
     public Builder<D> subtree(String key, Supplier<? extends DestinationTree<D>> subtree) {
-      entries.merge(
-          key,
-          DestinationEntry.ofSubtree(subtree),
-          (existing, added) -> existing.withSubtree(subtree));
-      return this;
+      return entry(key, DestinationEntry.<D>builder().subtree(subtree));
     }
 
     /**
-     * Gives the entry under {@code key} a subtree from another builder, built when it is visited.
+     * Adds an entry that holds a subtree from another builder, built now, once.
      *
      * @param key its key
      * @param subtree the subtree's builder
      * @return this builder
+     * @throws IllegalArgumentException if the key is already a key or an alias here
      */
     public Builder<D> subtree(String key, Builder<D> subtree) {
-      return subtree(key, subtree::build);
+      return entry(key, DestinationEntry.<D>builder().subtree(subtree));
     }
 
     /**
@@ -204,15 +205,15 @@ public interface DestinationTree<D> {
      * @param key the key of a destination already added
      * @return this builder
      * @throws IllegalArgumentException if no destination has that key, or the alias is already a
-     *     key here
+     *     key or an alias here
      */
     public Builder<D> alias(String alias, String key) {
       DestinationEntry<D> entry = entries.get(key);
       if (entry == null || entry.destination().isEmpty()) {
         throw new IllegalArgumentException("No destination " + key + " to alias");
       }
-      if (entries.containsKey(alias)) {
-        throw new IllegalArgumentException(alias + " is already a key here");
+      if (entries.containsKey(alias) || aliases.containsKey(alias)) {
+        throw new IllegalArgumentException(alias + " is already a key or an alias here");
       }
       aliases.put(alias, key);
       return this;

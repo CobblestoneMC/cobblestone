@@ -7,7 +7,9 @@
 
 package org.cobblestonemc.integration.pikamugquests;
 
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 import me.pikamug.quests.Quests;
 import me.pikamug.quests.player.Quester;
 import me.pikamug.quests.quests.Quest;
@@ -46,13 +48,18 @@ final class PikamugQuestsDestinationService implements DestinationService {
     }
     var questNode = Destination.tree();
     boolean any = false;
+    Set<String> taken = new HashSet<>();
     for (Quest quest : quester.getCurrentQuests().keySet()) {
       if (QuestTargets.current(quester, quest) == null) {
         continue; // no locatable objective in the current stage — nothing to walk to
       }
       String label = quest.getName();
+      String key = slug(label);
+      for (int n = 2; !taken.add(key); n++) {
+        key = slug(label) + "-" + n; // two quests that slug alike
+      }
       questNode.destination(
-          slug(label),
+          key,
           () ->
               Destination.at(
                   QuestTargets.current(quests.getQuester(player.getUniqueId()), quest), label));

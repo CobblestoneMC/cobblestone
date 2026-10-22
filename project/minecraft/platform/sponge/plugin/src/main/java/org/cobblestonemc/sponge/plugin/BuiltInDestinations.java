@@ -444,7 +444,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
                           .build()));
     }
     DestinationTree.Builder<NavigationTarget> node = DestinationTree.builder();
-    namespaces.forEach((namespace, worlds) -> node.subtree(namespace, worlds::build));
+    namespaces.forEach(node::subtree);
     return node.build();
   }
 

@@ -76,6 +76,11 @@ For a plugin named `Shops`, the address is `shops market`. Players may use `/nav
 `Destination.tree()` begins a tree. Add entries to it, each keyed by a string: `destination(key, …)`
 for somewhere to go, `subtree(key, …)` for a tree of further entries beneath it.
 
+!!! tip
+
+    Hold a tree you are still adding to in a `var` — `var tree = Destination.tree();` — rather than
+    spelling out its type, `DestinationTree.Builder<MinecraftDestination<World, Vector3i>>`.
+
 === "Paper"
 
     ``` { .java .annotate }
@@ -108,7 +113,9 @@ Rules:
 
 - **Keys** are single tokens. Upper case is permitted; special characters are not. Spaces are
   permitted but discouraged, since keys appear in commands and permission nodes.
-- **Subtrees are suppliers**, evaluated only when traversed.
+- **Each key is added once.** Adding a key again, or a key that is already an alias, throws.
+- **Subtrees from a supplier are built each time they are traversed**, and never if they are not.
+  A subtree given as a builder is built once, when it is added.
 - **Return `null`** from `provide` when there are no destinations for the player. Empty trees are
   omitted.
 - **Mark large trees `strict()`.** Strict trees are skipped when computing suggestions.
@@ -117,8 +124,8 @@ Rules:
 
 ### Both at once
 
-An entry may be a destination and hold a subtree. Calling `destination` and `subtree` with the
-same key makes one such entry, or build it in one go with `Destination.entry()`:
+An entry may be a destination and hold a subtree. Build it with `Destination.entry()` and add it
+with `entry(key, …)`:
 
 ```java
 for (Town town : towns()) {

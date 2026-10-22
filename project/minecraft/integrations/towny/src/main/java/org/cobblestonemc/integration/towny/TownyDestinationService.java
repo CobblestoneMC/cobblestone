@@ -21,6 +21,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.paper.plugin.api.Destination;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
+import org.cobblestonemc.plugin.api.DestinationEntry;
 import org.cobblestonemc.plugin.api.DestinationTree;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.joml.Vector3i;
@@ -51,18 +52,20 @@ final class TownyDestinationService implements DestinationService {
     var towns = Destination.tree();
     for (Town town : TownyAPI.getInstance().getTowns()) {
       String name = town.getName();
-      // A town is somewhere to go, and also holds its home, outposts and plots.
-      towns.destination(name, () -> wholeTown(town));
-      towns.subtree(name, () -> townDetail(town));
+      towns.entry(name, town(town));
     }
 
     var root = Destination.tree().subtree("town", towns);
     Town own = ownTown(player);
     if (own != null) {
-      root.subtree("resident", () -> townDetail(own));
-      root.destination("resident", () -> wholeTown(own));
+      root.entry("resident", town(own));
     }
     return root.build();
+  }
+
+  /** A town is somewhere to go, and also holds its home, outposts and plots. */
+  private static DestinationEntry.Builder<MinecraftDestination<World, Vector3i>> town(Town town) {
+    return Destination.entry().destination(() -> wholeTown(town)).subtree(() -> townDetail(town));
   }
 
   private static DestinationTree<MinecraftDestination<World, Vector3i>> townDetail(Town town) {
