@@ -29,7 +29,8 @@ import org.cobblestonemc.plugin.api.Validity;
  * NavigationTarget}s, with every region converted from the platform's type to the search's. The
  * view is as lazy as the tree it wraps — nothing is converted until a subtree is visited or a leaf
  * is built — and each search re-reads the integration's regions, so its moving targets are followed
- * as before.
+ * as before. Each entry keeps the {@linkplain DestinationEntry#display display} the integration
+ * gave it.
  */
 public final class PlatformTrees {
 
@@ -56,7 +57,8 @@ public final class PlatformTrees {
   private static <W, V> DestinationEntry<NavigationTarget> adapt(
       DestinationEntry<MinecraftDestination<W, V>> entry,
       Function<WorldRegion<W, V>, Optional<DomainRegion<MinecraftWorld>>> regions) {
-    DestinationEntry.Builder<NavigationTarget> adapted = DestinationEntry.builder();
+    DestinationEntry.Builder<NavigationTarget> adapted =
+        DestinationEntry.<NavigationTarget>builder().display(entry.display());
     entry.destination().ifPresent(leaf -> adapted.destination(new Leaf<>(leaf, regions)));
     entry.subtree().ifPresent(subtree -> adapted.subtree(() -> adapt(subtree.get(), regions)));
     return adapted.build();

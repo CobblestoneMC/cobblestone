@@ -7,9 +7,11 @@
 
 package org.cobblestonemc.plugin.api;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
+import net.kyori.adventure.text.Component;
 
 /**
  * One named entry in a {@link DestinationTree}: a destination, a subtree of further entries, or
@@ -28,11 +30,15 @@ public final class DestinationEntry<D> {
 
   private final DestinationLeaf<D> destination;
   private final Supplier<? extends DestinationTree<D>> subtree;
+  private final Display display;
 
   private DestinationEntry(
-      DestinationLeaf<D> destination, Supplier<? extends DestinationTree<D>> subtree) {
+      DestinationLeaf<D> destination,
+      Supplier<? extends DestinationTree<D>> subtree,
+      Display display) {
     this.destination = destination;
     this.subtree = subtree;
+    this.display = Objects.requireNonNull(display, "display");
   }
 
   /**
@@ -64,6 +70,25 @@ public final class DestinationEntry<D> {
   }
 
   /**
+   * How the navigation menu shows this entry.
+   *
+   * @return the display
+   */
+  public Display display() {
+    return display;
+  }
+
+  /**
+   * Returns a copy shown with the given display.
+   *
+   * @param display the display
+   * @return the copy
+   */
+  public DestinationEntry<D> withDisplay(Display display) {
+    return new DestinationEntry<>(destination, subtree, display);
+  }
+
+  /**
    * Builds a {@link DestinationEntry}.
    *
    * @param <D> what the destinations build
@@ -72,6 +97,7 @@ public final class DestinationEntry<D> {
 
     private DestinationLeaf<D> destination;
     private Supplier<? extends DestinationTree<D>> subtree;
+    private Display display = Display.none();
 
     private Builder() {}
 
@@ -109,6 +135,60 @@ public final class DestinationEntry<D> {
     }
 
     /**
+     * Sets everything the menu shows for the entry at once.
+     *
+     * @param display the display
+     * @return this builder
+     */
+    public Builder<D> display(Display display) {
+      this.display = Objects.requireNonNull(display, "display");
+      return this;
+    }
+
+    /**
+     * Sets the name the menu shows, in place of the entry's key.
+     *
+     * @param label the name
+     * @return this builder
+     */
+    public Builder<D> label(Component label) {
+      this.display = display.withLabel(label);
+      return this;
+    }
+
+    /**
+     * Sets the lines the menu shows beneath the name.
+     *
+     * @param description the lines
+     * @return this builder
+     */
+    public Builder<D> description(List<Component> description) {
+      this.display = display.withDescription(description);
+      return this;
+    }
+
+    /**
+     * Sets the lines the menu shows beneath the name.
+     *
+     * @param description the lines
+     * @return this builder
+     */
+    public Builder<D> description(Component... description) {
+      return description(List.of(description));
+    }
+
+    /**
+     * Sets the item the menu shows.
+     *
+     * @param icon the item, or {@code null} for the menu's default
+     * @return this builder
+     */
+    public Builder<D> icon(Icon icon) {
+      this.display = display.withIcon(icon);
+      return this;
+    }
+
+    /**
      * Gives the entry a subtree from another builder, built now, once.
      *
      * @param subtree the subtree's builder
@@ -130,7 +210,7 @@ public final class DestinationEntry<D> {
         throw new IllegalStateException(
             "A destination entry needs a destination, a subtree, or both");
       }
-      return new DestinationEntry<>(destination, subtree);
+      return new DestinationEntry<>(destination, subtree, display);
     }
   }
 }

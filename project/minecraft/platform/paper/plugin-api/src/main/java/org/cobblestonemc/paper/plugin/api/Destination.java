@@ -50,8 +50,10 @@ public final class Destination {
 
   /**
    * Begins one entry of a tree, for when it needs more than {@link
-   * DestinationTree.Builder#destination} or {@link DestinationTree.Builder#subtree} give it, such
-   * as both roles at once. Add it with {@link DestinationTree.Builder#entry(String,
+   * DestinationTree.Builder#destination} or {@link DestinationTree.Builder#subtree} give it: both
+   * roles at once, or a {@linkplain DestinationEntry.Builder#label label}, {@linkplain
+   * DestinationEntry.Builder#description description} or {@linkplain DestinationEntry.Builder#icon
+   * icon} in the navigation menu. Add it with {@link DestinationTree.Builder#entry(String,
    * DestinationEntry.Builder)}.
    *
    * @return a new, empty entry builder

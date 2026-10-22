@@ -32,6 +32,8 @@ import org.cobblestonemc.plugin.api.DestinationEntry;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
 import org.cobblestonemc.plugin.api.DestinationOption;
 import org.cobblestonemc.plugin.api.DestinationTree;
+import org.cobblestonemc.plugin.api.Display;
+import org.cobblestonemc.plugin.api.Icon;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.cobblestonemc.plugin.api.OptionValues;
 import org.cobblestonemc.plugin.api.Validity;
@@ -109,11 +111,13 @@ class PlatformTreesTest {
   }
 
   @Test
-  void entriesKeepBothRoles() {
+  void entriesKeepTheirDisplayAndBothRoles() {
+    Display display = Display.of(Icon.item("red_banner")).withLabel(Component.text("Riverwood"));
     DestinationEntry<MinecraftDestination<String, Integer>> town =
         DestinationEntry.<MinecraftDestination<String, Integer>>builder()
             .destination(() -> destination("riverwood", List::of))
             .subtree(() -> tree(true, Map.of(), Map.of()))
+            .display(display)
             .build();
     DestinationTree<MinecraftDestination<String, Integer>> root =
         DestinationTree.<MinecraftDestination<String, Integer>>builder()
@@ -122,6 +126,7 @@ class PlatformTreesTest {
 
     DestinationEntry<NavigationTarget> adapted =
         PlatformTrees.adapt(root, regions).entries().get("riverwood");
+    assertEquals(display, adapted.display());
     assertTrue(adapted.destination().isPresent());
     assertTrue(adapted.subtree().orElseThrow().get().strict());
   }
@@ -129,6 +134,30 @@ class PlatformTreesTest {
   @Test
   void anEntryNeedsADestinationOrASubtree() {
     assertThrows(IllegalStateException.class, () -> DestinationEntry.<String>builder().build());
+  }
+
+  @Test
+  void iconsParseAsAdminsWriteThem() {
+    assertEquals(Optional.of(Icon.item("minecraft:oak_sign")), Icon.parse(" Oak_Sign "));
+    assertEquals(Optional.of(Icon.head("abc")), Icon.parse("head:abc"));
+    assertEquals(Optional.of(Icon.head("abc")), Icon.parse("HEAD: abc"));
+    assertEquals(Optional.empty(), Icon.parse("  "));
+    assertEquals(Optional.empty(), Icon.parse("head:"));
+    assertEquals(Icon.item("minecraft:stone"), Icon.parse(null, Icon.item("stone")));
+    assertEquals(Icon.item("minecraft:dirt"), Icon.parse("dirt", Icon.item("stone")));
+  }
+
+  @Test
+  void displaysFillInWhatTheyLeaveOut() {
+    Display labelled = Display.none().withLabel(Component.text("Riverwood"));
+    Display fallback =
+        Display.of(Icon.item("stone"))
+            .withLabel(Component.text("town"))
+            .withDescription(List.of(Component.text("a town")));
+    Display combined = labelled.or(fallback);
+    assertEquals(Optional.of(Component.text("Riverwood")), combined.label());
+    assertEquals(fallback.description(), combined.description());
+    assertEquals(Optional.of(Icon.item("stone")), combined.icon());
   }
 
   @Test
