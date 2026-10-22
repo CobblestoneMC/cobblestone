@@ -335,23 +335,35 @@ final class NavigateCommand {
                           destination::exists)
                       .whenComplete(
                           (outcome, tripError) -> {
-                            if (tripError != null || outcome instanceof TripOutcome.Failed) {
-                              messages.send(player, locale, CobblestoneMessages.NAVIGATE_ERROR);
-                            } else if (outcome instanceof TripOutcome.TripLimitReached) {
-                              messages.send(
-                                  player, locale, CobblestoneMessages.NAVIGATE_TRIP_LIMIT);
-                            } else {
-                              // "Route found" carries a hover with the search time and the trip
-                              // length.
-                              Component started =
-                                  messages.render(locale, CobblestoneMessages.NAVIGATE_STARTED);
-                              Component stats =
-                                  messages.render(
-                                      locale,
-                                      CobblestoneMessages.NAVIGATE_STATS,
-                                      elapsedMillis,
-                                      messages.formatDuration(locale, path.duration()));
-                              player.sendMessage(started.hoverEvent(HoverEvent.showText(stats)));
+                            TripOutcome tripOutcome =
+                                tripError != null ? new TripOutcome.Error(tripError) : outcome;
+                            switch (tripOutcome) {
+                              case TripOutcome.Started started -> {
+                                // "Route found" carries a hover with the search time and the
+                                // trip length.
+                                Component found =
+                                    messages.render(locale, CobblestoneMessages.NAVIGATE_STARTED);
+                                Component stats =
+                                    messages.render(
+                                        locale,
+                                        CobblestoneMessages.NAVIGATE_STATS,
+                                        elapsedMillis,
+                                        messages.formatDuration(locale, path.duration()));
+                                player.sendMessage(found.hoverEvent(HoverEvent.showText(stats)));
+                              }
+                              case TripOutcome.TripLimitReached limit ->
+                                  messages.send(
+                                      player, locale, CobblestoneMessages.NAVIGATE_TRIP_LIMIT);
+                              case TripOutcome.Failed failed ->
+                                  messages.send(player, locale, CobblestoneMessages.NAVIGATE_ERROR);
+                              case TripOutcome.Error failure -> {
+                                log.error(
+                                    "navigate {} -> {}: starting the trip failed",
+                                    failure.throwable(),
+                                    player.getName(),
+                                    destinationLabel);
+                                messages.send(player, locale, CobblestoneMessages.NAVIGATE_ERROR);
+                              }
                             }
                           });
                 }
