@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import org.cobblestonemc.plugin.api.DestinationEntry;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
 import org.cobblestonemc.plugin.api.DestinationOption;
 import org.cobblestonemc.plugin.api.DestinationTree;
@@ -694,8 +695,14 @@ class DestinationResolverTest {
       if (strict) {
         node.strict();
       }
-      leaves.forEach(node::destination);
-      subs.forEach(node::subtree);
+      // A key with both a leaf and a sub is one entry with both roles.
+      Map<String, DestinationEntry.Builder<String>> entries = new LinkedHashMap<>();
+      leaves.forEach(
+          (key, leaf) ->
+              entries.computeIfAbsent(key, k -> DestinationEntry.builder()).destination(leaf));
+      subs.forEach(
+          (key, sub) -> entries.computeIfAbsent(key, k -> DestinationEntry.builder()).subtree(sub));
+      entries.forEach(node::entry);
       aliases.forEach(node::alias);
       return node.build();
     }
