@@ -17,6 +17,8 @@ import org.bukkit.World;
 import org.cobblestonemc.minecraft.api.WorldRegion;
 import org.cobblestonemc.paper.api.SingleCellWorldRegion;
 import org.cobblestonemc.paper.api.Transition;
+import org.cobblestonemc.plugin.api.DestinationEntry;
+import org.cobblestonemc.plugin.api.DestinationTree;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.joml.Vector3i;
 
@@ -36,6 +38,27 @@ import org.joml.Vector3i;
 public final class Destination {
 
   private Destination() {}
+
+  /**
+   * Begins a tree of destinations, for a {@link DestinationService} to hand Cobblestone.
+   *
+   * @return a new, empty tree builder
+   */
+  public static DestinationTree.Builder<MinecraftDestination<World, Vector3i>> tree() {
+    return DestinationTree.builder();
+  }
+
+  /**
+   * Begins one entry of a tree, for when it needs more than {@link
+   * DestinationTree.Builder#destination} or {@link DestinationTree.Builder#subtree} give it, such
+   * as both roles at once. Add it with {@link DestinationTree.Builder#entry(String,
+   * DestinationEntry.Builder)}.
+   *
+   * @return a new, empty entry builder
+   */
+  public static DestinationEntry.Builder<MinecraftDestination<World, Vector3i>> entry() {
+    return DestinationEntry.builder();
+  }
 
   /**
    * A destination at a single location (its block cell), or an empty one if {@code location} is

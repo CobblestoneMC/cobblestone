@@ -11,8 +11,8 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.paper.plugin.api.Destination;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
-import org.cobblestonemc.paper.plugin.api.DestinationTree;
-import org.cobblestonemc.plugin.api.PlatformDestinationTree;
+import org.cobblestonemc.plugin.api.DestinationTree;
+import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.joml.Vector3i;
 
 /**
@@ -36,14 +36,14 @@ final class EssentialsDestinationService implements DestinationService {
   }
 
   @Override
-  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
-    DestinationTree homes = DestinationTree.builder().strict();
+  public DestinationTree<MinecraftDestination<World, Vector3i>> provide(Player player) {
+    var homes = Destination.tree().strict();
     for (String home : essentials.homes(player)) {
-      homes.leaf(home, () -> Destination.at(essentials.home(player, home), home));
+      homes.destination(home, () -> Destination.at(essentials.home(player, home), home));
     }
-    DestinationTree root = DestinationTree.builder().subtree(HOME_KEY, homes);
+    var root = Destination.tree().subtree(HOME_KEY, homes);
     if (essentials.hasSpawn()) {
-      root.leaf(SPAWN_KEY, () -> Destination.at(essentials.spawn(player), "spawn"));
+      root.destination(SPAWN_KEY, () -> Destination.at(essentials.spawn(player), "spawn"));
     }
     return root.build();
   }

@@ -7,7 +7,9 @@
 
 package org.cobblestonemc.integration.pikamugquests;
 
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 import me.pikamug.quests.Quests;
 import me.pikamug.quests.player.Quester;
 import me.pikamug.quests.quests.Quest;
@@ -15,8 +17,8 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.paper.plugin.api.Destination;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
-import org.cobblestonemc.paper.plugin.api.DestinationTree;
-import org.cobblestonemc.plugin.api.PlatformDestinationTree;
+import org.cobblestonemc.plugin.api.DestinationTree;
+import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.joml.Vector3i;
 
 /**
@@ -39,26 +41,31 @@ final class PikamugQuestsDestinationService implements DestinationService {
   }
 
   @Override
-  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
+  public DestinationTree<MinecraftDestination<World, Vector3i>> provide(Player player) {
     Quester quester = quests.getQuester(player.getUniqueId());
     if (quester == null) {
       return null;
     }
-    DestinationTree questNode = DestinationTree.builder();
+    var questNode = Destination.tree();
     boolean any = false;
+    Set<String> taken = new HashSet<>();
     for (Quest quest : quester.getCurrentQuests().keySet()) {
       if (QuestTargets.current(quester, quest) == null) {
         continue; // no locatable objective in the current stage — nothing to walk to
       }
       String label = quest.getName();
-      questNode.leaf(
-          slug(label),
+      String key = slug(label);
+      for (int n = 2; !taken.add(key); n++) {
+        key = slug(label) + "-" + n; // two quests that slug alike
+      }
+      questNode.destination(
+          key,
           () ->
               Destination.at(
                   QuestTargets.current(quests.getQuester(player.getUniqueId()), quest), label));
       any = true;
     }
-    return any ? DestinationTree.builder().subtree(QUEST_KEY, questNode).build() : null;
+    return any ? Destination.tree().subtree(QUEST_KEY, questNode).build() : null;
   }
 
   /**

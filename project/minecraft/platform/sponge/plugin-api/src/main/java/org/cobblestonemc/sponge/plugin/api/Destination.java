@@ -13,6 +13,8 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import org.cobblestonemc.minecraft.api.WorldRegion;
+import org.cobblestonemc.plugin.api.DestinationEntry;
+import org.cobblestonemc.plugin.api.DestinationTree;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.cobblestonemc.sponge.api.SingleCellWorldRegion;
 import org.cobblestonemc.sponge.api.Transition;
@@ -36,6 +38,27 @@ import org.spongepowered.math.vector.Vector3i;
 public final class Destination {
 
   private Destination() {}
+
+  /**
+   * Begins a tree of destinations, for a {@link DestinationService} to hand Cobblestone.
+   *
+   * @return a new, empty tree builder
+   */
+  public static DestinationTree.Builder<MinecraftDestination<ServerWorld, Vector3i>> tree() {
+    return DestinationTree.builder();
+  }
+
+  /**
+   * Begins one entry of a tree, for when it needs more than {@link
+   * DestinationTree.Builder#destination} or {@link DestinationTree.Builder#subtree} give it, such
+   * as both roles at once. Add it with {@link DestinationTree.Builder#entry(String,
+   * DestinationEntry.Builder)}.
+   *
+   * @return a new, empty entry builder
+   */
+  public static DestinationEntry.Builder<MinecraftDestination<ServerWorld, Vector3i>> entry() {
+    return DestinationEntry.builder();
+  }
 
   /**
    * A destination at a single location (its block cell), or empty if {@code location} is null. Its

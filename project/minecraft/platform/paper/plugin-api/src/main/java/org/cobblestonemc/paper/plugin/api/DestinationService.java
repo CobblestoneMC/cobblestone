@@ -9,7 +9,8 @@ package org.cobblestonemc.paper.plugin.api;
 
 import org.bukkit.World;
 import org.bukkit.entity.Player;
-import org.cobblestonemc.plugin.api.PlatformDestinationTree;
+import org.cobblestonemc.plugin.api.DestinationTree;
+import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3i;
 
@@ -21,14 +22,14 @@ public interface DestinationService {
    * The root of this integration's destination tree for the given player.
    *
    * <p>The root's own key is <b>not</b> chosen here: Cobblestone files the tree under the
-   * registering plugin's name, so two plugins offering a {@code warp} level stay distinguishable.
-   * Build the levels below that — {@code DestinationTree.builder().subtree("town", …)} — not a
-   * level named after the plugin itself.
+   * registering plugin's name, so two plugins offering a {@code warp} subtree stay distinguishable.
+   * Build what lies below that — {@code Destination.tree().subtree("town", …)} — not a subtree
+   * named after the plugin itself.
    *
    * @param player the player requesting navigation
    * @return the (lazily-evaluated) tree, or {@code null} if this integration has nothing to offer
    *     this player right now
    */
   @Nullable
-  PlatformDestinationTree<World, Vector3i> provide(Player player);
+  DestinationTree<MinecraftDestination<World, Vector3i>> provide(Player player);
 }

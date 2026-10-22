@@ -30,13 +30,13 @@ import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.plugin.Permissions;
+import org.cobblestonemc.plugin.api.DestinationTree;
 import org.cobblestonemc.plugin.api.NavigatorSettings;
 import org.cobblestonemc.plugin.api.TripOutcome;
 import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.command.FlagParser;
 import org.cobblestonemc.plugin.command.NavigationFlags;
 import org.cobblestonemc.plugin.destination.DestinationDetails;
-import org.cobblestonemc.plugin.destination.DestinationNode;
 import org.cobblestonemc.plugin.destination.DestinationResolver;
 import org.cobblestonemc.plugin.destination.DestinationRoots;
 import org.cobblestonemc.plugin.destination.NavigationPermissions;
@@ -455,7 +455,7 @@ final class NavigateCommand {
         != Tristate.FALSE;
   }
 
-  private Map<String, DestinationNode<NavigationTarget>> destinationRoots(ServerPlayer player) {
+  private Map<String, DestinationTree<NavigationTarget>> destinationRoots(ServerPlayer player) {
     return DestinationRoots.of(integrations.destinationProviders(), player);
   }
 

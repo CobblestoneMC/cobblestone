@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
+import org.cobblestonemc.plugin.api.DestinationTree;
 import org.junit.jupiter.api.Test;
 
 class DestinationRootsTest {
@@ -20,12 +21,12 @@ class DestinationRootsTest {
   @Test
   void keepsOnlyProvidersWithSomethingToOfferInKeyOrder() {
     Map<String, DestinationProvider<String>> providers = new LinkedHashMap<>();
-    DestinationNode<NavigationTarget> spawn =
-        DestinationNode.<NavigationTarget>builder()
-            .leaf("spawn", DestinationLeaf.<NavigationTarget>of(() -> null))
+    DestinationTree<NavigationTarget> spawn =
+        DestinationTree.<NavigationTarget>builder()
+            .destination("spawn", DestinationLeaf.<NavigationTarget>of(() -> null))
             .build();
     providers.put("warps", player -> spawn);
-    providers.put("empty", player -> DestinationNode.<NavigationTarget>builder().build());
+    providers.put("empty", player -> DestinationTree.<NavigationTarget>builder().build());
     providers.put("absent", player -> null);
     providers.put("essentials", player -> player.equals("alex") ? spawn : null);
 
