@@ -484,7 +484,7 @@ final class NavigateCommand {
   }
 
   private Map<String, DestinationTree<NavigationTarget>> destinationRoots(Player player) {
-    return DestinationRoots.of(integrations.destinationProviders(), player);
+    return DestinationRoots.of(integrations.destinationProviders(), player, log);
   }
 
   private static List<String> flagNames() {

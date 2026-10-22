@@ -456,7 +456,7 @@ final class NavigateCommand {
   }
 
   private Map<String, DestinationTree<NavigationTarget>> destinationRoots(ServerPlayer player) {
-    return DestinationRoots.of(integrations.destinationProviders(), player);
+    return DestinationRoots.of(integrations.destinationProviders(), player, log);
   }
 
   /**
