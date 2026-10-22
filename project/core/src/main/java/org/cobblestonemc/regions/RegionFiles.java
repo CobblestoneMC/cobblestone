@@ -79,7 +79,7 @@ public final class RegionFiles {
   private static final int PREAMBLE = 4 + 4 + 4 + 8 + 4 + 4 + 4;
 
   /** Sectors the header takes, slots included. */
-  private static final int HEADER_SECTORS = (PREAMBLE + SLOTS * 8 + SECTOR - 1) / SECTOR;
+  static final int HEADER_SECTORS = (PREAMBLE + SLOTS * 8 + SECTOR - 1) / SECTOR;
 
   /** Files kept open: a search reads the columns of a few files one after another. */
   private static final int OPEN_FILES = 8;

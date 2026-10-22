@@ -143,14 +143,22 @@ search until a block in the chunk changes.
 
 | Setting | Default | |
 | --- | --- | --- |
+| `search.regions.persist` | `true` | restart |
 | `search.regions.memory_megabytes` | `128` | restart |
+| `search.regions.flush_seconds` | `60` | restart |
 
-- **`memory_megabytes`**: Memory each world's regions may use, least recently used dropped first.
-  The chunks around each navigating player are kept on top of this, about 3 MB a player, until their
-  trip ends, so the searches that re-plan around them stay fast.
+- **`persist`**: Keep regions on disk under `plugins/Cobblestone/regions/`, so a restart does not
+  start from nothing. A few kilobytes per chunk, only for chunks searches touched. Delete the
+  folder to force everything to be built again.
+- **`memory_megabytes`**: Memory each world's regions may use, least recently used dropped first
+  and read back from disk when needed. The chunks around each navigating player are kept on top of
+  this, about 3 MB a player, until their trip ends, so the searches that re-plan around them stay
+  fast.
+- **`flush_seconds`**: How often new regions are written. They are also written when a world saves
+  and when the server stops. A write touches only the chunks that changed.
 
-Block changes made while the server is running are tracked. Regions are kept in memory only, so a
-restart builds them again as searches need them.
+Block changes made while the server is running are tracked. Edits made while it is stopped, by
+external tools, are not: delete the `regions` folder after editing a world offline.
 
 ### Tuning
 
