@@ -499,7 +499,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
             node.entry(
                 namespace,
                 DestinationEntry.<NavigationTarget>builder()
-                    .subtree(worlds::build)
+                    .subtree(worlds)
                     .display(icon(MenuIcons.WORLD))
                     .build()));
     return node.build();

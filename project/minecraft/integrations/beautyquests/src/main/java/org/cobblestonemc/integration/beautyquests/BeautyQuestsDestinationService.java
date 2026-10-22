@@ -11,7 +11,9 @@ import fr.skytasul.quests.api.QuestsAPI;
 import fr.skytasul.quests.api.players.PlayerAccount;
 import fr.skytasul.quests.api.players.PlayersManager;
 import fr.skytasul.quests.api.quests.Quest;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -42,13 +44,18 @@ final class BeautyQuestsDestinationService implements DestinationService {
     }
     var quests = Destination.tree();
     boolean any = false;
+    Set<String> taken = new HashSet<>();
     for (Quest quest : QuestsAPI.getAPI().getQuestsManager().getQuestsStarted(account)) {
       Location target = QuestTargets.current(account, quest);
       if (target == null) {
         continue; // current stage has no precise location — nothing to walk to
       }
       String label = label(quest);
-      quests.destination(slug(label), () -> Destination.at(target, label));
+      String key = slug(label);
+      for (int n = 2; !taken.add(key); n++) {
+        key = slug(label) + "-" + n; // two quests that slug alike
+      }
+      quests.destination(key, () -> Destination.at(target, label));
       any = true;
     }
     return any ? Destination.tree().subtree(QUEST_KEY, quests).build() : null;

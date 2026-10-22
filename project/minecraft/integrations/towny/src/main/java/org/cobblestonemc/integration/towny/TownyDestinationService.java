@@ -65,7 +65,7 @@ final class TownyDestinationService implements DestinationService {
       towns.entry(town.getName(), townEntry(town));
     }
 
-    var root = Destination.tree().entry("town", shown(icons.towns()).subtree(towns::build));
+    var root = Destination.tree().entry("town", shown(icons.towns()).subtree(towns));
     Town own = ownTown(player);
     if (own != null) {
       root.entry("resident", townEntry(own).label(null));
