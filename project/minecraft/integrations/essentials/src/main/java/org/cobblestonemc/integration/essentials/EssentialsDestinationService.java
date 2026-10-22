@@ -55,7 +55,7 @@ final class EssentialsDestinationService implements DestinationService {
     }
     var root =
         Destination.tree()
-            .entry(HOME_KEY, Destination.entry().subtree(homes::build).display(display("homes")));
+            .entry(HOME_KEY, Destination.entry().subtree(homes).display(display("homes")));
     if (essentials.hasSpawn()) {
       root.entry(
           SPAWN_KEY,

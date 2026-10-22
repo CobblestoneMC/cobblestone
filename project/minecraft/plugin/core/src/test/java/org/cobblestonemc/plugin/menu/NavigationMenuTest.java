@@ -94,14 +94,18 @@ class NavigationMenuTest {
                         .build())
             .build();
     DestinationTree.Builder<NavigationTarget> towns = level();
-    towns.destination("riverwood", destination()).subtree("riverwood", () -> riverwood);
+    towns.entry(
+        "riverwood",
+        DestinationEntry.<NavigationTarget>builder()
+            .destination(destination())
+            .subtree(() -> riverwood));
     towns.destination("ashford", destination());
     NavigationMenu menu =
         menu(
             roots(
                 Map.of(
                     "towny",
-                    level().subtree("town", towns::build),
+                    level().subtree("town", towns),
                     "other",
                     level().destination("elsewhere", destination()))));
 
@@ -139,8 +143,11 @@ class NavigationMenuTest {
             .destination("death", destination())
             .destination(
                 "vault", DestinationLeaf.<NavigationTarget>of(() -> null).withPermissions("vault"))
-            .destination("spawn", destination())
-            .subtree("spawn", () -> level().destination("inner", destination()).build());
+            .entry(
+                "spawn",
+                DestinationEntry.<NavigationTarget>builder()
+                    .destination(destination())
+                    .subtree(level().destination("inner", destination())));
     NavigationMenu menu =
         new NavigationMenu(
             Locale.ENGLISH,

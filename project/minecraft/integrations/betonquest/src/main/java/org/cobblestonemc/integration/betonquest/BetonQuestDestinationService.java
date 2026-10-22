@@ -10,8 +10,10 @@
  */
 package org.cobblestonemc.integration.betonquest;
 
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.betonquest.betonquest.api.BetonQuestApi;
 import org.betonquest.betonquest.api.compass.QuestCompass;
 import org.betonquest.betonquest.api.identifier.CompassIdentifier;
@@ -53,13 +55,18 @@ final class BetonQuestDestinationService implements DestinationService {
     Map<CompassIdentifier, QuestCompass> compasses = api.compasses().forProfile(profile);
     var compass = Destination.tree();
     boolean any = false;
+    Set<String> taken = new HashSet<>();
     for (Map.Entry<CompassIdentifier, QuestCompass> entry : compasses.entrySet()) {
       Location target = CompassTargets.locationOf(entry.getValue(), profile);
       if (target == null) {
         continue; // location couldn't be resolved — nothing to walk to
       }
       String name = entry.getKey().get();
-      compass.destination(slug(name), () -> Destination.at(target, name));
+      String key = slug(name);
+      for (int n = 2; !taken.add(key); n++) {
+        key = slug(name) + "-" + n; // two compasses that slug alike
+      }
+      compass.destination(key, () -> Destination.at(target, name));
       any = true;
     }
     return any ? Destination.tree().subtree(COMPASS_KEY, compass).build() : null;

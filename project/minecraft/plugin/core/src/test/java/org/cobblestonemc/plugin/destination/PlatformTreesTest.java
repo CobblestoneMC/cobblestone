@@ -10,6 +10,7 @@ package org.cobblestonemc.plugin.destination;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -17,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -159,25 +161,52 @@ class PlatformTreesTest {
   }
 
   @Test
-  void aDestinationAndASubtreeUnderOneKeyMakeOneEntryWhicheverComesFirst() {
+  void anEntryIsBothADestinationAndASubtreeOnlyThroughEntry() {
     DestinationLeaf<String> leaf = DestinationLeaf.of(() -> "riverwood");
     Supplier<DestinationTree<String>> subtree = () -> DestinationTree.<String>builder().build();
 
-    for (DestinationTree<String> node :
-        List.of(
+    DestinationTree<String> node =
+        DestinationTree.<String>builder()
+            .entry(
+                "riverwood", DestinationEntry.<String>builder().destination(leaf).subtree(subtree))
+            .build();
+    DestinationEntry<String> riverwood = node.entries().get("riverwood");
+    assertEquals(Optional.of(leaf), riverwood.destination());
+    assertEquals(Optional.of(subtree), riverwood.subtree());
+
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
             DestinationTree.<String>builder()
                 .destination("riverwood", leaf)
-                .subtree("riverwood", subtree)
-                .build(),
-            DestinationTree.<String>builder()
-                .subtree("riverwood", subtree)
-                .destination("riverwood", leaf)
-                .build())) {
-      DestinationEntry<String> riverwood = node.entries().get("riverwood");
-      assertEquals(1, node.entries().size());
-      assertEquals(Optional.of(leaf), riverwood.destination());
-      assertEquals(Optional.of(subtree), riverwood.subtree());
-    }
+                .subtree("riverwood", subtree));
+  }
+
+  @Test
+  void aKeyOrAliasIsAddedOnce() {
+    DestinationTree.Builder<String> node =
+        DestinationTree.<String>builder()
+            .destination("market", () -> "market")
+            .alias("mkt", "market");
+    assertThrows(IllegalArgumentException.class, () -> node.destination("market", () -> "other"));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> node.subtree("mkt", () -> DestinationTree.<String>builder().build()));
+    assertThrows(IllegalArgumentException.class, () -> node.alias("mkt", "market"));
+    assertThrows(IllegalArgumentException.class, () -> node.alias("market", "market"));
+  }
+
+  @Test
+  void aSubtreeFromABuilderIsBuiltOnceWhenAdded() {
+    DestinationTree.Builder<String> towns =
+        DestinationTree.<String>builder().destination("riverwood", () -> "riverwood");
+    DestinationTree<String> node = DestinationTree.<String>builder().subtree("town", towns).build();
+    towns.destination("oakvale", () -> "oakvale");
+
+    Supplier<? extends DestinationTree<String>> town =
+        node.entries().get("town").subtree().orElseThrow();
+    assertSame(town.get(), town.get());
+    assertEquals(Set.of("riverwood"), town.get().entries().keySet());
   }
 
   @Test
