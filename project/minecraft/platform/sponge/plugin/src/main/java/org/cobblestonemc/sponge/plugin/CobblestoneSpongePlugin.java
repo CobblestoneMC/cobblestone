@@ -280,7 +280,8 @@ public final class CobblestoneSpongePlugin {
             navigateCommand,
             recents,
             messages,
-            () -> MenuSettings.from(config, keys));
+            () -> MenuSettings.from(config, keys),
+            cobblestoneLogger);
 
     if (config.get(keys.metricsEnabled)) {
       this.metrics =

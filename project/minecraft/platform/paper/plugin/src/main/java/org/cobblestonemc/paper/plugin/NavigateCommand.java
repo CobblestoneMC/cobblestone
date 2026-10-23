@@ -236,6 +236,21 @@ final class NavigateCommand {
     navigate(player, player.locale(), NavigationFlags.defaults(), destination);
   }
 
+  /**
+   * Navigates a player to a destination picked without typing and already built, as though they had
+   * typed it with no flags.
+   *
+   * @param player the player
+   * @param pick the destination, with its options parsed
+   * @param destination the destination, built
+   */
+  void navigate(
+      Player player,
+      DestinationResolver.Resolved<NavigationTarget> pick,
+      NavigationTarget destination) {
+    navigate(player, player.locale(), NavigationFlags.defaults(), pick, destination);
+  }
+
   private void navigate(
       Player player,
       Locale locale,
@@ -264,6 +279,16 @@ final class NavigateCommand {
       }
       case Validity.Valid<NavigationTarget>(NavigationTarget valid) -> destination = valid;
     }
+    navigate(player, locale, flags, resolved, destination);
+  }
+
+  private void navigate(
+      Player player,
+      Locale locale,
+      NavigationFlags flags,
+      DestinationResolver.Resolved<NavigationTarget> resolved,
+      NavigationTarget destination) {
+    List<String> address = resolved.address();
 
     TripLabel tripLabel = TripLabel.address(address);
     Component hover = DestinationDetails.hover(address, destination);
@@ -359,6 +384,11 @@ final class NavigateCommand {
                       path.steps().size(),
                       path.duration(),
                       elapsedMillis);
+                  if (path.steps().isEmpty()) {
+                    // The search started inside the destination: there is no route to follow.
+                    messages.send(player, locale, CobblestoneMessages.NAVIGATE_ALREADY_THERE);
+                    return;
+                  }
                   // Hand the found route to the shared trip service — the same code path
                   // integrations
                   // use. The command only carries the chosen navigator id (appearance comes from
@@ -377,26 +407,36 @@ final class NavigateCommand {
                           destination::exists)
                       .whenComplete(
                           (outcome, tripError) -> {
-                            if (tripError == null && outcome instanceof TripOutcome.Started) {
-                              recents.record(uuid, recent);
-                            }
-                            if (tripError != null || outcome instanceof TripOutcome.Failed) {
-                              messages.send(player, locale, CobblestoneMessages.NAVIGATE_ERROR);
-                            } else if (outcome instanceof TripOutcome.TripLimitReached) {
-                              messages.send(
-                                  player, locale, CobblestoneMessages.NAVIGATE_TRIP_LIMIT);
-                            } else {
-                              // "Route found" carries a hover with the search time and the trip
-                              // length.
-                              Component started =
-                                  messages.render(locale, CobblestoneMessages.NAVIGATE_STARTED);
-                              Component stats =
-                                  messages.render(
-                                      locale,
-                                      CobblestoneMessages.NAVIGATE_STATS,
-                                      elapsedMillis,
-                                      messages.formatDuration(locale, path.duration()));
-                              player.sendMessage(started.hoverEvent(HoverEvent.showText(stats)));
+                            TripOutcome tripOutcome =
+                                tripError != null ? new TripOutcome.Error(tripError) : outcome;
+                            switch (tripOutcome) {
+                              case TripOutcome.Started started -> {
+                                recents.record(uuid, recent);
+                                // "Route found" carries a hover with the search time and the
+                                // trip length.
+                                Component found =
+                                    messages.render(locale, CobblestoneMessages.NAVIGATE_STARTED);
+                                Component stats =
+                                    messages.render(
+                                        locale,
+                                        CobblestoneMessages.NAVIGATE_STATS,
+                                        elapsedMillis,
+                                        messages.formatDuration(locale, path.duration()));
+                                player.sendMessage(found.hoverEvent(HoverEvent.showText(stats)));
+                              }
+                              case TripOutcome.TripLimitReached limit ->
+                                  messages.send(
+                                      player, locale, CobblestoneMessages.NAVIGATE_TRIP_LIMIT);
+                              case TripOutcome.Failed failed ->
+                                  messages.send(player, locale, CobblestoneMessages.NAVIGATE_ERROR);
+                              case TripOutcome.Error failure -> {
+                                log.error(
+                                    "navigate {} -> {}: starting the trip failed",
+                                    failure.throwable(),
+                                    player.getName(),
+                                    destinationLabel);
+                                messages.send(player, locale, CobblestoneMessages.NAVIGATE_ERROR);
+                              }
                             }
                           });
                 }
@@ -520,7 +560,7 @@ final class NavigateCommand {
   }
 
   private Map<String, DestinationTree<NavigationTarget>> destinationRoots(Player player) {
-    return DestinationRoots.of(integrations.destinationProviders(), player);
+    return DestinationRoots.of(integrations.destinationProviders(), player, log);
   }
 
   private static List<String> flagNames() {

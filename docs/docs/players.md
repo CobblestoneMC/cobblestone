@@ -58,8 +58,10 @@ Type `/nav` on its own to open a menu of everywhere you can go. `/nav -help` lis
 
 - Items marked **»** open a further list. Others start navigating as soon as you click them.
 - Something that is both a place and a list opens, and lists the place itself first.
-- A destination that needs more from you, such as `coordinates block`, asks for it in a form
-  before starting.
+- A destination that needs more from you, such as `coordinates block`, asks for it before
+  starting: in a form on Paper, or as a command to finish in chat on Sponge.
+- A destination you cannot go to right now, such as `death` before you have died, turns into a
+  barrier that says why. Click it again to try again.
 - The top row of the first page shows the destinations you went to most recently, so a favorite is
   one click away. They are forgotten when the server restarts.
 

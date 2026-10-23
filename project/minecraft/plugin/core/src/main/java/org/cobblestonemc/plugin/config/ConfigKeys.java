@@ -482,8 +482,9 @@ public final class ConfigKeys {
         """
         The navigation menu: a chest of every destination a player may go to, opened by typing
         /navigate on its own. Clicking a destination starts navigating to it; one that needs more,
-        such as coordinates, asks for it first. Items are written as an item key ("minecraft:oak_sign") or as "head:" followed by a
-        skin texture value, as head databases such as minecraft-heads.com publish them.""");
+        such as coordinates, asks for it first. Items are written as an item key
+        ("minecraft:oak_sign") or as "head:" followed by a skin texture value, as head databases
+        such as minecraft-heads.com publish them.""");
     this.menuTitle =
         manager
             .key("menu.title", "<#4AA8FF>Navigation Menu", Codec.ofString())

@@ -140,6 +140,10 @@ public final class CobblestoneMessages {
   public static final Message0 NAVIGATE_ALREADY_ON_SURFACE =
       Message0.error("command.navigate.already_on_surface");
 
+  /** Shown when the player is already at the destination, so there is no route to follow. */
+  public static final Message0 NAVIGATE_ALREADY_THERE =
+      Message0.info("command.navigate.already_there");
+
   /** Shown for {@code /navigate death} when no death of the player's is on record. */
   public static final Message0 NAVIGATE_NO_DEATH = Message0.error("command.navigate.no_death");
 
