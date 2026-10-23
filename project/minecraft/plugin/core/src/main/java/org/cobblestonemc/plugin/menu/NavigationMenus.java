@@ -7,50 +7,58 @@
 
 package org.cobblestonemc.plugin.menu;
 
-import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.UUID;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
+import net.kyori.adventure.text.Component;
+import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.plugin.api.Display;
+import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.destination.DestinationProvider;
 import org.cobblestonemc.plugin.destination.DestinationResolver;
 import org.cobblestonemc.plugin.destination.DestinationRoots;
 import org.cobblestonemc.plugin.destination.NavigationTarget;
+import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Messages;
 
 /**
- * Opens navigation menus and carries out what their clicks ask for, leaving a platform only what
- * differs between servers: drawing the menu, and how to close it, navigate, and ask for options.
+ * Opens navigation menus and carries out what their clicks ask for, leaving the {@link
+ * MenuPlatform} only what differs between servers.
  *
  * @param <P> the platform player type
  */
-public abstract class NavigationMenus<P> {
+public final class NavigationMenus<P> {
 
+  private final MenuPlatform<P> platform;
   private final Supplier<? extends Map<String, ? extends DestinationProvider<P>>> providers;
   private final RecentDestinations recents;
   private final Messages messages;
   private final Supplier<MenuSettings> settings;
+  private final CobblestoneLogger log;
 
   /**
    * Creates the menus.
    *
+   * @param platform what differs between servers
    * @param providers the registered destination providers, keyed by owner
    * @param recents the players' recent destinations
    * @param messages renders the menus' words
    * @param settings reads how the menus look, each time one opens
+   * @param log where a destination that fails to build is reported
    */
-  protected NavigationMenus(
+  public NavigationMenus(
+      MenuPlatform<P> platform,
       Supplier<? extends Map<String, ? extends DestinationProvider<P>>> providers,
       RecentDestinations recents,
       Messages messages,
-      Supplier<MenuSettings> settings) {
+      Supplier<MenuSettings> settings,
+      CobblestoneLogger log) {
+    this.platform = platform;
     this.providers = providers;
     this.recents = recents;
     this.messages = messages;
     this.settings = settings;
+    this.log = log;
   }
 
   /**
@@ -59,94 +67,65 @@ public abstract class NavigationMenus<P> {
    * @param player the player
    * @return the menu
    */
-  protected final NavigationMenu menu(P player) {
+  public NavigationMenu menu(P player) {
     Map<String, ? extends DestinationProvider<P>> registered = providers.get();
     Map<String, Display> displays = new TreeMap<>();
     registered.forEach((owner, provider) -> displays.put(owner, provider.display(player)));
     return new NavigationMenu(
-        locale(player),
+        platform.locale(player),
         messages,
         settings.get(),
         DestinationRoots.of(registered, player),
         displays,
-        recents.get(id(player)),
-        hasPermission(player),
-        canNavigate(player));
+        recents.get(platform.id(player)),
+        platform.hasPermission(player),
+        platform.canNavigate(player));
   }
 
   /**
-   * Carries out what a click in a player's menu asks for.
+   * Handles a click in a player's menu. Call on the player's own thread: a destination they pick is
+   * built here, and may read the world around them. One they cannot go to now stays in the menu,
+   * marked with the reason.
    *
    * @param player the player
-   * @param action what the click asks for
+   * @param menu their menu
+   * @param slot the slot clicked
    * @param redraw draws the menu again
    */
-  protected final void handle(P player, MenuAction action, Runnable redraw) {
-    switch (action) {
+  public void click(P player, NavigationMenu menu, int slot, Runnable redraw) {
+    switch (menu.click(slot)) {
       case MenuAction.None none -> {}
       case MenuAction.Redraw again -> redraw.run();
-      case MenuAction.Close close -> closeThen(player, () -> {});
-      case MenuAction.Navigate pick ->
-          closeThen(player, () -> navigate(player, pick.destination()));
-      case MenuAction.FillIn fillIn -> closeThen(player, () -> fillIn(player, fillIn));
+      case MenuAction.Close close -> platform.closeThen(player, () -> {});
+      case MenuAction.Navigate pick -> {
+        switch (build(player, pick.destination())) {
+          case Validity.Invalid<NavigationTarget>(Component reason) -> {
+            menu.refuse(reason);
+            redraw.run();
+          }
+          case Validity.Valid<NavigationTarget>(NavigationTarget destination) ->
+              platform.closeThen(
+                  player, () -> platform.navigate(player, pick.destination(), destination));
+        }
+      }
+      case MenuAction.FillIn fillIn ->
+          platform.closeThen(player, () -> platform.fillIn(player, fillIn));
     }
   }
 
-  /**
-   * The player's locale.
-   *
-   * @param player the player
-   * @return the locale
-   */
-  protected abstract Locale locale(P player);
-
-  /**
-   * The player's unique id.
-   *
-   * @param player the player
-   * @return the id
-   */
-  protected abstract UUID id(P player);
-
-  /**
-   * Tests whether the player holds a permission node.
-   *
-   * @param player the player
-   * @return the test
-   */
-  protected abstract Predicate<String> hasPermission(P player);
-
-  /**
-   * Tests whether the player may navigate to a canonical address, as {@code /navigate} does.
-   *
-   * @param player the player
-   * @return the test
-   */
-  protected abstract Predicate<List<String>> canNavigate(P player);
-
-  /**
-   * Closes the player's menu and then does something. Called from within a click, so both must wait
-   * for the click to finish.
-   *
-   * @param player the player
-   * @param then what to do once the menu is closed
-   */
-  protected abstract void closeThen(P player, Runnable then);
-
-  /**
-   * Navigates the player to a destination they picked, as {@code /navigate} would.
-   *
-   * @param player the player
-   * @param destination the destination, with its options parsed
-   */
-  protected abstract void navigate(
-      P player, DestinationResolver.Resolved<NavigationTarget> destination);
-
-  /**
-   * Asks the player for a destination's options, then navigates there.
-   *
-   * @param player the player
-   * @param fillIn the destination, and what to call it while asking
-   */
-  protected abstract void fillIn(P player, MenuAction.FillIn fillIn);
+  private Validity<NavigationTarget> build(
+      P player, DestinationResolver.Resolved<NavigationTarget> pick) {
+    try {
+      return pick.leaf().build(pick.values());
+    } catch (RuntimeException e) {
+      // Most likely an integration's leaf; the address's first key names the plugin.
+      log.error(
+          "menu {} -> {}: building the destination failed",
+          e,
+          platform.id(player),
+          String.join(" ", pick.address()));
+      return Validity.invalid(
+          messages.render(platform.locale(player), CobblestoneMessages.NAVIGATE_ERROR));
+    }
+  }
 }

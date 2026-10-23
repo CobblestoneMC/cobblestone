@@ -236,6 +236,21 @@ final class NavigateCommand {
     navigate(player, player.locale(), NavigationFlags.defaults(), destination);
   }
 
+  /**
+   * Navigates a player to a destination picked without typing and already built, as though they had
+   * typed it with no flags.
+   *
+   * @param player the player
+   * @param pick the destination, with its options parsed
+   * @param destination the destination, built
+   */
+  void navigate(
+      Player player,
+      DestinationResolver.Resolved<NavigationTarget> pick,
+      NavigationTarget destination) {
+    navigate(player, player.locale(), NavigationFlags.defaults(), pick, destination);
+  }
+
   private void navigate(
       Player player,
       Locale locale,
@@ -264,6 +279,16 @@ final class NavigateCommand {
       }
       case Validity.Valid<NavigationTarget>(NavigationTarget valid) -> destination = valid;
     }
+    navigate(player, locale, flags, resolved, destination);
+  }
+
+  private void navigate(
+      Player player,
+      Locale locale,
+      NavigationFlags flags,
+      DestinationResolver.Resolved<NavigationTarget> resolved,
+      NavigationTarget destination) {
+    List<String> address = resolved.address();
 
     TripLabel tripLabel = TripLabel.address(address);
     Component hover = DestinationDetails.hover(address, destination);

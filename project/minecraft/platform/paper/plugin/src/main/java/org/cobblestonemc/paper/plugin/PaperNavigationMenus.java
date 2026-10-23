@@ -30,6 +30,7 @@ import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.plugin.Plugin;
+import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.paper.plugin.api.PaperIcon;
 import org.cobblestonemc.plugin.api.Icon;
 import org.cobblestonemc.plugin.destination.DestinationResolver;
@@ -37,6 +38,7 @@ import org.cobblestonemc.plugin.destination.NavigationTarget;
 import org.cobblestonemc.plugin.menu.MenuAction;
 import org.cobblestonemc.plugin.menu.MenuItem;
 import org.cobblestonemc.plugin.menu.MenuLayout;
+import org.cobblestonemc.plugin.menu.MenuPlatform;
 import org.cobblestonemc.plugin.menu.MenuSettings;
 import org.cobblestonemc.plugin.menu.NavigationMenu;
 import org.cobblestonemc.plugin.menu.NavigationMenus;
@@ -49,11 +51,12 @@ import org.jetbrains.annotations.NotNull;
  * hands back to it. Nothing can be taken out of or put into the chest; every click is cancelled and
  * only read.
  */
-final class PaperNavigationMenus extends NavigationMenus<Player> implements Listener {
+final class PaperNavigationMenus implements MenuPlatform<Player>, Listener {
 
   private final Plugin plugin;
   private final NavigateCommand navigate;
   private final Messages messages;
+  private final NavigationMenus<Player> menus;
 
   PaperNavigationMenus(
       Plugin plugin,
@@ -61,11 +64,14 @@ final class PaperNavigationMenus extends NavigationMenus<Player> implements List
       NavigateCommand navigate,
       RecentDestinations recents,
       Messages messages,
-      Supplier<MenuSettings> settings) {
-    super(integrations::destinationProviders, recents, messages, settings);
+      Supplier<MenuSettings> settings,
+      CobblestoneLogger log) {
     this.plugin = plugin;
     this.navigate = navigate;
     this.messages = messages;
+    this.menus =
+        new NavigationMenus<>(
+            this, integrations::destinationProviders, recents, messages, settings, log);
   }
 
   /**
@@ -74,7 +80,7 @@ final class PaperNavigationMenus extends NavigationMenus<Player> implements List
    * @param player the player
    */
   void open(Player player) {
-    NavigationMenu menu = menu(player);
+    NavigationMenu menu = menus.menu(player);
     Holder holder = new Holder(menu);
     holder.inventory = Bukkit.createInventory(holder, MenuLayout.SIZE, menu.title());
     holder.draw();
@@ -93,7 +99,7 @@ final class PaperNavigationMenus extends NavigationMenus<Player> implements List
         || !(event.getWhoClicked() instanceof Player player)) {
       return;
     }
-    handle(player, holder.menu.click(event.getRawSlot()), holder::draw);
+    menus.click(player, holder.menu, event.getRawSlot(), holder::draw);
   }
 
   @EventHandler(ignoreCancelled = true)
@@ -104,38 +110,41 @@ final class PaperNavigationMenus extends NavigationMenus<Player> implements List
   }
 
   @Override
-  protected Locale locale(Player player) {
+  public Locale locale(Player player) {
     return player.locale();
   }
 
   @Override
-  protected UUID id(Player player) {
+  public UUID id(Player player) {
     return player.getUniqueId();
   }
 
   @Override
-  protected Predicate<String> hasPermission(Player player) {
+  public Predicate<String> hasPermission(Player player) {
     return player::hasPermission;
   }
 
   @Override
-  protected Predicate<List<String>> canNavigate(Player player) {
+  public Predicate<List<String>> canNavigate(Player player) {
     return NavigateCommand.canNavigate(player);
   }
 
   @Override
-  protected void navigate(Player player, DestinationResolver.Resolved<NavigationTarget> pick) {
-    navigate.navigate(player, pick);
+  public void navigate(
+      Player player,
+      DestinationResolver.Resolved<NavigationTarget> pick,
+      NavigationTarget destination) {
+    navigate.navigate(player, pick, destination);
   }
 
   @Override
-  protected void fillIn(Player player, MenuAction.FillIn fillIn) {
+  public void fillIn(Player player, MenuAction.FillIn fillIn) {
     PaperOptionDialog.show(plugin, player, fillIn, navigate, messages);
   }
 
   /** Waits for the player's next tick: an inventory must not be closed from its own click event. */
   @Override
-  protected void closeThen(Player player, Runnable then) {
+  public void closeThen(Player player, Runnable then) {
     player
         .getScheduler()
         .run(

@@ -51,6 +51,9 @@ import org.cobblestonemc.plugin.message.Messages;
  * <p>The first page of the top level opens with the player's recent destinations, so a favorite is
  * one click away.
  *
+ * <p>A destination the player picks but cannot go to right now, such as their last death when they
+ * have not died, stays in the menu as a barrier that says why, until the next click.
+ *
  * <p>Destinations the player may not navigate to are left out, by the same permissions {@code
  * /navigate} checks, and so is a level with nothing in it the player could pick. Levels are built
  * only when they or the level above them are opened, and destinations only once they are picked.
@@ -80,6 +83,12 @@ public final class NavigationMenu {
   private final Deque<Level> levels = new ArrayDeque<>();
   private final Map<Integer, Runnable> clicks = new HashMap<>();
   private MenuAction pending = new MenuAction.None();
+
+  /** The destination last picked, until the next click. */
+  private Entry picked;
+
+  /** Why {@link #picked} cannot be gone to, once {@linkplain #refuse refused}. */
+  private Component refusal;
 
   /**
    * Opens a menu on the top level.
@@ -229,8 +238,22 @@ public final class NavigationMenu {
       return new MenuAction.None();
     }
     pending = new MenuAction.None();
+    picked = null;
+    refusal = null;
     click.run();
     return pending;
+  }
+
+  /**
+   * Marks the destination just picked as one the player cannot go to right now, until the next
+   * click. Draw the menu again to show it.
+   *
+   * @param reason why, as the destination said
+   */
+  public void refuse(Component reason) {
+    if (picked != null) {
+      refusal = reason;
+    }
   }
 
   // -----------------------------------------------------------------------------------------
@@ -378,12 +401,18 @@ public final class NavigationMenu {
 
   private void put(Map<Integer, MenuItem> items, int slot, Entry entry, boolean recent) {
     boolean opens = entry.subtree != null;
+    Component label = entry.display.label().orElseGet(() -> Component.text(entry.key));
+    if (refusal != null && entry.equals(picked)) {
+      // Clicking it again tries again.
+      items.put(slot, new MenuItem(icon(MenuIcons.CLOSE), name(label), List.of(line(refusal))));
+      clicks.put(slot, () -> pick(entry, label));
+      return;
+    }
     Icon icon =
         entry
             .display
             .icon()
             .orElseGet(() -> icon(opens ? MenuIcons.FOLDER : MenuIcons.DESTINATION));
-    Component label = entry.display.label().orElseGet(() -> Component.text(entry.key));
     Component name =
         opens ? name(label.append(Component.text(OPENS, CobblestoneColors.PRIMARY))) : name(label);
 
@@ -412,9 +441,14 @@ public final class NavigationMenu {
           slot, () -> pending = new MenuAction.FillIn(entry.address, entry.destination, label));
     } else {
       lore.add(line(messages.renderBare(locale, CobblestoneMessages.MENU_NAVIGATE)));
-      clicks.put(slot, () -> pending = navigate(entry, label));
+      clicks.put(slot, () -> pick(entry, label));
     }
     items.put(slot, new MenuItem(icon, name, lore));
+  }
+
+  private void pick(Entry entry, Component label) {
+    picked = entry;
+    pending = navigate(entry, label);
   }
 
   /**

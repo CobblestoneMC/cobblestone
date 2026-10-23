@@ -365,7 +365,7 @@ class NavigationMenuTest {
     return item == null ? null : plain(item.name());
   }
 
-  private static String plain(Component component) {
+  static String plain(Component component) {
     StringBuilder out = new StringBuilder();
     if (component instanceof TextComponent text) {
       out.append(text.content());
