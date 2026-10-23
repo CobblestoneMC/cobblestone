@@ -44,7 +44,7 @@ public final class NavigationMenus<P> {
    * @param recents the players' recent destinations
    * @param messages renders the menus' words
    * @param settings reads how the menus look, each time one opens
-   * @param log where a destination that fails to build is reported
+   * @param log where a provider that throws, or a destination that fails to build, is reported
    */
   public NavigationMenus(
       MenuPlatform<P> platform,
@@ -75,7 +75,7 @@ public final class NavigationMenus<P> {
         platform.locale(player),
         messages,
         settings.get(),
-        DestinationRoots.of(registered, player),
+        DestinationRoots.of(registered, player, log),
         displays,
         recents.get(platform.id(player)),
         platform.hasPermission(player),
