@@ -172,6 +172,35 @@ Records each player's most recent death location and offers the `death` destinat
 disabled, recording stops and the destination is hidden; stored data is retained. To restrict it by
 group instead, use `cobblestone.navigate.cobblestone.death`.
 
+## `menu`
+
+| Setting | Default | |
+| --- | --- | --- |
+| `menu.title` | `<#4AA8FF>Navigation Menu` | live |
+| `menu.filler` | `minecraft:gray_stained_glass_pane` | live |
+| `menu.recents` | `true` | live |
+| `menu.icons.<name>` | see below | live |
+
+The navigation menu opens when a player types `/navigate` with no destination. It is a double chest
+with a border, which holds the back, page and close buttons. Inside it are four rows of
+destinations. On the first page, the top row is the player's recent destinations instead, followed
+by a gap. Entries are listed alphabetically. A level with only one way on is skipped.
+
+- **`title`**: The menu's title, in [MiniMessage](https://docs.advntr.dev/minimessage/format.html).
+- **`filler`**: The item in the border and the gap.
+- **`recents`**: Whether to show recent destinations. They are kept in memory until restart.
+
+Items are written as an item key, such as `minecraft:oak_sign`, or as `head:` followed by a skin
+texture value, as head databases such as minecraft-heads.com publish them.
+
+`menu.icons` sets the items for Cobblestone's own entries (`death`, `spawn`, `player`, …), the
+buttons (`back`, `page`, `close`, `breadcrumb`), and the fallbacks for entries that choose none
+(`destination`, `folder`). Each integration sets its own items in its own config. Other players
+always show their own heads, and pets show their spawn egg.
+
+A destination that needs more input, such as `coordinates block`, asks for it before navigating:
+in a dialog on Paper, and on Sponge by handing the player the command to finish in chat.
+
 ## `metrics`
 
 | Setting | Default | |

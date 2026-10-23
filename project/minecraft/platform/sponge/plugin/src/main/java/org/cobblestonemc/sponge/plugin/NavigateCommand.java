@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
@@ -41,6 +42,7 @@ import org.cobblestonemc.plugin.destination.DestinationResolver;
 import org.cobblestonemc.plugin.destination.DestinationRoots;
 import org.cobblestonemc.plugin.destination.NavigationPermissions;
 import org.cobblestonemc.plugin.destination.NavigationTarget;
+import org.cobblestonemc.plugin.menu.RecentDestinations;
 import org.cobblestonemc.plugin.message.CobblestoneMessages;
 import org.cobblestonemc.plugin.message.Message0;
 import org.cobblestonemc.plugin.message.Messages;
@@ -63,7 +65,7 @@ import org.spongepowered.api.world.server.ServerLocation;
  * The {@code /navigate} (alias {@code /nav}) command: parse flags, resolve the destination through
  * the registered providers, run the search, and — on success — create the chosen navigator and
  * start a guided trip. All the non-Sponge logic lives in platform-neutral plugin-core helpers (flag
- * parsing, destination resolution).
+ * parsing, destination resolution). Typed on its own, it opens the navigation menu.
  */
 final class NavigateCommand {
 
@@ -73,6 +75,8 @@ final class NavigateCommand {
   // One key per word position. Distinct keys, all read back in order, so every word lands in the
   // same parse context — which is what lets tab-completion see the words typed before the cursor.
   private static final List<Parameter.Key<String>> WORD_KEYS = wordKeys();
+  // Typed alone, prints the command's help rather than being read as a destination.
+  private static final String HELP_FLAG = "-help";
   // A tiny, greedy search for the off-trail "guide" path: bounded and heavily weighted so it's
   // cheap.
   private static final SearchSettings GUIDE_SETTINGS =
@@ -90,6 +94,7 @@ final class NavigateCommand {
   private final Supplier<SearchSettings> searchSettings;
   private final CobblestoneLogger log;
   private final Messages messages;
+  private final RecentDestinations recents;
 
   NavigateCommand(
       SpongeNavigationServiceImpl navigationService,
@@ -99,7 +104,8 @@ final class NavigateCommand {
       SearchGate gate,
       Supplier<SearchSettings> searchSettings,
       CobblestoneLogger log,
-      Messages messages) {
+      Messages messages,
+      RecentDestinations recents) {
     this.navigationService = navigationService;
     this.tripService = tripService;
     this.integrations = integrations;
@@ -108,14 +114,16 @@ final class NavigateCommand {
     this.searchSettings = searchSettings;
     this.log = log;
     this.messages = messages;
+    this.recents = recents;
   }
 
   /**
    * Builds the command.
    *
+   * @param openMenu opens the navigation menu, for a player who types the command on its own
    * @return the command
    */
-  Command.Parameterized command() {
+  Command.Parameterized command(Consumer<ServerPlayer> openMenu) {
     // A chain of single-word parameters, NOT one greedy parameter. Sponge translates a greedy or
     // repeating parameter into nodes that redirect to themselves, and each redirect starts a fresh
     // parse context — so a completer only ever sees the first word, and cannot tell where in the
@@ -137,7 +145,12 @@ final class NavigateCommand {
                     messages.render(messages.defaultLocale(), CobblestoneMessages.PLAYERS_ONLY));
                 return CommandResult.success();
               }
-              run(player.get(), typedWords(context));
+              List<String> words = typedWords(context);
+              if (words.isEmpty()) {
+                openMenu.accept(player.get());
+              } else {
+                run(player.get(), words);
+              }
               return CommandResult.success();
             })
         .build();
@@ -162,7 +175,7 @@ final class NavigateCommand {
 
   private void run(ServerPlayer player, List<String> tokens) {
     Locale locale = player.locale();
-    if (tokens.isEmpty()) {
+    if (tokens.equals(List.of(HELP_FLAG))) {
       navHelp(player, locale);
       return;
     }
@@ -216,6 +229,33 @@ final class NavigateCommand {
     navigate(player, locale, flags, resolved);
   }
 
+  /**
+   * Navigates a player to a destination picked without typing, as though they had typed it with no
+   * flags. Call on the main thread: the destination is built here, and may read the world around
+   * them.
+   *
+   * @param player the player
+   * @param destination the destination, with its options parsed
+   */
+  void navigate(ServerPlayer player, DestinationResolver.Resolved<NavigationTarget> destination) {
+    navigate(player, player.locale(), NavigationFlags.defaults(), destination);
+  }
+
+  /**
+   * Navigates a player to a destination picked without typing and already built, as though they had
+   * typed it with no flags.
+   *
+   * @param player the player
+   * @param pick the destination, with its options parsed
+   * @param destination the destination, built
+   */
+  void navigate(
+      ServerPlayer player,
+      DestinationResolver.Resolved<NavigationTarget> pick,
+      NavigationTarget destination) {
+    navigate(player, player.locale(), NavigationFlags.defaults(), pick, destination);
+  }
+
   private void navigate(
       ServerPlayer player,
       Locale locale,
@@ -244,6 +284,16 @@ final class NavigateCommand {
       }
       case Validity.Valid<NavigationTarget>(NavigationTarget valid) -> destination = valid;
     }
+    navigate(player, locale, flags, resolved, destination);
+  }
+
+  private void navigate(
+      ServerPlayer player,
+      Locale locale,
+      NavigationFlags flags,
+      DestinationResolver.Resolved<NavigationTarget> resolved,
+      NavigationTarget destination) {
+    List<String> address = resolved.address();
 
     boolean live =
         switch (flags.liveness()) {
@@ -259,7 +309,8 @@ final class NavigateCommand {
         destination.destination(),
         destination::exists,
         flags,
-        live);
+        live,
+        new RecentDestinations.Recent(address, resolved.optionTokens()));
   }
 
   private void startSearch(
@@ -270,7 +321,8 @@ final class NavigateCommand {
       Destination<RegionFactory> destination,
       BooleanSupplier targetExists,
       NavigationFlags flags,
-      boolean live) {
+      boolean live,
+      RecentDestinations.Recent recent) {
     String label = tripLabel.text();
     UUID uuid = player.uniqueId();
     long startNanos = System.nanoTime();
@@ -325,16 +377,20 @@ final class NavigateCommand {
                         live,
                         targetExists)
                     .whenComplete(
-                        (outcome, tripError) ->
-                            reportTrip(
-                                player,
-                                locale,
-                                messages,
-                                log,
-                                label,
-                                path,
-                                elapsedMillis,
-                                tripError != null ? new TripOutcome.Error(tripError) : outcome));
+                        (outcome, tripError) -> {
+                          if (tripError == null && outcome instanceof TripOutcome.Started) {
+                            recents.record(uuid, recent);
+                          }
+                          reportTrip(
+                              player,
+                              locale,
+                              messages,
+                              log,
+                              label,
+                              path,
+                              elapsedMillis,
+                              tripError != null ? new TripOutcome.Error(tripError) : outcome);
+                        });
               }
             });
   }
@@ -423,6 +479,7 @@ final class NavigateCommand {
 
   private void navHelp(ServerPlayer player, Locale locale) {
     messages.send(player, locale, CobblestoneMessages.NAVIGATE_HELP_HEADER);
+    SpongeCommandHelp.line(player, messages, locale, "/navigate", "command.navigate.help.menu");
     SpongeCommandHelp.line(
         player, messages, locale, "/navigate <destination…>", "command.navigate.help.destination");
     SpongeCommandHelp.line(
@@ -436,13 +493,17 @@ final class NavigateCommand {
         "-no-world <world> / -no-dimension <dim>",
         "command.navigate.help.no_world");
     SpongeCommandHelp.line(player, messages, locale, "-live", "command.navigate.help.live");
+    SpongeCommandHelp.line(player, messages, locale, "-help", "command.navigate.help.help");
   }
 
   /**
    * The Cobblestone navigation-gate check for a player: default-allow, so a destination is offered
    * unless its {@code cobblestone.navigate.<address>} node is explicitly denied.
+   *
+   * @param player the player
+   * @return tests a canonical address
    */
-  private static Predicate<List<String>> canNavigate(ServerPlayer player) {
+  static Predicate<List<String>> canNavigate(ServerPlayer player) {
     return address ->
         NavigationPermissions.allowed(
             address,
@@ -527,8 +588,11 @@ final class NavigateCommand {
   /**
    * Tells a player how a destination's options are typed, after they gave it options that do not
    * fit.
+   *
+   * @param player the player
+   * @param invalid what did not fit
    */
-  private void sendUsage(
+  void sendUsage(
       ServerPlayer player, DestinationResolver.InvalidOptions<NavigationTarget> invalid) {
     Locale locale = player.locale();
     String usage = DestinationResolver.usage(invalid.address(), invalid.options());

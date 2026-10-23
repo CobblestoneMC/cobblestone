@@ -18,11 +18,14 @@ import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.plugin.LogoutCleanup;
 import org.cobblestonemc.plugin.config.ConfigKeys;
 import org.cobblestonemc.plugin.config.ConfigManager;
+import org.cobblestonemc.plugin.config.MenuIcons;
 import org.cobblestonemc.plugin.data.DataStore;
 import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.DataStores;
 import org.cobblestonemc.plugin.hologram.TrailLabelManager;
 import org.cobblestonemc.plugin.hud.TripHud;
+import org.cobblestonemc.plugin.menu.MenuSettings;
+import org.cobblestonemc.plugin.menu.RecentDestinations;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchGate;
 import org.cobblestonemc.plugin.search.SearchRegistry;
@@ -93,6 +96,8 @@ public final class CobblestoneSpongePlugin {
   private SpongeMetrics metrics;
   private SpongePetListener petListener;
   private SpongeMountListener mountListener;
+  private NavigateCommand navigateCommand;
+  private SpongeNavigationMenus menus;
 
   @Inject
   CobblestoneSpongePlugin(
@@ -215,7 +220,8 @@ public final class CobblestoneSpongePlugin {
             navigationService.regions(),
             navigationService::mayBeGenerated,
             () -> config.get(keys.deathsTrack),
-            messages));
+            messages,
+            MenuIcons.reader(config, keys.menuIcons)));
     // Each player's last death is recorded so they can navigate back to it.
     Sponge.eventManager()
         .registerListeners(
@@ -253,6 +259,29 @@ public final class CobblestoneSpongePlugin {
             searchSettings,
             liveIntervalMillis);
     CobblestoneSpongeApi.install(integrationRegistry, tripService);
+
+    // The menu starts trips through the command, so both remember them as recent destinations.
+    RecentDestinations recents = new RecentDestinations();
+    this.navigateCommand =
+        new NavigateCommand(
+            navigationService,
+            tripService,
+            integrationRegistry,
+            searchRegistry,
+            searchGate,
+            searchSettings,
+            cobblestoneLogger,
+            messages,
+            recents);
+    this.menus =
+        new SpongeNavigationMenus(
+            container,
+            integrationRegistry,
+            navigateCommand,
+            recents,
+            messages,
+            () -> MenuSettings.from(config, keys),
+            cobblestoneLogger);
 
     if (config.get(keys.metricsEnabled)) {
       this.metrics =
@@ -296,17 +325,7 @@ public final class CobblestoneSpongePlugin {
     }
     // /navigate and /location are also /cobblestone subcommands; each command is built once and
     // shared, so both spellings behave alike.
-    Command.Parameterized navigate =
-        new NavigateCommand(
-                navigationService,
-                tripService,
-                integrationRegistry,
-                searchRegistry,
-                searchGate,
-                searchSettings,
-                cobblestoneLogger,
-                messages)
-            .command();
+    Command.Parameterized navigate = navigateCommand.command(menus::open);
     Command.Parameterized location = CobblestoneCommand.location(messages, dataStore.locations());
     event.register(
         container,

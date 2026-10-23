@@ -7,7 +7,10 @@
 
 package org.cobblestonemc.plugin.config;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
@@ -127,6 +130,21 @@ public final class ConfigKeys {
    * keeps what is already stored.
    */
   public final ConfigKey<Boolean> deathsTrack;
+
+  /** The navigation menu's title, in MiniMessage. Mutable. */
+  public final ConfigKey<String> menuTitle;
+
+  /** The item that fills the navigation menu's border and gaps. Mutable. */
+  public final ConfigKey<String> menuFiller;
+
+  /** Whether the navigation menu opens with the player's recently used destinations. Mutable. */
+  public final ConfigKey<Boolean> menuRecents;
+
+  /**
+   * The navigation menu's items for Cobblestone's own entries and its fallbacks, keyed by the names
+   * in {@link MenuIcons}. Mutable.
+   */
+  public final Map<String, ConfigKey<String>> menuIcons;
 
   /** Whether anonymous bStats metrics are reported. Requires a restart. */
   public final ConfigKey<Boolean> metricsEnabled;
@@ -458,6 +476,58 @@ public final class ConfigKeys {
                 permission "cobblestone.navigate.cobblestone.death".""")
             .mutable()
             .register();
+
+    manager.section(
+        "menu",
+        """
+        The navigation menu: a chest of every destination a player may go to, opened by typing
+        /navigate on its own. Clicking a destination starts navigating to it; one that needs more,
+        such as coordinates, asks for it first. Items are written as an item key
+        ("minecraft:oak_sign") or as "head:" followed by a skin texture value, as head databases
+        such as minecraft-heads.com publish them.""");
+    this.menuTitle =
+        manager
+            .key("menu.title", "<#4AA8FF>Navigation Menu", Codec.ofString())
+            .comment(
+                """
+                The menu's title, in MiniMessage format
+                (https://docs.advntr.dev/minimessage/format.html).""")
+            .mutable()
+            .register();
+    this.menuFiller =
+        manager
+            .key("menu.filler", MenuIcons.FILLER_DEFAULT, Codec.ofString())
+            .comment(
+                """
+                The item that fills the menu's border, where its buttons sit, and the gap between
+                recent destinations and the rest.""")
+            .mutable()
+            .register();
+    this.menuRecents =
+        manager
+            .key("menu.recents", true, Codec.ofBoolean())
+            .comment(
+                """
+                Whether the menu opens with a row of the player's recently used destinations, so a
+                favorite is one click away. They are remembered until the server restarts.""")
+            .mutable()
+            .register();
+    manager.section(
+        "menu.icons",
+        """
+        The items for Cobblestone's own destinations, and the fallbacks for entries that choose
+        none. An integration's items are set in that integration's own config.""");
+    Map<String, ConfigKey<String>> icons = new LinkedHashMap<>();
+    MenuIcons.DEFAULTS.forEach(
+        (name, icon) ->
+            icons.put(
+                name,
+                manager
+                    .key("menu.icons." + name, icon.item(), Codec.ofString())
+                    .comment(icon.description())
+                    .mutable()
+                    .register()));
+    this.menuIcons = Collections.unmodifiableMap(icons);
 
     manager.section(
         "metrics",
