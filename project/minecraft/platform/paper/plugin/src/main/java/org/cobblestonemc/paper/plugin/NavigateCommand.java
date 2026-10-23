@@ -384,6 +384,11 @@ final class NavigateCommand {
                       path.steps().size(),
                       path.duration(),
                       elapsedMillis);
+                  if (path.steps().isEmpty()) {
+                    // The search started inside the destination: there is no route to follow.
+                    messages.send(player, locale, CobblestoneMessages.NAVIGATE_ALREADY_THERE);
+                    return;
+                  }
                   // Hand the found route to the shared trip service — the same code path
                   // integrations
                   // use. The command only carries the chosen navigator id (appearance comes from
@@ -555,7 +560,7 @@ final class NavigateCommand {
   }
 
   private Map<String, DestinationTree<NavigationTarget>> destinationRoots(Player player) {
-    return DestinationRoots.of(integrations.destinationProviders(), player);
+    return DestinationRoots.of(integrations.destinationProviders(), player, log);
   }
 
   private static List<String> flagNames() {

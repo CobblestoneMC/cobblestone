@@ -9,9 +9,11 @@ package org.cobblestonemc.plugin.destination;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
 import org.cobblestonemc.plugin.api.DestinationTree;
 import org.junit.jupiter.api.Test;
@@ -32,7 +34,52 @@ class DestinationRootsTest {
 
     assertEquals(
         List.of("essentials", "warps"),
-        List.copyOf(DestinationRoots.of(providers, "alex").keySet()));
-    assertEquals(List.of("warps"), List.copyOf(DestinationRoots.of(providers, "sam").keySet()));
+        List.copyOf(DestinationRoots.of(providers, "alex", new Errors()).keySet()));
+    assertEquals(
+        List.of("warps"),
+        List.copyOf(DestinationRoots.of(providers, "sam", new Errors()).keySet()));
+  }
+
+  @Test
+  void aProviderThatThrowsIsLoggedAndLeftOut() {
+    Map<String, DestinationProvider<String>> providers = new LinkedHashMap<>();
+    providers.put(
+        "warps",
+        player ->
+            DestinationTree.<NavigationTarget>builder()
+                .destination("spawn", DestinationLeaf.<NavigationTarget>of(() -> null))
+                .build());
+    providers.put(
+        "broken",
+        player -> {
+          throw new IllegalArgumentException("spawn is already a key or an alias here");
+        });
+    Errors errors = new Errors();
+
+    assertEquals(
+        List.of("warps"), List.copyOf(DestinationRoots.of(providers, "alex", errors).keySet()));
+    assertEquals(List.of(List.of("broken")), errors.args);
+  }
+
+  /** Records the arguments of each error logged. */
+  private static final class Errors extends CobblestoneLogger {
+    final List<List<Object>> args = new ArrayList<>();
+
+    @Override
+    public void trace(String message, Object... args) {}
+
+    @Override
+    public void debug(String message, Object... args) {}
+
+    @Override
+    public void info(String message, Object... args) {}
+
+    @Override
+    public void warn(String message, Object... args) {}
+
+    @Override
+    public void error(String message, Throwable throwable, Object... args) {
+      this.args.add(List.of(args));
+    }
   }
 }

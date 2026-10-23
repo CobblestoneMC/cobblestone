@@ -360,6 +360,11 @@ final class NavigateCommand {
                   instanceof
                   NavigationResult.Success<ServerLocation, MinecraftStepPayload>(
                       Path<ServerLocation, MinecraftStepPayload> path)) {
+                if (path.steps().isEmpty()) {
+                  // The search started inside the destination: there is no route to follow.
+                  messages.send(player, locale, CobblestoneMessages.NAVIGATE_ALREADY_THERE);
+                  return;
+                }
                 NavigatorSettings settings = NavigatorSettings.builder(flags.navigator()).build();
                 tripService
                     .start(
@@ -517,7 +522,7 @@ final class NavigateCommand {
   }
 
   private Map<String, DestinationTree<NavigationTarget>> destinationRoots(ServerPlayer player) {
-    return DestinationRoots.of(integrations.destinationProviders(), player);
+    return DestinationRoots.of(integrations.destinationProviders(), player, log);
   }
 
   /**
