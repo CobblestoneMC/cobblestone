@@ -22,13 +22,13 @@ import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.joml.Vector3i;
 
 /**
- * Surfaces the player's active quests as navigation targets: {@code quests → quest → <name>}, one
- * leaf per current quest whose current stage has a locatable objective (a reach-location or
- * kill-within region). Cobblestone roots the branch at Quests' own name, which keeps these from
- * colliding with other integrations' trees; its resolver still lets a player type just the quest
- * name when it's unambiguous. Navigating is gated by Cobblestone's {@code
- * cobblestone.navigate.quests.quest.*} permission (default-allow). Targets re-resolve on query, so
- * advancing a stage is reflected without a restart.
+ * Surfaces the player's active quests as navigation targets: {@code cobblestonepikamugquests →
+ * quest → <name>}, one leaf per current quest whose current stage has a locatable objective (a
+ * reach-location or kill-within region). Cobblestone roots the branch at this plugin's own name,
+ * which keeps these from colliding with other integrations' trees; its resolver still lets a player
+ * type just the quest name when it's unambiguous. Navigating is gated by Cobblestone's {@code
+ * cobblestone.navigate.cobblestonepikamugquests.quest.*} permission (default-allow). Targets
+ * re-resolve on query, so advancing a stage is reflected without a restart.
  */
 final class PikamugQuestsDestinationService implements DestinationService {
 

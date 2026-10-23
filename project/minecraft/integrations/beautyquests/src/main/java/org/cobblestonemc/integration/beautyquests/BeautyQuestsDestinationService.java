@@ -24,13 +24,14 @@ import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.joml.Vector3i;
 
 /**
- * Surfaces the player's started quests as navigation targets: {@code beautyquests → quest →
- * <name>}, one leaf per started quest whose current stage has a precise location. Cobblestone roots
- * the branch at BeautyQuests' own name, which keeps these from colliding with other integrations'
- * trees; its resolver still lets a player type just the quest name when it's unambiguous.
- * Navigating is gated by Cobblestone's {@code cobblestone.navigate.beautyquests.quest.*} permission
- * (default-allow). The target is snapshotted when the tree is built (on the main thread, as {@code
- * getLocated} requires); advancing a stage is picked up the next time destinations are resolved.
+ * Surfaces the player's started quests as navigation targets: {@code cobblestonebeautyquests →
+ * quest → <name>}, one leaf per started quest whose current stage has a precise location.
+ * Cobblestone roots the branch at this plugin's own name, which keeps these from colliding with
+ * other integrations' trees; its resolver still lets a player type just the quest name when it's
+ * unambiguous. Navigating is gated by Cobblestone's {@code
+ * cobblestone.navigate.cobblestonebeautyquests.quest.*} permission (default-allow). The target is
+ * snapshotted when the tree is built (on the main thread, as {@code getLocated} requires);
+ * advancing a stage is picked up the next time destinations are resolved.
  */
 final class BeautyQuestsDestinationService implements DestinationService {
 

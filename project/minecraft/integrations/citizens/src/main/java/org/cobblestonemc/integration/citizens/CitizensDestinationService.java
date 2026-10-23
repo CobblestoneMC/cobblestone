@@ -19,13 +19,13 @@ import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.joml.Vector3i;
 
 /**
- * Surfaces the server's Citizens NPCs as navigation targets: {@code citizens → npc → <name>-<id>},
- * one leaf per NPC. Names aren't unique in Citizens, so each key carries the NPC id to
- * disambiguate. Navigating is gated by Cobblestone's {@code cobblestone.navigate.citizens.npc.*}
- * permission (default-allow), and — because a server may have hundreds of NPCs — {@code
- * /navigate}'s tab-completion only offers matches once the player has narrowed the set down. Each
- * NPC's location is re-read (by id) when the destination is resolved, so it reflects where the NPC
- * currently stands.
+ * Surfaces the server's Citizens NPCs as navigation targets: {@code cobblestonecitizens → npc →
+ * <name>-<id>}, one leaf per NPC. Names aren't unique in Citizens, so each key carries the NPC id
+ * to disambiguate. Navigating is gated by Cobblestone's {@code
+ * cobblestone.navigate.cobblestonecitizens.npc.*} permission (default-allow), and — because a
+ * server may have hundreds of NPCs — {@code /navigate}'s tab-completion only offers matches once
+ * the player has narrowed the set down. Each NPC's location is re-read (by id) when the destination
+ * is resolved, so it reflects where the NPC currently stands.
  */
 final class CitizensDestinationService implements DestinationService {
 
