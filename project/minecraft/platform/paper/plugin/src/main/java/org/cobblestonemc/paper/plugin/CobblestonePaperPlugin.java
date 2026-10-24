@@ -253,7 +253,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             navigateCommand,
             recents,
             messages,
-            () -> MenuSettings.from(config, keys));
+            () -> MenuSettings.from(config, keys),
+            logger);
     getServer().getPluginManager().registerEvents(menus, this);
 
     getLifecycleManager()

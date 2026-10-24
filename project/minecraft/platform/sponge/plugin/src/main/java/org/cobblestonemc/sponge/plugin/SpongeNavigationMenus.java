@@ -17,12 +17,14 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
+import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.plugin.api.Icon;
 import org.cobblestonemc.plugin.destination.DestinationResolver;
 import org.cobblestonemc.plugin.destination.NavigationTarget;
 import org.cobblestonemc.plugin.menu.MenuAction;
 import org.cobblestonemc.plugin.menu.MenuItem;
 import org.cobblestonemc.plugin.menu.MenuLayout;
+import org.cobblestonemc.plugin.menu.MenuPlatform;
 import org.cobblestonemc.plugin.menu.MenuSettings;
 import org.cobblestonemc.plugin.menu.NavigationMenu;
 import org.cobblestonemc.plugin.menu.NavigationMenus;
@@ -52,11 +54,12 @@ import org.spongepowered.plugin.PluginContainer;
  * whose clicks it hands back to it. A destination that needs more is finished in chat: the player
  * is handed the command to complete.
  */
-final class SpongeNavigationMenus extends NavigationMenus<ServerPlayer> {
+final class SpongeNavigationMenus implements MenuPlatform<ServerPlayer> {
 
   private final PluginContainer plugin;
   private final NavigateCommand navigate;
   private final Messages messages;
+  private final NavigationMenus<ServerPlayer> menus;
 
   SpongeNavigationMenus(
       PluginContainer plugin,
@@ -64,11 +67,14 @@ final class SpongeNavigationMenus extends NavigationMenus<ServerPlayer> {
       NavigateCommand navigate,
       RecentDestinations recents,
       Messages messages,
-      Supplier<MenuSettings> settings) {
-    super(integrations::destinationProviders, recents, messages, settings);
+      Supplier<MenuSettings> settings,
+      CobblestoneLogger log) {
     this.plugin = plugin;
     this.navigate = navigate;
     this.messages = messages;
+    this.menus =
+        new NavigationMenus<>(
+            this, integrations::destinationProviders, recents, messages, settings, log);
   }
 
   /**
@@ -77,7 +83,7 @@ final class SpongeNavigationMenus extends NavigationMenus<ServerPlayer> {
    * @param player the player
    */
   void open(ServerPlayer player) {
-    NavigationMenu menu = menu(player);
+    NavigationMenu menu = menus.menu(player);
     ViewableInventory inventory =
         ViewableInventory.builder()
             .type(ContainerTypes.GENERIC_9X6)
@@ -95,41 +101,43 @@ final class SpongeNavigationMenus extends NavigationMenus<ServerPlayer> {
           if (clickType == ClickTypes.DOUBLE_CLICK.get()) {
             return false;
           }
-          handle(player, menu.click(slotIndex), () -> draw(inventory, menu));
+          menus.click(player, menu, slotIndex, () -> draw(inventory, menu));
           return false;
         });
     view.open(player);
   }
 
   @Override
-  protected Locale locale(ServerPlayer player) {
+  public Locale locale(ServerPlayer player) {
     return player.locale();
   }
 
   @Override
-  protected UUID id(ServerPlayer player) {
+  public UUID id(ServerPlayer player) {
     return player.uniqueId();
   }
 
   @Override
-  protected Predicate<String> hasPermission(ServerPlayer player) {
+  public Predicate<String> hasPermission(ServerPlayer player) {
     return player::hasPermission;
   }
 
   @Override
-  protected Predicate<List<String>> canNavigate(ServerPlayer player) {
+  public Predicate<List<String>> canNavigate(ServerPlayer player) {
     return NavigateCommand.canNavigate(player);
   }
 
   @Override
-  protected void navigate(
-      ServerPlayer player, DestinationResolver.Resolved<NavigationTarget> pick) {
-    navigate.navigate(player, pick);
+  public void navigate(
+      ServerPlayer player,
+      DestinationResolver.Resolved<NavigationTarget> pick,
+      NavigationTarget destination) {
+    navigate.navigate(player, pick, destination);
   }
 
   /** Hands the player the command for a destination, to finish typing in chat. */
   @Override
-  protected void fillIn(ServerPlayer player, MenuAction.FillIn fillIn) {
+  public void fillIn(ServerPlayer player, MenuAction.FillIn fillIn) {
     Locale locale = player.locale();
     String usage = DestinationResolver.usage(fillIn.address(), fillIn.destination().options());
     player.sendMessage(
@@ -144,7 +152,7 @@ final class SpongeNavigationMenus extends NavigationMenus<ServerPlayer> {
 
   /** Waits for the next tick: an inventory must not be closed from within its own click. */
   @Override
-  protected void closeThen(ServerPlayer player, Runnable then) {
+  public void closeThen(ServerPlayer player, Runnable then) {
     Sponge.server()
         .scheduler()
         .submit(

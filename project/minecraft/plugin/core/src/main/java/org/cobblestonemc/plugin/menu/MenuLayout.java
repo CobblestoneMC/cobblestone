@@ -7,20 +7,7 @@
 
 package org.cobblestonemc.plugin.menu;
 
-/**
- * Where things sit in the navigation menu, a double chest of six rows of nine:
- *
- * <pre>
- *   ▒ ▒ ▒ ▒ ◆ ▒ ▒ ▒ ▒    border; ◆ names where in the tree the player is
- *   ▒ · · · · · · · ▒    four rows of seven entries — or, on the first page of the top
- *   ▒ · · · · · · · ▒    level, a row of recent destinations, a gap, and two rows of
- *   ▒ · · · · · · · ▒    entries
- *   ▒ · · · · · · · ▒
- *   ↩ ▒ ▒ ◀ ✕ ▶ ▒ ▒ ▒    border; back, previous page, close, next page
- * </pre>
- *
- * The border is always there: the buttons live in it.
- */
+/** Where things sit in the navigation menu, a double chest of six rows of nine. */
 public final class MenuLayout {
 
   /** Rows in the menu. */

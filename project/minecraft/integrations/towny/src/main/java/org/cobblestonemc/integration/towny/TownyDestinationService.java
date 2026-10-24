@@ -65,7 +65,9 @@ final class TownyDestinationService implements DestinationService {
       towns.entry(town.getName(), townEntry(town));
     }
 
-    var root = Destination.tree().entry("town", shown(icons.towns()).subtree(towns));
+    var root =
+        Destination.tree()
+            .entry("town", shown(icons.simpleConfiguredDisplay("towns")).subtree(towns));
     Town own = ownTown(player);
     if (own != null) {
       root.entry("resident", townEntry(own).label(null));
@@ -75,7 +77,7 @@ final class TownyDestinationService implements DestinationService {
 
   @Override
   public Display display(Player player) {
-    return icons.root();
+    return icons.simpleConfiguredDisplay("root");
   }
 
   /** A town: somewhere to go, which also holds its home, outposts and plots. */
@@ -91,15 +93,25 @@ final class TownyDestinationService implements DestinationService {
         .strict()
         .entry(
             "home",
-            shown(icons.home()).destination(() -> Destination.at(town.getSpawnOrNull(), "home")))
-        .entry("outpost", shown(icons.outposts()).subtree(() -> outposts(town)))
+            shown(icons.simpleConfiguredDisplay("home"))
+                .destination(() -> Destination.at(town.getSpawnOrNull(), "home")))
+        .entry(
+            "outpost",
+            shown(icons.simpleConfiguredDisplay("outposts")).subtree(() -> outposts(town)))
         .entry(
             "type",
-            shown(icons.plotTypes())
-                .subtree(() -> plots(town, TownBlock::getTypeName, icons.plotType())))
+            shown(icons.simpleConfiguredDisplay("plot-types"))
+                .subtree(
+                    () ->
+                        plots(
+                            town,
+                            TownBlock::getTypeName,
+                            icons.simpleConfiguredDisplay("plot-type"))))
         .entry(
             "plot",
-            shown(icons.plots()).subtree(() -> plots(town, TownBlock::getName, icons.plot())))
+            shown(icons.simpleConfiguredDisplay("plots"))
+                .subtree(
+                    () -> plots(town, TownBlock::getName, icons.simpleConfiguredDisplay("plot"))))
         .build();
   }
 
@@ -110,7 +122,8 @@ final class TownyDestinationService implements DestinationService {
       Location spawn = spawns.get(i);
       tree.entry(
           Integer.toString(i + 1),
-          shown(icons.outpost()).destination(() -> Destination.at(spawn, "outpost")));
+          shown(icons.simpleConfiguredDisplay("outpost"))
+              .destination(() -> Destination.at(spawn, "outpost")));
     }
     return tree.build();
   }
