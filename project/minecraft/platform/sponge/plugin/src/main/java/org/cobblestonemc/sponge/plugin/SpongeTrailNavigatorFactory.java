@@ -24,7 +24,6 @@ import org.cobblestonemc.sponge.plugin.api.TrailNavigatorSettings;
 import org.spongepowered.api.ResourceKey;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.effect.particle.ParticleType;
-import org.spongepowered.api.effect.particle.ParticleTypes;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.registry.RegistryTypes;
 import org.spongepowered.api.util.Color;
@@ -101,19 +100,21 @@ public final class SpongeTrailNavigatorFactory implements NavigatorFactory {
   }
 
   /**
-   * Resolves vanilla particle ids ({@code minecraft:<name>}), skipping unknown ones, such as {@code
-   * trail} before Minecraft 1.21.2. Dust stands in if none are left.
+   * Resolves vanilla particle ids ({@code minecraft:<name>}), skipping unknown ones. {@code trail}
+   * becomes dust where the server can't draw it, as before Minecraft 1.21.2.
    */
   private static List<ParticleType> parseParticles(List<String> names) {
     List<ParticleType> particles = new ArrayList<>();
     for (String name : names) {
+      String key = name.trim().toLowerCase(Locale.ROOT);
+      if (key.equals("trail")) {
+        particles.add(SpongeTrailNavigator.trailOrDust());
+        continue;
+      }
       Sponge.game()
           .registry(RegistryTypes.PARTICLE_TYPE)
-          .<ParticleType>findValue(ResourceKey.minecraft(name.trim().toLowerCase(Locale.ROOT)))
+          .<ParticleType>findValue(ResourceKey.minecraft(key))
           .ifPresent(particles::add);
-    }
-    if (particles.isEmpty()) {
-      particles.add(ParticleTypes.DUST.get());
     }
     return particles;
   }

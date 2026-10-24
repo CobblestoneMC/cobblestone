@@ -64,7 +64,7 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
     this.player = player;
     this.particles = List.copyOf(particleTypes);
     this.highlightParticles = List.copyOf(highlightParticleTypes);
-    this.colors = palette.isEmpty() ? List.of(Color.AQUA) : List.copyOf(palette);
+    this.colors = palette.isEmpty() ? List.of(Color.fromRGB(0x4AA8FF)) : List.copyOf(palette);
     this.particleTicks = Math.max(1, particleTicks);
     this.dusts = new ArrayList<>(colors.size());
     for (Color color : colors) {
@@ -140,7 +140,7 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
     ThreadLocalRandom random = ThreadLocalRandom.current();
     final var particle = particles.get(random.nextInt(particles.size()));
     if (particle == Particle.TRAIL) {
-      // Drifts along the trail at its flow speed, then is gone: it lasts exactly particleTicks.
+      // Drifts along the trail at its flow speed (at 20 TPS) and is gone after particleTicks.
       double seconds = particleTicks / 20.0;
       Location target = location.clone().add(vx * seconds, vy * seconds, vz * seconds);
       Particle.TRAIL

@@ -62,6 +62,27 @@ final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> 
           .findValue(ResourceKey.sponge("target"))
           .map(option -> (ParticleOption<Vector3d>) option);
 
+  /**
+   * The particle drawn for {@code type}: dust in place of a trail particle this server can't aim.
+   *
+   * @param type a configured particle
+   * @return the particle to draw
+   */
+  static ParticleType drawable(ParticleType type) {
+    return TARGET.isEmpty() && TRAIL.filter(type::equals).isPresent()
+        ? ParticleTypes.DUST.get()
+        : type;
+  }
+
+  /**
+   * The trail particle where this server can draw it, otherwise dust.
+   *
+   * @return the particle to draw for {@code TRAIL}
+   */
+  static ParticleType trailOrDust() {
+    return TRAIL.isPresent() && TARGET.isPresent() ? TRAIL.get() : ParticleTypes.DUST.get();
+  }
+
   private final UUID playerId;
   private final List<ParticleType> particles;
   private final List<ParticleType> highlightParticles;
@@ -85,8 +106,9 @@ final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> 
       BooleanSupplier showLabel) {
     super(bufferCells, density, recalcDistance, messages, player.locale(), labels, showLabel);
     this.playerId = player.uniqueId();
-    this.particles = List.copyOf(particleTypes);
-    this.highlightParticles = List.copyOf(highlightParticleTypes);
+    this.particles = particleTypes.stream().map(SpongeTrailNavigator::drawable).toList();
+    this.highlightParticles =
+        highlightParticleTypes.stream().map(SpongeTrailNavigator::drawable).toList();
     this.colors = palette.isEmpty() ? List.of(Color.ofRgb(0x4AA8FF)) : List.copyOf(palette);
     this.particleTicks = Math.max(1, particleTicks);
     setPath(path);
@@ -163,7 +185,7 @@ final class SpongeTrailNavigator extends AbstractTrailNavigator<ServerLocation> 
     ParticleType type = types.get(random.nextInt(types.size()));
     ParticleEffect.Builder effect = ParticleEffect.builder().type(type).quantity(1);
     if (TRAIL.isPresent() && TARGET.isPresent() && type.equals(TRAIL.get())) {
-      // Drifts along the trail at its flow speed, then is gone: it lasts exactly particleTicks.
+      // Drifts along the trail at its flow speed (at 20 TPS) and is gone after particleTicks.
       double seconds = particleTicks / 20.0;
       effect
           .option(ParticleOptions.COLOR.get(), colors.get(random.nextInt(colors.size())))
