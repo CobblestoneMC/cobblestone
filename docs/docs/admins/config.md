@@ -232,6 +232,7 @@ own configuration.
 - **`density`**: Mean particles per cell per tick. Fractional values are probabilities: `0.7` means
   a 70% chance of one particle per cell per tick.
 - **`particle_ticks`**: How long each `TRAIL` particle lasts. Shorter is crisper on the move;
-  longer is fuller.
+  longer is fuller. Each particle drifts in a straight line at about a block a second, so beyond
+  about 40 ticks it visibly strays off a curving trail.
 
 Particle names follow the server's particle registry.

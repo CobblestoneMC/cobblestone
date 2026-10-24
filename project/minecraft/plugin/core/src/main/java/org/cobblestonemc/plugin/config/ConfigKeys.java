@@ -598,7 +598,9 @@ public final class ConfigKeys {
             .comment(
                 """
                 How many ticks each TRAIL particle lasts before it is gone. Shorter keeps the trail
-                crisp ahead of a player on the move; longer makes it fuller.""")
+                crisp ahead of a player on the move; longer makes it fuller. Each particle drifts in
+                a straight line at about a block a second, so beyond about 40 ticks it visibly
+                strays off a curving trail.""")
             .mutable()
             .register();
   }
