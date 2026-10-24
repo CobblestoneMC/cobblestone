@@ -73,15 +73,14 @@ class MinecraftAgentTest {
   void eachMiningBucketIsPricedAsItsTypicalBlock() {
     MinecraftAgent miner = MinecraftAgent.forPlayer(TestPlayer.walker(), Set.of());
     // Ten blocks level: two blocks broken and a walk per block, at hardness times 1.5 a block.
-    assertEquals(2 * 1.5 * 1.5 + 0.20, across(miner, RegionClass.STONE), 1e-9);
-    assertTrue(across(miner, RegionClass.SANDSTONE) < across(miner, RegionClass.STONE));
-    assertTrue(across(miner, RegionClass.STONE) < across(miner, RegionClass.DEEPSLATE));
-    assertTrue(across(miner, RegionClass.DEEPSLATE) < across(miner, RegionClass.OBSIDIAN));
+    assertEquals(2 * 1.5 * 1.5 + 0.20, across(miner, RegionClass.ROCK), 1e-9);
+    assertTrue(across(miner, RegionClass.SOFT_ROCK) < across(miner, RegionClass.ROCK));
+    assertTrue(across(miner, RegionClass.ROCK) < across(miner, RegionClass.HARD_ROCK));
+    assertTrue(across(miner, RegionClass.HARD_ROCK) < across(miner, RegionClass.OBSIDIAN));
 
     MinecraftAgent noPickaxe =
         MinecraftAgent.forPlayer(TestPlayer.walker(), Set.of(MinecraftStepType.MINE));
-    assertEquals(
-        MinecraftAgent.FALLBACK_COST_PER_BLOCK, across(noPickaxe, RegionClass.STONE), 1e-9);
+    assertEquals(MinecraftAgent.FALLBACK_COST_PER_BLOCK, across(noPickaxe, RegionClass.ROCK), 1e-9);
   }
 
   @Test

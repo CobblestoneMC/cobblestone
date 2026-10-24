@@ -183,19 +183,19 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
   @Override
   public int family(int klass) {
     return switch (of(klass)) {
-      case SANDSTONE, STONE, MIXED_ROCK, DEEPSLATE -> RegionClass.STONE.id();
+      case SOFT_ROCK, ROCK, MIXED_ROCK, HARD_ROCK -> RegionClass.ROCK.id();
       default -> klass;
     };
   }
 
   /**
-   * A rock region's class is the band of rock nearest its cells' average hardness: sandstone,
-   * stone, mixed rock or deepslate. Nothing but the class is stored, so an estimate across a region
-   * is at most half a band from its true average.
+   * A rock region's class is the band of rock nearest its cells' average hardness: soft rock, rock,
+   * mixed rock or hard rock. Nothing but the class is stored, so an estimate across a region is at
+   * most half a band from its true average.
    */
   @Override
   public int label(int family, int[] counts) {
-    if (family != RegionClass.STONE.id()) {
+    if (family != RegionClass.ROCK.id()) {
       return family;
     }
     double sum = 0;
@@ -216,7 +216,7 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
 
   /** The classes a rock region can be, softest first. */
   private static final RegionClass[] ROCK_BANDS = {
-    RegionClass.SANDSTONE, RegionClass.STONE, RegionClass.MIXED_ROCK, RegionClass.DEEPSLATE
+    RegionClass.SOFT_ROCK, RegionClass.ROCK, RegionClass.MIXED_ROCK, RegionClass.HARD_ROCK
   };
 
   /**
@@ -230,11 +230,11 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
    */
   public static double hardness(RegionClass klass) {
     return switch (klass) {
-      case GLASS -> 0.2;
-      case SANDSTONE -> 0.4;
-      case STONE -> 1.5;
+      case SOFT -> 0.2;
+      case SOFT_ROCK -> 0.4;
+      case ROCK -> 1.5;
       case MIXED_ROCK -> 2.25;
-      case DEEPSLATE -> 3.0;
+      case HARD_ROCK -> 3.0;
       case OBSIDIAN -> 50.0;
       case DIRT -> 0.5;
       case WOOD -> 2.0;
