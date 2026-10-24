@@ -58,7 +58,7 @@ public enum RegionClass {
   /** Breakable by hand: leaves, glass, wool. */
   SOFT(7, Body.SOLID, MiningClass.SOFT),
 
-  /** Soft rock: netherrack and its ores. */
+  /** Soft rock: netherrack and its ores, sandstone. */
   SOFT_ROCK(8, Body.SOLID, MiningClass.SOFT_ROCK),
 
   /** Rock: stone and its ores. */
@@ -74,7 +74,7 @@ public enum RegionClass {
   HARD_ROCK(11, Body.SOLID, MiningClass.HARD_ROCK),
 
   /** Obsidian, and whatever else needs a diamond pickaxe. */
-  OBSIDIAN(12, Body.SOLID, MiningClass.OBSIDIAN),
+  VERY_HARD_ROCK(12, Body.SOLID, MiningClass.VERY_HARD_ROCK),
 
   /** Dirt, sand and gravel. */
   DIRT(13, Body.SOLID, MiningClass.DIRT),

@@ -49,16 +49,17 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
 
   private final Function<DomainRegion<?>, TerrainSource<C>> sourceFor;
   private final Function<DomainRegion<?>, RegionStore<C>> storeFor;
-  private final RegionAgent agent;
+  private final Function<DomainRegion<?>, RegionAgent> agentFor;
   private final double tierOneRate;
   private final Consumer<RegionSearch> onSearch;
 
   /**
-   * Creates a heuristic that reads a terrain source and a store per solve.
+   * Creates a heuristic that reads a terrain source, a store and an agent per solve.
    *
    * <p>Per solve, not per strategy: one strategy is built per navigate, but a trip may have legs in
    * several worlds, and a source bound to the first would answer every later leg from the wrong
-   * terrain without ever failing. The target region knows which world its leg is in.
+   * terrain without ever failing. The target region knows which world its leg is in. The agent too,
+   * since what it pays for a kind of terrain can depend on the world.
    *
    * <p>A server's store is its world's, shared by every search, so a column built by any search is
    * read back instead of built again. A store of each solve's own ({@link RegionStore#inMemory})
@@ -70,7 +71,7 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
    * @param sourceFor the terrain source for a solve's target region, for the columns the store has
    *     to build
    * @param storeFor the store for a solve's target region's world
-   * @param agent who is travelling
+   * @param agentFor who is travelling, as priced in a solve's target region's world
    * @param tierOneRate the least the agent can pay per block by any movement at all, which Tier 1
    *     prices unsolved legs with: lower than {@link RegionAgent#cheapest()} for an agent who can
    *     move in ways the region layer does not price, such as riding
@@ -80,12 +81,12 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
   public RegionHeuristic(
       Function<DomainRegion<?>, TerrainSource<C>> sourceFor,
       Function<DomainRegion<?>, RegionStore<C>> storeFor,
-      RegionAgent agent,
+      Function<DomainRegion<?>, RegionAgent> agentFor,
       double tierOneRate,
       Consumer<RegionSearch> onSearch) {
     this.sourceFor = sourceFor;
     this.storeFor = storeFor;
-    this.agent = agent;
+    this.agentFor = agentFor;
     this.tierOneRate = tierOneRate;
     this.onSearch = onSearch;
   }
@@ -98,7 +99,10 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
 
   @Override
   public SolveHeuristic newSolve(int windowWidth, DomainRegion<?> target) {
-    return new Solve(target, new RegionGraph<>(storeFor.apply(target), sourceFor.apply(target)));
+    return new Solve(
+        target,
+        new RegionGraph<>(storeFor.apply(target), sourceFor.apply(target)),
+        agentFor.apply(target));
   }
 
   /** One solve's view: a search seeded on first use, and the answers it has given. */
@@ -106,12 +110,14 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
 
     private final DomainRegion<?> target;
     private final RegionGraph<C> graph;
+    private final RegionAgent agent;
     private final Map<Cell, Double> answered = new HashMap<>();
     private RegionSearch search;
 
-    Solve(DomainRegion<?> target, RegionGraph<C> graph) {
+    Solve(DomainRegion<?> target, RegionGraph<C> graph, RegionAgent agent) {
       this.target = target;
       this.graph = graph;
+      this.agent = agent;
     }
 
     @Override

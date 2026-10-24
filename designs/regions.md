@@ -20,7 +20,7 @@ the terrain ahead. REGIONS reads the terrain ahead.
 
 - **Regions.** Each chunk column is classed cell by cell (stand, soul sand, soul soil, water, water
   surface, climb, air, and breakable material by mining bucket: soft, soft rock, rock, hard rock,
-  obsidian, dirt, wood) and flood-filled into connected regions, one class each, within each
+  very hard rock, dirt, wood) and flood-filled into connected regions, one class each, within each
   16³ section (a section is a cube as wide as the terrain's column). A region is split
   where walking inside it would bend more than 1.5x its straight line (Manhattan against
   Manhattan), so pricing a crossing as a straight line stays honest. Uniform sections skip the fill.
@@ -35,9 +35,10 @@ the terrain ahead. REGIONS reads the terrain ahead.
   stone block by block and a region per kind would shred both (about 80% more regions); a rock
   region is then the band nearest its cells' average hardness: soft rock, rock, mixed rock or hard
   rock. A region stores only its class, never a cost: a mining bucket is priced from
-  a typical hardness in it, so tools will change the agent and nothing stored. Rock is always
-  usable, at the mining rate with a pickaxe and at a fallback rate without, so the graph stays
-  connected.
+  a typical hardness in it, so tools will change the agent and nothing stored. What is typical
+  can depend on the world: soft rock is priced as netherrack in the Nether and as sandstone
+  elsewhere. Rock is always usable, at the mining rate with a pickaxe and at a fallback rate
+  without, so the graph stays connected.
 - **Search.** Reverse Resumable A*: a backward search from the destination, focused on the fine
   search's origin, resumed only when a question needs it. A settled portal knows its true cost to
   the destination over the graph, so answers are final when given. Each portal's label carries

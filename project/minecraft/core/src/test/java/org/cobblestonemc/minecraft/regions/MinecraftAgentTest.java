@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Set;
+import org.cobblestonemc.minecraft.MinecraftWorld.Environment;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,8 @@ class MinecraftAgentTest {
 
   @Test
   void soulSandDragsAWalkerAndSoulSoilDoesNot() {
-    MinecraftAgent walker = MinecraftAgent.forPlayer(TestPlayer.walker(), Set.of());
+    MinecraftAgent walker =
+        MinecraftAgent.forPlayer(TestPlayer.walker(), Set.of(), Environment.OVERWORLD);
     assertEquals(0.20, across(walker, RegionClass.STAND), 1e-9);
     assertEquals(0.20 / 0.4, across(walker, RegionClass.SOUL_SAND), 1e-9);
     assertEquals(0.20, across(walker, RegionClass.SOUL_SOIL), 1e-9);
@@ -34,7 +36,8 @@ class MinecraftAgentTest {
 
   @Test
   void soulSpeedBootsMakeBothSoulBlocksFasterThanGround() {
-    MinecraftAgent boots = MinecraftAgent.forPlayer(TestPlayer.soulSpeed(3), Set.of());
+    MinecraftAgent boots =
+        MinecraftAgent.forPlayer(TestPlayer.soulSpeed(3), Set.of(), Environment.OVERWORLD);
     double fast = 0.20 / (1 + 0.3 * (1 + 0.35 * 3));
     assertEquals(fast, across(boots, RegionClass.SOUL_SAND), 1e-9);
     assertEquals(fast, across(boots, RegionClass.SOUL_SOIL), 1e-9);
@@ -45,7 +48,8 @@ class MinecraftAgentTest {
   @Test
   void soulSpeedGoesWithWalking() {
     MinecraftAgent boots =
-        MinecraftAgent.forPlayer(TestPlayer.soulSpeed(1), Set.of(MinecraftStepType.WALK));
+        MinecraftAgent.forPlayer(
+            TestPlayer.soulSpeed(1), Set.of(MinecraftStepType.WALK), Environment.OVERWORLD);
     assertFalse(boots.usable(RegionClass.SOUL_SOIL));
   }
 
@@ -53,40 +57,58 @@ class MinecraftAgentTest {
   void onlyTheSurfaceCarriesABoat() {
     MinecraftAgent boatOnly =
         MinecraftAgent.forPlayer(
-            TestPlayer.create(false, true, false), Set.of(MinecraftStepType.SWIM));
+            TestPlayer.create(false, true, false),
+            Set.of(MinecraftStepType.SWIM),
+            Environment.OVERWORLD);
     assertTrue(boatOnly.usable(RegionClass.WATER_SURFACE));
     assertFalse(boatOnly.usable(RegionClass.WATER), "below the surface is swum or nothing");
     assertEquals(0.15, across(boatOnly, RegionClass.WATER_SURFACE), 1e-9);
 
-    MinecraftAgent swimmer = MinecraftAgent.forPlayer(TestPlayer.walker(), Set.of());
+    MinecraftAgent swimmer =
+        MinecraftAgent.forPlayer(TestPlayer.walker(), Set.of(), Environment.OVERWORLD);
     assertTrue(swimmer.usable(RegionClass.WATER));
     assertEquals(0.30, across(swimmer, RegionClass.WATER), 1e-9);
     assertEquals(0.30, across(swimmer, RegionClass.WATER_SURFACE), 1e-9);
 
     MinecraftAgent boater =
-        MinecraftAgent.forPlayer(TestPlayer.create(false, true, false), Set.of());
+        MinecraftAgent.forPlayer(
+            TestPlayer.create(false, true, false), Set.of(), Environment.OVERWORLD);
     assertEquals(0.15, across(boater, RegionClass.WATER_SURFACE), 1e-9);
     assertEquals(0.30, across(boater, RegionClass.WATER), 1e-9);
   }
 
   @Test
   void eachMiningBucketIsPricedAsItsTypicalBlock() {
-    MinecraftAgent miner = MinecraftAgent.forPlayer(TestPlayer.walker(), Set.of());
+    MinecraftAgent miner =
+        MinecraftAgent.forPlayer(TestPlayer.walker(), Set.of(), Environment.OVERWORLD);
     // Ten blocks level: two blocks broken and a walk per block, at hardness times 1.5 a block.
     assertEquals(2 * 1.5 * 1.5 + 0.20, across(miner, RegionClass.ROCK), 1e-9);
     assertTrue(across(miner, RegionClass.SOFT_ROCK) < across(miner, RegionClass.ROCK));
     assertTrue(across(miner, RegionClass.ROCK) < across(miner, RegionClass.HARD_ROCK));
-    assertTrue(across(miner, RegionClass.HARD_ROCK) < across(miner, RegionClass.OBSIDIAN));
+    assertTrue(across(miner, RegionClass.HARD_ROCK) < across(miner, RegionClass.VERY_HARD_ROCK));
 
     MinecraftAgent noPickaxe =
-        MinecraftAgent.forPlayer(TestPlayer.walker(), Set.of(MinecraftStepType.MINE));
+        MinecraftAgent.forPlayer(
+            TestPlayer.walker(), Set.of(MinecraftStepType.MINE), Environment.OVERWORLD);
     assertEquals(MinecraftAgent.FALLBACK_COST_PER_BLOCK, across(noPickaxe, RegionClass.ROCK), 1e-9);
+  }
+
+  @Test
+  void softRockIsNetherrackInTheNetherAndSandstoneElsewhere() {
+    MinecraftAgent overworld =
+        MinecraftAgent.forPlayer(TestPlayer.walker(), Set.of(), Environment.OVERWORLD);
+    MinecraftAgent nether =
+        MinecraftAgent.forPlayer(TestPlayer.walker(), Set.of(), Environment.NETHER);
+    assertEquals(2 * 0.8 * 1.5 + 0.20, across(overworld, RegionClass.SOFT_ROCK), 1e-9);
+    assertEquals(2 * 0.4 * 1.5 + 0.20, across(nether, RegionClass.SOFT_ROCK), 1e-9);
+    assertEquals(across(overworld, RegionClass.ROCK), across(nether, RegionClass.ROCK), 1e-9);
   }
 
   @Test
   void aBoatSwimsTheDropsInASurface() {
     MinecraftAgent boater =
-        MinecraftAgent.forPlayer(TestPlayer.create(false, true, false), Set.of());
+        MinecraftAgent.forPlayer(
+            TestPlayer.create(false, true, false), Set.of(), Environment.OVERWORLD);
     // Ten blocks across and two down: boated across, swum down.
     assertEquals(
         0.15 * 10 + 0.30 * 2, boater.traverse(RegionClass.WATER_SURFACE, 0, 2, 0, 10, 0, 0), 1e-9);

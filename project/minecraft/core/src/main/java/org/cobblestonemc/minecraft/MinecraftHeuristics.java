@@ -77,7 +77,11 @@ public final class MinecraftHeuristics {
                       ? RegionStore.inMemory(
                           MinecraftTerrain.spec((MinecraftWorld) target.domain()))
                       : stores.of((MinecraftWorld) target.domain()),
-              MinecraftAgent.forPlayer(agent, settings.excludedModes()),
+              target ->
+                  MinecraftAgent.forPlayer(
+                      agent,
+                      settings.excludedModes(),
+                      ((MinecraftWorld) target.domain()).environment()),
               behavior.cheapestCostPerBlock(),
               search -> {});
     };

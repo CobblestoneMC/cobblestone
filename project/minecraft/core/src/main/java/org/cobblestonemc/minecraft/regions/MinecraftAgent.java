@@ -9,6 +9,7 @@ package org.cobblestonemc.minecraft.regions;
 
 import java.util.Set;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
+import org.cobblestonemc.minecraft.MinecraftWorld.Environment;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.cobblestonemc.regions.RegionAgent;
 
@@ -79,6 +80,10 @@ public final class MinecraftAgent implements RegionAgent {
   private final double boat;
 
   private final boolean mine;
+
+  /** The environment of the world it is priced in, which says what its soft rock is. */
+  private final Environment environment;
+
   private final double cheapest;
 
   private MinecraftAgent(
@@ -88,9 +93,11 @@ public final class MinecraftAgent implements RegionAgent {
       double boat,
       double climb,
       double fly,
-      boolean mine) {
+      boolean mine,
+      Environment environment) {
     this.boat = boat;
     this.mine = mine;
+    this.environment = environment;
     double least = FALLBACK_COST_PER_BLOCK;
     for (RegionClass klass : RegionClass.values()) {
       double rate =
@@ -102,7 +109,8 @@ public final class MinecraftAgent implements RegionAgent {
             case CLIMB -> least(climb, fly);
             case AIR -> fly;
             // Priced by break time and direction; see traverse.
-            case SOFT, SOFT_ROCK, ROCK, MIXED_ROCK, HARD_ROCK, OBSIDIAN, DIRT, WOOD -> Double.NaN;
+            case SOFT, SOFT_ROCK, ROCK, MIXED_ROCK, HARD_ROCK, VERY_HARD_ROCK, DIRT, WOOD ->
+                Double.NaN;
           };
       rates[klass.id()] = rate;
       if (has(rate)) {
@@ -116,7 +124,7 @@ public final class MinecraftAgent implements RegionAgent {
   }
 
   /**
-   * Returns the cost model for a player, given the step types an operator has excluded.
+   * Returns the cost model for a player in a world, given the step types an operator has excluded.
    *
    * <p>The one place a {@link CobblestonePlayer} becomes region costs, read from the same player
    * and exclusions the fine search is built from, so the two cannot disagree about what a player is
@@ -126,10 +134,12 @@ public final class MinecraftAgent implements RegionAgent {
    *
    * @param player the navigating player
    * @param excluded the step types an operator has turned off
+   * @param environment the environment of the world the estimate is for: the Nether's soft rock is
+   *     netherrack, softer than sandstone
    * @return the cost model
    */
   public static MinecraftAgent forPlayer(
-      CobblestonePlayer player, Set<MinecraftStepType> excluded) {
+      CobblestonePlayer player, Set<MinecraftStepType> excluded, Environment environment) {
     boolean walks = !excluded.contains(MinecraftStepType.WALK);
     int soulSpeed = walks ? player.soulSpeedLevel() : 0;
     boolean flies =
@@ -144,7 +154,8 @@ public final class MinecraftAgent implements RegionAgent {
         boats ? BOAT : Double.NaN,
         excluded.contains(MinecraftStepType.CLIMB) ? Double.NaN : CLIMB,
         flies ? FLY : Double.NaN,
-        !excluded.contains(MinecraftStepType.MINE));
+        !excluded.contains(MinecraftStepType.MINE),
+        environment);
   }
 
   /**
@@ -227,15 +238,15 @@ public final class MinecraftAgent implements RegionAgent {
   }
 
   /**
-   * The seconds to break a typical block of a class of breakable material.
+   * The seconds to break a typical block of a class of breakable material, in this agent's world.
    *
    * <p>What the fine search charges today, which knows no tools: {@code MinecraftBlock
    * #breakTimeSeconds()} is the block's hardness times 1.5, whatever the agent carries. Tools
    * change this and nothing stored: a better pickaxe makes rock faster for the agent holding it,
    * here.
    */
-  private static double breakTime(RegionClass klass) {
-    return MinecraftTerrain.hardness(klass) * 1.5;
+  private double breakTime(RegionClass klass) {
+    return MinecraftTerrain.hardness(klass, environment) * 1.5;
   }
 
   /**

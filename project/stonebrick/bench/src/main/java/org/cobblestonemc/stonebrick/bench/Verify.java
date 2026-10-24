@@ -148,7 +148,7 @@ final class Verify {
                         capture.maxY(scenario.world()),
                         ScenarioRunner.REGION_DETOUR)),
                 new DirectChunkColumns(capture, scenario.world())),
-            loadout.regionAgent(),
+            loadout.regionAgent(capture.environment(scenario.world())),
             scenario.destination(),
             path.get(0),
             scenario.destination()::equals);
