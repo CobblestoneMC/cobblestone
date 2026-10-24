@@ -175,12 +175,6 @@ public final class CorpusProvisioner {
     return requests;
   }
 
-  /**
-   * Counts how many of a capsule's chunks the capture does not hold.
-   *
-   * <p>Checked per chunk rather than by a marker file, so an interrupted capture resumes rather
-   * than being either redone from scratch or wrongly believed complete.
-   */
   /** Whether this capture's trait table was written against different trait bits. */
   boolean staleTraits(CaptureDirectory capture) {
     Path table = capture.root().resolve("traits.tsv");
@@ -195,6 +189,12 @@ public final class CorpusProvisioner {
     }
   }
 
+  /**
+   * Counts how many of a capsule's chunks the capture does not hold.
+   *
+   * <p>Checked per chunk rather than by a marker file, so an interrupted capture resumes rather
+   * than being either redone from scratch or wrongly believed complete.
+   */
   private int countMissing(CaptureDirectory capture, NeededChunks capsule) {
     // Shift, not divide. Integer division truncates towards zero, so block -1 would land in chunk
     // 0 rather than chunk -1 — and the box would then miss a strip of the capsule on every negative
