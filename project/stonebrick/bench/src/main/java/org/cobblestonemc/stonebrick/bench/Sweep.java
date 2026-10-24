@@ -109,13 +109,13 @@ final class Sweep {
             points.add(point);
             // Each point as it lands, not only in the tables at the end: a full sweep runs for
             // hours, and one stopped partway through should leave its measurements behind.
-            // The wall-clock parts trail the deterministic ones, so a parser reading fixed fields
-            // still finds them where it always did.
+            // The region layer's wall-clock breakdown trails everything else, so a parser reading
+            // fixed fields finds them where they are without it.
             String breakdown = runner.lastRegionBreakdown();
             System.out.printf(
                 Locale.ROOT,
-                "point %s %s w=%.2f %s cost=%.3f expanded=%d columns=%d ms=%d ioMs=%d reads=%d"
-                    + " regionReads=%d coldReads=%d opened=%d closest=%.0f legs=%d%s%n",
+                "point %s %s w=%.2f %s cost=%.3f expanded=%d columns=%d regionReads=%d"
+                    + " closest=%.0f legs=%d%s%n",
                 point.scenario(),
                 heuristic,
                 weight,
@@ -123,13 +123,7 @@ final class Sweep {
                 point.cost(),
                 point.nodes(),
                 point.columns(),
-                result.realMillis(),
-                // Time parked on the modelled disk: the virtual clock only moves for that.
-                result.virtualMillis(),
-                result.chunkReads(),
                 result.regionChunkReads(),
-                result.coldChunkReads(),
-                result.nodesOpened(),
                 result.closestBlocks(),
                 runner.lastLegs(),
                 breakdown == null ? "" : " " + breakdown);
@@ -153,12 +147,13 @@ final class Sweep {
         System.out.printf(Locale.ROOT, "%n%s%n", current);
         System.out.printf(
             Locale.ROOT,
-            "  %-16s %6s %12s %10s %8s%n",
+            "  %-16s %6s %12s %10s %8s %8s%n",
             "heuristic",
             "w",
             "nodes",
             "cost",
-            "excess");
+            "excess",
+            "columns");
       }
       Double floor = best.get(point.scenario());
       String excess =
@@ -167,7 +162,7 @@ final class Sweep {
               : "-";
       System.out.printf(
           Locale.ROOT,
-          "  %-16s %6.2f %12d %10s %8s%n",
+          "  %-16s %6.2f %12d %10s %8s %8s%n",
           point.heuristic(),
           point.weight(),
           point.nodes(),

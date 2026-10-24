@@ -143,8 +143,7 @@ public final class CobblestoneSpongePlugin {
     }
 
     // Regions are shared by every search and forgotten when a block in their chunk changes.
-    RegionConfig regionConfig = new RegionConfig(config, keys, logger::warn);
-    this.regionStores = regionConfig.stores();
+    this.regionStores = RegionConfig.stores(config, keys);
 
     this.navigationService =
         new SpongeNavigationServiceImpl(
@@ -259,7 +258,6 @@ public final class CobblestoneSpongePlugin {
                 .tier1UnsolvedPessimism(config.get(keys.algorithmTier1UnsolvedPessimism))
                 .runningAverageWidth(config.get(keys.algorithmRunningAverageWidth))
                 .heuristicWeight(config.get(keys.algorithmHeuristicWeight))
-                .heuristic(regionConfig.heuristic())
                 .build();
     this.tripService =
         new SpongeTripServiceImpl(

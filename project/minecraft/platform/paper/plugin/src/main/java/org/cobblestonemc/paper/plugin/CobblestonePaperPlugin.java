@@ -85,8 +85,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     }
 
     // Regions are shared by every search and forgotten when a block in their chunk changes.
-    RegionConfig regionConfig = new RegionConfig(config, keys, getLogger()::warning);
-    this.regionStores = regionConfig.stores();
+    this.regionStores = RegionConfig.stores(config, keys);
 
     // The transition registry is owned by the plugin; the platform API only reads from / registers
     // into it. Both are reachable to other plugins via the registered plugin API.
@@ -228,7 +227,6 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                 .tier1UnsolvedPessimism(config.get(keys.algorithmTier1UnsolvedPessimism))
                 .runningAverageWidth(config.get(keys.algorithmRunningAverageWidth))
                 .heuristicWeight(config.get(keys.algorithmHeuristicWeight))
-                .heuristic(regionConfig.heuristic())
                 .build();
 
     // The trip service is the shared "search-then-guide" code path: the /navigate command and

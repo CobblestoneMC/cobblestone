@@ -92,18 +92,13 @@ limit; a manual `/navigate` always runs.
 | --- | --- | --- |
 | `search.algorithm.max_cells_visited` | `200000` | live |
 | `search.algorithm.max_wall_clock_seconds` | `60` | live |
-| `search.algorithm.heuristic` | `REGIONS` | live |
-| `search.algorithm.heuristic_weight` | `1.7` | live |
+| `search.algorithm.heuristic_weight` | `1.5` | live |
 | `search.algorithm.tier1_unsolved_pessimism` | `1.5` | live |
 | `search.algorithm.running_average_width` | `5` | live |
 
 - **`max_cells_visited`**: Cell limit per search. Memory use is a few hundred bytes per cell, so the
   default peaks in the tens of megabytes. Increase for longer routes; decrease on small heaps.
 - **`max_wall_clock_seconds`**: Time limit per search.
-- **`heuristic`**: How the search estimates the rest of a route. `REGIONS` reads the connected
-  patches of terrain ahead, finding better routes and handling water, caves and boats, at the cost
-  of extra chunk reads per search. `RUNNING_AVERAGE` extrapolates from the last few steps; it is
-  cheaper but never routes a player onto the water by boat.
 - **`heuristic_weight`**: A* heuristic weight. `1.0` yields optimal routes; higher values search
   faster with routes at most this factor longer than optimal.
 - **`tier1_unsolved_pessimism`**: Cost multiplier for route legs that have not yet been solved.
@@ -149,8 +144,10 @@ search until a block in the chunk changes.
   The chunks around each navigating player are kept on top of this, about 3 MB a player, until their
   trip ends, so the searches that re-plan around them stay fast.
 
-Block changes made while the server is running are tracked. Regions are kept in memory only, so a
-restart builds them again as searches need them.
+Block changes made while the server is running are tracked: a changed chunk's regions are dropped
+about 10 seconds after the change, together with any further changes in that time, and built again
+when a search next needs them. Regions are kept in memory only, so a restart builds them again as
+searches need them.
 
 ### Tuning
 
