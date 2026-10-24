@@ -10,8 +10,10 @@
  */
 package org.cobblestonemc.integration.betonquest;
 
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.betonquest.betonquest.api.BetonQuestApi;
 import org.betonquest.betonquest.api.compass.QuestCompass;
 import org.betonquest.betonquest.api.identifier.CompassIdentifier;
@@ -21,16 +23,16 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.paper.plugin.api.Destination;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
-import org.cobblestonemc.paper.plugin.api.DestinationTree;
-import org.cobblestonemc.plugin.api.PlatformDestinationTree;
+import org.cobblestonemc.plugin.api.DestinationTree;
+import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.joml.Vector3i;
 
 /**
- * Surfaces the player's active quest compasses as navigation targets: {@code cobblestonebetonquest
- * → compass → <name>}, one leaf per compass whose location resolves. Cobblestone roots the branch
- * at this plugin's own name, which keeps these from colliding with other integrations' trees; its
+ * Surfaces the player's active quest compasses as navigation targets: {@code betonquest → compass →
+ * <name>}, one leaf per compass whose location resolves. Cobblestone roots the branch at
+ * BetonQuest's own name, which keeps these from colliding with other integrations' trees; its
  * resolver still lets a player type just the compass name when it's unambiguous. Navigating is
- * gated by Cobblestone's {@code cobblestone.navigate.cobblestonebetonquest.compass.*} permission
+ * gated by Cobblestone's {@code cobblestone.navigate.betonquest.compass.*} permission
  * (default-allow). Targets are snapshotted when the tree is built (on the main thread, as
  * compass-location resolution requires).
  */
@@ -45,24 +47,29 @@ final class BetonQuestDestinationService implements DestinationService {
   }
 
   @Override
-  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
+  public DestinationTree<MinecraftDestination<World, Vector3i>> provide(Player player) {
     OnlineProfile profile = api.profiles().getProfile(player);
     if (profile == null) {
       return null;
     }
     Map<CompassIdentifier, QuestCompass> compasses = api.compasses().forProfile(profile);
-    DestinationTree compass = DestinationTree.builder();
+    var compass = Destination.tree();
     boolean any = false;
+    Set<String> taken = new HashSet<>();
     for (Map.Entry<CompassIdentifier, QuestCompass> entry : compasses.entrySet()) {
       Location target = CompassTargets.locationOf(entry.getValue(), profile);
       if (target == null) {
         continue; // location couldn't be resolved — nothing to walk to
       }
       String name = entry.getKey().get();
-      compass.leaf(slug(name), Destination.at(target, name));
+      String key = slug(name);
+      for (int n = 2; !taken.add(key); n++) {
+        key = slug(name) + "-" + n; // two compasses that slug alike
+      }
+      compass.destination(key, () -> Destination.at(target, name));
       any = true;
     }
-    return any ? DestinationTree.builder().subtree(COMPASS_KEY, compass).build() : null;
+    return any ? Destination.tree().subtree(COMPASS_KEY, compass).build() : null;
   }
 
   /**

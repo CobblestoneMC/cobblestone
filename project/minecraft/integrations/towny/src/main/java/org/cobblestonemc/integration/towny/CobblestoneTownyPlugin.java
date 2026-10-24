@@ -26,7 +26,9 @@ public final class CobblestoneTownyPlugin extends JavaPlugin {
       getServer().getPluginManager().disablePlugin(this);
       return;
     }
-    CobblestonePaperApi.registrar().registerDestinations(towny, new TownyDestinationService());
+    saveDefaultConfig();
+    CobblestonePaperApi.registrar()
+        .registerDestinations(towny, new TownyDestinationService(new TownyIcons(getConfig())));
     CobblestoneCoreApi.registrar().register(towny, new TownySearchModificationService(this));
     getLogger().info("CobblestoneTowny enabled.");
   }

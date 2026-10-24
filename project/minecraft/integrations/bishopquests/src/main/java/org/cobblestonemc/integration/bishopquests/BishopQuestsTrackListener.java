@@ -11,20 +11,20 @@ import com.leonardobishop.quests.bukkit.api.event.PlayerStartTrackQuestEvent;
 import com.leonardobishop.quests.common.player.QPlayer;
 import com.leonardobishop.quests.common.plugin.Quests;
 import com.leonardobishop.quests.common.quest.Quest;
-import org.cobblestonemc.paper.plugin.api.CobblestonePluginAPI;
-import org.cobblestonemc.plugin.api.NavigatorSettings;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.cobblestonemc.paper.plugin.api.CobblestonePaperApi;
+import org.cobblestonemc.plugin.api.NavigatorSettings;
 
 /**
  * The auto-navigation hook: LMBishop Quests fires {@link PlayerStartTrackQuestEvent} when a player
  * tracks a quest. If that quest opts into navigation ({@link QuestNavPrefs}) and has a current
  * {@code position} objective, we start — or, because the trip carries the quest id as its stable
- * label, <em>replace</em> — a guided Cobblestone trip to it. The event doesn't carry the quest, but the
- * player's tracked-quest preference is already set when it fires, so we read it from there.
+ * label, <em>replace</em> — a guided Cobblestone trip to it. The event doesn't carry the quest, but
+ * the player's tracked-quest preference is already set when it fires, so we read it from there.
  */
 final class BishopQuestsTrackListener implements Listener {
 
@@ -54,7 +54,7 @@ final class BishopQuestsTrackListener implements Listener {
     Player player = event.getPlayer();
     NavigatorSettings settings = prefs.settings(questId);
     // The quest id is the trip's stable label, so re-tracking (or the next objective) replaces it.
-    CobblestonePluginAPI.tripService()
+    CobblestonePaperApi.tripService()
         .navigate(
             player,
             target,

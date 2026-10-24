@@ -47,4 +47,15 @@ public record NavigationFlags(
     excludedWorlds = Set.copyOf(excludedWorlds);
     excludedDimensions = Set.copyOf(excludedDimensions);
   }
+
+  /**
+   * The flags of a {@code /navigate} typed with none — what a trip started from the navigation menu
+   * uses.
+   *
+   * @return the defaults
+   */
+  public static NavigationFlags defaults() {
+    return new NavigationFlags(
+        Set.of(), Set.of(), Set.of(), FlagParser.DEFAULT_NAVIGATOR, Liveness.DEFAULT);
+  }
 }

@@ -10,19 +10,19 @@ package org.cobblestonemc.integration.bishopquests;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import org.cobblestonemc.paper.plugin.api.TrailNavigatorSettings;
-import org.cobblestonemc.plugin.api.NavigatorSettings;
 import org.bukkit.Color;
 import org.bukkit.Particle;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.cobblestonemc.paper.plugin.api.TrailNavigatorSettings;
+import org.cobblestonemc.plugin.api.NavigatorSettings;
 
 /**
- * Resolves CobblestoneBishopQuests' per-quest navigation preferences from the plugin config: whether a
- * quest auto-navigates, and the {@link NavigatorSettings} (navigator id + trail particles/colors)
- * to guide it with. Each field falls back from a per-quest override ({@code quests.<id>.<field>})
- * to the global default, so an admin styles everything once and tweaks individual quests as needed.
- * Quests are keyed by their LMBishop quest id.
+ * Resolves CobblestoneBishopQuests' per-quest navigation preferences from the plugin config:
+ * whether a quest auto-navigates, and the {@link NavigatorSettings} (navigator id + trail
+ * particles/colors) to guide it with. Each field falls back from a per-quest override ({@code
+ * quests.<id>.<field>}) to the global default, so an admin styles everything once and tweaks
+ * individual quests as needed. Quests are keyed by their LMBishop quest id.
  *
  * <p>The config is read live (through the plugin's {@link FileConfiguration}), so a reload takes
  * effect on the next quest track without a restart.

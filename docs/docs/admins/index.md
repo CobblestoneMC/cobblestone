@@ -67,7 +67,7 @@ third-party build protection to routes.
 | [Towny](integrations.md#towny) | Towns, outposts, and plots; `/town spawn` and `/nation spawn` as route steps; build protection. |
 | [EssentialsX](integrations.md#essentialsx) | Homes and spawn; `/home` and `/spawn` as route steps. |
 | [Citizens](integrations.md#citizens) | NPCs. |
-| [BetonQuest](integrations.md#betonquest), [BeautyQuests](integrations.md#beautyquests), [Quests](integrations.md#quests-pikamug) | Quest objectives, with optional automatic trips. |
+| [BetonQuest](integrations.md#betonquest), [BeautyQuests](integrations.md#beautyquests), [Quests (PikaMug)](integrations.md#quests-pikamug), [Quests (LMBishop)](integrations.md#quests-lmbishop) | Quest objectives, with optional automatic trips. |
 | [Typewriter](integrations.md#typewriter) | A *Navigate Player* action. |
 
 ## Permissions

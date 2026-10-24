@@ -31,12 +31,15 @@ import org.cobblestonemc.paper.plugin.api.TrailNavigatorSettings;
 import org.cobblestonemc.paper.plugin.api.TripService;
 import org.cobblestonemc.plugin.config.ConfigKeys;
 import org.cobblestonemc.plugin.config.ConfigManager;
+import org.cobblestonemc.plugin.config.MenuIcons;
 import org.cobblestonemc.plugin.config.RegionConfig;
 import org.cobblestonemc.plugin.data.DataStore;
 import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.DataStores;
 import org.cobblestonemc.plugin.hologram.TrailLabelManager;
 import org.cobblestonemc.plugin.hud.TripHud;
+import org.cobblestonemc.plugin.menu.MenuSettings;
+import org.cobblestonemc.plugin.menu.RecentDestinations;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchGate;
 import org.cobblestonemc.plugin.search.SearchRegistry;
@@ -131,7 +134,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             platformApi.scheduler(),
             platformApi.regions(),
             () -> config.get(keys.deathsTrack),
-            messages));
+            messages,
+            MenuIcons.reader(config, keys.menuIcons)));
     // Each player's last death is recorded so they can navigate back to it.
     getServer()
         .getPluginManager()
@@ -250,22 +254,37 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
         .getServicesManager()
         .register(TripService.class, tripService, this, ServicePriority.Normal);
 
+    // The menu starts trips through the command, so both remember them as recent destinations.
+    RecentDestinations recents = new RecentDestinations();
+    NavigateCommand navigateCommand =
+        new NavigateCommand(
+            platformApi,
+            tripService,
+            integrationRegistry,
+            searchRegistry,
+            searchGate,
+            searchSettings,
+            logger,
+            messages,
+            recents);
+    PaperNavigationMenus menus =
+        new PaperNavigationMenus(
+            this,
+            integrationRegistry,
+            navigateCommand,
+            recents,
+            messages,
+            () -> MenuSettings.from(config, keys),
+            logger);
+    getServer().getPluginManager().registerEvents(menus, this);
+
     getLifecycleManager()
         .registerEventHandler(
             LifecycleEvents.COMMANDS,
             event -> {
               // /navigate and /location are also /cobblestone subcommands; each node is built
               // once and shared, so both spellings behave alike.
-              var navigate =
-                  NavigateCommand.build(
-                      platformApi,
-                      tripService,
-                      integrationRegistry,
-                      searchRegistry,
-                      searchGate,
-                      searchSettings,
-                      logger,
-                      messages);
+              var navigate = navigateCommand.node(menus::open);
               var location = CobblestoneCommand.location(messages, dataStore.locations());
               var registrar = event.registrar();
               registrar.register(

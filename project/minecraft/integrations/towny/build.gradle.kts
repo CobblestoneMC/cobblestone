@@ -32,6 +32,8 @@ dependencies {
     // The server API (Bukkit/Paper) and Towny, both provided at runtime.
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
     compileOnly("com.palmergames.bukkit.towny:towny:0.103.1.1")
+    // TownyIcons' color matching reads Bukkit's dye colors.
+    testImplementation("io.papermc.paper:paper-api:26.1.2.build.+")
 }
 
 tasks.jar {
