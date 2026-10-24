@@ -106,10 +106,12 @@ final class Sweep {
                     result.nodesExpanded());
             points.add(point);
             // Each point as it lands, not only in the tables at the end: a full sweep runs for
-            // hours, and one stopped partway through should leave its measurements behind.
+            // hours, and one stopped partway through should leave its measurements behind. What it
+            // cost trails what it found, so a parser reading the first fields still finds them.
             System.out.printf(
                 Locale.ROOT,
-                "point %s %s w=%.2f %s cost=%.3f expanded=%d closest=%.0f legs=%d%n",
+                "point %s %s w=%.2f %s cost=%.3f expanded=%d closest=%.0f legs=%d"
+                    + " ms=%d ioMs=%d reads=%d coldReads=%d opened=%d%n",
                 point.scenario(),
                 heuristic,
                 weight,
@@ -117,7 +119,13 @@ final class Sweep {
                 point.cost(),
                 point.nodes(),
                 result.closestBlocks(),
-                runner.lastLegs());
+                runner.lastLegs(),
+                result.realMillis(),
+                // Time parked on the modelled disk: the virtual clock only moves for that.
+                result.virtualMillis(),
+                result.chunkReads(),
+                result.coldChunkReads(),
+                result.nodesOpened());
           }
         }
       }

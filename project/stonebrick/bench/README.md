@@ -51,6 +51,9 @@ only: wall time and heap.
 point overworld/ocean@player RUNNING_AVERAGE w=2.00 success cost=195.020 expanded=26461 closest=0 legs=1
 ```
 
+Every point also prints what it cost: wall time (`ms`), time parked on the modelled disk (`ioMs`),
+chunk reads (`reads`, `coldReads` for first reads) and cells opened (`opened`).
+
 `closest` is how near the search came, in blocks from the nearest cell it settled to the
 destination: 0 when it arrived. When every heuristic fails a route, the one that came closer did
 better.
