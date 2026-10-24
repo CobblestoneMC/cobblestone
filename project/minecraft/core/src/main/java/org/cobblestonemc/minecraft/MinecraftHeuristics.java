@@ -8,6 +8,7 @@
 package org.cobblestonemc.minecraft;
 
 import org.cobblestonemc.Cell;
+import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.Heuristics;
 import org.cobblestonemc.api.SearchSettings;
@@ -67,23 +68,25 @@ public final class MinecraftHeuristics {
       case RUNNING_AVERAGE -> Heuristics.runningAverage(behavior.cheapestCostPerBlock());
       case REGIONS ->
           new RegionHeuristic<MinecraftChunk>(
-              // The domain of a Tier-3 target region is always the world that leg runs in; the
-              // casts are the price of HeuristicStrategy being domain-agnostic.
               target ->
                   new WorldChunkColumns(
-                      chunks, (MinecraftWorld) target.domain(), target.nearestBoundaryCell(origin)),
+                      chunks, worldOf(target), target.nearestBoundaryCell(origin)),
               target ->
                   stores == null
-                      ? RegionStore.inMemory(
-                          MinecraftTerrain.spec((MinecraftWorld) target.domain()))
-                      : stores.of((MinecraftWorld) target.domain()),
+                      ? RegionStore.inMemory(MinecraftTerrain.spec(worldOf(target)))
+                      : stores.of(worldOf(target)),
               target ->
                   MinecraftAgent.forPlayer(
-                      agent,
-                      settings.excludedModes(),
-                      ((MinecraftWorld) target.domain()).environment()),
-              behavior.cheapestCostPerBlock(),
-              search -> {});
+                      agent, settings.excludedModes(), worldOf(target).environment()),
+              behavior.cheapestCostPerBlock());
     };
+  }
+
+  /**
+   * Returns the world a target region's leg runs in. A Tier-3 target's domain is always its world;
+   * the cast is the price of {@link HeuristicStrategy} being domain-agnostic.
+   */
+  private static MinecraftWorld worldOf(DomainRegion<?> target) {
+    return (MinecraftWorld) target.domain();
   }
 }

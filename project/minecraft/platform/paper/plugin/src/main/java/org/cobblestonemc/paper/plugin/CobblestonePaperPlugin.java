@@ -33,12 +33,15 @@ import org.cobblestonemc.paper.plugin.api.TrailNavigatorSettings;
 import org.cobblestonemc.paper.plugin.api.TripService;
 import org.cobblestonemc.plugin.config.ConfigKeys;
 import org.cobblestonemc.plugin.config.ConfigManager;
+import org.cobblestonemc.plugin.config.MenuIcons;
 import org.cobblestonemc.plugin.config.RegionConfig;
 import org.cobblestonemc.plugin.data.DataStore;
 import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.DataStores;
 import org.cobblestonemc.plugin.hologram.TrailLabelManager;
 import org.cobblestonemc.plugin.hud.TripHud;
+import org.cobblestonemc.plugin.menu.MenuSettings;
+import org.cobblestonemc.plugin.menu.RecentDestinations;
 import org.cobblestonemc.plugin.message.Messages;
 import org.cobblestonemc.plugin.search.SearchGate;
 import org.cobblestonemc.plugin.search.SearchRegistry;
@@ -86,8 +89,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
 
     // Regions are shared by every search, kept on disk across restarts, and forgotten when a
     // block in their chunk changes.
-    RegionConfig regionConfig = new RegionConfig(config, keys, getLogger()::warning);
-    this.regionStores = regionConfig.stores(getDataFolder().toPath());
+    this.regionStores = RegionConfig.stores(config, keys, getDataFolder().toPath());
 
     // The transition registry is owned by the plugin; the platform API only reads from / registers
     // into it. Both are reachable to other plugins via the registered plugin API.
@@ -104,7 +106,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     getServer()
         .getPluginManager()
         .registerEvents(new PaperRegionListener(regionStores, platformApi), this);
-    long flushSeconds = regionConfig.flushSeconds();
+    long flushSeconds = RegionConfig.flushSeconds(config, keys);
     this.regionFlush =
         getServer()
             .getAsyncScheduler()
@@ -141,7 +143,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             platformApi.scheduler(),
             platformApi.regions(),
             () -> config.get(keys.deathsTrack),
-            messages));
+            messages,
+            MenuIcons.reader(config, keys.menuIcons)));
     // Each player's last death is recorded so they can navigate back to it.
     getServer()
         .getPluginManager()
@@ -185,14 +188,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             () -> !folia && config.get(keys.tripsHud),
             agent -> new PaperHudDisplay(agent.player()),
             logger);
-    tripManager.onChange(
-        agent -> {
-          tripHud.refresh(agent);
-          // A player who has stopped navigating no longer needs their surroundings kept built.
-          if (tripManager.trips(agent.uuid()).isEmpty()) {
-            regionStores.release(agent.uuid());
-          }
-        });
+    tripManager.onChange(tripHud::refresh);
     getServer().getOnlinePlayers().forEach(player -> tripHud.load(player.getUniqueId()));
 
     // Discovered vanilla portals are surfaced to searches as an internal transition provider, and
@@ -241,7 +237,6 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                 .tier1UnsolvedPessimism(config.get(keys.algorithmTier1UnsolvedPessimism))
                 .runningAverageWidth(config.get(keys.algorithmRunningAverageWidth))
                 .heuristicWeight(config.get(keys.algorithmHeuristicWeight))
-                .heuristic(regionConfig.heuristic())
                 .build();
 
     // The trip service is the shared "search-then-guide" code path: the /navigate command and
@@ -260,22 +255,37 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
         .getServicesManager()
         .register(TripService.class, tripService, this, ServicePriority.Normal);
 
+    // The menu starts trips through the command, so both remember them as recent destinations.
+    RecentDestinations recents = new RecentDestinations();
+    NavigateCommand navigateCommand =
+        new NavigateCommand(
+            platformApi,
+            tripService,
+            integrationRegistry,
+            searchRegistry,
+            searchGate,
+            searchSettings,
+            logger,
+            messages,
+            recents);
+    PaperNavigationMenus menus =
+        new PaperNavigationMenus(
+            this,
+            integrationRegistry,
+            navigateCommand,
+            recents,
+            messages,
+            () -> MenuSettings.from(config, keys),
+            logger);
+    getServer().getPluginManager().registerEvents(menus, this);
+
     getLifecycleManager()
         .registerEventHandler(
             LifecycleEvents.COMMANDS,
             event -> {
               // /navigate and /location are also /cobblestone subcommands; each node is built
               // once and shared, so both spellings behave alike.
-              var navigate =
-                  NavigateCommand.build(
-                      platformApi,
-                      tripService,
-                      integrationRegistry,
-                      searchRegistry,
-                      searchGate,
-                      searchSettings,
-                      logger,
-                      messages);
+              var navigate = navigateCommand.node(menus::open);
               var location = CobblestoneCommand.location(messages, dataStore.locations());
               var registrar = event.registrar();
               registrar.register(

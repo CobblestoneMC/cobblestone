@@ -179,7 +179,7 @@ final class CobblestoneCommand {
         audience,
         messages,
         locale,
-        "/cobblestone navigate <destination…>",
+        "/cobblestone navigate [destination…]",
         "command.cobblestone.help.navigate");
     SpongeCommandHelp.line(
         audience,

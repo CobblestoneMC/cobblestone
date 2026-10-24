@@ -68,7 +68,7 @@ public final class CaptureChunks {
    * degenerate — it has hit a fabricated wall and its result describes a world that does not exist.
    * The <em>region layer</em> reading past the edge is not: its backward search spreads outward
    * from the destination, it is expected to reach further than the fine search ever will, and it
-   * already treats an unprofilable section as unknown and falls back. Sharing one log would have
+   * already treats a column it cannot read as unknown and falls back. Sharing one log would have
    * every region run declare itself degenerate.
    *
    * @param capture the capture

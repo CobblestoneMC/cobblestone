@@ -92,10 +92,7 @@ public record Scenario(
     /** Remaining distance times the recent per-block cost. */
     RUNNING_AVERAGE(SearchSettings.Heuristic.RUNNING_AVERAGE),
 
-    /**
-     * A backward search over connected terrain regions, resumed as the fine search asks.
-     * Production's default, and so the bench's.
-     */
+    /** A backward search over connected terrain regions, resumed as the fine search asks. */
     REGIONS(SearchSettings.Heuristic.REGIONS);
 
     private final SearchSettings.@Nullable Heuristic production;

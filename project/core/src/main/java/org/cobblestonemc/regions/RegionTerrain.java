@@ -67,7 +67,8 @@ public interface RegionTerrain<C> {
    * @param worldMinY the world's lowest Y, inclusive
    * @param worldMaxY the world's highest Y, inclusive
    * @param columnMinY the Y the column's cells count from, at or below {@code worldMinY}
-   * @param classes where to write each cell's class; its length is a multiple of 256
+   * @param classes where to write each cell's class; its length is a whole number of cubic sections
+   *     of the column's width
    */
   void classify(C column, int worldMinY, int worldMaxY, int columnMinY, byte[] classes);
 

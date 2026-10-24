@@ -176,7 +176,7 @@ public final class ScenarioRunner {
           counting.opened.get(),
           counting.closed.get(),
           platform.ioStats().reads(),
-          platform.profileReads(),
+          platform.regionReads(),
           platform.ioStats().coldReads(),
           scheduler.millis(),
           platform.ioStats().totalDelayMicros(),
@@ -333,9 +333,8 @@ public final class ScenarioRunner {
   /**
    * The column source the last run used, or {@code null} if it did not run on regions.
    *
-   * <p>Exposed rather than folded into {@link RunResult} because the region layer's reads are not
-   * gated, and recording them as a deterministic metric would imply a rigour they do not have. The
-   * sweep prints them so the cost is at least visible.
+   * <p>Kept for the sweep's report of how many distinct columns the region layer read. The reads
+   * themselves are {@link RunResult#regionChunkReads()}, gated like the search's own.
    */
   private @Nullable CaptureChunkColumns lastRegionColumns;
 
@@ -348,8 +347,8 @@ public final class ScenarioRunner {
     return lastRegionColumns == null ? 0 : lastRegionColumns.chunkColumns();
   }
 
-  /** The searches the last run's region heuristic started, one per solve that asked anything. */
-  private final List<RegionSearch> lastRegionSearches = new ArrayList<>();
+  /** The solves the last run's region heuristic started, one per leg. */
+  private final List<RegionHeuristic<MinecraftChunk>.Solve> lastRegionSolves = new ArrayList<>();
 
   /**
    * Returns where the last run's region layer spent its time and memory, or {@code null} if it did
@@ -373,7 +372,11 @@ public final class ScenarioRunner {
     long regions = 0;
     long portals = 0;
     long expansions = 0;
-    for (RegionSearch search : lastRegionSearches) {
+    for (RegionHeuristic<MinecraftChunk>.Solve solve : lastRegionSolves) {
+      RegionSearch search = solve.search();
+      if (search == null) {
+        continue; // a solve that was never asked anything
+      }
       queries += search.queries();
       searchNanos += search.searchNanos();
       expansions += search.expansions();
@@ -405,7 +408,7 @@ public final class ScenarioRunner {
         regions,
         portals,
         bytes / 1024,
-        store.bytesInMemory() / 1024);
+        store.unpinnedBytes() / 1024);
   }
 
   /**
@@ -467,7 +470,7 @@ public final class ScenarioRunner {
       StonebrickPlatformApi platform) {
     // Cleared first, so a run without the region layer does not report the last one's reads.
     lastRegionColumns = null;
-    lastRegionSearches.clear();
+    lastRegionSolves.clear();
     lastRegionStore = null;
     if (scenario.heuristic().production() == null) {
       return Heuristics.zero();
@@ -482,7 +485,11 @@ public final class ScenarioRunner {
     MinecraftWorld world = platform.world(scenario.world());
     RegionStore<MinecraftChunk> store =
         new RegionStore<>(
-            new RegionSpec<>(MinecraftTerrain.INSTANCE, world.minY(), world.maxY(), REGION_DETOUR),
+            new RegionSpec<>(
+                MinecraftTerrain.of(world.environment()),
+                world.minY(),
+                world.maxY(),
+                REGION_DETOUR),
             Long.MAX_VALUE,
             regionCache == null
                 ? null
@@ -491,12 +498,27 @@ public final class ScenarioRunner {
             Runnable::run,
             Runnable::run);
     lastRegionStore = store;
-    return new RegionHeuristic<MinecraftChunk>(
-        region -> columns,
-        region -> store,
-        region -> MinecraftAgent.forPlayer(player, settings.excludedModes(), world.environment()),
-        behavior.cheapestCostPerBlock(),
-        lastRegionSearches::add);
+    RegionHeuristic<MinecraftChunk> regions =
+        new RegionHeuristic<>(
+            region -> columns,
+            region -> store,
+            region ->
+                MinecraftAgent.forPlayer(player, settings.excludedModes(), world.environment()),
+            behavior.cheapestCostPerBlock());
+    // Production's heuristic, with each solve kept so the run can report what its search did.
+    return new HeuristicStrategy() {
+      @Override
+      public double estimate(Cell from, DomainRegion<?> target, TraversalState state) {
+        return regions.estimate(from, target, state);
+      }
+
+      @Override
+      public SolveHeuristic newSolve(int windowWidth, DomainRegion<?> target) {
+        RegionHeuristic<MinecraftChunk>.Solve solve = regions.newSolve(windowWidth, target);
+        lastRegionSolves.add(solve);
+        return solve;
+      }
+    };
   }
 
   /**

@@ -150,7 +150,7 @@ public final class RegionStore<C> {
    * @return the column
    */
   public FutureOr<RegionColumn> column(int columnX, int columnZ, TerrainSource<C> source) {
-    long key = key(columnX, columnZ);
+    long key = RegionColumn.key(columnX, columnZ);
     CompletableFuture<RegionColumn> promise;
     synchronized (this) {
       RegionColumn known = pinned.get(key);
@@ -185,7 +185,7 @@ public final class RegionStore<C> {
     boolean stale;
     synchronized (this) {
       // Invalidated and not yet removed from disk: what is there is the terrain before the change.
-      stale = removed.contains(key(columnX, columnZ));
+      stale = removed.contains(RegionColumn.key(columnX, columnZ));
     }
     if (files == null || stale) {
       build(columnX, columnZ, source, to);
@@ -230,7 +230,12 @@ public final class RegionStore<C> {
     }
     if (terrain.isImmediate()) {
       boolean readable = terrain.value() != null;
-      settle(columnX, columnZ, built(columnX, columnZ, terrain.value()), readable, readable, to);
+      try {
+        settle(columnX, columnZ, built(columnX, columnZ, terrain.value()), readable, readable, to);
+      } catch (RuntimeException failed) {
+        // Failed, not thrown: left in flight, the column would park every later search on it.
+        fail(columnX, columnZ, to, failed);
+      }
       return;
     }
     // Built off the thread the terrain arrived on, which on a live server may be the main thread.
@@ -277,7 +282,7 @@ public final class RegionStore<C> {
       boolean keep,
       boolean fresh,
       CompletableFuture<RegionColumn> to) {
-    long key = key(columnX, columnZ);
+    long key = RegionColumn.key(columnX, columnZ);
     synchronized (this) {
       loading.remove(key);
       boolean changed = changedWhileLoading.remove(key);
@@ -295,8 +300,8 @@ public final class RegionStore<C> {
   private void fail(
       int columnX, int columnZ, CompletableFuture<RegionColumn> to, Throwable failure) {
     synchronized (this) {
-      loading.remove(key(columnX, columnZ));
-      changedWhileLoading.remove(key(columnX, columnZ));
+      loading.remove(RegionColumn.key(columnX, columnZ));
+      changedWhileLoading.remove(RegionColumn.key(columnX, columnZ));
     }
     to.completeExceptionally(failure);
   }
@@ -317,7 +322,7 @@ public final class RegionStore<C> {
     Set<Long> wanted = new HashSet<>();
     for (int dx = -radius; dx <= radius; dx++) {
       for (int dz = -radius; dz <= radius; dz++) {
-        wanted.add(key(columnX + dx, columnZ + dz));
+        wanted.add(RegionColumn.key(columnX + dx, columnZ + dz));
       }
     }
     Set<Long> before = pins.put(owner, wanted);
@@ -385,7 +390,7 @@ public final class RegionStore<C> {
    * @param columnZ the column Z
    */
   public synchronized void invalidate(int columnX, int columnZ) {
-    long key = key(columnX, columnZ);
+    long key = RegionColumn.key(columnX, columnZ);
     RegionColumn dropped = memory.remove(key);
     if (dropped != null) {
       memoryBytes -= dropped.footprintBytes();
@@ -411,7 +416,7 @@ public final class RegionStore<C> {
    * @return {@code true} if it is
    */
   public synchronized boolean inMemory(int columnX, int columnZ) {
-    long key = key(columnX, columnZ);
+    long key = RegionColumn.key(columnX, columnZ);
     return memory.containsKey(key) || pinned.containsKey(key);
   }
 
@@ -506,11 +511,11 @@ public final class RegionStore<C> {
   /**
    * What a store has done.
    *
-   * @param columnsInMemory columns held in memory now, not pinned
-   * @param bytesInMemory their approximate footprint
-   * @param columnsPinned pinned columns held in memory now
-   * @param bytesPinned their approximate footprint
-   * @param columnsUnwritten columns built and not yet on disk
+   * @param unpinnedColumns columns held in memory now that are not pinned, within the budget
+   * @param unpinnedBytes their approximate footprint
+   * @param pinnedColumns pinned columns held in memory now, beyond the budget
+   * @param pinnedBytes their approximate footprint
+   * @param unwrittenColumns columns built and not yet on disk
    * @param memoryHits columns answered from memory
    * @param diskLoads columns read back from disk
    * @param diskNanos time spent reading the disk, including reads that found nothing
@@ -521,11 +526,11 @@ public final class RegionStore<C> {
    * @param diskBytesWritten bytes written
    */
   public record Stats(
-      int columnsInMemory,
-      long bytesInMemory,
-      int columnsPinned,
-      long bytesPinned,
-      int columnsUnwritten,
+      int unpinnedColumns,
+      long unpinnedBytes,
+      int pinnedColumns,
+      long pinnedBytes,
+      int unwrittenColumns,
       long memoryHits,
       long diskLoads,
       long diskNanos,
@@ -565,9 +570,5 @@ public final class RegionStore<C> {
       eldest.remove();
       evictions++;
     }
-  }
-
-  private static long key(int columnX, int columnZ) {
-    return ((long) columnX << 32) | (columnZ & 0xFFFF_FFFFL);
   }
 }

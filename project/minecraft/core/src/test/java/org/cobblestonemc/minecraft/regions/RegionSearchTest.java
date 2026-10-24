@@ -90,7 +90,8 @@ class RegionSearchTest {
 
   private static RegionGraph<MinecraftChunk> graph(World world) {
     return new RegionGraph<>(
-        RegionStore.inMemory(new RegionSpec<>(MinecraftTerrain.INSTANCE, 0, 47)), world);
+        RegionStore.inMemory(new RegionSpec<>(MinecraftTerrain.of(Environment.OVERWORLD), 0, 47)),
+        world);
   }
 
   private static RegionSearch search(Terrain terrain, MinecraftAgent agent, Cell goal, Cell from) {

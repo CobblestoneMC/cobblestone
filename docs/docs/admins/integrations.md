@@ -1,6 +1,6 @@
 ---
 title: Integrations
-description: Companion plugins for Towny, EssentialsX, Citizens, quest plugins, and Typewriter.
+description: Companion plugins for Towny, EssentialsX, Citizens, Geyser, quest plugins, and Typewriter.
 ---
 
 # Integrations
@@ -32,6 +32,9 @@ The `town` level is strict: `/nav town riverwood home` is valid; `/nav riverwood
 - **Teleport route steps.** `/town spawn`, `/nation spawn`, and `/town outpost` are offered as route
   steps when the player is permitted to use them under Towny's rules.
 - **Build protection.** Routes do not mine through blocks the player may not break.
+- **Menu items.** In the navigation menu each town shows as a banner in its map color (`/town set
+  mapcolor`), matched to the nearest dye. Change the items under `icons` in
+  `plugins/CobblestoneTowny/config.yml`.
 
 ## EssentialsX
 
@@ -43,6 +46,25 @@ The `town` level is strict: `/nav town riverwood home` is valid; `/nav riverwood
 ```
 
 `/home` and `/spawn` are offered as route steps when the player is permitted to use them.
+
+Change how homes and the spawn look in the navigation menu under `icons` in
+`plugins/CobblestoneEssentials/config.yml`.
+
+## Geyser
+
+**CobblestoneGeyser** · requires Geyser on this server
+
+Bedrock players open the [navigation menu](config.md#menu) by performing an emote, instead of
+typing `/nav`. The emote runs `/navigate` as the player, so it needs the same permission. The
+default emote is **Simple Clap**, one of the four every Bedrock player starts with; change the list
+of emote ids under `emotes` in `plugins/CobblestoneGeyser/config.yml`.
+
+Geyser must run on this server: Geyser on a proxy cannot report emotes to it.
+
+!!! note
+
+    Bedrock players see textured heads in the menu as plain heads unless the texture is also listed
+    in Geyser's `custom-skulls.yml`.
 
 ## Citizens
 
@@ -118,6 +140,25 @@ quests:
 ```
 
 The plugin is named `Quests`, so its nodes take the form `cobblestone.navigate.quests.quest.<name>`.
+
+## Quests (LMBishop)
+
+**CobblestoneBishopQuests** · requires Quests
+
+```
+/nav quest <id>
+```
+
+Each started quest with a `position` task still to reach is a destination. Tracking a quest starts a
+trip to that position. Per-quest overrides are keyed by quest id:
+
+```yaml
+quests:
+  citizen1:
+    enabled: false
+```
+
+The plugin is named `Quests`, so its nodes take the form `cobblestone.navigate.quests.quest.<id>`.
 
 ## Typewriter
 

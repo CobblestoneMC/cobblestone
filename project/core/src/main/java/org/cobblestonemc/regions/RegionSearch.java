@@ -511,9 +511,9 @@ public final class RegionSearch {
     for (int[] offset : around) {
       int nx = x + offset[0];
       int nz = z + offset[2];
-      // Only within a column already in hand: this is a fallback, not a reason to fetch.
-      if (Math.floorDiv(nx, 16) != Math.floorDiv(x, 16)
-          || Math.floorDiv(nz, 16) != Math.floorDiv(z, 16)) {
+      // Only within the cell's own column: a neighbour's region would have to be completed, and
+      // this is a fallback, not a reason to fetch.
+      if (graph.columnOf(nx) != graph.columnOf(x) || graph.columnOf(nz) != graph.columnOf(z)) {
         continue;
       }
       region = graph.regionAt(nx, y + offset[1], nz);

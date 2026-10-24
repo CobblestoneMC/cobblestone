@@ -14,6 +14,7 @@ import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.ChunkSource;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.regions.RegionColumn;
 import org.cobblestonemc.regions.TerrainSource;
 
 /**
@@ -33,7 +34,7 @@ public final class WorldChunkColumns implements TerrainSource<MinecraftChunk> {
   /**
    * Creates a source over a world.
    *
-   * @param chunks the search\'s own chunk source, which the region layer reads through like
+   * @param chunks the search's own chunk source, which the region layer reads through like
    *     everything else in the search
    * @param world the world to read
    * @param destination where the solve is heading, the chunk provider's hint for how hard to try
@@ -46,12 +47,12 @@ public final class WorldChunkColumns implements TerrainSource<MinecraftChunk> {
 
   @Override
   public FutureOr<MinecraftChunk> column(int chunkX, int chunkZ) {
-    long key = ((long) chunkX << 32) | (chunkZ & 0xFFFF_FFFFL);
+    long key = RegionColumn.key(chunkX, chunkZ);
     FutureOr<MinecraftChunk> known = columns.get(key);
     if (known != null) {
-      // Remembered while in flight too, so a seam's five columns queue one read each, and so a
-      // column asked about after its read landed answers at once, as the graph requires.
-      return known;
+      // Remembered while in flight too, so a seam's five columns queue one read each. A read that
+      // has landed answers at once, as the graph requires: from() unwraps a completed future.
+      return known.isImmediate() ? known : FutureOr.from(known.future());
     }
     Cell anchor =
         new Cell(

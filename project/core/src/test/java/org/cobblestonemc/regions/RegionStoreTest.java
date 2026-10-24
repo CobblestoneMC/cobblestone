@@ -92,6 +92,20 @@ class RegionStoreTest {
   }
 
   @Test
+  void aColumnThatFailsToBuildDoesNotHoldUpTheNextAsk() {
+    RegionStore<ToyWorld.Column> store = store(Long.MAX_VALUE);
+    ToyWorld.Source broken =
+        new ToyWorld.Source(
+            (x, y, z) -> {
+              throw new IllegalStateException("a block nothing can classify");
+            },
+            16);
+    assertTrue(store.column(0, 0, broken).future().isCompletedExceptionally());
+
+    assertTrue(column(store, 0, 0, new ToyWorld.Source()).regions() > 0, "asked again, it builds");
+  }
+
+  @Test
   void aTightBudgetEvictsTheLeastRecentlyUsed() {
     ToyWorld.Source source = new ToyWorld.Source();
     // A byte: every column but the newest is evicted at once.
@@ -118,7 +132,7 @@ class RegionStoreTest {
     }
     assertTrue(tight.inMemory(0, 0), "pinned, it stays");
     assertFalse(tight.inMemory(1, 0), "the others go past the budget");
-    assertEquals(1, tight.stats().columnsPinned());
+    assertEquals(1, tight.stats().pinnedColumns());
 
     tight.release(alice);
     assertTrue(tight.inMemory(0, 0), "still pinned for bob");
@@ -134,7 +148,7 @@ class RegionStoreTest {
     tight.pin(owner, 0, 0, 1);
     column(tight, 0, 0, source);
     column(tight, 1, 1, source);
-    assertEquals(2, tight.stats().columnsPinned());
+    assertEquals(2, tight.stats().pinnedColumns());
 
     // Walked on: the old surroundings are let go, the new ones held.
     tight.pin(owner, 10, 0, 1);
@@ -154,6 +168,6 @@ class RegionStoreTest {
     assertFalse(store.inMemory(0, 0));
     column(store, 0, 0, source);
     assertEquals(2, source.reads);
-    assertEquals(1, store.stats().columnsPinned(), "rebuilt, it is pinned again");
+    assertEquals(1, store.stats().pinnedColumns(), "rebuilt, it is pinned again");
   }
 }

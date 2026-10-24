@@ -12,24 +12,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.minecraft.api.WorldRegion;
+import org.cobblestonemc.plugin.api.DestinationEntry;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
 import org.cobblestonemc.plugin.api.DestinationOption;
+import org.cobblestonemc.plugin.api.DestinationTree;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.cobblestonemc.plugin.api.OptionValues;
-import org.cobblestonemc.plugin.api.PlatformDestinationTree;
 import org.cobblestonemc.plugin.api.Validity;
 
 /**
- * Brings an integration's {@link PlatformDestinationTree} into Cobblestone's own terms: a {@link
- * DestinationNode} of {@link NavigationTarget}s, with every region converted from the platform's
- * type to the search's. The view is as lazy as the tree it wraps — nothing is converted until a
- * level is visited or a leaf is built — and each search re-reads the integration's regions, so its
- * moving targets are followed as before.
+ * Brings an integration's {@link DestinationTree} into Cobblestone's own terms: a tree of {@link
+ * NavigationTarget}s, with every region converted from the platform's type to the search's. The
+ * view is as lazy as the tree it wraps — nothing is converted until a subtree is visited or a leaf
+ * is built — and each search re-reads the integration's regions, so its moving targets are followed
+ * as before. Each entry keeps the {@linkplain DestinationEntry#display display} the integration
+ * gave it.
  */
 public final class PlatformTrees {
 
@@ -45,15 +46,22 @@ public final class PlatformTrees {
    * @param <V> the platform vector type
    * @return the view
    */
-  public static <W, V> DestinationNode<NavigationTarget> adapt(
-      PlatformDestinationTree<W, V> tree,
+  public static <W, V> DestinationTree<NavigationTarget> adapt(
+      DestinationTree<MinecraftDestination<W, V>> tree,
       Function<WorldRegion<W, V>, Optional<DomainRegion<MinecraftWorld>>> regions) {
-    Map<String, Supplier<? extends DestinationNode<NavigationTarget>>> subTrees =
-        new LinkedHashMap<>();
-    tree.subTrees().forEach((key, child) -> subTrees.put(key, () -> adapt(child.get(), regions)));
-    Map<String, DestinationLeaf<NavigationTarget>> leaves = new LinkedHashMap<>();
-    tree.leaves().forEach((key, leaf) -> leaves.put(key, new Leaf<>(leaf, regions)));
-    return new DestinationNode.Simple<>(tree.strict(), subTrees, leaves);
+    Map<String, DestinationEntry<NavigationTarget>> entries = new LinkedHashMap<>();
+    tree.entries().forEach((key, entry) -> entries.put(key, adapt(entry, regions)));
+    return new DestinationTree.Simple<>(tree.strict(), entries, tree.aliases());
+  }
+
+  private static <W, V> DestinationEntry<NavigationTarget> adapt(
+      DestinationEntry<MinecraftDestination<W, V>> entry,
+      Function<WorldRegion<W, V>, Optional<DomainRegion<MinecraftWorld>>> regions) {
+    DestinationEntry.Builder<NavigationTarget> adapted =
+        DestinationEntry.<NavigationTarget>builder().display(entry.display());
+    entry.destination().ifPresent(leaf -> adapted.destination(new Leaf<>(leaf, regions)));
+    entry.subtree().ifPresent(subtree -> adapted.subtree(() -> adapt(subtree.get(), regions)));
+    return adapted.build();
   }
 
   /**

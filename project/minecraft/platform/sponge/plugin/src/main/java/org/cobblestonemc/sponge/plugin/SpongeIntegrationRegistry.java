@@ -11,7 +11,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
 import org.cobblestonemc.minecraft.registry.OwnedRegistry;
+import org.cobblestonemc.plugin.api.DestinationTree;
+import org.cobblestonemc.plugin.api.Display;
 import org.cobblestonemc.plugin.destination.DestinationProvider;
+import org.cobblestonemc.plugin.destination.NavigationTarget;
 import org.cobblestonemc.plugin.destination.PlatformTrees;
 import org.cobblestonemc.sponge.SpongeRegions;
 import org.cobblestonemc.sponge.plugin.api.DestinationService;
@@ -59,9 +62,17 @@ public final class SpongeIntegrationRegistry implements IntegrationRegistrar {
   public void registerDestinations(PluginContainer owner, DestinationService provider) {
     registerProvider(
         owner,
-        player -> {
-          var tree = provider.provide(player);
-          return tree == null ? null : PlatformTrees.adapt(tree, regions::of);
+        new DestinationProvider<>() {
+          @Override
+          public DestinationTree<NavigationTarget> provide(ServerPlayer player) {
+            var tree = provider.provide(player);
+            return tree == null ? null : PlatformTrees.adapt(tree, regions::of);
+          }
+
+          @Override
+          public Display display(ServerPlayer player) {
+            return provider.display(player);
+          }
         });
   }
 

@@ -212,7 +212,7 @@ public enum RegionClass {
    * @param mining the bucket
    * @return the class
    */
-  public static RegionClass solid(MiningClass mining) {
+  public static RegionClass of(MiningClass mining) {
     return BY_MINING[mining.ordinal()];
   }
 
@@ -252,23 +252,5 @@ public enum RegionClass {
    */
   public boolean solid() {
     return body == Body.SOLID;
-  }
-
-  /**
-   * Returns whether a walking body stands in cells of this class.
-   *
-   * @return {@code true} for the classes of ground
-   */
-  public boolean standing() {
-    return body.standing();
-  }
-
-  /**
-   * Returns whether this class is water, surface or not.
-   *
-   * @return {@code true} for {@link #WATER} and {@link #WATER_SURFACE}
-   */
-  public boolean water() {
-    return body == Body.WATER;
   }
 }

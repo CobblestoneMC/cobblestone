@@ -34,10 +34,12 @@ public final class CobblestoneEssentialsPlugin extends JavaPlugin {
     Plugin spawnPlugin = getServer().getPluginManager().getPlugin("EssentialsSpawn");
     IEssentialsSpawn spawnApi = spawnPlugin instanceof IEssentialsSpawn spawn ? spawn : null;
 
+    saveDefaultConfig();
     Essentials essentials = new Essentials(essentialsApi, spawnApi);
 
     CobblestonePaperApi.registrar()
-        .registerDestinations(essentialsPlugin, new EssentialsDestinationService(essentials));
+        .registerDestinations(
+            essentialsPlugin, new EssentialsDestinationService(essentials, getConfig()));
     CobblestoneCoreApi.registrar()
         .register(essentialsPlugin, new EssentialsSearchModificationService(essentials));
 
