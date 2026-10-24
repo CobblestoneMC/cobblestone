@@ -19,7 +19,7 @@ the route costs. RUNNING_AVERAGE extrapolates from the steps already taken, whic
 the terrain ahead. REGIONS reads the terrain ahead.
 
 - **Regions.** Each chunk column is classed cell by cell (stand, soul sand, soul soil, water, water
-  surface, climb, air, and breakable material by mining bucket: soft, soft rock, rock, hard rock,
+  surface, climb, air, and breakable material by mining bucket: glass, sandstone, stone, deepslate,
   obsidian, dirt, wood) and flood-filled into connected regions, one class each, within each
   16³ section (a section is a cube as wide as the terrain's column). A region is split
   where walking inside it would bend more than 1.5x its straight line (Manhattan against
@@ -33,8 +33,8 @@ the terrain ahead. REGIONS reads the terrain ahead.
   water surface takes a boat. A kind of terrain earns its own class only when some agent would pay
   differently for it. Rock for a pickaxe fills as one family, because deepslate is dithered into
   stone block by block and a region per kind would shred both (about 80% more regions); a rock
-  region is then the band nearest its cells' average hardness: soft rock, rock, mixed rock or hard
-  rock. A region stores only its class, never a cost: a mining bucket is priced from
+  region is then the band nearest its cells' average hardness: sandstone, stone, mixed rock or
+  deepslate. A region stores only its class, never a cost: a mining bucket is priced from
   a typical hardness in it, so tools will change the agent and nothing stored. Rock is always
   usable, at the mining rate with a pickaxe and at a fallback rate without, so the graph stays
   connected.

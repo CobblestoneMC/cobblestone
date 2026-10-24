@@ -102,7 +102,7 @@ public final class MinecraftAgent implements RegionAgent {
             case CLIMB -> least(climb, fly);
             case AIR -> fly;
             // Priced by break time and direction; see traverse.
-            case SOFT, SOFT_ROCK, ROCK, MIXED_ROCK, HARD_ROCK, OBSIDIAN, DIRT, WOOD -> Double.NaN;
+            case GLASS, SANDSTONE, STONE, MIXED_ROCK, DEEPSLATE, OBSIDIAN, DIRT, WOOD -> Double.NaN;
           };
       rates[klass.id()] = rate;
       if (has(rate)) {

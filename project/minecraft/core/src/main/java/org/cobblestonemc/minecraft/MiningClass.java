@@ -17,6 +17,9 @@ import org.jetbrains.annotations.Nullable;
  * tool helps and roughly how hard the blocks in it are, so that terrain can be summarized without
  * storing a number that is only true for one agent.
  *
+ * <p><b>Each bucket is named for a block typical of it,</b> not for every block in it: {@link
+ * #DIRT} holds sand and gravel too, and {@link #SANDSTONE} holds netherrack.
+ *
  * <p><b>Buckets follow what an agent would pay.</b> Netherrack takes a pickaxe like stone but
  * breaks four times faster, so it is a bucket of its own; deepslate takes twice as long as stone.
  * An ore goes with the rock it sits in: an ore of its own hardness would cut every vein out of the
@@ -24,17 +27,17 @@ import org.jetbrains.annotations.Nullable;
  */
 public enum MiningClass {
 
-  /** Broken by hand about as fast as with anything: leaves, glass, wool, plants. */
-  SOFT(0),
+  /** Broken by hand about as fast as with anything: glass, leaves, wool, plants. */
+  GLASS(0),
 
-  /** Soft rock for a pickaxe: netherrack and the ores in it, sandstone. */
-  SOFT_ROCK(1),
+  /** Soft rock for a pickaxe: sandstone, and netherrack and its ores. */
+  SANDSTONE(1),
 
   /** Rock for a pickaxe: stone, cobblestone, granite, basalt, and the ores in stone. */
-  ROCK(2),
+  STONE(2),
 
   /** Hard rock for a pickaxe: deepslate and its ores, end stone. */
-  HARD_ROCK(3),
+  DEEPSLATE(3),
 
   /** Breaks only with a diamond pickaxe or better: obsidian, crying obsidian, ancient debris. */
   OBSIDIAN(4),
@@ -116,8 +119,8 @@ public enum MiningClass {
     return switch (tool) {
       case SHOVEL -> DIRT;
       case AXE -> WOOD;
-      case HOE -> SOFT;
-      case NONE -> hardness < 1 ? SOFT : ROCK;
+      case HOE -> GLASS;
+      case NONE -> hardness < 1 ? GLASS : STONE;
       case PICKAXE -> pickaxe(hardness, key);
     };
   }
@@ -126,19 +129,19 @@ public enum MiningClass {
   private static MiningClass pickaxe(double hardness, String key) {
     if (key.endsWith("_ore")) {
       if (key.startsWith("deepslate_")) {
-        return HARD_ROCK;
+        return DEEPSLATE;
       }
       if (key.startsWith("nether_")) {
-        return SOFT_ROCK;
+        return SANDSTONE;
       }
-      return ROCK;
+      return STONE;
     }
     if (hardness < 1) {
-      return SOFT_ROCK;
+      return SANDSTONE;
     }
     if (hardness < 3) {
-      return ROCK;
+      return STONE;
     }
-    return HARD_ROCK;
+    return DEEPSLATE;
   }
 }
