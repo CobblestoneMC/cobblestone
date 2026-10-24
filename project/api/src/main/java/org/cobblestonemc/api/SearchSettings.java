@@ -47,7 +47,7 @@ public final class SearchSettings {
    * <p>Swept for {@link #DEFAULT_HEURISTIC}, whose estimate {@code bench verify} puts at 0.7–0.95
    * of the true cost and never above: below about 1.5 the search starts running out of cells, and
    * above it every step up trades fewer nodes for slightly dearer paths. Another heuristic would
-   * want its own weight. The sweep is in {@code designs/regions.md}.
+   * want its own weight.
    */
   public static final double DEFAULT_HEURISTIC_WEIGHT = 1.7;
 
@@ -55,8 +55,7 @@ public final class SearchSettings {
    * The estimate a search uses unless told otherwise.
    *
    * <p>{@link Heuristic#REGIONS} by default, from measurement: on the benchmark it solves routes
-   * the running average cannot, expands a fraction of the nodes, and finds cheaper paths. The
-   * numbers are in {@code designs/regions.md}.
+   * the running average cannot, expands a fraction of the nodes, and finds cheaper paths.
    *
    * <p>⚠️ It is not free: a search reads the terrain it reasons over, and the first search over new
    * terrain has to cut it into regions, which on a long route is hundreds of chunk reads. Regions
