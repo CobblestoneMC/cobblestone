@@ -108,7 +108,10 @@ final class SpongeBlock implements MinecraftBlock {
         type.key(RegistryTypes.BLOCK_TYPE).value());
   }
 
-  /** The tool the block's vanilla tags say breaks it fastest. */
+  /**
+   * The tool the block's vanilla tags say breaks it fastest, of those {@link MiningClass} buckets
+   * by: a hoe's blocks count as no tool's.
+   */
   private MiningClass.Tool tool() {
     if (type.is(BlockTypeTags.MINEABLE_PICKAXE)) {
       return MiningClass.Tool.PICKAXE;
@@ -118,9 +121,6 @@ final class SpongeBlock implements MinecraftBlock {
     }
     if (type.is(BlockTypeTags.MINEABLE_AXE)) {
       return MiningClass.Tool.AXE;
-    }
-    if (type.is(BlockTypeTags.MINEABLE_HOE)) {
-      return MiningClass.Tool.HOE;
     }
     return MiningClass.Tool.NONE;
   }

@@ -16,8 +16,8 @@ class MiningClassTest {
 
   @Test
   void everyClassReadsBackFromItsId() {
-    for (MiningClass klass : MiningClass.values()) {
-      assertEquals(klass, MiningClass.byId(klass.id()));
+    for (MiningClass clazz : MiningClass.values()) {
+      assertEquals(clazz, MiningClass.byId(clazz.id()));
     }
     assertNull(MiningClass.byId(-1));
     assertNull(MiningClass.byId(MiningClass.MAX_IDS));
@@ -42,9 +42,18 @@ class MiningClassTest {
 
   @Test
   void otherToolsBucketByTool() {
-    assertEquals(MiningClass.DIRT, MiningClass.of(MiningClass.Tool.SHOVEL, false, 0.5, "dirt"));
-    assertEquals(MiningClass.WOOD, MiningClass.of(MiningClass.Tool.AXE, false, 2.0, "oak_log"));
-    assertEquals(MiningClass.SOFT, MiningClass.of(MiningClass.Tool.HOE, false, 0.2, "oak_leaves"));
-    assertEquals(MiningClass.SOFT, MiningClass.of(MiningClass.Tool.NONE, false, 0.3, "glass"));
+    assertEquals(MiningClass.LOOSE, MiningClass.of(MiningClass.Tool.SHOVEL, false, 0.5, "dirt"));
+    assertEquals(MiningClass.WOODEN, MiningClass.of(MiningClass.Tool.AXE, false, 2.0, "oak_log"));
+  }
+
+  @Test
+  void blocksNoToolHelpsAreSoftOrBandedAsRock() {
+    MiningClass.Tool none = MiningClass.Tool.NONE;
+    assertEquals(MiningClass.SOFT, MiningClass.of(none, false, 0.3, "glass"));
+    assertEquals(MiningClass.SOFT, MiningClass.of(none, false, 0.2, "oak_leaves"));
+    assertEquals(MiningClass.ROCK, MiningClass.of(none, false, 1.0, "nether_wart_block"));
+    assertEquals(MiningClass.HARD_ROCK, MiningClass.of(none, false, 3.0, "sculk_catalyst"));
+    assertEquals(
+        MiningClass.VERY_HARD_ROCK, MiningClass.of(none, false, 55, "reinforced_deepslate"));
   }
 }

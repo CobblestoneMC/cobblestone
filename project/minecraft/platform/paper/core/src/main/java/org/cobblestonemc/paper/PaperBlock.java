@@ -156,7 +156,10 @@ final class PaperBlock implements MinecraftBlock {
         material.getKey().getKey());
   }
 
-  /** The tool the block's vanilla tags say breaks it fastest. */
+  /**
+   * The tool the block's vanilla tags say breaks it fastest, of those {@link MiningClass} buckets
+   * by: a hoe's blocks count as no tool's.
+   */
   private MiningClass.Tool tool() {
     if (Tag.MINEABLE_PICKAXE.isTagged(material)) {
       return MiningClass.Tool.PICKAXE;
@@ -166,9 +169,6 @@ final class PaperBlock implements MinecraftBlock {
     }
     if (Tag.MINEABLE_AXE.isTagged(material)) {
       return MiningClass.Tool.AXE;
-    }
-    if (Tag.MINEABLE_HOE.isTagged(material)) {
-      return MiningClass.Tool.HOE;
     }
     return MiningClass.Tool.NONE;
   }
