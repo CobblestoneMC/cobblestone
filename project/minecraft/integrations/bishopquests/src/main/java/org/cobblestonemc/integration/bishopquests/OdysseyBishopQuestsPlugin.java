@@ -37,7 +37,7 @@ public final class CobblestoneBishopQuestsPlugin extends JavaPlugin {
     QuestNavPrefs prefs = new QuestNavPrefs(getConfig());
 
     CobblestonePluginAPI.registrar()
-        .registerDestinations(this, new BishopQuestsDestinationService(quests));
+        .registerDestinations(questsPlugin, new BishopQuestsDestinationService(quests));
     getServer()
         .getPluginManager()
         .registerEvents(new BishopQuestsTrackListener(quests, prefs), this);
