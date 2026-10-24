@@ -26,17 +26,17 @@ class MiningClassTest {
   @Test
   void anOreGoesWithTheRockItSitsIn() {
     MiningClass.Tool pickaxe = MiningClass.Tool.PICKAXE;
-    assertEquals(MiningClass.ROCK, MiningClass.of(pickaxe, false, 3.0, "iron_ore"));
-    assertEquals(MiningClass.HARD_ROCK, MiningClass.of(pickaxe, false, 4.5, "deepslate_iron_ore"));
-    assertEquals(MiningClass.SOFT_ROCK, MiningClass.of(pickaxe, false, 3.0, "nether_gold_ore"));
+    assertEquals(MiningClass.STONE, MiningClass.of(pickaxe, false, 3.0, "iron_ore"));
+    assertEquals(MiningClass.DEEPSLATE, MiningClass.of(pickaxe, false, 4.5, "deepslate_iron_ore"));
+    assertEquals(MiningClass.SANDSTONE, MiningClass.of(pickaxe, false, 3.0, "nether_gold_ore"));
   }
 
   @Test
-  void rockIsBandedByHardness() {
+  void pickaxeBlocksAreBandedByHardness() {
     MiningClass.Tool pickaxe = MiningClass.Tool.PICKAXE;
-    assertEquals(MiningClass.SOFT_ROCK, MiningClass.of(pickaxe, false, 0.4, "netherrack"));
-    assertEquals(MiningClass.ROCK, MiningClass.of(pickaxe, false, 1.5, "stone"));
-    assertEquals(MiningClass.HARD_ROCK, MiningClass.of(pickaxe, false, 3.0, "deepslate"));
+    assertEquals(MiningClass.SANDSTONE, MiningClass.of(pickaxe, false, 0.4, "netherrack"));
+    assertEquals(MiningClass.STONE, MiningClass.of(pickaxe, false, 1.5, "stone"));
+    assertEquals(MiningClass.DEEPSLATE, MiningClass.of(pickaxe, false, 3.0, "deepslate"));
     assertEquals(MiningClass.OBSIDIAN, MiningClass.of(pickaxe, true, 50, "obsidian"));
   }
 
@@ -44,7 +44,7 @@ class MiningClassTest {
   void otherToolsBucketByTool() {
     assertEquals(MiningClass.DIRT, MiningClass.of(MiningClass.Tool.SHOVEL, false, 0.5, "dirt"));
     assertEquals(MiningClass.WOOD, MiningClass.of(MiningClass.Tool.AXE, false, 2.0, "oak_log"));
-    assertEquals(MiningClass.SOFT, MiningClass.of(MiningClass.Tool.HOE, false, 0.2, "oak_leaves"));
-    assertEquals(MiningClass.SOFT, MiningClass.of(MiningClass.Tool.NONE, false, 0.3, "glass"));
+    assertEquals(MiningClass.GLASS, MiningClass.of(MiningClass.Tool.HOE, false, 0.2, "oak_leaves"));
+    assertEquals(MiningClass.GLASS, MiningClass.of(MiningClass.Tool.NONE, false, 0.3, "glass"));
   }
 }

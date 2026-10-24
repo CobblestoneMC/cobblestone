@@ -110,7 +110,7 @@ public interface MinecraftBlock {
    * @return the mining class
    */
   default MiningClass miningClass() {
-    return MiningClass.ROCK;
+    return MiningClass.STONE;
   }
 
   /**
