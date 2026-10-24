@@ -20,7 +20,7 @@ the terrain ahead. REGIONS reads the terrain ahead.
 
 - **Regions.** Each chunk column is classed cell by cell (stand, soul sand, soul soil, water, water
   surface, climb, air, and breakable material by mining bucket: soft, soft rock, rock, hard rock,
-  very hard rock, dirt, wood) and flood-filled into connected regions, one class each, within each
+  very hard rock, loose, wooden) and flood-filled into connected regions, one class each, within each
   16³ section (a section is a cube as wide as the terrain's column). A region is split
   where walking inside it would bend more than 1.5x its straight line (Manhattan against
   Manhattan), so pricing a crossing as a straight line stays honest. Uniform sections skip the fill.

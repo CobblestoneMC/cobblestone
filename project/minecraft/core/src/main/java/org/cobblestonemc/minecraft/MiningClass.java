@@ -21,6 +21,14 @@ import org.jetbrains.annotations.Nullable;
  * breaks four times faster, so it is a bucket of its own; deepslate takes twice as long as stone.
  * An ore goes with the rock it sits in: an ore of its own hardness would cut every vein out of the
  * stone around it.
+ *
+ * <p><b>Known limitation: blocks no tool we bucket by helps.</b> A block with no pickaxe, shovel or
+ * axe tag is soft below hardness 1 and otherwise banded as rock by its hardness, as if a pickaxe
+ * helped. While costs know no tools that prices it right, but once a pickaxe makes rock faster it
+ * will under-price these. In the benchmark corpus they are few: nether and warped wart blocks and
+ * shroomlight, which a hoe breaks fastest, and vaults, trial spawners and reinforced deepslate.
+ * Hoes are left out on purpose, since players rarely carry one; a bucket for hoe blocks (leaves,
+ * wart blocks, moss, sculk) is a later improvement.
  */
 public enum MiningClass {
 
@@ -42,11 +50,11 @@ public enum MiningClass {
    */
   VERY_HARD_ROCK(4),
 
-  /** For a shovel: dirt, grass, sand, gravel, clay, soul sand. */
-  DIRT(5),
+  /** Loose ground, for a shovel: dirt, grass, sand, gravel, clay, soul sand. */
+  LOOSE(5),
 
-  /** For an axe: logs, planks, and things made of them. */
-  WOOD(6);
+  /** Anything wooden, for an axe: logs, planks, and things made of them. */
+  WOODEN(6);
 
   /** The most ids there can be: captures store an id in four bits, half of them still free. */
   public static final int MAX_IDS = 16;
@@ -54,11 +62,11 @@ public enum MiningClass {
   private static final MiningClass[] BY_ID = new MiningClass[MAX_IDS];
 
   static {
-    for (MiningClass klass : values()) {
-      if (BY_ID[klass.id] != null) {
-        throw new IllegalStateException("mining class id " + klass.id + " is used twice");
+    for (MiningClass clazz : values()) {
+      if (BY_ID[clazz.id] != null) {
+        throw new IllegalStateException("mining class id " + clazz.id + " is used twice");
       }
-      BY_ID[klass.id] = klass;
+      BY_ID[clazz.id] = clazz;
     }
   }
 
@@ -96,7 +104,6 @@ public enum MiningClass {
     PICKAXE,
     SHOVEL,
     AXE,
-    HOE,
     NONE
   }
 
@@ -105,7 +112,7 @@ public enum MiningClass {
    *
    * <p>The one rule every platform buckets by, so that Paper, Sponge and a capture of either agree.
    *
-   * @param tool the tool its tags name
+   * @param tool the tool its tags name, of those a player is likely to carry
    * @param needsDiamond whether it needs a diamond tool to drop anything
    * @param hardness its hardness, as Minecraft defines it
    * @param key its block id without a namespace, such as {@code deepslate_iron_ore}; an ore, whose
@@ -117,10 +124,9 @@ public enum MiningClass {
       return VERY_HARD_ROCK;
     }
     return switch (tool) {
-      case SHOVEL -> DIRT;
-      case AXE -> WOOD;
-      case HOE -> SOFT;
-      case NONE -> hardness < 1 ? SOFT : ROCK;
+      case SHOVEL -> LOOSE;
+      case AXE -> WOODEN;
+      case NONE -> hardness < 1 ? SOFT : rock(hardness);
       case PICKAXE -> pickaxe(hardness, key);
     };
   }
@@ -136,12 +142,20 @@ public enum MiningClass {
       }
       return ROCK;
     }
-    if (hardness < 1) {
-      return SOFT_ROCK;
-    }
+    return hardness < 1 ? SOFT_ROCK : rock(hardness);
+  }
+
+  /**
+   * Rock of a hardness of at least 1, banded: stone, deepslate, and from obsidian's hardness of 50
+   * up, very hard rock.
+   */
+  private static MiningClass rock(double hardness) {
     if (hardness < 3) {
       return ROCK;
     }
-    return HARD_ROCK;
+    if (hardness < 50) {
+      return HARD_ROCK;
+    }
+    return VERY_HARD_ROCK;
   }
 }

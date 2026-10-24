@@ -99,9 +99,9 @@ public final class MinecraftAgent implements RegionAgent {
     this.mine = mine;
     this.environment = environment;
     double least = FALLBACK_COST_PER_BLOCK;
-    for (RegionClass klass : RegionClass.values()) {
+    for (RegionClass clazz : RegionClass.values()) {
       double rate =
-          switch (klass) {
+          switch (clazz) {
             case STAND -> least(walk, fly);
             case SOUL_SAND -> least(least(walk / SOUL_SAND_SPEED, soulSpeed), fly);
             case SOUL_SOIL -> least(least(walk, soulSpeed), fly);
@@ -109,10 +109,10 @@ public final class MinecraftAgent implements RegionAgent {
             case CLIMB -> least(climb, fly);
             case AIR -> fly;
             // Priced by break time and direction; see traverse.
-            case SOFT, SOFT_ROCK, ROCK, MIXED_ROCK, HARD_ROCK, VERY_HARD_ROCK, DIRT, WOOD ->
+            case SOFT, SOFT_ROCK, ROCK, MIXED_ROCK, HARD_ROCK, VERY_HARD_ROCK, LOOSE, WOODEN ->
                 Double.NaN;
           };
-      rates[klass.id()] = rate;
+      rates[clazz.id()] = rate;
       if (has(rate)) {
         least = Math.min(least, rate);
       }
@@ -168,15 +168,15 @@ public final class MinecraftAgent implements RegionAgent {
   }
 
   @Override
-  public boolean usable(int klass) {
-    RegionClass known = RegionClass.byId(klass);
+  public boolean usable(int clazz) {
+    RegionClass known = RegionClass.byId(clazz);
     return known != null && usable(known);
   }
 
   @Override
   public double traverse(
-      int klass, double fx, double fy, double fz, double tx, double ty, double tz) {
-    return traverse(RegionClass.byId(klass), fx, fy, fz, tx, ty, tz);
+      int clazz, double fx, double fy, double fz, double tx, double ty, double tz) {
+    return traverse(RegionClass.byId(clazz), fx, fy, fz, tx, ty, tz);
   }
 
   /**
@@ -189,20 +189,20 @@ public final class MinecraftAgent implements RegionAgent {
    * rather than answering. Priced at twice the cost of digging, rock is a route only when nothing
    * else is.
    *
-   * @param klass the class
+   * @param clazz the class
    * @return {@code true} if usable
    */
-  public boolean usable(RegionClass klass) {
-    return klass.solid()
-        || has(rates[klass.id()])
-        || (klass == RegionClass.WATER_SURFACE && has(boat));
+  public boolean usable(RegionClass clazz) {
+    return clazz.solid()
+        || has(rates[clazz.id()])
+        || (clazz == RegionClass.WATER_SURFACE && has(boat));
   }
 
   /**
    * Returns the seconds to cross a region in a straight line from one point to another, by the
    * cheapest way the agent has across it.
    *
-   * @param klass the region's class
+   * @param clazz the region's class
    * @param fx where the crossing starts, X
    * @param fy where the crossing starts, Y
    * @param fz where the crossing starts, Z
@@ -212,22 +212,22 @@ public final class MinecraftAgent implements RegionAgent {
    * @return the cost in seconds
    */
   public double traverse(
-      RegionClass klass, double fx, double fy, double fz, double tx, double ty, double tz) {
+      RegionClass clazz, double fx, double fy, double fz, double tx, double ty, double tz) {
     double dx = tx - fx;
     double dy = ty - fy;
     double dz = tz - fz;
     double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    if (klass.solid()) {
-      double breakTime = breakTime(klass);
+    if (clazz.solid()) {
+      double breakTime = breakTime(clazz);
       // At least one block, however short the line: the two portals of a one-block wall sit face
       // to face, and a crossing priced by the distance between them would dig it for free.
       return mine
           ? Math.max(mining(breakTime, dx, dy, dz), breakTime + FALL)
           : FALLBACK_COST_PER_BLOCK * Math.max(1, length);
     }
-    double rate = rates[klass.id()];
+    double rate = rates[clazz.id()];
     double cost = (has(rate) ? rate : FALLBACK_COST_PER_BLOCK) * length;
-    if (klass == RegionClass.WATER_SURFACE && has(boat)) {
+    if (clazz == RegionClass.WATER_SURFACE && has(boat)) {
       // A boat crosses the surface; anything vertical in the crossing, where a surface steps down
       // a fall of water, is swum.
       double across = Math.sqrt(dx * dx + dz * dz);
@@ -245,8 +245,8 @@ public final class MinecraftAgent implements RegionAgent {
    * change this and nothing stored: a better pickaxe makes rock faster for the agent holding it,
    * here.
    */
-  private double breakTime(RegionClass klass) {
-    return MinecraftTerrain.hardness(klass, environment) * 1.5;
+  private double breakTime(RegionClass clazz) {
+    return MinecraftTerrain.hardness(clazz, environment) * 1.5;
   }
 
   /**

@@ -21,8 +21,8 @@ import org.junit.jupiter.api.Test;
 class MinecraftAgentTest {
 
   /** Ten blocks along X. */
-  private static double across(MinecraftAgent cost, RegionClass klass) {
-    return cost.traverse(klass, 0, 0, 0, 10, 0, 0) / 10;
+  private static double across(MinecraftAgent cost, RegionClass clazz) {
+    return cost.traverse(clazz, 0, 0, 0, 10, 0, 0) / 10;
   }
 
   @Test

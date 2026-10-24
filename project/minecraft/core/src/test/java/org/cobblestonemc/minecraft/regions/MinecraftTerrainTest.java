@@ -49,7 +49,7 @@ class MinecraftTerrainTest {
 
   private static final MinecraftBlock STONE = solid(MiningClass.ROCK);
   private static final MinecraftBlock DEEPSLATE = solid(MiningClass.HARD_ROCK);
-  private static final MinecraftBlock GRAVEL = solid(MiningClass.DIRT);
+  private static final MinecraftBlock GRAVEL = solid(MiningClass.LOOSE);
 
   /** Counts of rock cells, by class. */
   private static int[] counts(int soft, int rock, int hard) {
@@ -80,8 +80,8 @@ class MinecraftTerrainTest {
     int rock = RegionClass.ROCK.id();
     assertEquals(rock, TERRAIN.family(RegionClass.SOFT_ROCK.id()));
     assertEquals(rock, TERRAIN.family(RegionClass.HARD_ROCK.id()));
-    assertEquals(RegionClass.DIRT.id(), TERRAIN.family(RegionClass.DIRT.id()));
-    assertNotEquals(rock, TERRAIN.family(RegionClass.WOOD.id()));
+    assertEquals(RegionClass.LOOSE.id(), TERRAIN.family(RegionClass.LOOSE.id()));
+    assertNotEquals(rock, TERRAIN.family(RegionClass.WOODEN.id()));
   }
 
   @Test
@@ -120,8 +120,8 @@ class MinecraftTerrainTest {
 
   @Test
   void everyClassReadsBackFromItsId() {
-    for (RegionClass klass : RegionClass.values()) {
-      assertEquals(klass, RegionClass.byId(klass.id()));
+    for (RegionClass clazz : RegionClass.values()) {
+      assertEquals(clazz, RegionClass.byId(clazz.id()));
     }
     for (MiningClass mining : MiningClass.values()) {
       assertEquals(mining, RegionClass.solid(mining).mining());

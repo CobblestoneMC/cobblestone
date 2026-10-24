@@ -34,7 +34,7 @@ import org.jetbrains.annotations.Nullable;
  * lets the benchmark platform read a capture with no server and no third-party jar present.
  *
  * <pre>
- *   #stonebrick-traits 3
+ *   #stonebrick-traits 4
  *   #state	bits	breakTimeSeconds	speedFactor	damagePerSecond
  *   minecraft:air	0x3f0000	Infinity	1.0	0.0
  * </pre>
@@ -51,9 +51,10 @@ public final class TraitTable {
    *
    * <p>Bump it when a bit is added or a platform changes what it answers for a block, and {@code
    * captureCorpus} re-captures every table written before. Version 2: soul sand and soul soil
-   * answer the Soul Speed bit, and soul soil no longer drags. Version 3: the mining class.
+   * answer the Soul Speed bit, and soul soil no longer drags. Version 3: the mining class. Version
+   * 4: hoe blocks, and blocks no tool helps, bucketed by hardness.
    */
-  private static final String HEADER = "#stonebrick-traits 3";
+  private static final String HEADER = "#stonebrick-traits 4";
 
   private static final String COLUMNS =
       "#state\tbits\tbreakTimeSeconds\tspeedFactor\tdamagePerSecond";

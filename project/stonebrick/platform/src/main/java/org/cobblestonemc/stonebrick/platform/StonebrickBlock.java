@@ -127,9 +127,9 @@ final class StonebrickBlock implements MinecraftBlock {
 
   @Override
   public MiningClass miningClass() {
-    MiningClass klass = MiningClass.byId(traits.miningClass());
+    MiningClass clazz = MiningClass.byId(traits.miningClass());
     // A number no class has is a capture from a build with classes this one lacks.
-    return klass == null ? MiningClass.ROCK : klass;
+    return clazz == null ? MiningClass.ROCK : clazz;
   }
 
   @Override

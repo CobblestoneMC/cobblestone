@@ -23,16 +23,16 @@ public interface RegionAgent {
   /**
    * Returns whether the agent can be inside a region of this class.
    *
-   * @param klass the class
+   * @param clazz the class
    * @return {@code true} if usable
    */
-  boolean usable(int klass);
+  boolean usable(int clazz);
 
   /**
    * Returns the seconds to cross a region of this class in a straight line from one point to
    * another.
    *
-   * @param klass the class
+   * @param clazz the class
    * @param fx where the crossing starts, X
    * @param fy where the crossing starts, Y
    * @param fz where the crossing starts, Z
@@ -41,7 +41,7 @@ public interface RegionAgent {
    * @param tz where it ends, Z
    * @return the cost in seconds
    */
-  double traverse(int klass, double fx, double fy, double fz, double tx, double ty, double tz);
+  double traverse(int clazz, double fx, double fy, double fz, double tx, double ty, double tz);
 
   /**
    * Returns the least any crossing can cost per block.

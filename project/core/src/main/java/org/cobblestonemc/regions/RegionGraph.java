@@ -481,7 +481,7 @@ public final class RegionGraph<C> {
   // Storage
   // ------------------------------------------------------------------------------------------
 
-  private int newRegion(int klass, long column) {
+  private int newRegion(int clazz, long column) {
     if (regionCount == regionClass.length) {
       int size = regionCount * 2;
       regionClass = Arrays.copyOf(regionClass, size);
@@ -491,7 +491,7 @@ public final class RegionGraph<C> {
       regionPortalCount = Arrays.copyOf(regionPortalCount, size);
     }
     int id = regionCount++;
-    regionClass[id] = (byte) klass;
+    regionClass[id] = (byte) clazz;
     regionColumn[id] = column;
     regionPortals[id] = new int[4];
     return id;

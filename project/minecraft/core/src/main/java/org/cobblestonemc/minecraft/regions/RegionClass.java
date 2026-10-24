@@ -73,14 +73,14 @@ public enum RegionClass {
   /** Hard rock: deepslate and its ores, end stone. */
   HARD_ROCK(11, Body.SOLID, MiningClass.HARD_ROCK),
 
-  /** Obsidian, and whatever else needs a diamond pickaxe. */
+  /** Very hard rock: obsidian, whatever else needs a diamond pickaxe, and vaults. */
   VERY_HARD_ROCK(12, Body.SOLID, MiningClass.VERY_HARD_ROCK),
 
-  /** Dirt, sand and gravel. */
-  DIRT(13, Body.SOLID, MiningClass.DIRT),
+  /** Loose ground: dirt, sand and gravel. */
+  LOOSE(13, Body.SOLID, MiningClass.LOOSE),
 
-  /** Wood. */
-  WOOD(14, Body.SOLID, MiningClass.WOOD);
+  /** Anything wooden. */
+  WOODEN(14, Body.SOLID, MiningClass.WOODEN);
 
   /** One more than the highest id: the size of an array indexed by id. */
   public static final int ID_BOUND;
@@ -91,18 +91,18 @@ public enum RegionClass {
 
   static {
     int bound = 0;
-    for (RegionClass klass : values()) {
-      bound = Math.max(bound, klass.id + 1);
+    for (RegionClass clazz : values()) {
+      bound = Math.max(bound, clazz.id + 1);
     }
     ID_BOUND = bound;
     BY_ID = new RegionClass[bound];
-    for (RegionClass klass : values()) {
-      if (BY_ID[klass.id] != null) {
-        throw new IllegalStateException("region class id " + klass.id + " is used twice");
+    for (RegionClass clazz : values()) {
+      if (BY_ID[clazz.id] != null) {
+        throw new IllegalStateException("region class id " + clazz.id + " is used twice");
       }
-      BY_ID[klass.id] = klass;
-      if (klass.mining != null) {
-        BY_MINING[klass.mining.ordinal()] = klass;
+      BY_ID[clazz.id] = clazz;
+      if (clazz.mining != null) {
+        BY_MINING[clazz.mining.ordinal()] = clazz;
       }
     }
   }

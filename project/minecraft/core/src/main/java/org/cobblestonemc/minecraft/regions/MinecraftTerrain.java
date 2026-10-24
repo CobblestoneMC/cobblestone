@@ -141,29 +141,29 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
   }
 
   /** The class stored as a number; the builder only asks about numbers it was given. */
-  private static RegionClass of(int klass) {
-    return RegionClass.byId(klass);
+  private static RegionClass of(int clazz) {
+    return RegionClass.byId(clazz);
   }
 
   @Override
-  public boolean standing(int klass) {
-    return of(klass).body().standing();
+  public boolean standing(int clazz) {
+    return of(clazz).body().standing();
   }
 
   @Override
-  public boolean steppable(int klass) {
-    return of(klass).body().steppable();
+  public boolean steppable(int clazz) {
+    return of(clazz).body().steppable();
   }
 
   @Override
-  public boolean open(int klass) {
-    return of(klass).body().open();
+  public boolean open(int clazz) {
+    return of(clazz).body().open();
   }
 
   @Override
-  public boolean landing(int klass, int depth) {
+  public boolean landing(int clazz, int depth) {
     // One block down onto ground is a step, already joined by the step contacts.
-    return switch (of(klass).body()) {
+    return switch (of(clazz).body()) {
       case GROUND -> depth >= 2 && depth <= MAX_DROP;
       case WATER -> true;
       case CLIMB -> depth <= MAX_DROP;
@@ -182,10 +182,10 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
    * other class is a family of its own.
    */
   @Override
-  public int family(int klass) {
-    return switch (of(klass)) {
+  public int family(int clazz) {
+    return switch (of(clazz)) {
       case SOFT_ROCK, ROCK, MIXED_ROCK, HARD_ROCK -> RegionClass.ROCK.id();
-      default -> klass;
+      default -> clazz;
     };
   }
 
@@ -233,20 +233,20 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
    * same in every world. An agent prices breaking a class by {@link #hardness(RegionClass,
    * Environment)} instead, which knows what the class is made of where it is.
    *
-   * @param klass a class for which {@link RegionClass#solid()} holds
+   * @param clazz a class for which {@link RegionClass#solid()} holds
    * @return the hardness
    */
-  public static double hardness(RegionClass klass) {
-    return switch (klass) {
+  public static double hardness(RegionClass clazz) {
+    return switch (clazz) {
       case SOFT -> 0.2;
       case SOFT_ROCK -> NETHERRACK_HARDNESS;
       case ROCK -> 1.5;
       case MIXED_ROCK -> 2.25;
       case HARD_ROCK -> 3.0;
       case VERY_HARD_ROCK -> 50.0;
-      case DIRT -> 0.5;
-      case WOOD -> 2.0;
-      default -> throw new IllegalArgumentException(klass + " is not breakable material");
+      case LOOSE -> 0.5;
+      case WOODEN -> 2.0;
+      default -> throw new IllegalArgumentException(clazz + " is not breakable material");
     };
   }
 
@@ -256,19 +256,19 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
    * <p>Soft rock is netherrack in the Nether and mostly sandstone anywhere else, at twice the
    * hardness. Every other class is the same everywhere.
    *
-   * @param klass a class for which {@link RegionClass#solid()} holds
+   * @param clazz a class for which {@link RegionClass#solid()} holds
    * @param environment the world's environment
    * @return the hardness
    */
-  public static double hardness(RegionClass klass, Environment environment) {
-    if (klass == RegionClass.SOFT_ROCK && environment != Environment.NETHER) {
+  public static double hardness(RegionClass clazz, Environment environment) {
+    if (clazz == RegionClass.SOFT_ROCK && environment != Environment.NETHER) {
       return SANDSTONE_HARDNESS;
     }
-    return hardness(klass);
+    return hardness(clazz);
   }
 
   @Override
-  public boolean convex(int klass) {
-    return of(klass).body().convex();
+  public boolean convex(int clazz) {
+    return of(clazz).body().convex();
   }
 }

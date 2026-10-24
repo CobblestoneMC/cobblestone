@@ -92,23 +92,23 @@ final class ToyWorld {
     }
 
     @Override
-    public boolean standing(int klass) {
-      return klass == GROUND;
+    public boolean standing(int clazz) {
+      return clazz == GROUND;
     }
 
     @Override
-    public boolean steppable(int klass) {
-      return klass == GROUND || klass == POOL;
+    public boolean steppable(int clazz) {
+      return clazz == GROUND || clazz == POOL;
     }
 
     @Override
-    public boolean open(int klass) {
-      return klass == OPEN;
+    public boolean open(int clazz) {
+      return clazz == OPEN;
     }
 
     @Override
-    public boolean landing(int klass, int depth) {
-      return (klass == GROUND && depth >= 2 && depth <= 3) || klass == POOL;
+    public boolean landing(int clazz, int depth) {
+      return (clazz == GROUND && depth >= 2 && depth <= 3) || clazz == POOL;
     }
 
     @Override
@@ -117,8 +117,8 @@ final class ToyWorld {
     }
 
     @Override
-    public boolean convex(int klass) {
-      return klass != ROCK;
+    public boolean convex(int clazz) {
+      return clazz != ROCK;
     }
   }
 
@@ -131,16 +131,16 @@ final class ToyWorld {
   /** Walks ground, swims water, and digs stone. */
   static final class Walker implements RegionAgent {
     @Override
-    public boolean usable(int klass) {
-      return klass != Terrain.OPEN;
+    public boolean usable(int clazz) {
+      return clazz != Terrain.OPEN;
     }
 
     @Override
     public double traverse(
-        int klass, double fx, double fy, double fz, double tx, double ty, double tz) {
+        int clazz, double fx, double fy, double fz, double tx, double ty, double tz) {
       double length =
           Math.sqrt((tx - fx) * (tx - fx) + (ty - fy) * (ty - fy) + (tz - fz) * (tz - fz));
-      return switch (klass) {
+      return switch (clazz) {
         case Terrain.GROUND -> 0.2 * length;
         case Terrain.POOL -> 0.3 * length;
         default -> 2.8 * Math.max(1, length);

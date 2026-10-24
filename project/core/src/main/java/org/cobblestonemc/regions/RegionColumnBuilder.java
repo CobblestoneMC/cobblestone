@@ -429,14 +429,14 @@ public final class RegionColumnBuilder<C> {
     }
   }
 
-  private int newRegion(int klass) {
+  private int newRegion(int clazz) {
     if (regionCount == regionClass.length) {
       int size = regionCount * 2;
       regionClass = Arrays.copyOf(regionClass, size);
       regionBox = Arrays.copyOf(regionBox, size * 6);
     }
     int id = regionCount++;
-    regionClass[id] = (byte) klass;
+    regionClass[id] = (byte) clazz;
     return id;
   }
 
