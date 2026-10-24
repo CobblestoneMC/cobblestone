@@ -20,12 +20,11 @@ import org.junit.jupiter.api.Test;
 /**
  * Carrying a boat has to change how an ocean is crossed.
  *
- * <p>Pinned to the coarse heuristic, which is what production runs. Under the running average a
- * {@code player-with-boat}'s path on {@code overworld/ocean} is byte-identical to a {@code
- * player}'s: it never boards (#27). Boarding itself works -- Dijkstra boards, and under the coarse
- * estimate the boat crosses for 107 s against 175 on foot -- so the fault is in the running
- * average, which prices the remaining journey at the rate it has been walking and never finds the
- * detour to the water worth taking.
+ * <p>Pinned to the region heuristic. Under the running average a {@code player-with-boat}'s path on
+ * {@code overworld/ocean} is byte-identical to a {@code player}'s: it never boards (#27). Boarding
+ * itself works -- Dijkstra boards, and under the region estimate the boat crosses for 107 s against
+ * 175 on foot -- so the fault is in the running average, which prices the remaining journey at the
+ * rate it has been walking and never finds the detour to the water worth taking.
  *
  * <p>Needs the local corpus, so it is skipped where {@code ocean} has not been captured.
  */

@@ -218,14 +218,7 @@ public final class CobblestoneSpongePlugin {
             () -> config.get(keys.tripsHud),
             agent -> new SpongeHudDisplay(agent.player()),
             cobblestoneLogger);
-    tripManager.onChange(
-        agent -> {
-          tripHud.refresh(agent);
-          // A player who has stopped navigating no longer needs their surroundings kept built.
-          if (tripManager.trips(agent.uuid()).isEmpty()) {
-            regionStores.release(agent.uuid());
-          }
-        });
+    tripManager.onChange(tripHud::refresh);
     // Cobblestone's own destinations sit under its id like an integration's, but are written in its
     // own terms rather than adapted from the integration API.
     integrationRegistry.registerProvider(

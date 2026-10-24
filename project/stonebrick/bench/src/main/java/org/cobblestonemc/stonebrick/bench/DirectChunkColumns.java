@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.MinecraftChunk;
+import org.cobblestonemc.regions.RegionColumn;
 import org.cobblestonemc.regions.TerrainSource;
 import org.cobblestonemc.stonebrick.format.CaptureFormatException;
 import org.cobblestonemc.stonebrick.format.ChunkColumn;
@@ -38,7 +39,7 @@ final class DirectChunkColumns implements TerrainSource<MinecraftChunk> {
   @Override
   // Always immediate: the capture is already in memory.
   public FutureOr<MinecraftChunk> column(int chunkX, int chunkZ) {
-    long key = ((long) chunkX << 32) | (chunkZ & 0xFFFF_FFFFL);
+    long key = RegionColumn.key(chunkX, chunkZ);
     if (chunks.containsKey(key)) {
       return FutureOr.of(chunks.get(key));
     }

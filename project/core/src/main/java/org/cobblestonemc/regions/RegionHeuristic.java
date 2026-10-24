@@ -10,7 +10,6 @@ package org.cobblestonemc.regions;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.DomainRegion;
@@ -26,10 +25,6 @@ import org.jetbrains.annotations.Nullable;
  * drink a river that does not go anywhere, the estimate comes from the terrain ahead: every
  * connected patch of ground, water, rock and air, and how they join. An estimate is a route through
  * those pieces, priced continuously from the cell asked about.
- *
- * <p>It replaced a heuristic that summarized each 16³ section as one node priced from how much of
- * it each kind of terrain covered. That could not tell whether the open half of a section reached
- * the other side, and measured at a quarter to a half of the true cost underground.
  *
  * <p><b>Answers are final when given.</b> {@link RegionSearch} only answers once nothing left on
  * its frontier could undercut the answer, so a cell asked about twice gets the same number, and the
@@ -51,7 +46,6 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
   private final Function<DomainRegion<?>, RegionStore<C>> storeFor;
   private final Function<DomainRegion<?>, RegionAgent> agentFor;
   private final double tierOneRate;
-  private final Consumer<RegionSearch> onSearch;
 
   /**
    * Creates a heuristic that reads a terrain source, a store and an agent per solve.
@@ -75,20 +69,16 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
    * @param tierOneRate the least the agent can pay per block by any movement at all, which Tier 1
    *     prices unsolved legs with: lower than {@link RegionAgent#cheapest()} for an agent who can
    *     move in ways the region layer does not price, such as riding
-   * @param onSearch receives each solve's search as it starts, for measuring; it holds the solve's
-   *     graph for as long as it is kept
    */
   public RegionHeuristic(
       Function<DomainRegion<?>, TerrainSource<C>> sourceFor,
       Function<DomainRegion<?>, RegionStore<C>> storeFor,
       Function<DomainRegion<?>, RegionAgent> agentFor,
-      double tierOneRate,
-      Consumer<RegionSearch> onSearch) {
+      double tierOneRate) {
     this.sourceFor = sourceFor;
     this.storeFor = storeFor;
     this.agentFor = agentFor;
     this.tierOneRate = tierOneRate;
-    this.onSearch = onSearch;
   }
 
   @Override
@@ -98,7 +88,7 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
   }
 
   @Override
-  public SolveHeuristic newSolve(int windowWidth, DomainRegion<?> target) {
+  public Solve newSolve(int windowWidth, DomainRegion<?> target) {
     return new Solve(
         target,
         new RegionGraph<>(storeFor.apply(target), sourceFor.apply(target)),
@@ -106,18 +96,28 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
   }
 
   /** One solve's view: a search seeded on first use, and the answers it has given. */
-  private final class Solve implements SolveHeuristic {
+  public final class Solve implements SolveHeuristic {
 
     private final DomainRegion<?> target;
     private final RegionGraph<C> graph;
     private final RegionAgent agent;
     private final Map<Cell, Double> answered = new HashMap<>();
-    private RegionSearch search;
+    private @Nullable RegionSearch search;
 
     Solve(DomainRegion<?> target, RegionGraph<C> graph, RegionAgent agent) {
       this.target = target;
       this.graph = graph;
       this.agent = agent;
+    }
+
+    /**
+     * Returns the solve's region search, for measuring what it did, or {@code null} if nothing has
+     * been asked yet.
+     *
+     * @return the search
+     */
+    public @Nullable RegionSearch search() {
+      return search;
     }
 
     @Override
@@ -135,7 +135,7 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
       if (answered.containsKey(from)) {
         return null;
       }
-      RegionSearch running = search(from);
+      RegionSearch running = searchFrom(from);
       double estimate = running.costToGoal(from);
       CompletableFuture<Void> waiting = running.takePending();
       if (waiting != null) {
@@ -153,7 +153,7 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
       }
       // Reached only when something estimates without preparing; answer, but cache only a real
       // answer.
-      RegionSearch running = search(from);
+      RegionSearch running = searchFrom(from);
       double estimate = running.costToGoal(from);
       if (running.takePending() == null) {
         remember(from, estimate);
@@ -161,14 +161,13 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
       return estimate;
     }
 
-    private RegionSearch search(Cell from) {
+    private RegionSearch searchFrom(Cell from) {
       if (search == null) {
         // Seeded at the first cell asked about, which is the solve's start: the search focuses on
         // it, and the goal cell worth aiming at depends on where the route begins.
         search =
             new RegionSearch(
                 graph, agent, target.nearestBoundaryCell(from), from, target::contains);
-        onSearch.accept(search);
       }
       return search;
     }

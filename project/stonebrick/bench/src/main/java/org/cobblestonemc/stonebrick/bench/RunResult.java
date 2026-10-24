@@ -36,7 +36,7 @@ import org.jetbrains.annotations.Nullable;
  * @param nodesOpened how many times a cell was placed on the open set
  * @param nodesExpanded how many cells were settled
  * @param chunkReads how many chunk reads were charged
- * @param profileChunkReads how many of those the region layer made, to build its columns
+ * @param regionChunkReads how many of those the region layer made, to build its columns
  * @param coldChunkReads how many of those were a chunk's first read
  * @param virtualMillis elapsed time on the modelled clock
  * @param ioDelayMicros total modelled IO delay charged
@@ -58,7 +58,7 @@ public record RunResult(
     long nodesOpened,
     long nodesExpanded,
     long chunkReads,
-    long profileChunkReads,
+    long regionChunkReads,
     long coldChunkReads,
     long virtualMillis,
     long ioDelayMicros,
@@ -95,7 +95,7 @@ public record RunResult(
     values.put("chunkReads", chunkReads);
     // Split out rather than buried: these are the reads that build the region layer, and on a slow
     // disk they dominate. A total that hides them makes the heuristic look free.
-    values.put("profileChunkReads", profileChunkReads);
+    values.put("regionChunkReads", regionChunkReads);
     values.put("coldChunkReads", coldChunkReads);
     values.put("virtualMillis", virtualMillis);
     values.put("ioDelayMicros", ioDelayMicros);

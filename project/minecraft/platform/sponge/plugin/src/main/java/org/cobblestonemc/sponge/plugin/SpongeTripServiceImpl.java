@@ -43,7 +43,6 @@ public final class SpongeTripServiceImpl
 
   private final SpongeNavigationServiceImpl navigationService;
   private final SpongeIntegrationRegistry integrations;
-  private final RegionStores regionStores;
 
   SpongeTripServiceImpl(
       SpongeNavigationServiceImpl navigationService,
@@ -54,10 +53,9 @@ public final class SpongeTripServiceImpl
       Supplier<SearchSettings> searchSettings,
       long liveIntervalMillis,
       RegionStores regionStores) {
-    super(trips, searches, gate, searchSettings, liveIntervalMillis);
+    super(trips, searches, gate, searchSettings, liveIntervalMillis, regionStores);
     this.navigationService = navigationService;
     this.integrations = integrations;
-    this.regionStores = regionStores;
   }
 
   @Override
@@ -78,11 +76,12 @@ public final class SpongeTripServiceImpl
   @Override
   protected SearchHandle<ServerLocation, MinecraftStepPayload> navigate(
       ServerPlayer player, ServerLocation destination, MinecraftSearchSettings settings) {
-    // A trip's searches start where the player is, so their surroundings stay built for the
-    // searches that re-plan around them; released when the player's last trip ends.
-    Position<MinecraftWorld> at = navigationService.position(player.serverLocation());
-    regionStores.pin(uuid(player), at.domain(), at.cell().x() >> 4, at.cell().z() >> 4);
     return navigationService.navigatePlayer(player, destination, settings);
+  }
+
+  @Override
+  protected ServerLocation location(ServerPlayer player) {
+    return player.serverLocation();
   }
 
   @Override

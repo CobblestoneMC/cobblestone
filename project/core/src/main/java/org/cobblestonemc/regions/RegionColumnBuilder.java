@@ -25,23 +25,15 @@ import org.jetbrains.annotations.Nullable;
  *       mix of its cells.
  *   <li><b>Contacts</b> scans for neighbouring cells in different regions — and for walking steps a
  *       level up or down, and ledges a body can drop from — and turns each touching pair into a
- *       portal whose box covers every cell where they meet. Which steps and drops count is the
- *       terrain's to say.
+ *       portal whose box covers every cell where they meet. The rules are {@link RegionJoins}, the
+ *       same a graph joins columns by; which steps and drops count is the terrain's to say.
  * </ol>
- *
- * <p><b>Change the rules, bump {@link #FILL_VERSION} or the terrain's version.</b> A built column
- * is a fact about the rules it was built by; one built under others is a different graph.
  *
  * <p>Not thread-safe: it reuses a column's worth of scratch between builds. One per thread.
  *
  * @param <C> the platform's column of terrain
  */
 public final class RegionColumnBuilder<C> {
-
-  /**
-   * The version of how this fills regions and finds contacts, apart from the terrain's own rules.
-   */
-  public static final int FILL_VERSION = 3;
 
   /**
    * Blocks of detour allowed regardless of distance, so a seed's immediate neighbours never split.
@@ -76,7 +68,10 @@ public final class RegionColumnBuilder<C> {
   private final int[] regionOf;
   private final int[] queue;
   private final int[] steps;
-  private final RegionContacts contacts = new RegionContacts();
+  private final RegionJoins joins;
+
+  /** The column being built's cells, as the joining rules read them. */
+  private final RegionJoins.Cells local;
 
   // --- the column being built ---
   private int regionCount;
@@ -111,6 +106,8 @@ public final class RegionColumnBuilder<C> {
     this.sectionClass = new byte[sections];
     this.queue = new int[sectionVolume];
     this.steps = new int[sectionVolume];
+    this.joins = new RegionJoins(terrain, region -> regionClass[region], spec.height());
+    this.local = (lx, ly, lz) -> regionOf[(ly << (2 * shift)) | (lz << shift) | lx];
   }
 
   /**
@@ -162,7 +159,7 @@ public final class RegionColumnBuilder<C> {
       store(s, first, from, uniform, base, cells, wideCells);
     }
     columnContacts(ox, oz);
-    contacts.flush(this::newPortal);
+    joins.flush(this::newPortal);
     return new RegionColumn(
         columnX,
         columnZ,
@@ -366,15 +363,15 @@ public final class RegionColumnBuilder<C> {
       int y = minY + ly;
       // Each face once, in the positive direction.
       if (x < mask) {
-        contacts.touch(r, regionOf[cell + 1], ox + x, y, oz + z, ox + x + 1, y, oz + z);
+        joins.touch(r, regionOf[cell + 1], ox + x, y, oz + z, ox + x + 1, y, oz + z);
       }
       if (z < mask) {
-        contacts.touch(r, regionOf[cell + width], ox + x, y, oz + z, ox + x, y, oz + z + 1);
+        joins.touch(r, regionOf[cell + width], ox + x, y, oz + z, ox + x, y, oz + z + 1);
       }
       if (cell + area < volume) {
-        contacts.touch(r, regionOf[cell + area], ox + x, y, oz + z, ox + x, y + 1, oz + z);
+        joins.touch(r, regionOf[cell + area], ox + x, y, oz + z, ox + x, y + 1, oz + z);
       }
-      if (!terrain.standing(cls[cell])) {
+      if (!joins.standing(r)) {
         continue;
       }
       for (int[] h : HORIZONTAL) {
@@ -383,49 +380,8 @@ public final class RegionColumnBuilder<C> {
         if (nx < 0 || nx > mask || nz < 0 || nz > mask) {
           continue; // across a seam; the graph finds it
         }
-        int beside = (ly << layer) | (nz << shift) | nx;
-        // Steps: a standing cell joins whatever it can walk into a level above or below.
-        if (beside + area < volume) {
-          step(r, beside + area, ox + x, y, oz + z, ox + nx, y + 1, oz + nz);
-        }
-        if (beside >= area) {
-          step(r, beside - area, ox + x, y, oz + z, ox + nx, y - 1, oz + nz);
-        }
-        if (cls[beside] >= 0 && terrain.open(cls[beside])) {
-          dropInto(r, ox + x, y, oz + z, ox + nx, oz + nz, beside);
-        }
+        joins.beside(r, ox + x, y, oz + z, local, nx, ly, nz, ox + nx, oz + nz);
       }
-    }
-  }
-
-  /** A walking step from a standing cell into the cell {@code to}, a level above or below. */
-  private void step(int from, int to, int fx, int fy, int fz, int tx, int ty, int tz) {
-    int region = regionOf[to];
-    if (region == RegionColumn.NONE || region == from || cls[to] < 0) {
-      return;
-    }
-    if (terrain.steppable(cls[to])) {
-      contacts.touch(from, region, fx, fy, fz, tx, ty, tz);
-    }
-  }
-
-  /**
-   * Finds where a body stepping off a ledge into {@code air} lands, and joins the ledge to it.
-   *
-   * <p>Separate from the fill because a fall is one-way: the ledge reaches the ground, and the
-   * ground does not reach the ledge.
-   */
-  private void dropInto(int from, int x, int y, int z, int airX, int airZ, int air) {
-    for (int k = 1; k <= terrain.deepestFall() && air - k * area >= 0; k++) {
-      int below = air - k * area;
-      int c = cls[below];
-      if (c >= 0 && terrain.open(c)) {
-        continue;
-      }
-      if (c >= 0 && terrain.landing(c, k)) {
-        contacts.drop(from, regionOf[below], x, y, z, airX, y, airZ);
-      }
-      return;
     }
   }
 

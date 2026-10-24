@@ -9,6 +9,7 @@ package org.cobblestonemc.paper;
 
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
+import org.cobblestonemc.minecraft.regions.MinecraftTerrain;
 
 /**
  * Reads of the terrain around a player by the same rules the search uses, for destinations that
@@ -29,6 +30,18 @@ public final class PaperTerrain {
    */
   public static boolean isPassable(BlockData data) {
     return new PaperBlock(data).isPassable();
+  }
+
+  /**
+   * Returns whether one block replacing another leaves the region layer's terrain as it was; see
+   * {@link MinecraftTerrain#classifiesAlike}.
+   *
+   * @param before the block that was there
+   * @param after the block that is there now
+   * @return {@code true} if the change does not matter to the regions
+   */
+  public static boolean classifiesAlike(BlockData before, BlockData after) {
+    return MinecraftTerrain.classifiesAlike(new PaperBlock(before), new PaperBlock(after));
   }
 
   /**

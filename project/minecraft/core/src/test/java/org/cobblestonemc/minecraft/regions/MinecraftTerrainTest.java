@@ -8,10 +8,13 @@
 package org.cobblestonemc.minecraft.regions;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftChunk;
+import org.cobblestonemc.minecraft.MinecraftWorld.Environment;
 import org.cobblestonemc.minecraft.MiningClass;
 import org.cobblestonemc.regions.RegionColumn;
 import org.cobblestonemc.regions.RegionColumnBuilder;
@@ -21,7 +24,9 @@ import org.junit.jupiter.api.Test;
 /** Rock of every hardness fills as one, and a region is the band nearest its average. */
 class MinecraftTerrainTest {
 
-  private static final MinecraftTerrain TERRAIN = MinecraftTerrain.INSTANCE;
+  private static final MinecraftTerrain TERRAIN = MinecraftTerrain.of(Environment.OVERWORLD);
+
+  private static final MinecraftTerrain NETHER = MinecraftTerrain.of(Environment.NETHER);
 
   private static MinecraftBlock solid(MiningClass mining) {
     return new MinecraftBlock() {
@@ -61,7 +66,11 @@ class MinecraftTerrainTest {
   }
 
   private static RegionClass label(int[] counts) {
-    return RegionClass.byId(TERRAIN.label(RegionClass.ROCK.id(), counts));
+    return label(TERRAIN, counts);
+  }
+
+  private static RegionClass label(MinecraftTerrain terrain, int[] counts) {
+    return RegionClass.byId(terrain.label(RegionClass.ROCK.id(), counts));
   }
 
   @Test
@@ -72,7 +81,16 @@ class MinecraftTerrainTest {
     assertEquals(RegionClass.ROCK, label(counts(0, 90, 10)), "a few veins do not make it mixed");
     assertEquals(RegionClass.HARD_ROCK, label(counts(0, 10, 90)));
     assertEquals(
-        RegionClass.SOFT_ROCK, label(counts(70, 30, 0)), "netherrack with some blackstone");
+        RegionClass.SOFT_ROCK, label(NETHER, counts(70, 30, 0)), "netherrack with some blackstone");
+  }
+
+  @Test
+  void softRockIsAsHardAsTheDimensionMakesIt() {
+    // Half soft rock, half hard rock: sandstone and deepslate average out past rock, netherrack and
+    // deepslate do not.
+    int[] half = counts(50, 0, 50);
+    assertEquals(RegionClass.MIXED_ROCK, label(TERRAIN, half));
+    assertEquals(RegionClass.ROCK, label(NETHER, half));
   }
 
   @Test
@@ -119,12 +137,21 @@ class MinecraftTerrainTest {
   }
 
   @Test
+  void aChangeMattersOnlyIfItChangesWhatClassesAreReadFrom() {
+    // A crop growing another stage: passable before and after, so no cell's class moves.
+    assertTrue(MinecraftTerrain.classifiesAlike(air(), air()));
+    assertFalse(MinecraftTerrain.classifiesAlike(air(), STONE), "a wall where there was none");
+    assertFalse(MinecraftTerrain.classifiesAlike(STONE, GRAVEL), "dug differently");
+    assertTrue(MinecraftTerrain.classifiesAlike(STONE, solid(MiningClass.ROCK)), "ore for stone");
+  }
+
+  @Test
   void everyClassReadsBackFromItsId() {
     for (RegionClass clazz : RegionClass.values()) {
       assertEquals(clazz, RegionClass.byId(clazz.id()));
     }
     for (MiningClass mining : MiningClass.values()) {
-      assertEquals(mining, RegionClass.solid(mining).mining());
+      assertEquals(mining, RegionClass.of(mining).mining());
     }
   }
 }

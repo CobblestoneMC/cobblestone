@@ -7,6 +7,8 @@
 
 package org.cobblestonemc.minecraft.regions;
 
+import java.util.EnumMap;
+import java.util.Map;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -27,16 +29,20 @@ import org.cobblestonemc.regions.RegionTerrain;
  * water or a ladder, and drops off a ledge onto ground up to {@link #MAX_DROP} below, onto a ladder
  * as far, and into water from any height up to {@link #MAX_WATER_DROP}.
  *
- * <p><b>Change any of it, bump {@link #VERSION}.</b> Stored columns built under other rules are
- * built again.
+ * <p><b>One per environment,</b> because what soft rock is depends on the dimension: netherrack in
+ * the Nether, mostly sandstone elsewhere, at twice the hardness. A rock region's class is chosen by
+ * its cells' hardness, so the same blocks can make a different class in a different dimension.
  */
 public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
 
-  /** The one instance: it holds no state but scratch per thread. */
-  public static final MinecraftTerrain INSTANCE = new MinecraftTerrain();
+  private static final Map<Environment, MinecraftTerrain> BY_ENVIRONMENT =
+      new EnumMap<>(Environment.class);
 
-  /** The version of these rules; see {@link RegionTerrain#version()}. */
-  public static final int VERSION = 5;
+  static {
+    for (Environment environment : Environment.values()) {
+      BY_ENVIRONMENT.put(environment, new MinecraftTerrain(environment));
+    }
+  }
 
   /** A chunk is 16 blocks along X and Z: {@code 1 << 4}. */
   private static final int CHUNK_SHIFT = 4;
@@ -53,14 +59,24 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
   /** The deepest drop into water a fall portal joins: water breaks any fall. */
   static final int MAX_WATER_DROP = 32;
 
+  /** The environment of the worlds this terrain classifies, which says what its soft rock is. */
+  private final Environment environment;
+
   /** A column's blocks, per thread: builds run in parallel. */
   private final ThreadLocal<MinecraftBlock[]> scratch = new ThreadLocal<>();
 
-  private MinecraftTerrain() {}
+  private MinecraftTerrain(Environment environment) {
+    this.environment = environment;
+  }
 
-  @Override
-  public int version() {
-    return VERSION;
+  /**
+   * Returns the terrain of worlds of an environment.
+   *
+   * @param environment the environment
+   * @return its terrain
+   */
+  public static MinecraftTerrain of(Environment environment) {
+    return BY_ENVIRONMENT.get(environment);
   }
 
   @Override
@@ -80,7 +96,7 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
    * @return its spec
    */
   public static RegionSpec<MinecraftChunk> spec(MinecraftWorld world) {
-    return new RegionSpec<>(INSTANCE, world.minY(), world.maxY());
+    return new RegionSpec<>(of(world.environment()), world.minY(), world.maxY());
   }
 
   @Override
@@ -120,11 +136,37 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
         boolean stands = floor != null && floor.isSolidTop() && (head == null || head.isPassable());
         classes[cell] = (byte) (stands ? ground(floor) : RegionClass.AIR).id();
       } else if (!block.isLava() && !Double.isInfinite(block.breakTimeSeconds())) {
-        classes[cell] = (byte) RegionClass.solid(block.miningClass()).id();
+        classes[cell] = (byte) RegionClass.of(block.miningClass()).id();
       }
       // Lava, and unbreakable blocks such as bedrock: nothing, not a region a miner could be priced
       // through.
     }
+  }
+
+  /**
+   * Returns whether one block replacing another leaves every class as it was.
+   *
+   * <p>A cell's class is read from its own block and the blocks above and below it, by the
+   * properties compared here, so a change none of them sees changes no region: a crop growing, a
+   * fluid's level moving, grass turning to dirt. A listener that skips those saves the column a
+   * rebuild. Reads what {@link #classify} reads; change one, change both.
+   *
+   * @param before the block that was there
+   * @param after the block that is there now
+   * @return {@code true} if the regions need not be rebuilt for it
+   */
+  public static boolean classifiesAlike(MinecraftBlock before, MinecraftBlock after) {
+    return before.isWater() == after.isWater()
+        && before.isLava() == after.isLava()
+        && before.isClimbable() == after.isClimbable()
+        && before.isScaffolding() == after.isScaffolding()
+        && before.isPassable() == after.isPassable()
+        && before.isSolidTop() == after.isSolidTop()
+        && before.boostsSoulSpeed() == after.boostsSoulSpeed()
+        && (before.speedFactor() < 1) == (after.speedFactor() < 1)
+        && Double.isInfinite(before.breakTimeSeconds())
+            == Double.isInfinite(after.breakTimeSeconds())
+        && before.miningClass() == after.miningClass();
   }
 
   /**
@@ -191,8 +233,8 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
 
   /**
    * A rock region's class is the band of rock nearest its cells' average hardness: soft rock, rock,
-   * mixed rock or hard rock. Nothing but the class is stored, so an estimate across a region is at
-   * most half a band from its true average.
+   * mixed rock or hard rock, each as hard as it is in this terrain's environment. Nothing but the
+   * class is stored, so an estimate across a region is at most half a band from its true average.
    */
   @Override
   public int label(int family, int[] counts) {
@@ -202,13 +244,14 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
     double sum = 0;
     int cells = 0;
     for (RegionClass band : ROCK_BANDS) {
-      sum += counts[band.id()] * hardness(band);
+      sum += counts[band.id()] * hardness(band, environment);
       cells += counts[band.id()];
     }
     double mean = sum / cells;
     RegionClass nearest = ROCK_BANDS[0];
     for (RegionClass band : ROCK_BANDS) {
-      if (Math.abs(hardness(band) - mean) < Math.abs(hardness(nearest) - mean)) {
+      if (Math.abs(hardness(band, environment) - mean)
+          < Math.abs(hardness(nearest, environment) - mean)) {
         nearest = band;
       }
     }
@@ -227,19 +270,22 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
   };
 
   /**
-   * Returns the hardness typical of a class of breakable material, as Minecraft defines hardness.
+   * Returns the hardness typical of a class of breakable material in a world of an environment, as
+   * Minecraft defines hardness.
    *
-   * <p>A fact about the terrain, not a cost: it is what a rock region's class is chosen by, the
-   * same in every world. An agent prices breaking a class by {@link #hardness(RegionClass,
-   * Environment)} instead, which knows what the class is made of where it is.
+   * <p>A fact about the terrain, not a cost: it is what a rock region's class is chosen by, and
+   * what an agent prices breaking it by. Soft rock is netherrack in the Nether and mostly sandstone
+   * anywhere else, at twice the hardness. Every other class is the same everywhere.
    *
    * @param clazz a class for which {@link RegionClass#solid()} holds
+   * @param environment the world's environment
    * @return the hardness
    */
-  public static double hardness(RegionClass clazz) {
+  public static double hardness(RegionClass clazz, Environment environment) {
     return switch (clazz) {
       case SOFT -> 0.2;
-      case SOFT_ROCK -> NETHERRACK_HARDNESS;
+      case SOFT_ROCK ->
+          environment == Environment.NETHER ? NETHERRACK_HARDNESS : SANDSTONE_HARDNESS;
       case ROCK -> 1.5;
       case MIXED_ROCK -> 2.25;
       case HARD_ROCK -> 3.0;
@@ -248,23 +294,6 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
       case WOODEN -> 2.0;
       default -> throw new IllegalArgumentException(clazz + " is not breakable material");
     };
-  }
-
-  /**
-   * Returns the hardness typical of a class of breakable material in a world of an environment.
-   *
-   * <p>Soft rock is netherrack in the Nether and mostly sandstone anywhere else, at twice the
-   * hardness. Every other class is the same everywhere.
-   *
-   * @param clazz a class for which {@link RegionClass#solid()} holds
-   * @param environment the world's environment
-   * @return the hardness
-   */
-  public static double hardness(RegionClass clazz, Environment environment) {
-    if (clazz == RegionClass.SOFT_ROCK && environment != Environment.NETHER) {
-      return SANDSTONE_HARDNESS;
-    }
-    return hardness(clazz);
   }
 
   @Override

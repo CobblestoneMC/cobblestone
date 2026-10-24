@@ -43,7 +43,6 @@ public final class PaperTripServiceImpl
 
   private final PaperNavigationServiceImpl platformApi;
   private final PaperIntegrationRegistry integrations;
-  private final RegionStores regionStores;
 
   PaperTripServiceImpl(
       PaperNavigationServiceImpl platformApi,
@@ -54,10 +53,9 @@ public final class PaperTripServiceImpl
       Supplier<SearchSettings> searchSettings,
       long liveIntervalMillis,
       RegionStores regionStores) {
-    super(trips, searches, gate, searchSettings, liveIntervalMillis);
+    super(trips, searches, gate, searchSettings, liveIntervalMillis, regionStores);
     this.platformApi = platformApi;
     this.integrations = integrations;
-    this.regionStores = regionStores;
   }
 
   @Override
@@ -78,11 +76,12 @@ public final class PaperTripServiceImpl
   @Override
   protected SearchHandle<Location, MinecraftStepPayload> navigate(
       Player player, Location destination, MinecraftSearchSettings settings) {
-    // A trip's searches start where the player is, so their surroundings stay built for the
-    // searches that re-plan around them; released when the player's last trip ends.
-    Position<MinecraftWorld> at = platformApi.position(player.getLocation());
-    regionStores.pin(uuid(player), at.domain(), at.cell().x() >> 4, at.cell().z() >> 4);
     return platformApi.navigatePlayer(player, destination, settings);
+  }
+
+  @Override
+  protected Location location(Player player) {
+    return player.getLocation();
   }
 
   @Override

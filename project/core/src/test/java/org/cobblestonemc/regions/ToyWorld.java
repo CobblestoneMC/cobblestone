@@ -45,17 +45,10 @@ final class ToyWorld {
     static final int POOL = 2;
     static final int ROCK = 3;
 
-    private final int version;
     private final int shift;
 
-    Terrain(int version, int shift) {
-      this.version = version;
+    Terrain(int shift) {
       this.shift = shift;
-    }
-
-    @Override
-    public int version() {
-      return version;
     }
 
     @Override
@@ -122,7 +115,7 @@ final class ToyWorld {
     }
   }
 
-  static final Terrain TERRAIN = new Terrain(1, 4);
+  static final Terrain TERRAIN = new Terrain(4);
 
   static RegionSpec<Column> spec() {
     return new RegionSpec<>(TERRAIN, MIN_Y, MAX_Y);

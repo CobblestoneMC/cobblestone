@@ -7,16 +7,20 @@
 
 package org.cobblestonemc.minecraft.regions;
 
+import java.time.Duration;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.cobblestonemc.Cell;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.regions.RegionSpec;
 import org.cobblestonemc.regions.RegionStore;
 
 /**
@@ -31,8 +35,14 @@ import org.cobblestonemc.regions.RegionStore;
  * starts from where they are, and is released when their last trip ends. Everything else is kept
  * within the memory budget, least recently used out.
  *
- * <p>Builds run on a small pool of daemon threads, so a chunk that arrives on the server thread is
- * not built there.
+ * <p><b>Changes are forgotten in batches.</b> A block change marks its column, and the column is
+ * forgotten {@link #INVALIDATION_DELAY} later, however many more changes it had meanwhile: a farm
+ * or a flowing river would otherwise have its columns rebuilt for every search that passes. A
+ * search in that window reads the column as it was, which costs the estimate a little and never the
+ * route, since the fine search reads the blocks themselves.
+ *
+ * <p>Builds and those delays run on a small pool of daemon threads, so a chunk that arrives on the
+ * server thread is not built there.
  */
 public final class RegionStores implements AutoCloseable {
 
@@ -41,9 +51,18 @@ public final class RegionStores implements AutoCloseable {
    */
   public static final int PIN_RADIUS = 4;
 
+  /** How long after a block changes its column is forgotten, with every change meanwhile. */
+  public static final Duration INVALIDATION_DELAY = Duration.ofSeconds(10);
+
   private final long memoryBudget;
-  private final ExecutorService builds;
+  private final Duration invalidationDelay;
+  private final ScheduledExecutorService threads;
   private final Map<String, RegionStore<MinecraftChunk>> stores = new ConcurrentHashMap<>();
+
+  /** Columns marked as changed and waiting to be forgotten. */
+  private final Set<Changed> changed = ConcurrentHashMap.newKeySet();
+
+  private record Changed(String world, int chunkX, int chunkZ) {}
 
   /**
    * Creates the registry.
@@ -52,10 +71,18 @@ public final class RegionStores implements AutoCloseable {
    * @param builderThreads how many threads build columns from chunks that arrive later
    */
   public RegionStores(long memoryBudget, int builderThreads) {
+    this(memoryBudget, builderThreads, INVALIDATION_DELAY);
+  }
+
+  RegionStores(long memoryBudget, int builderThreads, Duration invalidationDelay) {
     this.memoryBudget = memoryBudget;
-    this.builds =
-        Executors.newFixedThreadPool(
-            Math.max(1, builderThreads), daemons("cobblestone-regions-build"));
+    this.invalidationDelay = invalidationDelay;
+    ScheduledThreadPoolExecutor pool =
+        new ScheduledThreadPoolExecutor(
+            Math.max(1, builderThreads), daemons("cobblestone-regions"));
+    // A change still waiting at shutdown has nothing left to be forgotten from.
+    pool.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+    this.threads = pool;
   }
 
   /**
@@ -66,20 +93,31 @@ public final class RegionStores implements AutoCloseable {
    */
   public RegionStore<MinecraftChunk> of(MinecraftWorld world) {
     return stores.computeIfAbsent(
-        world.key(), key -> new RegionStore<>(MinecraftTerrain.spec(world), memoryBudget, builds));
+        world.key(), key -> new RegionStore<>(MinecraftTerrain.spec(world), memoryBudget, threads));
   }
 
   /**
-   * Forgets a column because a block in it changed. Cheap enough for every block event.
+   * Marks a column as changed, to be forgotten after {@link #INVALIDATION_DELAY} with every other
+   * change it has meanwhile. Cheap enough for every block event.
    *
    * @param world the world
    * @param chunkX the chunk X
    * @param chunkZ the chunk Z
    */
   public void invalidate(MinecraftWorld world, int chunkX, int chunkZ) {
-    RegionStore<MinecraftChunk> store = stores.get(world.key());
+    Changed column = new Changed(world.key(), chunkX, chunkZ);
+    if (!changed.add(column)) {
+      return; // already waiting: this change is forgotten with it
+    }
+    threads.schedule(() -> forget(column), invalidationDelay.toNanos(), TimeUnit.NANOSECONDS);
+  }
+
+  private void forget(Changed column) {
+    // Unmarked first, so a change that lands while the column is forgotten marks it again.
+    changed.remove(column);
+    RegionStore<MinecraftChunk> store = stores.get(column.world());
     if (store != null) {
-      store.invalidate(chunkX, chunkZ);
+      store.invalidate(column.chunkX(), column.chunkZ());
     }
   }
 
@@ -88,17 +126,18 @@ public final class RegionStores implements AutoCloseable {
    *
    * @param player the player's id
    * @param world the world they are in
-   * @param chunkX the chunk X they are in
-   * @param chunkZ the chunk Z they are in
+   * @param at where they are
    */
-  public void pin(UUID player, MinecraftWorld world, int chunkX, int chunkZ) {
+  public void pin(UUID player, MinecraftWorld world, Cell at) {
     // A pin in another world first lets go of the last one: a player is in one world at a time.
     for (Map.Entry<String, RegionStore<MinecraftChunk>> entry : stores.entrySet()) {
       if (!entry.getKey().equals(world.key())) {
         entry.getValue().release(player);
       }
     }
-    of(world).pin(player, chunkX, chunkZ, PIN_RADIUS);
+    RegionStore<MinecraftChunk> store = of(world);
+    RegionSpec<MinecraftChunk> spec = store.spec();
+    store.pin(player, spec.columnOf(at.x()), spec.columnOf(at.z()), PIN_RADIUS);
   }
 
   /**
@@ -121,21 +160,12 @@ public final class RegionStores implements AutoCloseable {
     stores.remove(worldKey);
   }
 
-  /**
-   * Returns every world's store, by world key.
-   *
-   * @return the stores
-   */
-  public Map<String, RegionStore<MinecraftChunk>> stores() {
-    return Map.copyOf(stores);
-  }
-
-  /** Stops building, letting builds still running finish for a moment. */
+  /** Stops building, letting builds still running finish for a moment; pending changes are moot. */
   @Override
   public void close() {
-    builds.shutdown();
+    threads.shutdown();
     try {
-      builds.awaitTermination(5, TimeUnit.SECONDS);
+      threads.awaitTermination(5, TimeUnit.SECONDS);
     } catch (InterruptedException interrupted) {
       Thread.currentThread().interrupt();
     }

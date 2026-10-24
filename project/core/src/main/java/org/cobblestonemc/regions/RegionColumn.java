@@ -99,6 +99,17 @@ public final class RegionColumn {
   }
 
   /**
+   * Returns the number a column is kept under, by its coordinates.
+   *
+   * @param columnX the column X
+   * @param columnZ the column Z
+   * @return the key
+   */
+  public static long key(int columnX, int columnZ) {
+    return ((long) columnX << 32) | (columnZ & 0xFFFF_FFFFL);
+  }
+
+  /**
    * Returns a column with no regions at all: one whose terrain cannot be read.
    *
    * @param spec the world's spec

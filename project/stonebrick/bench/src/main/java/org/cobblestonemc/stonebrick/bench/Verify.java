@@ -143,7 +143,7 @@ final class Verify {
             new RegionGraph<>(
                 RegionStore.inMemory(
                     new RegionSpec<>(
-                        MinecraftTerrain.INSTANCE,
+                        MinecraftTerrain.of(capture.environment(scenario.world())),
                         capture.minY(scenario.world()),
                         capture.maxY(scenario.world()),
                         ScenarioRunner.REGION_DETOUR)),
