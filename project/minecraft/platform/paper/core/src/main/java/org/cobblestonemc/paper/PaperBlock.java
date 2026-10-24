@@ -13,6 +13,7 @@ import org.bukkit.Tag;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Openable;
 import org.cobblestonemc.minecraft.MinecraftBlock;
+import org.cobblestonemc.minecraft.MiningClass;
 
 /**
  * A {@link MinecraftBlock} backed by a Bukkit {@link BlockData} from a chunk snapshot — the
@@ -144,6 +145,32 @@ final class PaperBlock implements MinecraftBlock {
       return Double.POSITIVE_INFINITY; // bedrock, barriers, etc.
     }
     return Math.max(hardness * 1.5, 0.05);
+  }
+
+  @Override
+  public MiningClass miningClass() {
+    return MiningClass.of(
+        tool(),
+        Tag.NEEDS_DIAMOND_TOOL.isTagged(material),
+        material.getHardness(),
+        material.getKey().getKey());
+  }
+
+  /**
+   * The tool the block's vanilla tags say breaks it fastest, of those {@link MiningClass} buckets
+   * by: a hoe's blocks count as no tool's.
+   */
+  private MiningClass.Tool tool() {
+    if (Tag.MINEABLE_PICKAXE.isTagged(material)) {
+      return MiningClass.Tool.PICKAXE;
+    }
+    if (Tag.MINEABLE_SHOVEL.isTagged(material)) {
+      return MiningClass.Tool.SHOVEL;
+    }
+    if (Tag.MINEABLE_AXE.isTagged(material)) {
+      return MiningClass.Tool.AXE;
+    }
+    return MiningClass.Tool.NONE;
   }
 
   @Override

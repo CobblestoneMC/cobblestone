@@ -95,6 +95,16 @@ public record BlockTraits(
   public static final int EXITABLE = 24;
 
   /**
+   * Bit index of the first of four bits holding the block's mining class, as the id of its {@code
+   * MiningClass} in the Minecraft module: a wire contract like {@link #DIRECTIONS}, so changing
+   * what an id means needs the trait table version bumped.
+   */
+  public static final int MINING_CLASS = 32;
+
+  /** The mining class's bits, below {@link #MINING_CLASS}. */
+  private static final long MINING_CLASS_MASK = 0b1111;
+
+  /**
    * Returns whether the given boolean trait is set.
    *
    * @param bitIndex one of the bit-index constants on this type
@@ -102,6 +112,15 @@ public record BlockTraits(
    */
   public boolean has(int bitIndex) {
     return (bits & (1L << bitIndex)) != 0;
+  }
+
+  /**
+   * Returns the block's mining class, as its id; see {@link #MINING_CLASS}.
+   *
+   * @return the id
+   */
+  public int miningClass() {
+    return (int) ((bits >>> MINING_CLASS) & MINING_CLASS_MASK);
   }
 
   /**
@@ -179,6 +198,19 @@ public record BlockTraits(
      */
     public Builder exitable(int directionIndex, boolean value) {
       return set(EXITABLE + directionIndex, value);
+    }
+
+    /**
+     * Sets the mining class.
+     *
+     * @param id the id of the block's {@code MiningClass}, 0 to 15
+     * @return this builder
+     */
+    public Builder miningClass(int id) {
+      bits =
+          (bits & ~(MINING_CLASS_MASK << MINING_CLASS))
+              | ((id & MINING_CLASS_MASK) << MINING_CLASS);
+      return this;
     }
 
     /**
