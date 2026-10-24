@@ -125,6 +125,25 @@ quests:
 
 The plugin is named `Quests`, so its nodes take the form `cobblestone.navigate.quests.quest.<name>`.
 
+## Quests (LMBishop)
+
+**CobblestoneBishopQuests** · requires Quests
+
+```
+/nav quest <id>
+```
+
+Each started quest with a `position` task still to reach is a destination. Tracking a quest starts a
+trip to that position. Per-quest overrides are keyed by quest id:
+
+```yaml
+quests:
+  citizen1:
+    enabled: false
+```
+
+The plugin is named `Quests`, so its nodes take the form `cobblestone.navigate.quests.quest.<id>`.
+
 ## Typewriter
 
 **cobblestone-typewriter** · Typewriter extension
