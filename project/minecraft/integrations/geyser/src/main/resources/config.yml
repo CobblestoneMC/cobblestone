@@ -1,0 +1,8 @@
+# CobblestoneGeyser — connects Geyser to Cobblestone.
+#
+# Bedrock players open Cobblestone's navigation menu by performing one of these emotes, just as if
+# they had typed /navigate on its own (so they need the same permission). Each is an emote's id. The
+# default is "Simple Clap", one of the four every Bedrock player starts with. Restart the server
+# after changing this file.
+emotes:
+  - "9a469a61-c83b-4ba9-b507-bdbe64430582"
