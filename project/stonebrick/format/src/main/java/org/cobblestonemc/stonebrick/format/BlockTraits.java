@@ -88,18 +88,21 @@ public record BlockTraits(
   /** Bit index: Soul Speed boots work on this block, as on soul sand and soul soil. */
   public static final int SOUL_SPEED = 14;
 
-  /**
-   * Bit index of the first of three bits holding the block's mining class, as the id of its {@code
-   * MiningClass} in the Minecraft module: a wire contract like {@link #DIRECTIONS}, so changing
-   * what an id means needs the trait table version bumped.
-   */
-  public static final int MINING_CLASS = 32;
-
   /** Bit index of the first of six {@code enterable} bits, one per {@link #DIRECTIONS} entry. */
   public static final int ENTERABLE = 16;
 
   /** Bit index of the first of six {@code exitable} bits, one per {@link #DIRECTIONS} entry. */
   public static final int EXITABLE = 24;
+
+  /**
+   * Bit index of the first of four bits holding the block's mining class, as the id of its {@code
+   * MiningClass} in the Minecraft module: a wire contract like {@link #DIRECTIONS}, so changing
+   * what an id means needs the trait table version bumped.
+   */
+  public static final int MINING_CLASS = 32;
+
+  /** The mining class's bits, below {@link #MINING_CLASS}. */
+  private static final long MINING_CLASS_MASK = 0b1111;
 
   /**
    * Returns whether the given boolean trait is set.
@@ -117,7 +120,7 @@ public record BlockTraits(
    * @return the id
    */
   public int miningClass() {
-    return (int) ((bits >>> MINING_CLASS) & 0b111);
+    return (int) ((bits >>> MINING_CLASS) & MINING_CLASS_MASK);
   }
 
   /**
@@ -200,11 +203,13 @@ public record BlockTraits(
     /**
      * Sets the mining class.
      *
-     * @param id the id of the block's {@code MiningClass}, 0 to 7
+     * @param id the id of the block's {@code MiningClass}, 0 to 15
      * @return this builder
      */
     public Builder miningClass(int id) {
-      bits = (bits & ~(0b111L << MINING_CLASS)) | ((long) (id & 0b111) << MINING_CLASS);
+      bits =
+          (bits & ~(MINING_CLASS_MASK << MINING_CLASS))
+              | ((id & MINING_CLASS_MASK) << MINING_CLASS);
       return this;
     }
 
