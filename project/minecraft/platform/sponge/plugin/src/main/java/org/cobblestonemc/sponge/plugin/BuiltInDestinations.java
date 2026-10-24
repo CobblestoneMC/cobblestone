@@ -376,7 +376,7 @@ public final class BuiltInDestinations implements DestinationProvider<ServerPlay
                     .stream()
                     .toList())
         .mobile()
-        .anchor(tracked::labelPoint) // a mount has no name over it, so its label follows it
+        .anchor(tracked::anchor) // a mount has no name over it, so its label follows it
         .existence(tracked::alive)
         .build();
   }

@@ -128,7 +128,7 @@ public record NavigationTarget(
     }
 
     /**
-     * Marks the target as one that shows its own name, so no label naming it is added.
+     * Marks the target as one that shows its own name.
      *
      * @return this builder
      */

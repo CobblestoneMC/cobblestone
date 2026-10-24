@@ -35,8 +35,9 @@ final class SpongeTrackedEntity {
   private final UUID uuid;
 
   // Written only on the main thread and read by any thread, search threads included. Volatile is
-  // all the guarding they need: each is replaced whole (a location is immutable), and the two are
-  // never needed together.
+  // all the guarding they need: each is replaced whole (a location is immutable). Only anchor()
+  // reads two together, the location and the height; a mismatched pair puts the label off by one
+  // refresh's movement until the next read.
   private volatile Entity lastSeen;
   private volatile ServerLocation lastLocation;
   private volatile double lastHeight;
@@ -60,7 +61,7 @@ final class SpongeTrackedEntity {
    *
    * @return the point, or empty if it has not been seen loaded
    */
-  Optional<TripTarget.Point> labelPoint() {
+  Optional<TripTarget.Point> anchor() {
     return location()
         .map(
             at ->

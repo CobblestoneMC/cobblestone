@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.plugin.trip;
 
+import java.util.Objects;
 import java.util.function.Consumer;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
@@ -69,7 +70,7 @@ public final class Trip<E, P extends TripAgent<E>, L> {
     this.guideSearch = guideSearch;
     this.live = live;
     this.liveIntervalMillis = liveIntervalMillis;
-    this.target = target == null ? TripTarget.FIXED : target;
+    this.target = Objects.requireNonNull(target, "target");
     this.existenceCheckEvery = Math.max(1L, EXISTENCE_CHECK_TICKS / Math.max(1L, periodTicks));
   }
 

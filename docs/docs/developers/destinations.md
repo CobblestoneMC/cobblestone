@@ -226,7 +226,7 @@ Destination.builder(
 
 - `mobile()` sets the default for live trips. Players may override it with `-live` or `-no-live`.
 - `labeled()` says the destination already shows its name in the world, as an NPC's nameplate
-  does, so Cobblestone adds no label naming it.
+  does.
 - `detail(...)` and `existence(...)` are described under [Hover detail](#hover-detail) and
   [Existence](#existence).
 

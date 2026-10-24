@@ -155,7 +155,7 @@ public final class Destination {
 
     /**
      * Marks the destination as one that already shows its name in the world (a player, a named
-     * NPC), so no label naming it is added over it. See {@link MinecraftDestination#hasLabel()}.
+     * NPC). See {@link MinecraftDestination#hasLabel()}.
      *
      * @return this builder
      */
