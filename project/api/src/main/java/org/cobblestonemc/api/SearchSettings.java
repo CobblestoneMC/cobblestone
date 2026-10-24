@@ -41,11 +41,25 @@ public final class SearchSettings {
   /** Default window width for the running-average heuristic. */
   public static final int DEFAULT_RUNNING_AVERAGE_WIDTH = 5;
 
-  /** Default A* heuristic weight (1.0 = admissible/optimal; &gt;1 = faster, weighted A*). */
-  public static final double DEFAULT_HEURISTIC_WEIGHT = 1.5;
+  /**
+   * The estimate a search uses unless told otherwise.
+   *
+   * <p>{@link Heuristic#REGIONS} by default, from measurement: on the benchmark it solves routes
+   * the running average cannot, expands a fraction of the nodes, and finds cheaper paths.
+   *
+   * <p>⚠️ It is not free: a search reads the terrain it reasons over, and the first search over new
+   * terrain has to cut it into regions, which on a long route is hundreds of chunk reads. Regions
+   * are shared between searches, so later searches mostly reuse them.
+   */
+  public static final Heuristic DEFAULT_HEURISTIC = Heuristic.REGIONS;
 
-  /** The estimate a search uses unless told otherwise. */
-  public static final Heuristic DEFAULT_HEURISTIC = Heuristic.RUNNING_AVERAGE;
+  /**
+   * The default heuristic's weight.
+   *
+   * @deprecated each heuristic has a weight of its own; use {@link Heuristic#defaultWeight()}
+   */
+  @Deprecated
+  public static final double DEFAULT_HEURISTIC_WEIGHT = DEFAULT_HEURISTIC.defaultWeight();
 
   private final int maxCellsVisited;
   private final long maxWallClockMillis;
@@ -59,7 +73,10 @@ public final class SearchSettings {
     this.maxWallClockMillis = builder.maxWallClockMillis;
     this.tier1UnsolvedPessimism = builder.tier1UnsolvedPessimism;
     this.runningAverageWidth = builder.runningAverageWidth;
-    this.heuristicWeight = builder.heuristicWeight;
+    this.heuristicWeight =
+        Double.isNaN(builder.heuristicWeight)
+            ? builder.heuristic.defaultWeight()
+            : builder.heuristicWeight;
     this.heuristic = builder.heuristic;
   }
 
@@ -129,7 +146,8 @@ public final class SearchSettings {
 
   /**
    * Returns the A* heuristic weight applied in Tier-2 (1.0 = admissible; &gt;1 trades optimality
-   * for a smaller explored frontier — weighted A*).
+   * for a smaller explored frontier — weighted A*): the one set, or else the heuristic's {@link
+   * Heuristic#defaultWeight()}.
    *
    * @return the heuristic weight
    */
@@ -149,9 +167,8 @@ public final class SearchSettings {
   /**
    * Which estimate the fine search prices its remaining journey with.
    *
-   * <p>One value today. It is an enum so that a new estimate is a new constant here and a new
-   * branch where the platform builds its heuristic, and every platform and the benchmark pick it up
-   * from there.
+   * <p>It is an enum so that a new estimate is a new constant here and a new branch where the
+   * platform builds its heuristic, and every platform and the benchmark pick it up from there.
    */
   public enum Heuristic {
     /**
@@ -161,7 +178,7 @@ public final class SearchSettings {
      * price a long journey at the rate of a river it is currently swimming down, because the river
      * really is cheap and simply does not go anywhere.
      */
-    RUNNING_AVERAGE,
+    RUNNING_AVERAGE(1.5),
 
     /**
      * A search over connected terrain regions -- patches of ground, water, rock and air joined
@@ -172,8 +189,29 @@ public final class SearchSettings {
      * just crossed, and knows a wall from a tunnel. Costs chunk reads and CPU to classify the
      * terrain -- a long route touches hundreds of columns -- once: regions are shared between
      * searches.
+     *
+     * <p>Weighted 1.7 by default: {@code bench verify} puts its estimate at 0.7–0.95 of the true
+     * cost and never above, and below about 1.5 the search starts running out of cells, while above
+     * it every step up trades fewer nodes for slightly dearer paths.
      */
-    REGIONS
+    REGIONS(1.7);
+
+    private final double defaultWeight;
+
+    Heuristic(double defaultWeight) {
+      this.defaultWeight = defaultWeight;
+    }
+
+    /**
+     * Returns the A* weight this heuristic runs at unless a search sets one: what was measured to
+     * suit it, since how far a weight can be pushed depends on how close the estimate runs to the
+     * true cost.
+     *
+     * @return the weight, at least 1.0
+     */
+    public double defaultWeight() {
+      return defaultWeight;
+    }
   }
 
   /** A fluent builder for {@link SearchSettings}. */
@@ -183,7 +221,10 @@ public final class SearchSettings {
     private long maxWallClockMillis = DEFAULT_MAX_WALL_CLOCK_MILLIS;
     private double tier1UnsolvedPessimism = DEFAULT_TIER1_UNSOLVED_PESSIMISM;
     private int runningAverageWidth = DEFAULT_RUNNING_AVERAGE_WIDTH;
-    private double heuristicWeight = DEFAULT_HEURISTIC_WEIGHT;
+
+    /** The weight set, or {@code NaN} for the heuristic's own. */
+    private double heuristicWeight = Double.NaN;
+
     private Heuristic heuristic = DEFAULT_HEURISTIC;
 
     private Builder() {}
@@ -200,7 +241,8 @@ public final class SearchSettings {
     }
 
     /**
-     * Sets the A* heuristic weight (must be &gt;= 1.0).
+     * Sets the A* heuristic weight (must be &gt;= 1.0). Unset, a search runs at its heuristic's
+     * {@link Heuristic#defaultWeight()}.
      *
      * @param value the weight
      * @return this builder
