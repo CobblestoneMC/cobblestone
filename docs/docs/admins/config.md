@@ -215,17 +215,24 @@ own configuration.
 | Setting | Default | |
 | --- | --- | --- |
 | `navigators.trail.buffer_cells` | `256` | live |
-| `navigators.trail.particles` | `[SCRAPE, WAX_OFF]` | live |
+| `navigators.trail.particles` | `[TRAIL]` | live |
 | `navigators.trail.highlight_particles` | `[END_ROD]` | live |
-| `navigators.trail.colors` | `[55FFFF, FFAA00, FFFFFF]` | live |
+| `navigators.trail.colors` | `[FFFFFF, 4AA8FF]` | live |
 | `navigators.trail.density` | `0.2` | live |
+| `navigators.trail.particle_ticks` | `10` | live |
 
 - **`buffer_cells`**: Length of the rendered path segment ahead of the player.
-- **`particles`**: Particle types, chosen at random per particle. `DUST` uses `colors`; other types
-  render as-is. Particles requiring data other than a color are not supported.
+- **`particles`**: Particle types, chosen at random per particle. `TRAIL` and `DUST` use `colors`;
+  other types render as-is. A `TRAIL` particle drifts along the trail and lasts exactly
+  `particle_ticks`, so the trail stays crisp ahead of a moving player. On a server too old to
+  have `TRAIL` (before 1.21.2, such as Sponge for 1.21.1), `DUST` is drawn in its place. Particles
+  requiring other data are not supported.
 - **`highlight_particles`**: Particles at highlighted points, such as action steps.
-- **`colors`**: `DUST` colors as `RRGGBB`, chosen at random per particle.
+- **`colors`**: `TRAIL` and `DUST` colors as `RRGGBB`, chosen at random per particle.
 - **`density`**: Mean particles per cell per tick. Fractional values are probabilities: `0.7` means
   a 70% chance of one particle per cell per tick.
+- **`particle_ticks`**: How long each `TRAIL` particle lasts. Shorter is crisper on the move;
+  longer is fuller. Each particle drifts in a straight line at about a block a second, so beyond
+  about 40 ticks it visibly strays off a curving trail.
 
 Particle names follow the server's particle registry.

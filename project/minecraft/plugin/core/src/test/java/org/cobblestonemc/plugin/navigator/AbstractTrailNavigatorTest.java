@@ -155,6 +155,26 @@ class AbstractTrailNavigatorTest {
     assertEquals(Optional.empty(), navigator.labelPoint(2.5));
   }
 
+  @Test
+  void particlesFillEachSegmentEvenly() {
+    // Dense enough that a gap is no accident: each 0.2-block slice of trail expects 20 particles.
+    // Were a segment's particles in a tick scattered around one point, as they once were, slices
+    // more than half a block from it would stay empty.
+    var navigator = new TestNavigator(straightPath(10, -1), 100);
+    navigator.tick();
+
+    boolean[] filled = new boolean[30]; // 0.2-block slices from x = 3 to x = 9
+    for (Vec3 particle : navigator.particles) {
+      int slice = (int) Math.floor((particle.x() - 3) / 0.2);
+      if (slice >= 0 && slice < filled.length) {
+        filled[slice] = true;
+      }
+    }
+    for (int slice = 0; slice < filled.length; slice++) {
+      assertTrue(filled[slice], "no particle near x = " + (3 + slice * 0.2));
+    }
+  }
+
   /** {@code length} walked steps east from the origin; step {@code door} (if any) opens a door. */
   private static Path<Vec3, MinecraftStepPayload> straightPath(int length, int door) {
     List<Step<Vec3, MinecraftStepPayload>> steps = new ArrayList<>();
@@ -173,20 +193,28 @@ class AbstractTrailNavigatorTest {
 
     Vec3 player = new Vec3(0.5, 0, 0.5);
     final AtomicBoolean showLabel;
+    final List<Vec3> particles = new ArrayList<>();
 
     TestNavigator(Path<Vec3, MinecraftStepPayload> path) {
       this(path, TrailLabels.none());
     }
 
+    TestNavigator(Path<Vec3, MinecraftStepPayload> path, double density) {
+      this(path, density, new AtomicBoolean(true), TrailLabels.none());
+    }
+
     TestNavigator(Path<Vec3, MinecraftStepPayload> path, TrailLabels<Vec3> labels) {
-      this(path, new AtomicBoolean(true), labels);
+      this(path, 1, new AtomicBoolean(true), labels);
     }
 
     private TestNavigator(
-        Path<Vec3, MinecraftStepPayload> path, AtomicBoolean showLabel, TrailLabels<Vec3> labels) {
+        Path<Vec3, MinecraftStepPayload> path,
+        double density,
+        AtomicBoolean showLabel,
+        TrailLabels<Vec3> labels) {
       super(
           64,
-          1,
+          density,
           0,
           new Messages(Locale.ROOT, false, new SilentLogger()),
           Locale.ROOT,
@@ -238,7 +266,9 @@ class AbstractTrailNavigatorTest {
 
     @Override
     protected void spawnTrailParticle(
-        double x, double y, double z, double vx, double vy, double vz) {}
+        double x, double y, double z, double vx, double vy, double vz) {
+      particles.add(new Vec3(x, y, z));
+    }
 
     @Override
     protected void spawnHighlightParticle(double x, double y, double z) {}
