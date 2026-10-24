@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.function.Function;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -23,6 +24,7 @@ import org.cobblestonemc.paper.plugin.api.Destination;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
 import org.cobblestonemc.plugin.api.DestinationEntry;
 import org.cobblestonemc.plugin.api.DestinationTree;
+import org.cobblestonemc.plugin.api.Display;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.joml.Vector3i;
 
@@ -41,56 +43,94 @@ import org.joml.Vector3i;
  *       name)
  * </ul>
  *
+ * <p>How each entry looks in the navigation menu comes from this plugin's config ({@link
+ * TownyIcons}).
+ *
  * <p>Navigability is gated by Cobblestone's {@code cobblestone.navigate.towny.*} permission
  * (default-allow), not by whether the player may teleport there. Regions are read from Towny
  * lazily, on the search-initiating thread.
  */
 final class TownyDestinationService implements DestinationService {
 
+  private final TownyIcons icons;
+
+  TownyDestinationService(TownyIcons icons) {
+    this.icons = icons;
+  }
+
   @Override
   public DestinationTree<MinecraftDestination<World, Vector3i>> provide(Player player) {
     var towns = Destination.tree();
     for (Town town : TownyAPI.getInstance().getTowns()) {
-      String name = town.getName();
-      towns.entry(name, town(town));
+      towns.entry(town.getName(), townEntry(town));
     }
 
-    var root = Destination.tree().subtree("town", towns);
+    var root =
+        Destination.tree()
+            .entry("town", shown(icons.simpleConfiguredDisplay("towns")).subtree(towns));
     Town own = ownTown(player);
     if (own != null) {
-      root.entry("resident", town(own));
+      root.entry("resident", townEntry(own).label(null));
     }
     return root.build();
   }
 
-  /** A town is somewhere to go, and also holds its home, outposts and plots. */
-  private static DestinationEntry.Builder<MinecraftDestination<World, Vector3i>> town(Town town) {
-    return Destination.entry().destination(() -> wholeTown(town)).subtree(() -> townDetail(town));
+  @Override
+  public Display display(Player player) {
+    return icons.simpleConfiguredDisplay("root");
   }
 
-  private static DestinationTree<MinecraftDestination<World, Vector3i>> townDetail(Town town) {
+  /** A town: somewhere to go, which also holds its home, outposts and plots. */
+  private DestinationEntry.Builder<MinecraftDestination<World, Vector3i>> townEntry(Town town) {
+    return shown(icons.town(town))
+        .label(label(town))
+        .destination(() -> wholeTown(town))
+        .subtree(() -> townDetail(town));
+  }
+
+  private DestinationTree<MinecraftDestination<World, Vector3i>> townDetail(Town town) {
     return Destination.tree()
         .strict()
-        .destination("home", () -> Destination.at(town.getSpawnOrNull(), "home"))
-        .subtree("outpost", () -> outposts(town))
-        .subtree("type", () -> plots(town, TownBlock::getTypeName))
-        .subtree("plot", () -> plots(town, TownBlock::getName))
+        .entry(
+            "home",
+            shown(icons.simpleConfiguredDisplay("home"))
+                .destination(() -> Destination.at(town.getSpawnOrNull(), "home")))
+        .entry(
+            "outpost",
+            shown(icons.simpleConfiguredDisplay("outposts")).subtree(() -> outposts(town)))
+        .entry(
+            "type",
+            shown(icons.simpleConfiguredDisplay("plot-types"))
+                .subtree(
+                    () ->
+                        plots(
+                            town,
+                            TownBlock::getTypeName,
+                            icons.simpleConfiguredDisplay("plot-type"))))
+        .entry(
+            "plot",
+            shown(icons.simpleConfiguredDisplay("plots"))
+                .subtree(
+                    () -> plots(town, TownBlock::getName, icons.simpleConfiguredDisplay("plot"))))
         .build();
   }
 
-  private static DestinationTree<MinecraftDestination<World, Vector3i>> outposts(Town town) {
+  private DestinationTree<MinecraftDestination<World, Vector3i>> outposts(Town town) {
     var tree = Destination.tree().strict();
     List<Location> spawns = town.getAllOutpostSpawns();
     for (int i = 0; i < spawns.size(); i++) {
       Location spawn = spawns.get(i);
-      tree.destination(Integer.toString(i + 1), () -> Destination.at(spawn, "outpost"));
+      tree.entry(
+          Integer.toString(i + 1),
+          shown(icons.simpleConfiguredDisplay("outpost"))
+              .destination(() -> Destination.at(spawn, "outpost")));
     }
     return tree.build();
   }
 
   /** A sub-tree keyed by a plot attribute (type or name); each leaf unions the matching plots. */
   private static DestinationTree<MinecraftDestination<World, Vector3i>> plots(
-      Town town, Function<TownBlock, String> attribute) {
+      Town town, Function<TownBlock, String> attribute, Display display) {
     var tree = Destination.tree().strict();
     Set<String> keys = new LinkedHashSet<>();
     for (TownBlock townBlock : town.getTownBlocks()) {
@@ -100,20 +140,33 @@ final class TownyDestinationService implements DestinationService {
       }
     }
     for (String key : keys) {
-      tree.destination(
+      tree.entry(
           key,
-          () ->
-              Destination.regions(
+          shown(display)
+              .destination(
                   () ->
-                      TownyRegions.plots(
-                          town, block -> key.equalsIgnoreCase(attribute.apply(block))),
-                  key));
+                      Destination.regions(
+                          () ->
+                              TownyRegions.plots(
+                                  town, block -> key.equalsIgnoreCase(attribute.apply(block))),
+                          key)));
     }
     return tree.build();
   }
 
   private static MinecraftDestination<World, Vector3i> wholeTown(Town town) {
     return Destination.regions(() -> TownyRegions.plots(town, block -> true), town.getName());
+  }
+
+  /** An entry shown with the given display, to give a destination or a subtree. */
+  private static DestinationEntry.Builder<MinecraftDestination<World, Vector3i>> shown(
+      Display display) {
+    return Destination.entry().display(display);
+  }
+
+  /** Towny writes spaces in a town's name as underscores. */
+  private static Component label(Town town) {
+    return Component.text(town.getName().replace('_', ' '));
   }
 
   private static Town ownTown(Player player) {
