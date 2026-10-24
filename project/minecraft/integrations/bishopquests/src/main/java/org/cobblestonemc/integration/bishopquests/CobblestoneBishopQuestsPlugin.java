@@ -8,15 +8,15 @@
 package org.cobblestonemc.integration.bishopquests;
 
 import com.leonardobishop.quests.common.plugin.Quests;
-import org.cobblestonemc.paper.plugin.api.CobblestonePluginAPI;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.cobblestonemc.paper.plugin.api.CobblestonePaperApi;
 
 /**
- * Entry point for the LMBishop Quests integration. Resolves the Quests API handle, then registers —
- * as an ordinary Bukkit service — a destination provider ({@code /navigate quests quest <name>})
- * and, as a listener, the tracking hook that auto-navigates a player to a quest's position
- * objective when they track it. Cobblestone discovers the destination provider automatically.
+ * Entry point for the LMBishop Quests integration. Resolves the Quests API handle, then registers
+ * its destinations ({@code /navigate quests quest <id>}) under the Quests plugin and, as a
+ * listener, the tracking hook that auto-navigates a player to a quest's position objective when
+ * they track it.
  *
  * <p>The {@code instanceof Quests} check also disambiguates from PikaMug's Quests (both use the
  * plugin name {@code Quests}, but only one can run at a time): if the installed {@code Quests}
@@ -36,7 +36,7 @@ public final class CobblestoneBishopQuestsPlugin extends JavaPlugin {
     saveDefaultConfig();
     QuestNavPrefs prefs = new QuestNavPrefs(getConfig());
 
-    CobblestonePluginAPI.registrar()
+    CobblestonePaperApi.registrar()
         .registerDestinations(questsPlugin, new BishopQuestsDestinationService(quests));
     getServer()
         .getPluginManager()
