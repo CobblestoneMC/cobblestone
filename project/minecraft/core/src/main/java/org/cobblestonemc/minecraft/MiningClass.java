@@ -36,8 +36,11 @@ public enum MiningClass {
   /** Hard rock for a pickaxe: deepslate and its ores, end stone. */
   HARD_ROCK(3),
 
-  /** Breaks only with a diamond pickaxe or better: obsidian, crying obsidian, ancient debris. */
-  OBSIDIAN(4),
+  /**
+   * Very hard rock, which breaks only with a diamond pickaxe or better: obsidian, crying obsidian,
+   * ancient debris.
+   */
+  VERY_HARD_ROCK(4),
 
   /** For a shovel: dirt, grass, sand, gravel, clay, soul sand. */
   DIRT(5),
@@ -45,8 +48,8 @@ public enum MiningClass {
   /** For an axe: logs, planks, and things made of them. */
   WOOD(6);
 
-  /** The most ids there can be: captures store an id in three bits. */
-  public static final int MAX_IDS = 8;
+  /** The most ids there can be: captures store an id in four bits, half of them still free. */
+  public static final int MAX_IDS = 16;
 
   private static final MiningClass[] BY_ID = new MiningClass[MAX_IDS];
 
@@ -111,7 +114,7 @@ public enum MiningClass {
    */
   public static MiningClass of(Tool tool, boolean needsDiamond, double hardness, String key) {
     if (needsDiamond) {
-      return OBSIDIAN;
+      return VERY_HARD_ROCK;
     }
     return switch (tool) {
       case SHOVEL -> DIRT;

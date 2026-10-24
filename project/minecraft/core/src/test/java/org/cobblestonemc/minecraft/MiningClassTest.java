@@ -37,7 +37,7 @@ class MiningClassTest {
     assertEquals(MiningClass.SOFT_ROCK, MiningClass.of(pickaxe, false, 0.4, "netherrack"));
     assertEquals(MiningClass.ROCK, MiningClass.of(pickaxe, false, 1.5, "stone"));
     assertEquals(MiningClass.HARD_ROCK, MiningClass.of(pickaxe, false, 3.0, "deepslate"));
-    assertEquals(MiningClass.OBSIDIAN, MiningClass.of(pickaxe, true, 50, "obsidian"));
+    assertEquals(MiningClass.VERY_HARD_ROCK, MiningClass.of(pickaxe, true, 50, "obsidian"));
   }
 
   @Test
