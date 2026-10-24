@@ -12,7 +12,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.api.FailureReason;
@@ -189,12 +188,13 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
       LiveSearch<L> liveSearch,
       GuideSearch<L> guideSearch,
       boolean live) {
-    return start(player, path, label, settings, liveSearch, guideSearch, live, null);
+    return start(player, path, label, settings, liveSearch, guideSearch, live, TripTarget.FIXED);
   }
 
   /**
    * As {@link #start(Object, Path, TripLabel, NavigatorSettings, LiveSearch, GuideSearch,
-   * boolean)}, for a target that may stop existing partway, which ends the trip.
+   * boolean)}, for a target that may move, stop existing partway (which ends the trip), or show its
+   * own name.
    *
    * @param player the player to guide
    * @param path the route to follow (its first step's world/region owns the trip)
@@ -203,8 +203,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
    * @param liveSearch the re-search behavior, or {@code null} to disable re-searching
    * @param guideSearch the short-range off-trail guide search, or {@code null}
    * @param live whether to also re-search periodically
-   * @param targetExists polled about once a second on the trip's thread; the trip ends once it
-   *     returns {@code false}. {@code null} for a target that cannot vanish
+   * @param target what the trip leads to; {@link TripTarget#FIXED} for a place that never moves
    * @return the outcome, completed once the trip is (or is not) started on the region thread
    */
   public CompletableFuture<TripOutcome> start(
@@ -215,7 +214,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
       LiveSearch<L> liveSearch,
       GuideSearch<L> guideSearch,
       boolean live,
-      BooleanSupplier targetExists) {
+      TripTarget target) {
     CompletableFuture<TripOutcome> outcome = new CompletableFuture<>();
     L origin = path.steps().isEmpty() ? null : path.steps().getFirst().position();
     Position<MinecraftWorld> originPosition = origin == null ? null : position(origin);
@@ -244,7 +243,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
                       guideSearch,
                       live,
                       liveIntervalMillis,
-                      targetExists);
+                      target);
               outcome.complete(
                   trip.map(
                           started ->

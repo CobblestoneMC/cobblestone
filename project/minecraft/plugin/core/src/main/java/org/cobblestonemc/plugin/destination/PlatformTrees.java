@@ -85,8 +85,10 @@ public final class PlatformTrees {
                 .toList(),
         destination.displayName(),
         destination.isMobile(),
+        destination.hasLabel(),
         destination.detail(),
-        destination::exists);
+        destination::exists,
+        Optional::empty);
   }
 
   /** An integration's leaf, described as it describes itself and built into a target. */

@@ -25,7 +25,7 @@ import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.jetbrains.annotations.Nullable;
 
-/** How a Minecraft player moves, each step labelled with its {@link MinecraftStepType}. */
+/** How a Minecraft player moves, each step labeled with its {@link MinecraftStepType}. */
 public final class MinecraftMovementBehavior
     implements MovementBehavior<MinecraftStepPayload, MinecraftWorld> {
 
