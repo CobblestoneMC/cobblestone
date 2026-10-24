@@ -20,6 +20,7 @@ import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
+import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.paper.PaperNavigationServiceImpl;
 import org.cobblestonemc.paper.plugin.api.NavigatorFactory;
 import org.cobblestonemc.paper.plugin.api.TrailNavigatorSettings;
@@ -50,8 +51,9 @@ public final class PaperTripServiceImpl
       SearchRegistry<Location> searches,
       SearchGate gate,
       Supplier<SearchSettings> searchSettings,
-      long liveIntervalMillis) {
-    super(trips, searches, gate, searchSettings, liveIntervalMillis);
+      long liveIntervalMillis,
+      RegionStores regionStores) {
+    super(trips, searches, gate, searchSettings, liveIntervalMillis, regionStores);
     this.platformApi = platformApi;
     this.integrations = integrations;
   }
@@ -75,6 +77,11 @@ public final class PaperTripServiceImpl
   protected SearchHandle<Location, MinecraftStepPayload> navigate(
       Player player, Location destination, MinecraftSearchSettings settings) {
     return platformApi.navigatePlayer(player, destination, settings);
+  }
+
+  @Override
+  protected Location location(Player player) {
+    return player.getLocation();
   }
 
   @Override

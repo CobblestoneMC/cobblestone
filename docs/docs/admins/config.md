@@ -131,6 +131,24 @@ limit; a manual `/navigate` always runs.
 
     Maximum chunk tickets held at once. Values below about 64 disable read-ahead and slow searches.
 
+### `search.regions`
+
+The `REGIONS` heuristic cuts each chunk into regions of terrain once and shares them between every
+search until a block in the chunk changes.
+
+| Setting | Default | |
+| --- | --- | --- |
+| `search.regions.memory_megabytes` | `128` | restart |
+
+- **`memory_megabytes`**: Memory each world's regions may use, least recently used dropped first.
+  The chunks around each navigating player are kept on top of this, about 3 MB a player, until their
+  trip ends, so the searches that re-plan around them stay fast.
+
+Block changes made while the server is running are tracked: a changed chunk's regions are dropped
+about 10 seconds after the change, together with any further changes in that time, and built again
+when a search next needs them. Regions are kept in memory only, so a restart builds them again as
+searches need them.
+
 ### Tuning
 
 | Symptom | Adjustment |

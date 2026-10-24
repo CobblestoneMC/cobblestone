@@ -85,12 +85,15 @@ public record Scenario(
      * No estimate at all, turning the search into Dijkstra.
      *
      * <p>Not for production: it expands everything. It is the only way to get a route's <i>true</i>
-     * optimal cost, which is what any other estimate's paths can be measured against.
+     * optimal cost, which is what {@code bench verify} measures the region estimates against.
      */
     ZERO(null),
 
     /** Remaining distance times the recent per-block cost. */
-    RUNNING_AVERAGE(SearchSettings.Heuristic.RUNNING_AVERAGE);
+    RUNNING_AVERAGE(SearchSettings.Heuristic.RUNNING_AVERAGE),
+
+    /** A backward search over connected terrain regions, resumed as the fine search asks. */
+    REGIONS(SearchSettings.Heuristic.REGIONS);
 
     private final SearchSettings.@Nullable Heuristic production;
 
@@ -284,6 +287,36 @@ public record Scenario(
             expectedOutcome,
             ungenerated,
             value);
+  }
+
+  /**
+   * Returns this scenario started somewhere else.
+   *
+   * <p>For asking what a route costs from partway along it, which is what verifying a cost-to-goal
+   * estimate needs.
+   *
+   * @param cell where to start
+   * @return the variant
+   */
+  public Scenario withOrigin(Cell cell) {
+    return new Scenario(
+        id,
+        description,
+        tags,
+        tier,
+        capture,
+        world,
+        cell,
+        destination,
+        destinationRadius,
+        destinationBox,
+        warps,
+        settings,
+        io,
+        onMissingCapture,
+        expectedOutcome,
+        ungenerated,
+        heuristic);
   }
 
   /**

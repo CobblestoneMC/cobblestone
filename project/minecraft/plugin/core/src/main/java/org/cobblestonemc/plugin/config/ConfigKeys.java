@@ -103,6 +103,12 @@ public final class ConfigKeys {
    */
   public final ConfigKey<Integer> chunksFetchAttempts;
 
+  /**
+   * How much memory each world's regions may hold beyond navigating players' surroundings, in
+   * megabytes. Requires a restart.
+   */
+  public final ConfigKey<Integer> regionsMemoryMegabytes;
+
   /** Whether Cobblestone discovers vanilla portal links by watching players teleport. Mutable. */
   public final ConfigKey<Boolean> portalsDiscovery;
 
@@ -415,6 +421,23 @@ public final class ConfigKeys {
                 that might pass — a disk read that errored, a load that timed out, a chunk whose
                 save had not reached disk yet — before treating it as impassable. Chunks that
                 simply cannot be had, such as ones never generated, are not retried at all.""")
+            .requiresRestart()
+            .register();
+
+    manager.section(
+        "search.regions",
+        """
+        The terrain regions the REGIONS heuristic searches over. Each chunk is cut into regions
+        once and kept, shared by every search, until a block in it changes.""");
+    this.regionsMemoryMegabytes =
+        manager
+            .key("search.regions.memory_megabytes", 128, Codec.ofInt())
+            .comment(
+                """
+                How much memory each world's regions may hold, in megabytes, least recently used
+                dropped first. The chunks around each navigating player are kept on top of this,
+                about 3 MB a player, until their trip ends, so the searches that re-plan around
+                them stay fast.""")
             .requiresRestart()
             .register();
 

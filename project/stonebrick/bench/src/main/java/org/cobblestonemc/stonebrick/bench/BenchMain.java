@@ -29,7 +29,8 @@ import org.cobblestonemc.stonebrick.platform.IoProfile;
  *   bench run      [--scenario id] [--tier ci|local] [--tag t]   run and compare against baselines
  *   bench accept   [--scenario id] [--tier ci|local]             run and record the results as accepted
  *   bench list                                                   show the corpus
- *   bench sweep    [--heuristic h] [--weights 1,1.5,2]           the nodes-versus-cost curve
+ *   bench sweep    [--heuristic h] [--weights 1.5,2.0] [--io p]   the nodes-versus-cost curve
+ *   bench verify   [--scenario id] [--agent a]                    estimates against Dijkstra's cost
  *   bench check    [--scenario id]                                 can the bench use a new scenario?
  *   bench path     [--scenario id] [--agent a]                    the cells of the route found
  * </pre>
@@ -62,6 +63,19 @@ public final class BenchMain {
     List<Scenario> scenarios = select(Scenario.loadAll(options.scenariosDir()), options);
     List<Loadout> loadouts =
         selectLoadouts(Loadout.loadAll(options.corpusRoot().resolve(Loadout.FILE_NAME)), options);
+
+    if (options.command().equals("verify")) {
+      for (Scenario scenario : scenarios) {
+        for (Loadout loadout : loadouts) {
+          if (!loadout.appliesTo(scenario)) {
+            continue;
+          }
+          Verify.run(options.corpusRoot(), scenario, loadout, 12, new QuietLogger());
+        }
+      }
+      Verify.aggregate();
+      return;
+    }
 
     if (scenarios.isEmpty()) {
       System.out.println(
@@ -133,7 +147,7 @@ public final class BenchMain {
         System.out.println(
             "Unknown command '"
                 + options.command()
-                + "'. Try run, sweep, accept, list, check or path.");
+                + "'. Try run, sweep, accept, list, check, path or verify.");
         System.exit(2);
       }
     }

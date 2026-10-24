@@ -20,6 +20,7 @@ seeded Paper server and captures what `data/needed-chunks.yml` asks for.
 | `sweep` | Runs at several heuristic weights and prints nodes expanded against path cost. |
 | `check` | Says whether a scenario can be benchmarked: each heuristic's result and Dijkstra's optimum. |
 | `path` | Prints the cells of the route each loadout's search found. |
+| `verify` | Samples cells along each route and compares the region estimate there with Dijkstra's true cost. |
 
 | Option | Effect |
 | --- | --- |
@@ -30,6 +31,9 @@ seeded Paper server and captures what `data/needed-chunks.yml` asks for.
 | `--weight 2.0`, `--weights 1,1.5,2` | heuristic weight(s) |
 | `--io sata` | simulated disk: `zero`, `nvme`, `sata`, `spinning`, `busy` |
 | `--corpus <dir>`, `--scenarios <file>`, `--baselines <dir>` | read from or write to elsewhere |
+
+`-Dregions.detour=<ratio>` sets the region fill's detour ratio, for measuring it. A long Dijkstra
+needs a large heap: `JAVA_OPTS=-Xmx8G`.
 
 ## Reading results
 
@@ -50,6 +54,11 @@ only: wall time and heap.
 ```
 point overworld/ocean@player RUNNING_AVERAGE w=2.00 success cost=195.020 expanded=26461 closest=0 legs=1
 ```
+
+Under `REGIONS` a point adds how many columns the region layer read (`columns`, `regionReads`) and
+where it spent its time and memory: reading and building columns (`readMs`, `buildMs`), joining
+them (`placeMs`, `seamMs`), its own search (`searchMs`, `queries`, `settled`), and its size
+(`built`, `regions`, `portals`, `graphKB`, `storeKB`).
 
 `closest` is how near the search came, in blocks from the nearest cell it settled to the
 destination: 0 when it arrived. When every heuristic fails a route, the one that came closer did

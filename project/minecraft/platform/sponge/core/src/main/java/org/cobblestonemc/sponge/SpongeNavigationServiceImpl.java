@@ -33,6 +33,7 @@ import org.cobblestonemc.api.SearchHandle;
 import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.ChunkSource;
+import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -40,6 +41,7 @@ import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
+import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.minecraft.registry.OwnedRegistry;
 import org.cobblestonemc.sponge.api.BoxWorldRegion;
 import org.cobblestonemc.sponge.api.BreakChecker;
@@ -81,6 +83,7 @@ public final class SpongeNavigationServiceImpl
 
   private final Map<String, MinecraftWorld> worldCache = new ConcurrentHashMap<>();
   private final OwnedRegistry<SearchModificationService> searchModifiers = new OwnedRegistry<>();
+  private final RegionStores regionStores;
 
   /**
    * Creates the API for a plugin.
@@ -91,14 +94,17 @@ public final class SpongeNavigationServiceImpl
    * @param maxChunkLoadRequests how many chunk loading tickets may be held at once
    * @param offline how to read an unloaded chunk on this Minecraft version, or {@link
    *     OfflineChunkSource#UNAVAILABLE} to always go through a chunk loading ticket
+   * @param regionStores the server's region stores, shared by every search
    */
   public SpongeNavigationServiceImpl(
       PluginContainer plugin,
       CobblestoneLogger logger,
       ChunkProviderSettings chunkSettings,
       IntSupplier maxChunkLoadRequests,
-      OfflineChunkSource offline) {
+      OfflineChunkSource offline,
+      RegionStores regionStores) {
     this.logger = logger;
+    this.regionStores = regionStores;
     int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
     this.scheduler = new SpongeScheduler(plugin, workerThreads);
     this.platform = new SpongePlatformApi(scheduler, logger, maxChunkLoadRequests, offline);
@@ -257,14 +263,13 @@ public final class SpongeNavigationServiceImpl
     org.cobblestonemc.minecraft.BreakChecker breakChecker = buildBreakChecker(modifiers, player);
     List<Restriction<MinecraftWorld>> restrictions = buildRestrictions(modifiers, player);
     // Built on the server thread: it reads the Sponge player, which worker threads must not touch.
+    CobblestonePlayer agent = new SpongePlayer(player);
     MinecraftMovementBehavior behavior =
         MinecraftMovementBehavior.forPlayer(
-            chunks,
-            new SpongePlayer(player),
-            settings.excludedModes(),
-            breakChecker,
-            countEnderPearls(player));
-    HeuristicStrategy heuristic = MinecraftHeuristics.forPlayer(behavior, settings);
+            chunks, agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
+    HeuristicStrategy heuristic =
+        MinecraftHeuristics.forPlayer(
+            behavior, chunks, agent, originPosition.cell(), settings, regionStores);
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
         gatherTransitions(

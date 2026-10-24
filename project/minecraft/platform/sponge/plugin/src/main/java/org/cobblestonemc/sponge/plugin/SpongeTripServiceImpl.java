@@ -17,6 +17,7 @@ import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
+import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.plugin.api.Navigator;
 import org.cobblestonemc.plugin.api.NavigatorSettings;
 import org.cobblestonemc.plugin.search.SearchGate;
@@ -50,8 +51,9 @@ public final class SpongeTripServiceImpl
       SearchRegistry<ServerLocation> searches,
       SearchGate gate,
       Supplier<SearchSettings> searchSettings,
-      long liveIntervalMillis) {
-    super(trips, searches, gate, searchSettings, liveIntervalMillis);
+      long liveIntervalMillis,
+      RegionStores regionStores) {
+    super(trips, searches, gate, searchSettings, liveIntervalMillis, regionStores);
     this.navigationService = navigationService;
     this.integrations = integrations;
   }
@@ -75,6 +77,11 @@ public final class SpongeTripServiceImpl
   protected SearchHandle<ServerLocation, MinecraftStepPayload> navigate(
       ServerPlayer player, ServerLocation destination, MinecraftSearchSettings settings) {
     return navigationService.navigatePlayer(player, destination, settings);
+  }
+
+  @Override
+  protected ServerLocation location(ServerPlayer player) {
+    return player.serverLocation();
   }
 
   @Override

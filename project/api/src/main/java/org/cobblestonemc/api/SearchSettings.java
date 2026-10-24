@@ -161,7 +161,19 @@ public final class SearchSettings {
      * price a long journey at the rate of a river it is currently swimming down, because the river
      * really is cheap and simply does not go anywhere.
      */
-    RUNNING_AVERAGE
+    RUNNING_AVERAGE,
+
+    /**
+     * A search over connected terrain regions -- patches of ground, water, rock and air joined
+     * where a body can cross between them -- run backwards from the destination and resumed as the
+     * fine search asks.
+     *
+     * <p>Prices the journey from terrain it has actually looked at rather than from terrain it has
+     * just crossed, and knows a wall from a tunnel. Costs chunk reads and CPU to classify the
+     * terrain -- a long route touches hundreds of columns -- once: regions are shared between
+     * searches.
+     */
+    REGIONS
   }
 
   /** A fluent builder for {@link SearchSettings}. */

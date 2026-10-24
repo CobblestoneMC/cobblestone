@@ -18,7 +18,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
+import org.cobblestonemc.minecraft.regions.MinecraftAgent;
 import org.cobblestonemc.stonebrick.platform.StonebrickPlayer;
 import org.yaml.snakeyaml.Yaml;
 
@@ -65,6 +67,19 @@ public record Loadout(
       }
     }
     return false;
+  }
+
+  /**
+   * Returns this loadout as the region layer's agent, as production builds it.
+   *
+   * <p>Here rather than beside each caller so the heuristic and the verification both price the
+   * same agent the same way.
+   *
+   * @param environment the environment of the world it is priced in
+   * @return the agent
+   */
+  public MinecraftAgent regionAgent(MinecraftWorld.Environment environment) {
+    return MinecraftAgent.forPlayer(player(), excludedModes, environment);
   }
 
   /**

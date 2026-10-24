@@ -21,6 +21,7 @@ import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
+import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.paper.PaperNavigationServiceImpl;
 import org.cobblestonemc.paper.api.NavigationService;
 import org.cobblestonemc.paper.api.SearchModificationRegistrar;
@@ -31,6 +32,7 @@ import org.cobblestonemc.paper.plugin.api.TripService;
 import org.cobblestonemc.plugin.config.ConfigKeys;
 import org.cobblestonemc.plugin.config.ConfigManager;
 import org.cobblestonemc.plugin.config.MenuIcons;
+import org.cobblestonemc.plugin.config.RegionConfig;
 import org.cobblestonemc.plugin.data.DataStore;
 import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.DataStores;
@@ -60,6 +62,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
   private PaperHolograms holograms;
   private PaperMetrics metrics;
   private PaperMountListener mountListener;
+  private RegionStores regionStores;
   private final SearchRegistry<Location> searchRegistry = new SearchRegistry<>();
 
   @Override
@@ -81,6 +84,9 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
       return;
     }
 
+    // Regions are shared by every search and forgotten when a block in their chunk changes.
+    this.regionStores = RegionConfig.stores(config, keys);
+
     // The transition registry is owned by the plugin; the platform API only reads from / registers
     // into it. Both are reachable to other plugins via the registered plugin API.
     this.platformApi =
@@ -91,7 +97,12 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                 config.get(keys.chunksCacheSize),
                 config.get(keys.chunksPrefetchDistance),
                 config.get(keys.chunksFetchAttempts),
-                config.get(keys.chunksPolicy)));
+                config.get(keys.chunksPolicy)),
+            regionStores);
+    getServer()
+        .getPluginManager()
+        .registerEvents(new PaperRegionListener(regionStores, platformApi), this);
+
     PaperIntegrationRegistry integrationRegistry =
         new PaperIntegrationRegistry(platformApi.regions());
     getServer()
@@ -228,7 +239,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             searchRegistry,
             searchGate,
             searchSettings,
-            liveIntervalMillis);
+            liveIntervalMillis,
+            regionStores);
     getServer()
         .getServicesManager()
         .register(TripService.class, tripService, this, ServicePriority.Normal);
@@ -317,6 +329,9 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     if (platformApi != null) {
       // Cancels in-flight searches and stops the search worker pool.
       platformApi.shutdown();
+    }
+    if (regionStores != null) {
+      regionStores.close();
     }
     getServer().getServicesManager().unregisterAll(this);
     if (mountListener != null) {
