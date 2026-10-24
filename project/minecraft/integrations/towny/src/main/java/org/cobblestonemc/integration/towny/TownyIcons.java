@@ -36,52 +36,20 @@ final class TownyIcons {
     this.config = config;
   }
 
-  Display root() {
-    return display("root");
-  }
-
-  Display towns() {
-    return display("towns");
-  }
-
   /** A town's item: its banner, unless the config names one item for every town. */
   Display town(Town town) {
     String configured = config.getString("icons.town");
     if (configured != null && configured.trim().equalsIgnoreCase(MAP_COLOR)) {
       return Display.of(PaperIcon.of(banner(town.getMapColorHexCode())));
     }
-    return display("town");
+    return simpleConfiguredDisplay("town");
   }
 
-  Display home() {
-    return display("home");
-  }
-
-  Display outposts() {
-    return display("outposts");
-  }
-
-  Display outpost() {
-    return display("outpost");
-  }
-
-  Display plotTypes() {
-    return display("plot-types");
-  }
-
-  Display plotType() {
-    return display("plot-type");
-  }
-
-  Display plots() {
-    return display("plots");
-  }
-
-  Display plot() {
-    return display("plot");
-  }
-
-  private Display display(String key) {
+  /**
+   * The single item configured under {@code icons.<key>}, or the menu's own default if it is left
+   * blank.
+   */
+  public Display simpleConfiguredDisplay(String key) {
     return Icon.parse(config.getString("icons." + key)).map(Display::of).orElse(Display.none());
   }
 
