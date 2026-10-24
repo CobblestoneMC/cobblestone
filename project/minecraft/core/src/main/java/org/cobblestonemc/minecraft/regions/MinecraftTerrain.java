@@ -10,6 +10,7 @@ package org.cobblestonemc.minecraft.regions;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.MinecraftWorld.Environment;
 import org.cobblestonemc.regions.RegionSpec;
 import org.cobblestonemc.regions.RegionTerrain;
 
@@ -183,19 +184,19 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
   @Override
   public int family(int klass) {
     return switch (of(klass)) {
-      case SANDSTONE, STONE, MIXED_ROCK, DEEPSLATE -> RegionClass.STONE.id();
+      case SOFT_ROCK, ROCK, MIXED_ROCK, HARD_ROCK -> RegionClass.ROCK.id();
       default -> klass;
     };
   }
 
   /**
-   * A rock region's class is the band of rock nearest its cells' average hardness: sandstone,
-   * stone, mixed rock or deepslate. Nothing but the class is stored, so an estimate across a region
-   * is at most half a band from its true average.
+   * A rock region's class is the band of rock nearest its cells' average hardness: soft rock, rock,
+   * mixed rock or hard rock. Nothing but the class is stored, so an estimate across a region is at
+   * most half a band from its true average.
    */
   @Override
   public int label(int family, int[] counts) {
-    if (family != RegionClass.STONE.id()) {
+    if (family != RegionClass.ROCK.id()) {
       return family;
     }
     double sum = 0;
@@ -214,32 +215,56 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
     return nearest.id();
   }
 
+  /** Netherrack's hardness: soft rock in the Nether. */
+  private static final double NETHERRACK_HARDNESS = 0.4;
+
+  /** Sandstone's hardness: soft rock outside the Nether. */
+  private static final double SANDSTONE_HARDNESS = 0.8;
+
   /** The classes a rock region can be, softest first. */
   private static final RegionClass[] ROCK_BANDS = {
-    RegionClass.SANDSTONE, RegionClass.STONE, RegionClass.MIXED_ROCK, RegionClass.DEEPSLATE
+    RegionClass.SOFT_ROCK, RegionClass.ROCK, RegionClass.MIXED_ROCK, RegionClass.HARD_ROCK
   };
 
   /**
    * Returns the hardness typical of a class of breakable material, as Minecraft defines hardness.
    *
-   * <p>A fact about the terrain, not a cost: it is what a rock region's class is chosen by, and
-   * what an agent prices breaking it from with whatever tool it has.
+   * <p>A fact about the terrain, not a cost: it is what a rock region's class is chosen by, the
+   * same in every world. An agent prices breaking a class by {@link #hardness(RegionClass,
+   * Environment)} instead, which knows what the class is made of where it is.
    *
    * @param klass a class for which {@link RegionClass#solid()} holds
    * @return the hardness
    */
   public static double hardness(RegionClass klass) {
     return switch (klass) {
-      case GLASS -> 0.2;
-      case SANDSTONE -> 0.4;
-      case STONE -> 1.5;
+      case SOFT -> 0.2;
+      case SOFT_ROCK -> NETHERRACK_HARDNESS;
+      case ROCK -> 1.5;
       case MIXED_ROCK -> 2.25;
-      case DEEPSLATE -> 3.0;
-      case OBSIDIAN -> 50.0;
+      case HARD_ROCK -> 3.0;
+      case VERY_HARD_ROCK -> 50.0;
       case DIRT -> 0.5;
       case WOOD -> 2.0;
       default -> throw new IllegalArgumentException(klass + " is not breakable material");
     };
+  }
+
+  /**
+   * Returns the hardness typical of a class of breakable material in a world of an environment.
+   *
+   * <p>Soft rock is netherrack in the Nether and mostly sandstone anywhere else, at twice the
+   * hardness. Every other class is the same everywhere.
+   *
+   * @param klass a class for which {@link RegionClass#solid()} holds
+   * @param environment the world's environment
+   * @return the hardness
+   */
+  public static double hardness(RegionClass klass, Environment environment) {
+    if (klass == RegionClass.SOFT_ROCK && environment != Environment.NETHER) {
+      return SANDSTONE_HARDNESS;
+    }
+    return hardness(klass);
   }
 
   @Override

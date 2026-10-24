@@ -494,7 +494,7 @@ public final class ScenarioRunner {
     return new RegionHeuristic<MinecraftChunk>(
         region -> columns,
         region -> store,
-        MinecraftAgent.forPlayer(player, settings.excludedModes()),
+        region -> MinecraftAgent.forPlayer(player, settings.excludedModes(), world.environment()),
         behavior.cheapestCostPerBlock(),
         lastRegionSearches::add);
   }

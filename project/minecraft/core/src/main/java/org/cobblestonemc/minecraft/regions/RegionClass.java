@@ -55,26 +55,26 @@ public enum RegionClass {
   /** Open space nothing stands in: crossed by flying, or fallen through. */
   AIR(6, Body.OPEN, null),
 
-  /** Breakable by hand: glass, leaves, wool. */
-  GLASS(7, Body.SOLID, MiningClass.GLASS),
+  /** Breakable by hand: leaves, glass, wool. */
+  SOFT(7, Body.SOLID, MiningClass.SOFT),
 
-  /** Soft rock: sandstone, and netherrack and its ores. */
-  SANDSTONE(8, Body.SOLID, MiningClass.SANDSTONE),
+  /** Soft rock: netherrack and its ores, sandstone. */
+  SOFT_ROCK(8, Body.SOLID, MiningClass.SOFT_ROCK),
 
-  /** Rock: stone and its ores. Also the family every band of rock fills as. */
-  STONE(9, Body.SOLID, MiningClass.STONE),
+  /** Rock: stone and its ores. */
+  ROCK(9, Body.SOLID, MiningClass.ROCK),
 
   /**
-   * Stone and deepslate mixed: where deepslate is dithered into stone. Never a block's own class,
+   * Rock and hard rock mixed: where deepslate is dithered into stone. Never a block's own class,
    * only a region's; see {@link MinecraftTerrain#label}.
    */
   MIXED_ROCK(10, Body.SOLID, null),
 
   /** Hard rock: deepslate and its ores, end stone. */
-  DEEPSLATE(11, Body.SOLID, MiningClass.DEEPSLATE),
+  HARD_ROCK(11, Body.SOLID, MiningClass.HARD_ROCK),
 
   /** Obsidian, and whatever else needs a diamond pickaxe. */
-  OBSIDIAN(12, Body.SOLID, MiningClass.OBSIDIAN),
+  VERY_HARD_ROCK(12, Body.SOLID, MiningClass.VERY_HARD_ROCK),
 
   /** Dirt, sand and gravel. */
   DIRT(13, Body.SOLID, MiningClass.DIRT),

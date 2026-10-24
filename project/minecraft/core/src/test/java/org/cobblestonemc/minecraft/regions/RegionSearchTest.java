@@ -17,6 +17,7 @@ import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftChunk;
+import org.cobblestonemc.minecraft.MinecraftWorld.Environment;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.cobblestonemc.regions.RegionGraph;
@@ -97,11 +98,12 @@ class RegionSearchTest {
   }
 
   private static MinecraftAgent walker() {
-    return MinecraftAgent.forPlayer(TestPlayer.walker(), Set.of());
+    return MinecraftAgent.forPlayer(TestPlayer.walker(), Set.of(), Environment.OVERWORLD);
   }
 
   private static MinecraftAgent walkerWithoutPickaxe() {
-    return MinecraftAgent.forPlayer(TestPlayer.walker(), Set.of(MinecraftStepType.MINE));
+    return MinecraftAgent.forPlayer(
+        TestPlayer.walker(), Set.of(MinecraftStepType.MINE), Environment.OVERWORLD);
   }
 
   @Test
@@ -185,7 +187,8 @@ class RegionSearchTest {
     Cell goal = new Cell(300, GROUND, 4);
     Cell from = new Cell(0, GROUND, 4);
     MinecraftAgent boater =
-        MinecraftAgent.forPlayer(TestPlayer.create(false, true, false), Set.of());
+        MinecraftAgent.forPlayer(
+            TestPlayer.create(false, true, false), Set.of(), Environment.OVERWORLD);
 
     double boat = search(river, boater, goal, from).costToGoal(from);
     double swim = search(river, walker(), goal, from).costToGoal(from);
