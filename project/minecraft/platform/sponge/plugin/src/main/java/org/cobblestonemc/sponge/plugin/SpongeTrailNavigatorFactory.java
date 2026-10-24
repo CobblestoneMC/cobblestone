@@ -19,6 +19,7 @@ import org.cobblestonemc.plugin.config.ConfigKeys;
 import org.cobblestonemc.plugin.config.ConfigManager;
 import org.cobblestonemc.plugin.hologram.TrailLabels;
 import org.cobblestonemc.plugin.message.Messages;
+import org.cobblestonemc.plugin.navigator.TrailShape;
 import org.cobblestonemc.sponge.plugin.api.NavigatorFactory;
 import org.cobblestonemc.sponge.plugin.api.TrailNavigatorSettings;
 import org.spongepowered.api.ResourceKey;
@@ -84,6 +85,11 @@ public final class SpongeTrailNavigatorFactory implements NavigatorFactory {
             .get(TrailNavigatorSettings.SHOW_LABEL)
             .<BooleanSupplier>map(show -> () -> show)
             .orElse(() -> config.get(keys.tripsHolograms));
+    TrailShape shape =
+        new TrailShape(
+            config.get(keys.trailLeadBlocks),
+            config.get(keys.trailLeadSeconds),
+            config.get(keys.trailGoalClearance));
     return new SpongeTrailNavigator(
         player,
         path,
@@ -96,6 +102,7 @@ public final class SpongeTrailNavigatorFactory implements NavigatorFactory {
         config.get(keys.tripsRecalculateDistance),
         messages,
         labels,
+        shape,
         showLabel);
   }
 

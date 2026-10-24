@@ -38,11 +38,11 @@ import org.cobblestonemc.plugin.trip.TripManager;
  * stacked.
  *
  * <p>Labels show only while the player stands still: once they have stayed in one block for {@link
- * #STILL_TICKS}, each trail's label appears over the point its navigator gives, {@link #DISTANCE}
- * blocks from them, in an open block they can see (see {@link HologramPlacement}); a trail with no
- * such spot yet gets its label as soon as it has one. Labels stay where they appeared, and all go
- * away as soon as the player leaves the block. Someone following a trail knows where it goes; one
- * who stops may not.
+ * #STILL_TICKS}, each trail's label appears over its trail head, where its trail starts ahead of
+ * them, in an open block they can see (see {@link HologramPlacement}); a trail with no such spot
+ * yet gets its label as soon as it has one. Labels stay where they appeared, and all go away as
+ * soon as the player leaves the block. Someone following a trail knows where it goes; one who stops
+ * may not.
  *
  * <p>Each label reads {@code Cancel} in red above the trip's name, and hitting that cancels the
  * trip. The client can't hit a label (see {@link LabelHit}), so the platform reports every left
@@ -53,9 +53,6 @@ import org.cobblestonemc.plugin.trip.TripManager;
  * @param <L> the native location type
  */
 public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements TrailLabels<L> {
-
-  /** How far from the player, in a straight line, a label floats over their trail. */
-  static final double DISTANCE = 4.5;
 
   /** How long the player must stay in one block before their labels appear: one second. */
   static final int STILL_TICKS = 20;
@@ -224,7 +221,7 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
       }
       Optional<Vec3> spot =
           source
-              .labelPoint(DISTANCE)
+              .headPoint()
               .map(platform::point)
               .flatMap(
                   point ->

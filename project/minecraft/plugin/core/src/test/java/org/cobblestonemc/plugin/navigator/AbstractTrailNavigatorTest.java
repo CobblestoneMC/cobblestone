@@ -8,6 +8,7 @@
 package org.cobblestonemc.plugin.navigator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -27,10 +28,11 @@ import org.cobblestonemc.plugin.hologram.TrailLabels;
 import org.cobblestonemc.plugin.message.Messages;
 import org.junit.jupiter.api.Test;
 
-/** How {@link AbstractTrailNavigator} decides which trail nodes the smoother may move. */
+/** How {@link AbstractTrailNavigator} smooths and draws its trail, and where its labels go. */
 class AbstractTrailNavigatorTest {
 
   private static final UUID PLAYER = UUID.randomUUID();
+  private static final double LEAD = TrailShape.DEFAULT.leadBlocks();
 
   @Test
   void minedNodesStayAtTheBlockTheyMine() {
@@ -56,56 +58,157 @@ class AbstractTrailNavigatorTest {
   }
 
   @Test
-  void labelPointIsOnTheTrailAtTheGivenDistance() {
-    var navigator = new TestNavigator(straightPath(10, -1));
+  void theTrailStartsAFewBlocksAheadOfAPlayerStandingStill() {
+    var navigator = new TestNavigator(straightPath(20, -1));
     navigator.tick();
 
-    Vec3 point = navigator.labelPoint(2.5).orElseThrow();
-    assertEquals(2.5, point.minus(navigator.player).length(), 1e-9);
-    assertEquals(0.9, point.y(), 1e-9, "at the trail's height");
-    assertEquals(0.5, point.z(), 1e-9, "on the straight trail");
-    assertTrue(point.x() > navigator.player.x(), "ahead of the player");
+    Vec3 head = navigator.trailHead();
+    assertEquals(0.5 + LEAD, head.x(), 1e-6, "along the trail");
+    assertEquals(0.9, head.y(), 1e-9, "at the trail's height");
+    assertEquals(0.5, head.z(), 1e-9, "on the straight trail");
   }
 
   @Test
-  void labelPointFollowsThePlayerAlongTheTrail() {
-    var navigator = new TestNavigator(straightPath(10, -1));
+  void theTrailStartsFurtherAheadOfAMovingPlayer() {
+    var navigator = new TestNavigator(straightPath(40, -1));
+    for (int tick = 0; tick < 60; tick++) {
+      navigator.player = new Vec3(0.5 + tick * 0.4, 0, 0.5); // 8 blocks a second
+      navigator.tick();
+    }
+
+    double gap = navigator.trailHead().x() - navigator.player.x();
+    // Measured along the trail from the point of it nearest the player, a little ahead of them.
+    assertEquals(TrailShape.DEFAULT.leadSeconds() * 8, gap, 0.5, "a second's travel ahead");
+  }
+
+  @Test
+  void noParticlesBetweenThePlayerAndTheTrailHead() {
+    var navigator = new TestNavigator(straightPath(20, -1));
+    navigator.tickMany(200);
+
+    double nearest = navigator.particles.stream().mapToDouble(Vec3::x).min().orElseThrow();
+    assertTrue(nearest > 0.5 + LEAD - 0.8, "nearest at x " + nearest);
+  }
+
+  @Test
+  void aroundACornerTheTrailHeadStaysJustPastWhatThePlayerCanSee() {
+    // Two steps east, then north up a corridor whose west wall hides it from the player.
+    List<Step<Vec3, MinecraftStepPayload>> steps = new ArrayList<>();
+    steps.add(walk(new Vec3(1, 0, 0)));
+    steps.add(walk(new Vec3(2, 0, 0)));
+    for (int z = -1; z >= -12; z--) {
+      steps.add(walk(new Vec3(2, 0, z)));
+    }
+    TrailShape far = new TrailShape(12, 0, 3); // well up the corridor
+    var open = new TestNavigator(new Path<>(new Vec3(0, 0, 0), steps), far);
+    open.tick();
+    assertTrue(open.trailHead().z() < -5, "without the wall: " + open.trailHead());
+
+    var walled = new TestNavigator(new Path<>(new Vec3(0, 0, 0), steps), far);
+    walled.probe = (x, y, z) -> y < 0 || (x <= 1 && z <= -1) ? TrailBlock.SOLID : TrailBlock.OPEN;
+    walled.tick();
+    Vec3 head = walled.trailHead();
+    assertTrue(head.z() < 0.5 && head.z() > -2.0, "a stub around the corner: " + head);
+  }
+
+  @Test
+  void withNoLeadTheTrailStartsAtThePlayer() {
+    var navigator = new TestNavigator(straightPath(20, -1), new TrailShape(0, 0, 3));
     navigator.player = new Vec3(4.5, 0, 0.5);
     navigator.tick();
-
-    Vec3 point = navigator.labelPoint(2.5).orElseThrow();
-    assertTrue(point.x() > 6.5 && point.x() < 7.0, "2.5 blocks past the player: " + point);
+    assertEquals(4.5, navigator.trailHead().x(), 1e-6);
   }
 
   @Test
-  void noLabelPointOffTheTrail() {
+  void theTrailStopsShortOfADestinationInSight() {
     var navigator = new TestNavigator(straightPath(10, -1));
-    navigator.tick();
-    navigator.player = new Vec3(2.5, 0, 6.5);
+    navigator.tickMany(200);
 
-    assertEquals(Optional.empty(), navigator.labelPoint(2.5));
+    double furthest = navigator.particles.stream().mapToDouble(Vec3::x).max().orElseThrow();
+    double goal = 10.5;
+    assertTrue(furthest < goal - TrailShape.DEFAULT.goalClearance() + 0.8, "at x " + furthest);
   }
 
   @Test
-  void labelPointFollowsTheGuideBackToTheTrail() {
+  void withNoClearanceTheTrailRunsToTheDestination() {
+    var navigator = new TestNavigator(straightPath(10, -1), new TrailShape(3, 1, 0));
+    navigator.tickMany(200);
+
+    double furthest = navigator.particles.stream().mapToDouble(Vec3::x).max().orElseThrow();
+    assertTrue(furthest > 9.5, "at x " + furthest);
+  }
+
+  @Test
+  void theTrailRunsToADestinationOutOfSight() {
+    var navigator = new TestNavigator(straightPath(10, -1));
+    // A wall at x = 8 from head height up: the trail passes under it, but the player can't see
+    // the destination over it.
+    navigator.probe = (x, y, z) -> y < 0 || (x == 8 && y >= 1) ? TrailBlock.SOLID : TrailBlock.OPEN;
+    navigator.tickMany(200);
+
+    double furthest = navigator.particles.stream().mapToDouble(Vec3::x).max().orElseThrow();
+    assertTrue(furthest > 9.5, "at x " + furthest);
+  }
+
+  @Test
+  void theDestinationGlitters() {
+    var navigator = new TestNavigator(straightPath(10, -1));
+    navigator.tickMany(50);
+    assertFalse(navigator.highlights.isEmpty());
+    assertTrue(navigator.highlights.stream().allMatch(point -> point.x() > 9.5), "at the end");
+  }
+
+  @Test
+  void aDoorIsHighlightedEvenInsideTheGap() {
+    var navigator = new TestNavigator(straightPath(10, 2)); // the third step opens a door
+    navigator.tickMany(50);
+
+    assertTrue(navigator.highlights.stream().anyMatch(point -> point.x() < 3.5), "at the door");
+  }
+
+  @Test
+  void theTrailHeadCarriesOnThroughADoor() {
+    var navigator = new TestNavigator(straightPath(20, 1)); // the second step opens a door
+    navigator.tick();
+    assertEquals(0.5 + LEAD, navigator.trailHead().x(), 1e-6);
+  }
+
+  @Test
+  void labelPointIsTheTrailHead() {
+    var navigator = new TestNavigator(straightPath(20, -1));
+    navigator.tick();
+    assertEquals(Optional.of(navigator.trailHead()), navigator.labelPoint());
+  }
+
+  @Test
+  void offTheTrailBeforeTheGuideIsFoundTheLabelPointIsOnTheTrail() {
+    var navigator = new TestNavigator(straightPath(10, -1));
+    navigator.player = new Vec3(2.5, 0, 6.5);
+    navigator.tick();
+
+    Vec3 point = navigator.labelPoint().orElseThrow();
+    assertEquals(0.5, point.z(), 1e-6, "on the trail");
+    assertEquals(2.5 + LEAD, point.x(), 0.1, "ahead of the point of it nearest the player");
+  }
+
+  @Test
+  void theTrailHeadFollowsTheGuideBackToTheTrail() {
     var navigator = new TestNavigator(straightPath(10, -1));
     navigator.player = new Vec3(2.5, 0, 6.5); // off to the side of the trail
     navigator.tick();
-    assertEquals(Optional.empty(), navigator.labelPoint(2.5), "no guide drawn yet");
 
     // A guide straight back toward the trail, as the guide search would find.
     List<Step<Vec3, MinecraftStepPayload>> guide = new ArrayList<>();
     for (int z = 5; z >= 1; z--) {
-      guide.add(
-          new Step<>(new Vec3(2, 0, z), 1, 1, MinecraftStepPayload.of(MinecraftStepType.WALK)));
+      guide.add(walk(new Vec3(2, 0, z)));
     }
     navigator.setGuidePath(new Path<>(new Vec3(2, 0, 6), guide));
     navigator.tick();
 
-    Vec3 point = navigator.labelPoint(2.5).orElseThrow();
-    assertEquals(2.5, point.minus(navigator.player).length(), 1e-9);
-    assertEquals(2.5, point.x(), 1e-9, "on the guide");
-    assertTrue(point.z() < 4.5 && point.z() > 3.5, "toward the trail: " + point);
+    Vec3 point = navigator.labelPoint().orElseThrow();
+    assertEquals(2.5, point.x(), 1e-6, "on the guide");
+    // The guide is drawn from the player's feet, up to the trail's height, so a little less far.
+    assertEquals(6.5 - LEAD, point.z(), 0.5, "toward the trail");
   }
 
   @Test
@@ -113,8 +216,7 @@ class AbstractTrailNavigatorTest {
     var navigator = new TestNavigator(straightPath(10, -1));
     navigator.showLabel.set(false);
     navigator.tick();
-
-    assertEquals(Optional.empty(), navigator.labelPoint(2.5));
+    assertEquals(Optional.empty(), navigator.labelPoint());
   }
 
   @Test
@@ -139,20 +241,8 @@ class AbstractTrailNavigatorTest {
     assertEquals(List.of("attach " + PLAYER, "detach " + PLAYER), calls);
   }
 
-  @Test
-  void noLabelPointPastAnActionStep() {
-    var navigator = new TestNavigator(straightPath(10, 1)); // the second step opens a door
-    navigator.tick();
-
-    assertEquals(Optional.empty(), navigator.labelPoint(2.5));
-  }
-
-  @Test
-  void noLabelPointNearTheEnd() {
-    var navigator = new TestNavigator(straightPath(2, -1));
-    navigator.tick();
-
-    assertEquals(Optional.empty(), navigator.labelPoint(2.5));
+  private static Step<Vec3, MinecraftStepPayload> walk(Vec3 to) {
+    return new Step<>(to, 1, 1, MinecraftStepPayload.of(MinecraftStepType.WALK));
   }
 
   /** {@code length} walked steps east from the origin; step {@code door} (if any) opens a door. */
@@ -172,18 +262,33 @@ class AbstractTrailNavigatorTest {
   private static final class TestNavigator extends AbstractTrailNavigator<Vec3> {
 
     Vec3 player = new Vec3(0.5, 0, 0.5);
+    TrailSmoother.BlockProbe probe = (x, y, z) -> y < 0 ? TrailBlock.SOLID : TrailBlock.OPEN;
     final AtomicBoolean showLabel;
+    final List<Vec3> particles = new ArrayList<>();
+    final List<Vec3> highlights = new ArrayList<>();
 
     TestNavigator(Path<Vec3, MinecraftStepPayload> path) {
-      this(path, TrailLabels.none());
+      this(path, TrailLabels.none(), TrailShape.DEFAULT);
+    }
+
+    TestNavigator(Path<Vec3, MinecraftStepPayload> path, TrailShape shape) {
+      this(path, TrailLabels.none(), shape);
     }
 
     TestNavigator(Path<Vec3, MinecraftStepPayload> path, TrailLabels<Vec3> labels) {
-      this(path, new AtomicBoolean(true), labels);
+      this(path, labels, TrailShape.DEFAULT);
     }
 
     private TestNavigator(
-        Path<Vec3, MinecraftStepPayload> path, AtomicBoolean showLabel, TrailLabels<Vec3> labels) {
+        Path<Vec3, MinecraftStepPayload> path, TrailLabels<Vec3> labels, TrailShape shape) {
+      this(path, labels, shape, new AtomicBoolean(true));
+    }
+
+    private TestNavigator(
+        Path<Vec3, MinecraftStepPayload> path,
+        TrailLabels<Vec3> labels,
+        TrailShape shape,
+        AtomicBoolean showLabel) {
       super(
           64,
           1,
@@ -191,6 +296,7 @@ class AbstractTrailNavigatorTest {
           new Messages(Locale.ROOT, false, new SilentLogger()),
           Locale.ROOT,
           labels,
+          shape,
           showLabel::get);
       this.showLabel = showLabel;
       setPath(path);
@@ -217,6 +323,17 @@ class AbstractTrailNavigatorTest {
     }
 
     @Override
+    protected Vec3 playerEye() {
+      return player.plus(new Vec3(0, 1.62, 0));
+    }
+
+    void tickMany(int ticks) {
+      for (int i = 0; i < ticks; i++) {
+        tick();
+      }
+    }
+
+    @Override
     protected String playerWorldKey() {
       return "world";
     }
@@ -238,14 +355,18 @@ class AbstractTrailNavigatorTest {
 
     @Override
     protected void spawnTrailParticle(
-        double x, double y, double z, double vx, double vy, double vz) {}
+        double x, double y, double z, double vx, double vy, double vz) {
+      particles.add(new Vec3(x, y, z));
+    }
 
     @Override
-    protected void spawnHighlightParticle(double x, double y, double z) {}
+    protected void spawnHighlightParticle(double x, double y, double z) {
+      highlights.add(new Vec3(x, y, z));
+    }
 
     @Override
     protected TrailSmoother.BlockProbe blockProbe() {
-      return (x, y, z) -> y < 0 ? TrailBlock.SOLID : TrailBlock.OPEN;
+      return probe;
     }
   }
 

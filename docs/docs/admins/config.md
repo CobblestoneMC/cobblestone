@@ -220,6 +220,9 @@ own configuration.
 | `navigators.trail.colors` | `[FFFFFF, 4AA8FF]` | live |
 | `navigators.trail.density` | `0.2` | live |
 | `navigators.trail.particle_ticks` | `10` | live |
+| `navigators.trail.lead_blocks` | `3` | live |
+| `navigators.trail.lead_seconds` | `1` | live |
+| `navigators.trail.goal_clearance` | `3` | live |
 
 - **`buffer_cells`**: Length of the rendered path segment ahead of the player.
 - **`particles`**: Particle types, chosen at random per particle. `TRAIL` and `DUST` use `colors`;
@@ -233,5 +236,11 @@ own configuration.
   a 70% chance of one particle per cell per tick.
 - **`particle_ticks`**: How long each `TRAIL` particle lasts. Shorter is crisper on the move;
   longer is fuller.
+- **`lead_blocks`**, **`lead_seconds`**: The trail starts ahead of the player, so its particles
+  lead them rather than streaming past: at least `lead_blocks` along the route, or as far as they
+  travel in `lead_seconds` if that is further (up to 32 blocks). Around a corner it starts just
+  past what they can see. Set both to `0` to draw the trail from the player's feet.
+- **`goal_clearance`**: How far short of a destination the player can see the trail stops, where
+  it glitters. `0` runs it all the way.
 
 Particle names follow the server's particle registry.
