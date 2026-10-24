@@ -84,9 +84,6 @@ public final class ConfigKeys {
    */
   public final ConfigKey<Double> algorithmHeuristicWeight;
 
-  /** Which estimate the fine search runs on. Mutable. */
-  public final ConfigKey<String> algorithmHeuristic;
-
   /**
    * How far Cobblestone may go to obtain a chunk a search wants to walk through. The accepted
    * values and the default are platform-specific; see {@link ConfigPlatform}. Requires a restart —
@@ -360,27 +357,6 @@ public final class ConfigKeys {
                 """
                 A* heuristic weight. 1.0 finds optimal paths but explores a lot; higher is much
                 faster and slightly suboptimal (bounded by this factor).""")
-            .mutable()
-            .register();
-
-    this.algorithmHeuristic =
-        manager
-            .key(
-                "search.algorithm.heuristic",
-                SearchSettings.DEFAULT_HEURISTIC.name(),
-                Codec.ofString())
-            .comment(
-                """
-                Which estimate the search prices its remaining journey with.
-
-                REGIONS searches connected patches of ground, water, rock and air backwards from
-                the destination, so it reasons about where the terrain actually goes. It finds much
-                better paths and solves routes RUNNING_AVERAGE cannot solve at all. The terrain it
-                reasons over is cut into regions once and shared by every search (see
-                search.regions), but the first search over new terrain pays for reading it.
-
-                RUNNING_AVERAGE extrapolates from the cost of the last few steps. Nearly free, and
-                it mistakes a cheap river for a cheap route.""")
             .mutable()
             .register();
 

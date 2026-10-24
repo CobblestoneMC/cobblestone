@@ -85,8 +85,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     }
 
     // Regions are shared by every search and forgotten when a block in their chunk changes.
-    RegionConfig regionConfig = new RegionConfig(config, keys, getLogger()::warning);
-    this.regionStores = regionConfig.stores();
+    this.regionStores = RegionConfig.stores(config, keys);
 
     // The transition registry is owned by the plugin; the platform API only reads from / registers
     // into it. Both are reachable to other plugins via the registered plugin API.
@@ -179,14 +178,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             () -> !folia && config.get(keys.tripsHud),
             agent -> new PaperHudDisplay(agent.player()),
             logger);
-    tripManager.onChange(
-        agent -> {
-          tripHud.refresh(agent);
-          // A player who has stopped navigating no longer needs their surroundings kept built.
-          if (tripManager.trips(agent.uuid()).isEmpty()) {
-            regionStores.release(agent.uuid());
-          }
-        });
+    tripManager.onChange(tripHud::refresh);
     getServer().getOnlinePlayers().forEach(player -> tripHud.load(player.getUniqueId()));
 
     // Discovered vanilla portals are surfaced to searches as an internal transition provider, and
@@ -235,7 +227,6 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                 .tier1UnsolvedPessimism(config.get(keys.algorithmTier1UnsolvedPessimism))
                 .runningAverageWidth(config.get(keys.algorithmRunningAverageWidth))
                 .heuristicWeight(config.get(keys.algorithmHeuristicWeight))
-                .heuristic(regionConfig.heuristic())
                 .build();
 
     // The trip service is the shared "search-then-guide" code path: the /navigate command and

@@ -32,9 +32,7 @@ import org.cobblestonemc.regions.RegionAgent;
  * only by its class; neither set of numbers is a precise constant the other must match. What keeps
  * them honest is measurement: {@code bench verify} compares these estimates with the fine search's
  * true costs, and a drift of either side shows up there as estimates moving away from 0.7–0.95 of
- * the truth. They had drifted once, by accident: walking was 0.215 against the search's 0.20 and
- * swimming 0.45 against 0.30, which over-priced dry ground by 7.5% and water by 50% everywhere at
- * once. Change either side, run verify and a sweep.
+ * the truth. Change either side, run verify and a sweep.
  *
  * <p><b>Every rate is at least {@link #cheapest()} per block of straight-line distance.</b> The
  * backward search focuses itself with that bound, and a crossing priced below it would let the
@@ -46,9 +44,10 @@ public final class MinecraftAgent implements RegionAgent {
    * What a block costs where the agent has no way through but the graph needs a price: rock, for an
    * agent that cannot dig.
    *
-   * <p>Twice a nominal mining rate of 1.4 s a block. Finite on purpose: infinity would turn a gap
-   * in the graph into a fence, and the estimate has to be able to be wrong without making a
-   * solvable route unreachable.
+   * <p>Fourteen blocks of walking a block, so rock is a route only when nothing else is. Finite on
+   * purpose: infinity would turn a gap in the graph into a fence, and the estimate has to be able
+   * to be wrong without making a solvable route unreachable. Not a mining rate: an agent that digs
+   * pays the break time of what it digs instead, which for stone is more than this.
    */
   public static final double FALLBACK_COST_PER_BLOCK = 2.8;
 
@@ -186,8 +185,8 @@ public final class MinecraftAgent implements RegionAgent {
    * priced through rock, at {@link #FALLBACK_COST_PER_BLOCK}. That keeps the graph connected. A gap
    * in it — a seam the builder joined too strictly, a corner it never looked across — would
    * otherwise make whole regions unreachable, and the search would spend its effort proving it
-   * rather than answering. Priced at twice the cost of digging, rock is a route only when nothing
-   * else is.
+   * rather than answering. Priced at fourteen blocks of walking a block, rock is a route only when
+   * nothing else is.
    *
    * @param clazz the class
    * @return {@code true} if usable

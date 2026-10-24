@@ -13,6 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.ChunkFetch;
 import org.cobblestonemc.minecraft.MinecraftChunk;
+import org.cobblestonemc.regions.RegionColumn;
 import org.cobblestonemc.regions.TerrainSource;
 import org.cobblestonemc.stonebrick.platform.MissingCaptureLog;
 import org.cobblestonemc.stonebrick.platform.StonebrickPlatformApi;
@@ -58,7 +59,7 @@ final class CaptureChunkColumns implements TerrainSource<MinecraftChunk> {
 
   @Override
   public FutureOr<MinecraftChunk> column(int chunkX, int chunkZ) {
-    long key = ((long) chunkX << 32) | (chunkZ & 0xFFFF_FFFFL);
+    long key = RegionColumn.key(chunkX, chunkZ);
     if (chunks.containsKey(key)) {
       return FutureOr.of(chunks.get(key));
     }
@@ -68,7 +69,7 @@ final class CaptureChunkColumns implements TerrainSource<MinecraftChunk> {
       long started = System.nanoTime();
       reading =
           platform
-              .fetchForProfile(world, chunkX, chunkZ, beyond)
+              .fetchForRegions(world, chunkX, chunkZ, beyond)
               .thenApply(
                   fetch -> fetch instanceof ChunkFetch.Success success ? success.chunk() : null)
               .whenComplete(

@@ -41,7 +41,7 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
   private final Map<String, StonebrickWorld> worlds = new HashMap<>();
 
   /** Reads made to build the region layer rather than to expand the search. */
-  private final AtomicLong profileReads = new AtomicLong();
+  private final AtomicLong regionReads = new AtomicLong();
 
   /**
    * Creates a platform over a loaded capture, with no simulated IO cost.
@@ -162,13 +162,13 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
    * @param log where to record reads outside the capture
    * @return the column, or a future of {@code null} where there is none
    */
-  public CompletableFuture<ChunkFetch> fetchForProfile(
+  public CompletableFuture<ChunkFetch> fetchForRegions(
       String worldKey, int chunkX, int chunkZ, MissingCaptureLog log) {
     return read(worldKey, chunkX, chunkZ, log, true);
   }
 
   private CompletableFuture<ChunkFetch> read(
-      String key, int chunkX, int chunkZ, MissingCaptureLog log, boolean forProfile) {
+      String key, int chunkX, int chunkZ, MissingCaptureLog log, boolean forRegions) {
     if (ungenerated.contains(((long) chunkX << 32) | (chunkZ & 0xFFFF_FFFFL))) {
       return CompletableFuture.completedFuture(ChunkFetch.Failed.permanent());
     }
@@ -180,11 +180,11 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
       log.missingColumn(key, chunkX, chunkZ);
       return CompletableFuture.completedFuture(ChunkFetch.Failed.permanent());
     }
-    if (forProfile) {
+    if (forRegions) {
       // Counted here rather than on entry: a column that is ungenerated or uncaptured returns
       // above without touching the disk, and counting those would let the region layer's share
       // exceed the total reads it is supposed to be part of.
-      profileReads.incrementAndGet();
+      regionReads.incrementAndGet();
     }
     // Decoding happens inside the read, after its modelled delay: a live server pays its decode as
     // part of the read, and charging it up front would let a prefetch nobody waits on cost the
@@ -235,8 +235,8 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
    *
    * @return the region layer's read count
    */
-  public long profileReads() {
-    return profileReads.get();
+  public long regionReads() {
+    return regionReads.get();
   }
 
   /**

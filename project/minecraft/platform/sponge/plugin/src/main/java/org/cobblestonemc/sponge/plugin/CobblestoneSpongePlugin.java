@@ -143,8 +143,7 @@ public final class CobblestoneSpongePlugin {
     }
 
     // Regions are shared by every search and forgotten when a block in their chunk changes.
-    RegionConfig regionConfig = new RegionConfig(config, keys, logger::warn);
-    this.regionStores = regionConfig.stores();
+    this.regionStores = RegionConfig.stores(config, keys);
 
     this.navigationService =
         new SpongeNavigationServiceImpl(
@@ -218,14 +217,7 @@ public final class CobblestoneSpongePlugin {
             () -> config.get(keys.tripsHud),
             agent -> new SpongeHudDisplay(agent.player()),
             cobblestoneLogger);
-    tripManager.onChange(
-        agent -> {
-          tripHud.refresh(agent);
-          // A player who has stopped navigating no longer needs their surroundings kept built.
-          if (tripManager.trips(agent.uuid()).isEmpty()) {
-            regionStores.release(agent.uuid());
-          }
-        });
+    tripManager.onChange(tripHud::refresh);
     // Cobblestone's own destinations sit under its id like an integration's, but are written in its
     // own terms rather than adapted from the integration API.
     integrationRegistry.registerProvider(
@@ -266,7 +258,6 @@ public final class CobblestoneSpongePlugin {
                 .tier1UnsolvedPessimism(config.get(keys.algorithmTier1UnsolvedPessimism))
                 .runningAverageWidth(config.get(keys.algorithmRunningAverageWidth))
                 .heuristicWeight(config.get(keys.algorithmHeuristicWeight))
-                .heuristic(regionConfig.heuristic())
                 .build();
     this.tripService =
         new SpongeTripServiceImpl(

@@ -68,7 +68,7 @@ public final class RegionGraph<C> {
    */
   private final Map<Long, RegionColumn> arrived = new ConcurrentHashMap<>();
 
-  private final RegionContacts contacts = new RegionContacts();
+  private final RegionJoins joins;
 
   // --- regions, struct of arrays ---
   private int regionCount;
@@ -104,6 +104,7 @@ public final class RegionGraph<C> {
     this.height = spec.height();
     this.shift = spec.shift();
     this.mask = spec.width() - 1;
+    this.joins = new RegionJoins(terrain, region -> regionClass[region], height);
   }
 
   // ------------------------------------------------------------------------------------------
@@ -119,7 +120,7 @@ public final class RegionGraph<C> {
    * @return the region, or {@link #NONE} — including when the column has not been placed
    */
   public int regionAt(int x, int y, int z) {
-    Placed column = columns.get(columnKey(x >> shift, z >> shift));
+    Placed column = columns.get(RegionColumn.key(x >> shift, z >> shift));
     if (column == null) {
       return NONE;
     }
@@ -210,6 +211,16 @@ public final class RegionGraph<C> {
   }
 
   /**
+   * Returns the column holding a world X or Z.
+   *
+   * @param coordinate the world X or Z
+   * @return the column X or Z
+   */
+  public int columnOf(int coordinate) {
+    return coordinate >> shift;
+  }
+
+  /**
    * Returns how many portals the graph holds; every portal index is below this.
    *
    * @return the portal count
@@ -225,24 +236,6 @@ public final class RegionGraph<C> {
    */
   public int regions() {
     return regionCount;
-  }
-
-  /**
-   * Returns how many columns have been placed.
-   *
-   * @return the column count
-   */
-  public int columnsBuilt() {
-    return columns.size();
-  }
-
-  /**
-   * Returns the store this graph reads columns from.
-   *
-   * @return the store
-   */
-  public RegionStore<C> store() {
-    return store;
   }
 
   /**
@@ -316,7 +309,7 @@ public final class RegionGraph<C> {
   }
 
   private @Nullable CompletableFuture<Void> completeColumn(int cx, int cz) {
-    Placed column = columns.get(columnKey(cx, cz));
+    Placed column = columns.get(RegionColumn.key(cx, cz));
     if (column != null && column.complete) {
       return null;
     }
@@ -341,13 +334,13 @@ public final class RegionGraph<C> {
     seam(cx, cz, false);
     seam(cx, cz - 1, false);
     seamNanos += System.nanoTime() - started;
-    columns.get(columnKey(cx, cz)).complete = true;
+    columns.get(RegionColumn.key(cx, cz)).complete = true;
     return null;
   }
 
   /** Places a column if the store has it ready, or returns the future it arrives on. */
   private @Nullable CompletableFuture<?> place(int cx, int cz) {
-    long key = columnKey(cx, cz);
+    long key = RegionColumn.key(cx, cz);
     if (columns.containsKey(key)) {
       return null;
     }
@@ -376,7 +369,7 @@ public final class RegionGraph<C> {
   /** Copies a column's regions and portals in at this graph's numbering. */
   private Placed placed(RegionColumn column) {
     int base = regionCount;
-    long key = columnKey(column.columnX, column.columnZ);
+    long key = RegionColumn.key(column.columnX, column.columnZ);
     for (int r = 0; r < column.regionClass.length; r++) {
       int id = newRegion(column.regionClass[r], key);
       System.arraycopy(column.regionBox, r * 6, regionBox, id * 6, 6);
@@ -400,12 +393,12 @@ public final class RegionGraph<C> {
    * down, a fall from a ledge — across the boundary between two. Both columns must be placed.
    */
   private void seam(int cx, int cz, boolean alongX) {
-    long key = (columnKey(cx, cz) << 1) | (alongX ? 1 : 0);
+    long key = (RegionColumn.key(cx, cz) << 1) | (alongX ? 1 : 0);
     if (!seams.add(key)) {
       return;
     }
-    Placed low = columns.get(columnKey(cx, cz));
-    Placed high = columns.get(alongX ? columnKey(cx + 1, cz) : columnKey(cx, cz + 1));
+    Placed low = columns.get(RegionColumn.key(cx, cz));
+    Placed high = columns.get(alongX ? RegionColumn.key(cx + 1, cz) : RegionColumn.key(cx, cz + 1));
     int ox = cx << shift;
     int oz = cz << shift;
     int width = mask + 1;
@@ -423,58 +416,16 @@ public final class RegionGraph<C> {
         int wbz = alongX ? oz + t : oz + width;
         int ra = low.regionAt(ax, ly, az);
         int rb = high.regionAt(bx, ly, bz);
-        contacts.touch(ra, rb, wax, y, waz, wbx, y, wbz);
-        if (ra != NONE && terrain.standing(regionClass[ra])) {
-          seamSteps(ra, high, bx, ly, bz, wax, waz, wbx, wbz);
-          if (rb != NONE && terrain.open(regionClass[rb])) {
-            seamDrop(ra, high, bx, ly, bz, wax, waz, wbx, wbz);
-          }
+        joins.touch(ra, rb, wax, y, waz, wbx, y, wbz);
+        if (ra != NONE && joins.standing(ra)) {
+          joins.beside(ra, wax, y, waz, high, bx, ly, bz, wbx, wbz);
         }
-        if (rb != NONE && terrain.standing(regionClass[rb])) {
-          seamSteps(rb, low, ax, ly, az, wbx, wbz, wax, waz);
-          if (ra != NONE && terrain.open(regionClass[ra])) {
-            seamDrop(rb, low, ax, ly, az, wbx, wbz, wax, waz);
-          }
+        if (rb != NONE && joins.standing(rb)) {
+          joins.beside(rb, wbx, y, wbz, low, ax, ly, az, wax, waz);
         }
       }
     }
-    contacts.flush(this::newPortal);
-  }
-
-  private void seamSteps(
-      int from, Placed other, int lx, int ly, int lz, int fx, int fz, int tx, int tz) {
-    int y = minY + ly;
-    if (ly + 1 < height) {
-      step(from, other.regionAt(lx, ly + 1, lz), fx, y, fz, tx, y + 1, tz);
-    }
-    if (ly > 0) {
-      step(from, other.regionAt(lx, ly - 1, lz), fx, y, fz, tx, y - 1, tz);
-    }
-  }
-
-  private void step(int from, int to, int fx, int fy, int fz, int tx, int ty, int tz) {
-    if (to != NONE && to != from && terrain.steppable(regionClass[to])) {
-      contacts.touch(from, to, fx, fy, fz, tx, ty, tz);
-    }
-  }
-
-  private void seamDrop(
-      int from, Placed other, int lx, int ly, int lz, int fx, int fz, int tx, int tz) {
-    int y = minY + ly;
-    for (int k = 1; k <= terrain.deepestFall() && ly - k >= 0; k++) {
-      int below = other.regionAt(lx, ly - k, lz);
-      if (below == NONE) {
-        return;
-      }
-      int c = regionClass[below];
-      if (terrain.open(c)) {
-        continue;
-      }
-      if (terrain.landing(c, k)) {
-        contacts.drop(from, below, fx, y, fz, tx, y, tz);
-      }
-      return;
-    }
+    joins.flush(this::newPortal);
   }
 
   // ------------------------------------------------------------------------------------------
@@ -523,10 +474,6 @@ public final class RegionGraph<C> {
     regionPortalCount[region] = count + 1;
   }
 
-  private static long columnKey(int cx, int cz) {
-    return ((long) cx << 32) | (cz & 0xFFFF_FFFFL);
-  }
-
   private static int unpackX(long key) {
     return (int) (key >> 32);
   }
@@ -536,7 +483,7 @@ public final class RegionGraph<C> {
   }
 
   /** A stored column, placed in this graph at an offset. */
-  private static final class Placed {
+  private static final class Placed implements RegionJoins.Cells {
 
     final RegionColumn column;
     final int base;
@@ -547,7 +494,8 @@ public final class RegionGraph<C> {
       this.base = base;
     }
 
-    int regionAt(int lx, int ly, int lz) {
+    @Override
+    public int regionAt(int lx, int ly, int lz) {
       int local = column.regionAt(lx, ly, lz);
       return local == RegionColumn.NONE ? NONE : base + local;
     }

@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
@@ -34,7 +35,7 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
   private final MinecraftScheduler<E> scheduler;
   private final int maxActivePerPlayer;
   private final Map<UUID, List<Trip<E, P, L>>> byPlayer = new ConcurrentHashMap<>();
-  private volatile Consumer<P> onChange = player -> {};
+  private final List<Consumer<P>> onChange = new CopyOnWriteArrayList<>();
 
   /**
    * Creates a trip manager.
@@ -48,13 +49,19 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
   }
 
   /**
-   * Sets the callback run whenever a player's active trips change. It runs under this manager's
-   * lock, so it should only hand work off.
+   * Adds a callback run whenever a player's active trips change. It runs under this manager's lock,
+   * so it should only hand work off.
    *
    * @param onChange receives the player whose trips changed
    */
   public void onChange(Consumer<P> onChange) {
-    this.onChange = onChange;
+    this.onChange.add(onChange);
+  }
+
+  private void changed(P player) {
+    for (Consumer<P> listener : onChange) {
+      listener.accept(player);
+    }
   }
 
   /**
@@ -125,7 +132,7 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
             targetExists);
     active.add(trip);
     trip.start();
-    onChange.accept(player);
+    changed(player);
     return Optional.of(trip);
   }
 
@@ -223,7 +230,7 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
     List<Trip<E, P, L>> active = byPlayer.remove(player);
     if (active != null && !active.isEmpty()) {
       active.forEach(Trip::stop);
-      onChange.accept(active.getFirst().player());
+      changed(active.getFirst().player());
     }
   }
 
@@ -248,7 +255,7 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
       if (active.isEmpty()) {
         byPlayer.remove(trip.player().uuid());
       }
-      onChange.accept(trip.player());
+      changed(trip.player());
     }
   }
 }

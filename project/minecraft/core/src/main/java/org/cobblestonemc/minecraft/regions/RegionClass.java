@@ -26,8 +26,7 @@ import org.jetbrains.annotations.Nullable;
  * belongs to that class.
  *
  * <p><b>Adding a class</b> is a line here, saying how a body moves through it ({@link Body}), and
- * its price in {@link MinecraftAgent}, whose exhaustive switch will not compile without one; then
- * {@link MinecraftTerrain#VERSION} bumped.
+ * its price in {@link MinecraftAgent}, whose exhaustive switch will not compile without one.
  *
  * <p><b>Each class has a fixed id,</b> which is what a region stores. Never reuse one: a retired
  * class's id stays retired, so a column built before it was retired can never read as another.
@@ -212,7 +211,7 @@ public enum RegionClass {
    * @param mining the bucket
    * @return the class
    */
-  public static RegionClass solid(MiningClass mining) {
+  public static RegionClass of(MiningClass mining) {
     return BY_MINING[mining.ordinal()];
   }
 
@@ -252,23 +251,5 @@ public enum RegionClass {
    */
   public boolean solid() {
     return body == Body.SOLID;
-  }
-
-  /**
-   * Returns whether a walking body stands in cells of this class.
-   *
-   * @return {@code true} for the classes of ground
-   */
-  public boolean standing() {
-    return body.standing();
-  }
-
-  /**
-   * Returns whether this class is water, surface or not.
-   *
-   * @return {@code true} for {@link #WATER} and {@link #WATER_SURFACE}
-   */
-  public boolean water() {
-    return body == Body.WATER;
   }
 }

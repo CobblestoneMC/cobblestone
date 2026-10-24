@@ -41,27 +41,11 @@ public final class SearchSettings {
   /** Default window width for the running-average heuristic. */
   public static final int DEFAULT_RUNNING_AVERAGE_WIDTH = 5;
 
-  /**
-   * Default A* heuristic weight (1.0 = admissible/optimal; &gt;1 = faster, weighted A*).
-   *
-   * <p>Swept for {@link #DEFAULT_HEURISTIC}, whose estimate {@code bench verify} puts at 0.7–0.95
-   * of the true cost and never above: below about 1.5 the search starts running out of cells, and
-   * above it every step up trades fewer nodes for slightly dearer paths. Another heuristic would
-   * want its own weight.
-   */
-  public static final double DEFAULT_HEURISTIC_WEIGHT = 1.7;
+  /** Default A* heuristic weight (1.0 = admissible/optimal; &gt;1 = faster, weighted A*). */
+  public static final double DEFAULT_HEURISTIC_WEIGHT = 1.5;
 
-  /**
-   * The estimate a search uses unless told otherwise.
-   *
-   * <p>{@link Heuristic#REGIONS} by default, from measurement: on the benchmark it solves routes
-   * the running average cannot, expands a fraction of the nodes, and finds cheaper paths.
-   *
-   * <p>⚠️ It is not free: a search reads the terrain it reasons over, and the first search over new
-   * terrain has to cut it into regions, which on a long route is hundreds of chunk reads. Regions
-   * are shared between searches, so later searches mostly reuse them.
-   */
-  public static final Heuristic DEFAULT_HEURISTIC = Heuristic.REGIONS;
+  /** The estimate a search uses unless told otherwise. */
+  public static final Heuristic DEFAULT_HEURISTIC = Heuristic.RUNNING_AVERAGE;
 
   private final int maxCellsVisited;
   private final long maxWallClockMillis;
