@@ -8,10 +8,13 @@
 package org.cobblestonemc.integration.essentials;
 
 import org.bukkit.World;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.paper.plugin.api.Destination;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
 import org.cobblestonemc.plugin.api.DestinationTree;
+import org.cobblestonemc.plugin.api.Display;
+import org.cobblestonemc.plugin.api.Icon;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.joml.Vector3i;
 
@@ -23,6 +26,8 @@ import org.joml.Vector3i;
  * /home}/{@code /spawn} is revoked (the teleport transition still requires the Essentials
  * permission). Destinations re-resolve on query, so moving a home or the spawn is reflected without
  * a restart.
+ *
+ * <p>How each entry looks in the navigation menu comes from this plugin's config.
  */
 final class EssentialsDestinationService implements DestinationService {
 
@@ -30,21 +35,44 @@ final class EssentialsDestinationService implements DestinationService {
   static final String SPAWN_KEY = "spawn";
 
   private final Essentials essentials;
+  private final FileConfiguration config;
 
-  EssentialsDestinationService(Essentials essentials) {
+  EssentialsDestinationService(Essentials essentials, FileConfiguration config) {
     this.essentials = essentials;
+    this.config = config;
   }
 
   @Override
   public DestinationTree<MinecraftDestination<World, Vector3i>> provide(Player player) {
+    Display home = display("home");
     var homes = Destination.tree().strict();
-    for (String home : essentials.homes(player)) {
-      homes.destination(home, () -> Destination.at(essentials.home(player, home), home));
+    for (String name : essentials.homes(player)) {
+      homes.entry(
+          name,
+          Destination.entry()
+              .destination(() -> Destination.at(essentials.home(player, name), name))
+              .display(home));
     }
-    var root = Destination.tree().subtree(HOME_KEY, homes);
+    var root =
+        Destination.tree()
+            .entry(HOME_KEY, Destination.entry().subtree(homes).display(display("homes")));
     if (essentials.hasSpawn()) {
-      root.destination(SPAWN_KEY, () -> Destination.at(essentials.spawn(player), "spawn"));
+      root.entry(
+          SPAWN_KEY,
+          Destination.entry()
+              .destination(() -> Destination.at(essentials.spawn(player), "spawn"))
+              .display(display("spawn")));
     }
     return root.build();
+  }
+
+  @Override
+  public Display display(Player player) {
+    return display("root");
+  }
+
+  /** The configured item for an entry, or the menu's own default if it is left blank. */
+  private Display display(String key) {
+    return Icon.parse(config.getString("icons." + key)).map(Display::of).orElse(Display.none());
   }
 }
