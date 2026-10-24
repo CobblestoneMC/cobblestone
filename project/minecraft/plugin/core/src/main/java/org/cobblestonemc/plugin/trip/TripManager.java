@@ -77,7 +77,15 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
       GuideSearch<L> guideSearch,
       boolean live,
       long liveIntervalMillis) {
-    return start(player, navigator, label, liveSearch, guideSearch, live, liveIntervalMillis, null);
+    return start(
+        player,
+        navigator,
+        label,
+        liveSearch,
+        guideSearch,
+        live,
+        liveIntervalMillis,
+        TripTarget.FIXED);
   }
 
   /**
@@ -91,7 +99,7 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
    * @param guideSearch the short-range guide search for off-trail drift; may be {@code null}
    * @param live whether to also re-search periodically (a "live" trip)
    * @param liveIntervalMillis the delay between periodic re-searches, in milliseconds
-   * @param target what the trip leads to; {@code null} for {@link TripTarget#FIXED}
+   * @param target what the trip leads to; {@link TripTarget#FIXED} for a place that never moves
    * @return the started trip, or empty if the player is at their limit
    */
   public synchronized Optional<Trip<E, P, L>> start(

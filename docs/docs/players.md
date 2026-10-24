@@ -14,7 +14,7 @@ modifications are required.
 
 | Command | Alias | Purpose |
 | --- | --- | --- |
-| `/navigate` | `/nav` | Navigate to a destination. |
+| `/navigate` | `/nav` | Navigate to a destination, or open the navigation menu. |
 | `/location` | `/loc` | Save, remove, and list locations. |
 | `/cobblestone` | `/stone` | Manage trips. Also holds `navigate` and `location` as subcommands. |
 
@@ -50,6 +50,21 @@ The trail renders only the next segment of the route, brightest at the point to 
   message. Command prompts, such as `Run /warp market.`, can be clicked.
 - **Ending.** A trip ends on arrival, on `/stone cancel`, or on disconnect. Death does not end a
   trip. A trip to a pet or mount ends if it dies, and a trip to a player ends if they log off.
+
+## The navigation menu
+
+Type `/nav` on its own to open a menu of everywhere you can go. `/nav -help` lists the flags
+`/nav` takes. On a server with the Geyser integration, Bedrock players can open the menu without
+typing by doing the **Simple Clap** emote.
+
+- Items marked **»** open a further list. Others start navigating as soon as you click them.
+- Something that is both a place and a list opens, and lists the place itself first.
+- A destination that needs more from you, such as `coordinates block`, asks for it before
+  starting: in a form on Paper, or as a command to finish in chat on Sponge.
+- A destination you cannot go to right now, such as `death` before you have died, turns into a
+  barrier that says why. Click it again to try again.
+- The top row of the first page shows the destinations you went to most recently, so a favorite is
+  one click away. They are forgotten when the server restarts.
 
 ## Destinations
 

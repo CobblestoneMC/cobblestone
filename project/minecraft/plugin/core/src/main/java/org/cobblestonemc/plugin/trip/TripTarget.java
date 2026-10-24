@@ -19,8 +19,7 @@ import org.cobblestonemc.plugin.navigator.Vec3;
  *
  * @param existence whether it still exists; the trip ends once this returns {@code false}. Polled
  *     about once a second on the trip's thread, so it must be cheap
- * @param labeled whether it already shows its name in the world, as a player's name tag does, so
- *     that no label naming it is added over it
+ * @param labeled whether it already shows its name in the world, as a player's name tag does
  * @param anchor where a label naming it floats right now (just above it), read on the trip's thread
  *     as often as every tick; empty to float the label over the end of the route instead, as for a
  *     place that never moves

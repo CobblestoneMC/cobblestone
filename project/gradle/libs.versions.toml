@@ -15,6 +15,7 @@ bstats = "3.2.1"
 
 [libraries]
 adventure-api = { module = "net.kyori:adventure-api", version.ref = "adventure" }
+adventure-minimessage = { module = "net.kyori:adventure-text-minimessage", version.ref = "adventure" }
 paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
 sponge-latest = { module = "org.spongepowered:spongeapi", version.ref = "sponge" }
 sponge-api12 = { module = "org.spongepowered:spongeapi", version.ref = "sponge12" }

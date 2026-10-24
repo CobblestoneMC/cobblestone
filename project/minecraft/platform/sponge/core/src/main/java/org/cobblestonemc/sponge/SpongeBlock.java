@@ -9,12 +9,14 @@ package org.cobblestonemc.sponge;
 
 import java.util.Set;
 import org.cobblestonemc.minecraft.MinecraftBlock;
+import org.cobblestonemc.minecraft.MiningClass;
 import org.spongepowered.api.block.BlockState;
 import org.spongepowered.api.block.BlockType;
 import org.spongepowered.api.block.BlockTypes;
 import org.spongepowered.api.data.Key;
 import org.spongepowered.api.data.Keys;
 import org.spongepowered.api.data.value.Value;
+import org.spongepowered.api.registry.RegistryTypes;
 import org.spongepowered.api.tag.BlockTypeTags;
 
 /**
@@ -95,6 +97,32 @@ final class SpongeBlock implements MinecraftBlock {
   @Override
   public boolean isLava() {
     return type.equals(BlockTypes.LAVA.get());
+  }
+
+  @Override
+  public MiningClass miningClass() {
+    return MiningClass.of(
+        tool(),
+        type.is(BlockTypeTags.NEEDS_DIAMOND_TOOL),
+        state.get(Keys.DESTROY_SPEED).orElse(0.0),
+        type.key(RegistryTypes.BLOCK_TYPE).value());
+  }
+
+  /**
+   * The tool the block's vanilla tags say breaks it fastest, of those {@link MiningClass} buckets
+   * by: a hoe's blocks count as no tool's.
+   */
+  private MiningClass.Tool tool() {
+    if (type.is(BlockTypeTags.MINEABLE_PICKAXE)) {
+      return MiningClass.Tool.PICKAXE;
+    }
+    if (type.is(BlockTypeTags.MINEABLE_SHOVEL)) {
+      return MiningClass.Tool.SHOVEL;
+    }
+    if (type.is(BlockTypeTags.MINEABLE_AXE)) {
+      return MiningClass.Tool.AXE;
+    }
+    return MiningClass.Tool.NONE;
   }
 
   @Override

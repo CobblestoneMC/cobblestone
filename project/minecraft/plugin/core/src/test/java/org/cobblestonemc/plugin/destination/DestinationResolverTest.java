@@ -20,8 +20,10 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import org.cobblestonemc.plugin.api.DestinationEntry;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
 import org.cobblestonemc.plugin.api.DestinationOption;
+import org.cobblestonemc.plugin.api.DestinationTree;
 import org.cobblestonemc.plugin.api.Validity;
 import org.cobblestonemc.plugin.destination.DestinationResolver.Ambiguous;
 import org.cobblestonemc.plugin.destination.DestinationResolver.InvalidOptions;
@@ -443,6 +445,38 @@ class DestinationResolverTest {
   }
 
   @Test
+  void findsAnEntryByItsCanonicalAddressBuildingOnlyTheLevelsAlongIt() {
+    var roots =
+        roots(
+            node("towny")
+                .sub(
+                    node("town")
+                        .leaf("riverwood")
+                        .sub(node("riverwood").leaf("home"))
+                        .sub(node("oakvale").leaf("home"))));
+
+    // Both roles under one key: the entry is found whole, as a destination with a level beneath.
+    var riverwood = DestinationResolver.find(roots, List.of("towny", "town", "riverwood"));
+    assertTrue(riverwood.orElseThrow().destination().isPresent());
+    assertTrue(riverwood.orElseThrow().subtree().isPresent());
+    assertEquals(1, nodesBuilt); // just "town"
+
+    assertTrue(
+        DestinationResolver.find(roots, List.of("towny", "town", "riverwood", "home"))
+            .orElseThrow()
+            .destination()
+            .isPresent());
+    // Nothing there, a missing level along the way, an address past a destination, a bare root.
+    assertTrue(DestinationResolver.find(roots, List.of("towny", "town", "ashford")).isEmpty());
+    assertTrue(DestinationResolver.find(roots, List.of("towny", "city", "riverwood")).isEmpty());
+    assertTrue(
+        DestinationResolver.find(roots, List.of("towny", "town", "riverwood", "home", "door"))
+            .isEmpty());
+    assertTrue(DestinationResolver.find(roots, List.of("towny")).isEmpty());
+    assertTrue(DestinationResolver.find(roots, List.of("essentials", "home")).isEmpty());
+  }
+
+  @Test
   void aStrictLevelKeepsATemplateApartFromALeafOfTheSameName() {
     // "surface" is the nearest open sky; "coordinates surface <x> <z>" is one column's.
     var roots =
@@ -584,7 +618,8 @@ class DestinationResolverTest {
 
   @Test
   void anAliasMustNameALeafAndNotShadowAKey() {
-    DestinationNode.Builder<String> builder = DestinationNode.<String>builder().leaf("mount", null);
+    DestinationTree.Builder<String> builder =
+        DestinationTree.<String>builder().destination("mount", DestinationLeaf.of(() -> "mount"));
     assertThrows(IllegalArgumentException.class, () -> builder.alias("horse", "pet"));
     assertThrows(IllegalArgumentException.class, () -> builder.alias("mount", "mount"));
   }
@@ -594,18 +629,18 @@ class DestinationResolverTest {
   // -----------------------------------------------------------------------------------------
 
   private static Resolution<String> resolve(
-      Map<String, DestinationNode<String>> roots, List<String> args) {
+      Map<String, DestinationTree<String>> roots, List<String> args) {
     return DestinationResolver.resolve(roots, args, ALL, ANY);
   }
 
   private static List<String> suggest(
-      Map<String, DestinationNode<String>> roots, List<String> args) {
+      Map<String, DestinationTree<String>> roots, List<String> args) {
     return DestinationResolver.suggest(roots, args, ALL, ANY);
   }
 
-  private static Map<String, DestinationNode<String>> roots(Tree... trees) {
+  private static Map<String, DestinationTree<String>> roots(Tree... trees) {
     // Sorted, as the command builds it: root order must not depend on registration order.
-    Map<String, DestinationNode<String>> out = new TreeMap<>();
+    Map<String, DestinationTree<String>> out = new TreeMap<>();
     for (Tree tree : trees) {
       out.put(tree.key, tree.build());
     }
@@ -621,12 +656,12 @@ class DestinationResolverTest {
     return new Tree(key);
   }
 
-  /** A test tree whose children count how often they are actually materialized. */
+  /** A test tree whose subtrees count how often they are actually materialized. */
   private final class Tree {
 
     private final String key;
     private boolean strict;
-    private final Map<String, Supplier<? extends DestinationNode<String>>> subs =
+    private final Map<String, Supplier<? extends DestinationTree<String>>> subs =
         new LinkedHashMap<>();
     private final Map<String, DestinationLeaf<String>> leaves = new LinkedHashMap<>();
     private final Map<String, String> aliases = new LinkedHashMap<>();
@@ -687,8 +722,21 @@ class DestinationResolverTest {
       return this;
     }
 
-    DestinationNode<String> build() {
-      return new DestinationNode.Simple<>(strict, subs, leaves, aliases);
+    DestinationTree<String> build() {
+      DestinationTree.Builder<String> node = DestinationTree.builder();
+      if (strict) {
+        node.strict();
+      }
+      // A key with both a leaf and a sub is one entry with both roles.
+      Map<String, DestinationEntry.Builder<String>> entries = new LinkedHashMap<>();
+      leaves.forEach(
+          (key, leaf) ->
+              entries.computeIfAbsent(key, k -> DestinationEntry.builder()).destination(leaf));
+      subs.forEach(
+          (key, sub) -> entries.computeIfAbsent(key, k -> DestinationEntry.builder()).subtree(sub));
+      entries.forEach(node::entry);
+      aliases.forEach(node::alias);
+      return node.build();
     }
   }
 }

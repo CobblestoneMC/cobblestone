@@ -10,6 +10,7 @@ package org.cobblestonemc.plugin.destination;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -17,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -26,11 +28,14 @@ import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.WorldRegion;
+import org.cobblestonemc.plugin.api.DestinationEntry;
 import org.cobblestonemc.plugin.api.DestinationLeaf;
 import org.cobblestonemc.plugin.api.DestinationOption;
+import org.cobblestonemc.plugin.api.DestinationTree;
+import org.cobblestonemc.plugin.api.Display;
+import org.cobblestonemc.plugin.api.Icon;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.cobblestonemc.plugin.api.OptionValues;
-import org.cobblestonemc.plugin.api.PlatformDestinationTree;
 import org.cobblestonemc.plugin.api.Validity;
 import org.junit.jupiter.api.Test;
 
@@ -59,10 +64,11 @@ class PlatformTreesTest {
                 List.of(level),
                 values -> Validity.valid(destination("dungeon " + values.get(level), List::of)))
             .withPermissions("quests.dungeon");
-    DestinationNode<NavigationTarget> adapted =
+    DestinationTree<NavigationTarget> adapted =
         PlatformTrees.adapt(tree(false, Map.of(), Map.of("dungeon", leaf)), regions);
 
-    DestinationLeaf<NavigationTarget> seen = adapted.leaves().get("dungeon");
+    DestinationLeaf<NavigationTarget> seen =
+        adapted.entries().get("dungeon").destination().orElseThrow();
     assertEquals(List.of("quests.dungeon"), seen.permissions());
     assertEquals(List.of(level), seen.options());
 
@@ -75,7 +81,7 @@ class PlatformTreesTest {
   @Test
   void anInvalidLeafStaysInvalid() {
     Component reason = Component.text("No dungeon today!");
-    DestinationNode<NavigationTarget> adapted =
+    DestinationTree<NavigationTarget> adapted =
         PlatformTrees.adapt(
             tree(
                 false,
@@ -83,24 +89,143 @@ class PlatformTreesTest {
                 Map.of("dungeon", DestinationLeaf.ofValidity(() -> invalid(reason)))),
             regions);
 
-    Validity<NavigationTarget> built = adapted.leaves().get("dungeon").build(OptionValues.empty());
+    Validity<NavigationTarget> built =
+        adapted.entries().get("dungeon").destination().orElseThrow().build(OptionValues.empty());
     assertEquals(reason, assertInstanceOf(Validity.Invalid.class, built).reason());
   }
 
   @Test
   void subTreesAreAdaptedOnlyWhenVisited() {
     AtomicBoolean visited = new AtomicBoolean();
-    Supplier<PlatformDestinationTree<String, Integer>> child =
+    Supplier<DestinationTree<MinecraftDestination<String, Integer>>> child =
         () -> {
           visited.set(true);
           return tree(true, Map.of(), Map.of());
         };
-    DestinationNode<NavigationTarget> adapted =
+    DestinationTree<NavigationTarget> adapted =
         PlatformTrees.adapt(tree(false, Map.of("town", child), Map.of()), regions);
 
     assertFalse(visited.get());
-    assertTrue(adapted.subTrees().get("town").get().strict());
+    assertTrue(adapted.entries().get("town").subtree().orElseThrow().get().strict());
     assertTrue(visited.get());
+  }
+
+  @Test
+  void entriesKeepTheirDisplayAndBothRoles() {
+    Display display = Display.of(Icon.item("red_banner")).withLabel(Component.text("Riverwood"));
+    DestinationEntry<MinecraftDestination<String, Integer>> town =
+        DestinationEntry.<MinecraftDestination<String, Integer>>builder()
+            .destination(() -> destination("riverwood", List::of))
+            .subtree(() -> tree(true, Map.of(), Map.of()))
+            .display(display)
+            .build();
+    DestinationTree<MinecraftDestination<String, Integer>> root =
+        DestinationTree.<MinecraftDestination<String, Integer>>builder()
+            .entry("riverwood", town)
+            .build();
+
+    DestinationEntry<NavigationTarget> adapted =
+        PlatformTrees.adapt(root, regions).entries().get("riverwood");
+    assertEquals(display, adapted.display());
+    assertTrue(adapted.destination().isPresent());
+    assertTrue(adapted.subtree().orElseThrow().get().strict());
+  }
+
+  @Test
+  void anEntryNeedsADestinationOrASubtree() {
+    assertThrows(IllegalStateException.class, () -> DestinationEntry.<String>builder().build());
+  }
+
+  @Test
+  void iconsParseAsAdminsWriteThem() {
+    assertEquals(Optional.of(Icon.item("minecraft:oak_sign")), Icon.parse(" Oak_Sign "));
+    assertEquals(Optional.of(Icon.head("abc")), Icon.parse("head:abc"));
+    assertEquals(Optional.of(Icon.head("abc")), Icon.parse("HEAD: abc"));
+    assertEquals(Optional.empty(), Icon.parse("  "));
+    assertEquals(Optional.empty(), Icon.parse("head:"));
+    assertEquals(Icon.item("minecraft:stone"), Icon.parse(null, Icon.item("stone")));
+    assertEquals(Icon.item("minecraft:dirt"), Icon.parse("dirt", Icon.item("stone")));
+  }
+
+  @Test
+  void displaysFillInWhatTheyLeaveOut() {
+    Display labelled = Display.none().withLabel(Component.text("Riverwood"));
+    Display fallback =
+        Display.of(Icon.item("stone"))
+            .withLabel(Component.text("town"))
+            .withDescription(List.of(Component.text("a town")));
+    Display combined = labelled.or(fallback);
+    assertEquals(Optional.of(Component.text("Riverwood")), combined.label());
+    assertEquals(fallback.description(), combined.description());
+    assertEquals(Optional.of(Icon.item("stone")), combined.icon());
+  }
+
+  @Test
+  void anEntryIsBothADestinationAndASubtreeOnlyThroughEntry() {
+    DestinationLeaf<String> leaf = DestinationLeaf.of(() -> "riverwood");
+    Supplier<DestinationTree<String>> subtree = () -> DestinationTree.<String>builder().build();
+
+    DestinationTree<String> node =
+        DestinationTree.<String>builder()
+            .entry(
+                "riverwood", DestinationEntry.<String>builder().destination(leaf).subtree(subtree))
+            .build();
+    DestinationEntry<String> riverwood = node.entries().get("riverwood");
+    assertEquals(Optional.of(leaf), riverwood.destination());
+    assertEquals(Optional.of(subtree), riverwood.subtree());
+
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            DestinationTree.<String>builder()
+                .destination("riverwood", leaf)
+                .subtree("riverwood", subtree));
+  }
+
+  @Test
+  void aKeyOrAliasIsAddedOnce() {
+    DestinationTree.Builder<String> node =
+        DestinationTree.<String>builder()
+            .destination("market", () -> "market")
+            .alias("mkt", "market");
+    assertThrows(IllegalArgumentException.class, () -> node.destination("market", () -> "other"));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> node.subtree("mkt", () -> DestinationTree.<String>builder().build()));
+    assertThrows(IllegalArgumentException.class, () -> node.alias("mkt", "market"));
+    assertThrows(IllegalArgumentException.class, () -> node.alias("market", "market"));
+  }
+
+  @Test
+  void aSubtreeFromABuilderIsBuiltOnceWhenAdded() {
+    DestinationTree.Builder<String> towns =
+        DestinationTree.<String>builder().destination("riverwood", () -> "riverwood");
+    DestinationTree<String> node = DestinationTree.<String>builder().subtree("town", towns).build();
+    towns.destination("oakvale", () -> "oakvale");
+
+    Supplier<? extends DestinationTree<String>> town =
+        node.entries().get("town").subtree().orElseThrow();
+    assertSame(town.get(), town.get());
+    assertEquals(Set.of("riverwood"), town.get().entries().keySet());
+  }
+
+  @Test
+  void aTreeKeepsItsEntriesInTheOrderAdded() {
+    DestinationTree<String> node =
+        DestinationTree.<String>builder()
+            .destination("spawn", DestinationLeaf.of(() -> "spawn"))
+            .subtree("town", () -> DestinationTree.<String>builder().build())
+            .destination("arena", DestinationLeaf.of(() -> "arena"))
+            .build();
+    assertEquals(List.of("spawn", "town", "arena"), List.copyOf(node.entries().keySet()));
+  }
+
+  @Test
+  void onlyADestinationTakesAnAlias() {
+    DestinationTree.Builder<String> node =
+        DestinationTree.<String>builder()
+            .subtree("town", () -> DestinationTree.<String>builder().build());
+    assertThrows(IllegalArgumentException.class, () -> node.alias("towns", "town"));
   }
 
   @Test
@@ -115,6 +240,31 @@ class PlatformTreesTest {
     current.set(0, region("unloaded"));
     assertTrue(target.destination().regions().isEmpty(), "the NPC moved somewhere unsearchable");
     assertEquals(2, conversions.get());
+  }
+
+  @Test
+  void aTargetShowsItsNameOnlyIfTheDestinationSaysSo() {
+    MinecraftDestination<String, Integer> plain = destination("market", List::of);
+    MinecraftDestination<String, Integer> npc =
+        new MinecraftDestination<>() {
+          @Override
+          public Destination<WorldRegion<String, Integer>> destination() {
+            return List::of;
+          }
+
+          @Override
+          public Component displayName() {
+            return Component.text("npc");
+          }
+
+          @Override
+          public boolean hasLabel() {
+            return true;
+          }
+        };
+
+    assertFalse(PlatformTrees.target(plain, regions).tripTarget().labeled());
+    assertTrue(PlatformTrees.target(npc, regions).tripTarget().labeled());
   }
 
   @Test
@@ -165,25 +315,17 @@ class PlatformTreesTest {
     };
   }
 
-  private static PlatformDestinationTree<String, Integer> tree(
+  private static DestinationTree<MinecraftDestination<String, Integer>> tree(
       boolean strict,
-      Map<String, Supplier<? extends PlatformDestinationTree<String, Integer>>> subTrees,
+      Map<String, Supplier<? extends DestinationTree<MinecraftDestination<String, Integer>>>>
+          subTrees,
       Map<String, DestinationLeaf<MinecraftDestination<String, Integer>>> leaves) {
-    return new PlatformDestinationTree<>() {
-      @Override
-      public boolean strict() {
-        return strict;
-      }
-
-      @Override
-      public Map<String, Supplier<? extends PlatformDestinationTree<String, Integer>>> subTrees() {
-        return subTrees;
-      }
-
-      @Override
-      public Map<String, DestinationLeaf<MinecraftDestination<String, Integer>>> leaves() {
-        return leaves;
-      }
-    };
+    DestinationTree.Builder<MinecraftDestination<String, Integer>> tree = DestinationTree.builder();
+    if (strict) {
+      tree.strict();
+    }
+    leaves.forEach(tree::destination);
+    subTrees.forEach(tree::subtree);
+    return tree.build();
   }
 }

@@ -13,12 +13,16 @@ A **destination** is a named location that `/navigate` can route to. Destination
 ```mermaid
 flowchart LR
     A[DestinationService] -->|provide player| B[DestinationTree]
-    B --> C[sub-trees]
-    B --> D[leaves]
-    C --> B
+    B --> C[entries, by key]
+    C -->|a destination| D[DestinationLeaf]
+    C -->|a subtree| B
     D --> E[MinecraftDestination]
     E --> F["regions() — where it actually is"]
 ```
+
+A tree is a set of **entries**, each named by a key. An entry is a destination, a subtree of
+further entries, or both — a town is somewhere to go, and also holds its home and plots. A tree
+itself is never a destination; only its entries are.
 
 ## Minimal example
 
@@ -30,14 +34,13 @@ A single destination at a fixed location:
     import org.cobblestonemc.paper.plugin.api.CobblestonePaperApi;
     import org.cobblestonemc.paper.plugin.api.Destination;
     import org.cobblestonemc.paper.plugin.api.DestinationService;
-    import org.cobblestonemc.paper.plugin.api.DestinationTree;
 
     public final class ShopsPlugin extends JavaPlugin {
       @Override
       public void onEnable() {
         CobblestonePaperApi.registrar().registerDestinations(this, player ->
-            DestinationTree.builder()
-                .leaf("market", () -> Destination.at(marketLocation(), "Market"))
+            Destination.tree()
+                .destination("market", () -> Destination.at(marketLocation(), "Market"))
                 .build());
       }
     }
@@ -50,13 +53,12 @@ A single destination at a fixed location:
     import org.cobblestonemc.sponge.plugin.api.CobblestoneSpongeApi;
     import org.cobblestonemc.sponge.plugin.api.Destination;
     import org.cobblestonemc.sponge.plugin.api.DestinationService;
-    import org.cobblestonemc.sponge.plugin.api.DestinationTree;
 
     @Listener
     public void onStartedEngine(StartedEngineEvent<Server> event) {
       CobblestoneSpongeApi.registrar().registerDestinations(container, player ->
-          DestinationTree.builder()
-              .leaf("market", () -> Destination.at(marketLocation(), Component.text("Market")))
+          Destination.tree()
+              .destination("market", () -> Destination.at(marketLocation(), Component.text("Market")))
               .build());
     }
     ```
@@ -66,62 +68,86 @@ For a plugin named `Shops`, the address is `shops market`. Players may use `/nav
 
 !!! note
 
-    The tree is already registered under the owner plugin's name. Do not add a top-level node for
+    The tree is already registered under the owner plugin's name. Do not add a top-level entry for
     it.
 
 ## Trees
 
-`DestinationTree.builder()` creates leaves and subtrees, each keyed by a string:
+`Destination.tree()` begins a tree. Add entries to it, each keyed by a string: `destination(key, …)`
+for somewhere to go, `subtree(key, …)` for a tree of further entries beneath it.
+
+!!! tip
+
+    Hold a tree you are still adding to in a `var` — `var tree = Destination.tree();` — rather than
+    spelling out its type, `DestinationTree.Builder<MinecraftDestination<World, Vector3i>>`.
 
 === "Paper"
 
     ``` { .java .annotate }
-    DestinationTree.builder()
+    Destination.tree()
         .subtree("warp", () -> warps(player))
-        .subtree("dungeon", DestinationTree.builder()
+        .subtree("dungeon", Destination.tree()
             .strict()                                     // (1)!
-            .leaf("crypt", () -> Destination.at(crypt, "The Crypt"))
-            .leaf("mines", () -> Destination.at(mines, "Deep Mines"))
-            .build())
+            .destination("crypt", () -> Destination.at(crypt, "The Crypt"))
+            .destination("mines", () -> Destination.at(mines, "Deep Mines")))
         .build();
     ```
 
-    1. A strict level cannot be omitted: `/nav dungeon crypt` is valid; `/nav crypt` is not.
+    1. A strict tree's key cannot be omitted: `/nav dungeon crypt` is valid; `/nav crypt` is not.
 
 === "Sponge"
 
     ``` { .java .annotate }
-    DestinationTree.builder()
+    Destination.tree()
         .subtree("warp", () -> warps(player))
-        .subtree("dungeon", DestinationTree.builder()
+        .subtree("dungeon", Destination.tree()
             .strict()                                     // (1)!
-            .leaf("crypt", () -> Destination.at(crypt, Component.text("The Crypt")))
-            .leaf("mines", () -> Destination.at(mines, Component.text("Deep Mines")))
-            .build())
+            .destination("crypt", () -> Destination.at(crypt, Component.text("The Crypt")))
+            .destination("mines", () -> Destination.at(mines, Component.text("Deep Mines"))))
         .build();
     ```
 
-    1. A strict level cannot be omitted: `/nav dungeon crypt` is valid; `/nav crypt` is not.
+    1. A strict tree's key cannot be omitted: `/nav dungeon crypt` is valid; `/nav crypt` is not.
 
 Rules:
 
 - **Keys** are single tokens. Upper case is permitted; special characters are not. Spaces are
   permitted but discouraged, since keys appear in commands and permission nodes.
-- **Children are suppliers**, evaluated only when traversed.
+- **Each key is added once.** Adding a key again, or a key that is already an alias, throws.
+- **Subtrees from a supplier are built each time they are traversed**, and never if they are not.
+  A subtree given as a builder is built once, when it is added.
 - **Return `null`** from `provide` when there are no destinations for the player. Empty trees are
   omitted.
-- **Mark large levels `strict()`.** Strict levels are skipped when computing suggestions.
+- **Mark large trees `strict()`.** Strict trees are skipped when computing suggestions.
+- **`alias(other, key)`** lets a destination answer to another name players may guess. An alias
+  is never suggested, and the destination keeps its own key in messages and permissions.
 
-### Lazy levels
+### Both at once
+
+An entry may be a destination and hold a subtree. Build it with `Destination.entry()` and add it
+with `entry(key, …)`:
+
+```java
+for (Town town : towns()) {
+  tree.entry(town.name(), Destination.entry()
+      .destination(() -> Destination.regions(() -> claims(town), town.name()))
+      .subtree(() -> townDetail(town)));       // its home, outposts, plots
+}
+```
+
+`/nav town riverwood` goes to the whole town; `/nav town riverwood home` goes to its home. An entry
+must have a destination, a subtree, or both; `build()` refuses one with neither.
+
+### Lazy subtrees
 
 === "Paper"
 
     ```java
-    private PlatformDestinationTree<World, Vector3i> warps(Player player) {
-      DestinationTree tree = DestinationTree.builder().strict();
+    private DestinationTree<MinecraftDestination<World, Vector3i>> warps(Player player) {
+      var tree = Destination.tree().strict();
       for (Warp warp : store.visibleTo(player)) {
-        // The lambda body runs only if this leaf is actually traversed.
-        tree.leaf(warp.name(), () -> Destination.at(warp.location(), warp.name()));
+        // The lambda body runs only if this destination is actually picked.
+        tree.destination(warp.name(), () -> Destination.at(warp.location(), warp.name()));
       }
       return tree.build();
     }
@@ -130,11 +156,11 @@ Rules:
 === "Sponge"
 
     ```java
-    private PlatformDestinationTree<ServerWorld, Vector3i> warps(ServerPlayer player) {
-      DestinationTree tree = DestinationTree.builder().strict();
+    private DestinationTree<MinecraftDestination<ServerWorld, Vector3i>> warps(ServerPlayer player) {
+      var tree = Destination.tree().strict();
       for (Warp warp : store.visibleTo(player)) {
-        // The lambda body runs only if this leaf is actually traversed.
-        tree.leaf(warp.name(), () -> Destination.at(warp.location(), Component.text(warp.name())));
+        // The lambda body runs only if this destination is actually picked.
+        tree.destination(warp.name(), () -> Destination.at(warp.location(), Component.text(warp.name())));
       }
       return tree.build();
     }
@@ -182,7 +208,7 @@ unavailable, such as when its world is unloaded.
 
 ### Moving targets
 
-`Destination.builder` takes the same regions as `Destination.regions`, plus four settings:
+`Destination.builder` takes the same regions as `Destination.regions`, plus optional settings:
 
 ```java
 Destination.builder(
@@ -192,7 +218,7 @@ Destination.builder(
             ? List.of(SingleCellWorldRegion.of(npc.getEntity().getLocation()))
             : List.of())
     .mobile()                                  // trips to it default to -live
-    .labeled()                                // its nameplate already names it
+    .labeled()                                 // its nameplate already names it
     .existence(() -> CitizensAPI.getNPCRegistry().getById(npc.getId()) != null)
     .detail(Component.text("Wanders the market"))
     .build();
@@ -200,7 +226,7 @@ Destination.builder(
 
 - `mobile()` sets the default for live trips. Players may override it with `-live` or `-no-live`.
 - `labeled()` says the destination already shows its name in the world, as an NPC's nameplate
-  does, so Cobblestone adds no label naming it.
+  does.
 - `detail(...)` and `existence(...)` are described under [Hover detail](#hover-detail) and
   [Existence](#existence).
 
@@ -209,9 +235,9 @@ and `exists()` are its defaults to override.
 
 ### Leaves
 
-`leaf(key, () -> destination)` is the common case: a leaf with no options or permissions that is
-always valid. For anything more, pass a `DestinationLeaf`. A leaf describes itself (its
-permissions and options) and builds its destination only once a player picks it:
+`destination(key, () -> destination)` is the common case: a destination with no options or
+permissions that is always valid. For anything more, pass a `DestinationLeaf`. A leaf describes
+itself (its permissions and options) and builds its destination only once a player picks it:
 
 - Tab completion reads every leaf's description on each keystroke, possibly off the server
   thread, so the description must be cheap and must not read the world.
@@ -220,7 +246,7 @@ permissions and options) and builds its destination only once a player picks it:
   destination, or the reason there is nothing to navigate to right now.
 
 ```java
-// Always valid, nothing typed after the key; the same as leaf(key, () -> ...).
+// Always valid, nothing typed after the key; the same as destination(key, () -> ...).
 DestinationLeaf.of(() -> Destination.at(market, "Market"));
 
 // May be invalid.
@@ -246,7 +272,7 @@ DestinationOption<Outpost> outpost =
         partial -> town.outposts().stream().map(Outpost::name).toList(),
         token -> Optional.ofNullable(town.outpost(token)));
 
-tree.leaf(
+tree.destination(
     "outpost",
     DestinationLeaf.withOptions(
         List.of(outpost),
@@ -287,6 +313,64 @@ Being out of reach, for example unloaded, is not the same as not existing. It is
 travelling player's thread, so keep it cheap. Cobblestone ends trips to pets and mounts that die,
 and to players who log off.
 
+## In the navigation menu
+
+Typing `/navigate` on its own opens a chest menu of the same tree. By default each entry shows
+as its key on a plain item. Give it a label, a description and an icon to make it look like yours:
+
+=== "Paper"
+
+    ```java
+    tree.entry("riverwood", Destination.entry()
+        .destination(() -> wholeTown(riverwood))
+        .subtree(() -> townDetail(riverwood))
+        .label(Component.text("Riverwood"))
+        .description(Component.text("Founded by the river folk"))
+        .icon(PaperIcon.of(Material.BLUE_BANNER)));
+    ```
+
+=== "Sponge"
+
+    ```java
+    tree.entry("riverwood", Destination.entry()
+        .destination(() -> wholeTown(riverwood))
+        .subtree(() -> townDetail(riverwood))
+        .label(Component.text("Riverwood"))
+        .description(Component.text("Founded by the river folk"))
+        .icon(SpongeIcon.of(ItemTypes.BLUE_BANNER.get())));
+    ```
+
+An `Icon` is one of:
+
+- `Icon.item("minecraft:oak_sign")` — an item, by key.
+- `Icon.head(texture)` — a player head wearing a skin texture: the base64 `textures` value that
+  head databases such as minecraft-heads.com publish.
+- `Icon.playerHead(uuid)` — a player's own head.
+- `PaperIcon.of(…)` / `SpongeIcon.of(…)` — a platform item stack, item type, or block, for full
+  control (a custom model, dyed leather, a glint).
+
+`Icon.parse(text, fallback)` reads `head:<texture>` or an item key, the form admins write in a
+config file, and falls back when the text is blank. Read icons from your plugin's own config so
+admins can theme them.
+
+Your plugin's own entry at the top of the menu is shown with `DestinationService.display(player)`:
+
+```java
+public final class ShopsDestinations implements DestinationService {
+  @Override
+  public DestinationTree<MinecraftDestination<World, Vector3i>> provide(Player player) { … }
+
+  @Override
+  public Display display(Player player) {
+    return Display.of(Icon.item("minecraft:emerald"));
+  }
+}
+```
+
+A destination with required options, such as coordinates, asks for them before navigating, using
+the options' names and suggestions. An option with a handful of suggestions is a choice among them;
+one with a single suggestion is text that starts as that suggestion.
+
 ## Permissions
 
 - **Destination node**: `cobblestone.navigate.<address>`. Generated automatically, default allow,
@@ -299,6 +383,6 @@ and to players who log off.
 Players may omit leading words of an address if the remainder is unambiguous.
 
 - The final key is always required.
-- `strict()` levels are always required.
+- `strict()` trees are always required.
 - Keys that collide across plugins are resolved by the player using the full address.
 - Matching is case-insensitive; `quest` and `Quest` collide.

@@ -11,48 +11,54 @@ import fr.skytasul.quests.api.QuestsAPI;
 import fr.skytasul.quests.api.players.PlayerAccount;
 import fr.skytasul.quests.api.players.PlayersManager;
 import fr.skytasul.quests.api.quests.Quest;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.paper.plugin.api.Destination;
 import org.cobblestonemc.paper.plugin.api.DestinationService;
-import org.cobblestonemc.paper.plugin.api.DestinationTree;
-import org.cobblestonemc.plugin.api.PlatformDestinationTree;
+import org.cobblestonemc.plugin.api.DestinationTree;
+import org.cobblestonemc.plugin.api.MinecraftDestination;
 import org.joml.Vector3i;
 
 /**
- * Surfaces the player's started quests as navigation targets: {@code cobblestonebeautyquests →
- * quest → <name>}, one leaf per started quest whose current stage has a precise location.
- * Cobblestone roots the branch at this plugin's own name, which keeps these from colliding with
- * other integrations' trees; its resolver still lets a player type just the quest name when it's
- * unambiguous. Navigating is gated by Cobblestone's {@code
- * cobblestone.navigate.cobblestonebeautyquests.quest.*} permission (default-allow). The target is
- * snapshotted when the tree is built (on the main thread, as {@code getLocated} requires);
- * advancing a stage is picked up the next time destinations are resolved.
+ * Surfaces the player's started quests as navigation targets: {@code beautyquests → quest →
+ * <name>}, one leaf per started quest whose current stage has a precise location. Cobblestone roots
+ * the branch at BeautyQuests' own name, which keeps these from colliding with other integrations'
+ * trees; its resolver still lets a player type just the quest name when it's unambiguous.
+ * Navigating is gated by Cobblestone's {@code cobblestone.navigate.beautyquests.quest.*} permission
+ * (default-allow). The target is snapshotted when the tree is built (on the main thread, as {@code
+ * getLocated} requires); advancing a stage is picked up the next time destinations are resolved.
  */
 final class BeautyQuestsDestinationService implements DestinationService {
 
   static final String QUEST_KEY = "quest";
 
   @Override
-  public PlatformDestinationTree<World, Vector3i> provide(Player player) {
+  public DestinationTree<MinecraftDestination<World, Vector3i>> provide(Player player) {
     PlayerAccount account = PlayersManager.getPlayerAccount(player);
     if (account == null) {
       return null;
     }
-    DestinationTree quests = DestinationTree.builder();
+    var quests = Destination.tree();
     boolean any = false;
+    Set<String> taken = new HashSet<>();
     for (Quest quest : QuestsAPI.getAPI().getQuestsManager().getQuestsStarted(account)) {
       Location target = QuestTargets.current(account, quest);
       if (target == null) {
         continue; // current stage has no precise location — nothing to walk to
       }
       String label = label(quest);
-      quests.leaf(slug(label), Destination.at(target, label));
+      String key = slug(label);
+      for (int n = 2; !taken.add(key); n++) {
+        key = slug(label) + "-" + n; // two quests that slug alike
+      }
+      quests.destination(key, () -> Destination.at(target, label));
       any = true;
     }
-    return any ? DestinationTree.builder().subtree(QUEST_KEY, quests).build() : null;
+    return any ? Destination.tree().subtree(QUEST_KEY, quests).build() : null;
   }
 
   /** A player-facing quest label: its name, or a stable fallback from its id. */

@@ -51,8 +51,7 @@ public interface MinecraftDestination<W, V> {
 
   /**
    * Returns whether this destination already shows its name in the world, as a player's name tag or
-   * a named pet's name does. Cobblestone floats a label naming a destination over it once the
-   * player gets close, unless it already has one. {@code false} by default.
+   * a named pet's name does. {@code false} by default.
    *
    * @return {@code true} if it shows its own name
    */

@@ -188,7 +188,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
       LiveSearch<L> liveSearch,
       GuideSearch<L> guideSearch,
       boolean live) {
-    return start(player, path, label, settings, liveSearch, guideSearch, live, null);
+    return start(player, path, label, settings, liveSearch, guideSearch, live, TripTarget.FIXED);
   }
 
   /**
@@ -203,7 +203,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
    * @param liveSearch the re-search behavior, or {@code null} to disable re-searching
    * @param guideSearch the short-range off-trail guide search, or {@code null}
    * @param live whether to also re-search periodically
-   * @param target what the trip leads to; {@code null} for {@link TripTarget#FIXED}
+   * @param target what the trip leads to; {@link TripTarget#FIXED} for a place that never moves
    * @return the outcome, completed once the trip is (or is not) started on the region thread
    */
   public CompletableFuture<TripOutcome> start(

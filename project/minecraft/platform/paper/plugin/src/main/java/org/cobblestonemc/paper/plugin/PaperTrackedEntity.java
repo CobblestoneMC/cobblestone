@@ -40,10 +40,11 @@ final class PaperTrackedEntity {
   // Written by server threads (the command's, the trip's, or a task on the entity's scheduler) and
   // read by any thread, search threads included. Volatile is all the guarding they need: each is
   // replaced whole, never changed in place (a location is a fresh copy, and cloned again for the
-  // reader), and the two are never needed together. Two writers racing can leave the older read
-  // last, but the next refresh, about a second later, corrects it. alive() reads the last-seen
-  // entity's health from the trip's thread, which on Folia may not own it; a stale read there only
-  // ends the trip a check later.
+  // reader). Only anchor() reads two together, the location and the height; a mismatched pair
+  // puts the label off by one refresh's movement until the next read. Two writers racing can leave
+  // the older read last, but the next refresh, about a second later, corrects it. alive() reads the
+  // last-seen entity's health from the trip's thread, which on Folia may not own it; a stale read
+  // there only ends the trip a check later.
   private volatile Entity lastSeen;
   private volatile Location lastLocation;
   private volatile double lastHeight;
@@ -69,7 +70,7 @@ final class PaperTrackedEntity {
    *
    * @return the point, or empty if it has not been seen loaded
    */
-  Optional<TripTarget.Point> labelPoint() {
+  Optional<TripTarget.Point> anchor() {
     return location()
         .map(
             at ->
