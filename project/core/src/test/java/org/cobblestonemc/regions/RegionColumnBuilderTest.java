@@ -24,14 +24,14 @@ class RegionColumnBuilderTest {
     private final ToyWorld.Walker walker = new ToyWorld.Walker();
 
     @Override
-    public boolean usable(int klass) {
-      return klass == ToyWorld.Terrain.GROUND || klass == ToyWorld.Terrain.POOL;
+    public boolean usable(int clazz) {
+      return clazz == ToyWorld.Terrain.GROUND || clazz == ToyWorld.Terrain.POOL;
     }
 
     @Override
     public double traverse(
-        int klass, double fx, double fy, double fz, double tx, double ty, double tz) {
-      return walker.traverse(klass, fx, fy, fz, tx, ty, tz);
+        int clazz, double fx, double fy, double fz, double tx, double ty, double tz) {
+      return walker.traverse(clazz, fx, fy, fz, tx, ty, tz);
     }
 
     @Override

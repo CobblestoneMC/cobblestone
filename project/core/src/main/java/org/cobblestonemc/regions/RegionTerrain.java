@@ -79,35 +79,35 @@ public interface RegionTerrain<C> {
    * that is one class edge to edge, and would miss the steps down out of its bottom layer. Standing
    * means something solid underfoot, so for any terrain under gravity this holds by itself.
    *
-   * @param klass the class
+   * @param clazz the class
    * @return {@code true} if it is ground
    */
-  boolean standing(int klass);
+  boolean standing(int clazz);
 
   /**
    * Returns whether a standing body can step into a cell of this class a level up or down.
    *
-   * @param klass the class
+   * @param clazz the class
    * @return {@code true} if it can
    */
-  boolean steppable(int klass);
+  boolean steppable(int clazz);
 
   /**
    * Returns whether a body falls through cells of this class.
    *
-   * @param klass the class
+   * @param clazz the class
    * @return {@code true} for open space
    */
-  boolean open(int klass);
+  boolean open(int clazz);
 
   /**
    * Returns whether a fall of {@code depth} blocks onto this class is worth a portal.
    *
-   * @param klass the class landed on
+   * @param clazz the class landed on
    * @param depth how far the body falls, at least 1
    * @return {@code true} if the fall joins the ledge to it
    */
-  boolean landing(int klass, int depth);
+  boolean landing(int clazz, int depth);
 
   /**
    * Returns the deepest fall worth looking for a landing at.
@@ -124,11 +124,11 @@ public interface RegionTerrain<C> {
    * together, such as two kinds of rock dithered into each other, where a region per kind would
    * shred both into fragments. By default every class is a family of its own.
    *
-   * @param klass the class
+   * @param clazz the class
    * @return the family, itself a class
    */
-  default int family(int klass) {
-    return klass;
+  default int family(int clazz) {
+    return clazz;
   }
 
   /**
@@ -143,9 +143,9 @@ public interface RegionTerrain<C> {
    */
   default int label(int family, int[] counts) {
     int best = family;
-    for (int klass = 0; klass < counts.length; klass++) {
-      if (counts[klass] > counts[best]) {
-        best = klass;
+    for (int clazz = 0; clazz < counts.length; clazz++) {
+      if (counts[clazz] > counts[best]) {
+        best = clazz;
       }
     }
     return best;
@@ -158,8 +158,8 @@ public interface RegionTerrain<C> {
    * region's seed is much longer than the straight line. A class crossed in straight lines whatever
    * its shape, such as rock that is dug through, need not be.
    *
-   * @param klass the class
+   * @param clazz the class
    * @return {@code true} if the fill caps the detour
    */
-  boolean convex(int klass);
+  boolean convex(int clazz);
 }
