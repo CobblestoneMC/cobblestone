@@ -47,39 +47,39 @@ class MinecraftTerrainTest {
     };
   }
 
-  private static final MinecraftBlock STONE = solid(MiningClass.ROCK);
-  private static final MinecraftBlock DEEPSLATE = solid(MiningClass.HARD_ROCK);
+  private static final MinecraftBlock STONE = solid(MiningClass.STONE);
+  private static final MinecraftBlock DEEPSLATE = solid(MiningClass.DEEPSLATE);
   private static final MinecraftBlock GRAVEL = solid(MiningClass.DIRT);
 
   /** Counts of rock cells, by class. */
   private static int[] counts(int soft, int rock, int hard) {
     int[] counts = new int[RegionClass.ID_BOUND];
-    counts[RegionClass.SOFT_ROCK.id()] = soft;
-    counts[RegionClass.ROCK.id()] = rock;
-    counts[RegionClass.HARD_ROCK.id()] = hard;
+    counts[RegionClass.SANDSTONE.id()] = soft;
+    counts[RegionClass.STONE.id()] = rock;
+    counts[RegionClass.DEEPSLATE.id()] = hard;
     return counts;
   }
 
   private static RegionClass label(int[] counts) {
-    return RegionClass.byId(TERRAIN.label(RegionClass.ROCK.id(), counts));
+    return RegionClass.byId(TERRAIN.label(RegionClass.STONE.id(), counts));
   }
 
   @Test
   void aRockRegionIsTheBandNearestItsAverageHardness() {
-    assertEquals(RegionClass.ROCK, label(counts(0, 100, 0)));
-    assertEquals(RegionClass.HARD_ROCK, label(counts(0, 0, 100)));
+    assertEquals(RegionClass.STONE, label(counts(0, 100, 0)));
+    assertEquals(RegionClass.DEEPSLATE, label(counts(0, 0, 100)));
     assertEquals(RegionClass.MIXED_ROCK, label(counts(0, 50, 50)));
-    assertEquals(RegionClass.ROCK, label(counts(0, 90, 10)), "a few veins do not make it mixed");
-    assertEquals(RegionClass.HARD_ROCK, label(counts(0, 10, 90)));
+    assertEquals(RegionClass.STONE, label(counts(0, 90, 10)), "a few veins do not make it mixed");
+    assertEquals(RegionClass.DEEPSLATE, label(counts(0, 10, 90)));
     assertEquals(
-        RegionClass.SOFT_ROCK, label(counts(70, 30, 0)), "netherrack with some blackstone");
+        RegionClass.SANDSTONE, label(counts(70, 30, 0)), "netherrack with some blackstone");
   }
 
   @Test
   void rockOfEveryHardnessIsOneFamilyAndDirtIsItsOwn() {
-    int rock = RegionClass.ROCK.id();
-    assertEquals(rock, TERRAIN.family(RegionClass.SOFT_ROCK.id()));
-    assertEquals(rock, TERRAIN.family(RegionClass.HARD_ROCK.id()));
+    int rock = RegionClass.STONE.id();
+    assertEquals(rock, TERRAIN.family(RegionClass.SANDSTONE.id()));
+    assertEquals(rock, TERRAIN.family(RegionClass.DEEPSLATE.id()));
     assertEquals(RegionClass.DIRT.id(), TERRAIN.family(RegionClass.DIRT.id()));
     assertNotEquals(rock, TERRAIN.family(RegionClass.WOOD.id()));
   }

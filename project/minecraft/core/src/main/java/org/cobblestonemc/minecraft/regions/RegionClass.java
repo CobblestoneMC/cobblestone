@@ -55,23 +55,23 @@ public enum RegionClass {
   /** Open space nothing stands in: crossed by flying, or fallen through. */
   AIR(6, Body.OPEN, null),
 
-  /** Breakable by hand: leaves, glass, wool. */
-  SOFT(7, Body.SOLID, MiningClass.SOFT),
+  /** Breakable by hand: glass, leaves, wool. */
+  GLASS(7, Body.SOLID, MiningClass.GLASS),
 
-  /** Soft rock: netherrack and its ores. */
-  SOFT_ROCK(8, Body.SOLID, MiningClass.SOFT_ROCK),
+  /** Soft rock: sandstone, and netherrack and its ores. */
+  SANDSTONE(8, Body.SOLID, MiningClass.SANDSTONE),
 
-  /** Rock: stone and its ores. */
-  ROCK(9, Body.SOLID, MiningClass.ROCK),
+  /** Rock: stone and its ores. Also the family every band of rock fills as. */
+  STONE(9, Body.SOLID, MiningClass.STONE),
 
   /**
-   * Rock and hard rock mixed: where deepslate is dithered into stone. Never a block's own class,
+   * Stone and deepslate mixed: where deepslate is dithered into stone. Never a block's own class,
    * only a region's; see {@link MinecraftTerrain#label}.
    */
   MIXED_ROCK(10, Body.SOLID, null),
 
   /** Hard rock: deepslate and its ores, end stone. */
-  HARD_ROCK(11, Body.SOLID, MiningClass.HARD_ROCK),
+  DEEPSLATE(11, Body.SOLID, MiningClass.DEEPSLATE),
 
   /** Obsidian, and whatever else needs a diamond pickaxe. */
   OBSIDIAN(12, Body.SOLID, MiningClass.OBSIDIAN),
