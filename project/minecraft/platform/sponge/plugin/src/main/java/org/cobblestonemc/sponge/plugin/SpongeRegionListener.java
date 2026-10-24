@@ -15,6 +15,7 @@ import org.spongepowered.api.block.transaction.BlockTransactionReceipt;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.Order;
 import org.spongepowered.api.event.block.ChangeBlockEvent;
+import org.spongepowered.api.event.world.SaveWorldEvent;
 import org.spongepowered.api.event.world.UnloadWorldEvent;
 import org.spongepowered.math.vector.Vector3i;
 
@@ -51,7 +52,13 @@ final class SpongeRegionListener {
     }
   }
 
-  /** A world that unloads takes its regions with it. */
+  /** The world has saved: write the regions too, so a crash after it loses nothing. */
+  @Listener(order = Order.POST)
+  public void onSave(SaveWorldEvent.Post event) {
+    stores.flush();
+  }
+
+  /** A world that unloads takes its regions with it, once they are written. */
   @Listener(order = Order.POST)
   public void onWorldUnload(UnloadWorldEvent event) {
     stores.worldUnloaded(worlds.wrap(event.world()).key());

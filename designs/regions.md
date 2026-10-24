@@ -54,8 +54,8 @@ the terrain ahead. REGIONS reads the terrain ahead.
   re-plan around a navigating player, such as the path back to a trail, never build.
 
 ## Storage
-- **One `RegionStore` per world,** shared by every search and agent: memory, then building from the
-  chunk. Pinned columns (above) are kept whatever the budget; the rest are kept up to 128 MB by
+- **One `RegionStore` per world,** shared by every search and agent: memory, then disk, then
+  building from the chunk. Pinned columns (above) are kept whatever the budget; the rest are kept up to 128 MB by
   default, least recently used out. The two are held apart, so evicting never looks past a pin.
 - **Invalidation:** every block change drops its column; the next search to need it rebuilds it.
   Paper listens for each kind of change event, Sponge for its one. A world that unloads drops its
@@ -64,7 +64,15 @@ the terrain ahead. REGIONS reads the terrain ahead.
   short per cell for a section of more than 255 regions, so no section runs out of numbers.
 - **Class ids are explicit,** never ordinals: `RegionClass` and `MiningClass` each give every value a
   fixed number, which is what a region or a capture stores. A retired class retires its number.
-- Columns are kept on disk across restarts in a follow-up PR.
+- **On disk,** `regions/<world>/r.<x>.<z>.crg`, 32x32 columns a file, as Minecraft keeps its
+  chunks: a header with a slot per column (first sector, length), then records in 1 KB sectors,
+  each `{length, CRC32, deflated column}`. A column that still fits its sectors is written over
+  them; one that grew takes the first free run or the end of the file, and frees its old sectors;
+  a removed column clears its slot. A write costs one record and an 8-byte slot, never the file.
+  A torn record fails its checksum and reads as missing. A header that does not match the format,
+  rules, detour ratio or world height reads as empty and is started afresh on the next write.
+- **Writes** every 60 s, on world save, on world unload and on shutdown. Unwritten columns survive
+  eviction. Offline edits are not seen; the admin docs say to delete `regions/` after them.
 
 ## Decisions
 - **The agent's rates are its own.** `MinecraftAgent` starts from the fine search's
@@ -131,7 +139,7 @@ destinations are unchanged node for node.
 
 ### Time and memory (2026-10-13, weight 2.0)
 Server time per run, all 58 runs, mean / median / p90 / max in ms, CPU plus modelled disk wait.
-"Warm" is after a restart, reading columns back from disk (the disk store is a follow-up PR).
+"Warm" is after a restart, reading columns back from disk.
 
 | Disk | RUNNING_AVERAGE | REGIONS cold | REGIONS warm |
 | --- | --- | --- | --- |

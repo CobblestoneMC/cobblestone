@@ -103,11 +103,17 @@ public final class ConfigKeys {
    */
   public final ConfigKey<Integer> chunksFetchAttempts;
 
+  /** Whether regions are kept on disk across restarts. Requires a restart. */
+  public final ConfigKey<Boolean> regionsPersist;
+
   /**
    * How much memory each world's regions may hold beyond navigating players' surroundings, in
    * megabytes. Requires a restart.
    */
   public final ConfigKey<Integer> regionsMemoryMegabytes;
+
+  /** How often new regions are written to disk, in seconds. Requires a restart. */
+  public final ConfigKey<Integer> regionsFlushSeconds;
 
   /** Whether Cobblestone discovers vanilla portal links by watching players teleport. Mutable. */
   public final ConfigKey<Boolean> portalsDiscovery;
@@ -429,6 +435,16 @@ public final class ConfigKeys {
         """
         The terrain regions the REGIONS heuristic searches over. Each chunk is cut into regions
         once and kept, shared by every search, until a block in it changes.""");
+    this.regionsPersist =
+        manager
+            .key("search.regions.persist", true, Codec.ofBoolean())
+            .comment(
+                """
+                Whether to keep regions on disk, under the plugin's data folder, so a restart does
+                not have to build them again. A few kilobytes per chunk, for chunks searches have
+                touched. Off keeps them in memory only.""")
+            .requiresRestart()
+            .register();
     this.regionsMemoryMegabytes =
         manager
             .key("search.regions.memory_megabytes", 128, Codec.ofInt())
@@ -438,6 +454,16 @@ public final class ConfigKeys {
                 dropped first. The chunks around each navigating player are kept on top of this,
                 about 3 MB a player, until their trip ends, so the searches that re-plan around
                 them stay fast.""")
+            .requiresRestart()
+            .register();
+    this.regionsFlushSeconds =
+        manager
+            .key("search.regions.flush_seconds", 60, Codec.ofInt())
+            .comment(
+                """
+                How often new regions are written to disk, in seconds. They are also written when
+                a world saves and when the server stops; a crash loses at most this much, and what
+                is lost is built again when next needed.""")
             .requiresRestart()
             .register();
 

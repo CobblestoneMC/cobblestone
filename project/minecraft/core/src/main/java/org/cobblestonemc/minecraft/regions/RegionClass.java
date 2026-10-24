@@ -26,7 +26,8 @@ import org.jetbrains.annotations.Nullable;
  * belongs to that class.
  *
  * <p><b>Adding a class</b> is a line here, saying how a body moves through it ({@link Body}), and
- * its price in {@link MinecraftAgent}, whose exhaustive switch will not compile without one.
+ * its price in {@link MinecraftAgent}, whose exhaustive switch will not compile without one; then
+ * {@link MinecraftTerrain#VERSION} bumped.
  *
  * <p><b>Each class has a fixed id,</b> which is what a region stores. Never reuse one: a retired
  * class's id stays retired, so a column built before it was retired can never read as another.

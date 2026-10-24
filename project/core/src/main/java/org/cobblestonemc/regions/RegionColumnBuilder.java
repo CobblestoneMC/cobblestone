@@ -29,11 +29,19 @@ import org.jetbrains.annotations.Nullable;
  *       same a graph joins columns by; which steps and drops count is the terrain's to say.
  * </ol>
  *
+ * <p><b>Change the rules, bump {@link #FILL_VERSION} or the terrain's version.</b> A built column
+ * is a fact about the rules it was built by; one built under others is a different graph.
+ *
  * <p>Not thread-safe: it reuses a column's worth of scratch between builds. One per thread.
  *
  * @param <C> the platform's column of terrain
  */
 public final class RegionColumnBuilder<C> {
+
+  /**
+   * The version of how this fills regions and finds contacts, apart from the terrain's own rules.
+   */
+  public static final int FILL_VERSION = 4;
 
   /**
    * Blocks of detour allowed regardless of distance, so a seed's immediate neighbours never split.

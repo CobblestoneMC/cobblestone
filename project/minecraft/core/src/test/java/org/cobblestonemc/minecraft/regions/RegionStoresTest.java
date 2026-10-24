@@ -30,7 +30,7 @@ class RegionStoresTest {
   @Test
   void changesAreForgottenTogetherOnceTheDelayHasPassed() throws InterruptedException {
     TestWorld world = TestWorld.builder("w").build();
-    try (RegionStores stores = new RegionStores(Long.MAX_VALUE, 1, DELAY)) {
+    try (RegionStores stores = new RegionStores(null, Long.MAX_VALUE, 1, DELAY)) {
       RegionStore<MinecraftChunk> store = stores.of(world);
       store.column(0, 0, ROCK);
 

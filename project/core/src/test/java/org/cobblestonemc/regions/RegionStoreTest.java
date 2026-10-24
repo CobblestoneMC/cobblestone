@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 class RegionStoreTest {
 
   private static RegionStore<ToyWorld.Column> store(long memoryBudget) {
-    return new RegionStore<>(ToyWorld.spec(), memoryBudget, Runnable::run);
+    return new RegionStore<>(ToyWorld.spec(), memoryBudget, null, Runnable::run, Runnable::run);
   }
 
   private static RegionColumn column(

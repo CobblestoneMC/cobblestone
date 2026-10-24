@@ -7,11 +7,17 @@
 
 package org.cobblestonemc.minecraft.regions;
 
+import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
@@ -20,14 +26,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.regions.RegionFiles;
 import org.cobblestonemc.regions.RegionSpec;
 import org.cobblestonemc.regions.RegionStore;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * A server's {@link RegionStore}s, one per world, and the threads they share.
  *
  * <p>The platform's one handle on the region layer: searches ask it for their world's store,
- * block-change listeners tell it what to forget, and trips tell it whose surroundings to keep.
+ * block-change listeners tell it what to forget, trips tell it whose surroundings to keep, and a
+ * timer, world saves and shutdown tell it to write.
  *
  * <p><b>Navigating players' surroundings stay in memory.</b> A trip's searches pin the chunks
  * within {@link #PIN_RADIUS} of where they start, under the player's id, so the short searches that
@@ -41,8 +50,9 @@ import org.cobblestonemc.regions.RegionStore;
  * search in that window reads the column as it was, which costs the estimate a little and never the
  * route, since the fine search reads the blocks themselves.
  *
- * <p>Builds and those delays run on a small pool of daemon threads, so a chunk that arrives on the
- * server thread is not built there.
+ * <p><b>Two kinds of thread of its own.</b> One for the disk, so reads and writes of the same files
+ * never race; and a small pool for building and those delays, so a chunk that arrives on the server
+ * thread is not built there. Both are daemons, and {@link #close} drains them.
  */
 public final class RegionStores implements AutoCloseable {
 
@@ -54,8 +64,10 @@ public final class RegionStores implements AutoCloseable {
   /** How long after a block changes its column is forgotten, with every change meanwhile. */
   public static final Duration INVALIDATION_DELAY = Duration.ofSeconds(10);
 
+  private final @Nullable Path root;
   private final long memoryBudget;
   private final Duration invalidationDelay;
+  private final ExecutorService disk;
   private final ScheduledExecutorService threads;
   private final Map<String, RegionStore<MinecraftChunk>> stores = new ConcurrentHashMap<>();
 
@@ -67,16 +79,21 @@ public final class RegionStores implements AutoCloseable {
   /**
    * Creates the registry.
    *
+   * @param root where to keep each world's files, under a directory per world; {@code null} to keep
+   *     columns in memory only, shared between searches but lost on restart
    * @param memoryBudget how many bytes of columns not pinned each world keeps in memory
    * @param builderThreads how many threads build columns from chunks that arrive later
    */
-  public RegionStores(long memoryBudget, int builderThreads) {
-    this(memoryBudget, builderThreads, INVALIDATION_DELAY);
+  public RegionStores(@Nullable Path root, long memoryBudget, int builderThreads) {
+    this(root, memoryBudget, builderThreads, INVALIDATION_DELAY);
   }
 
-  RegionStores(long memoryBudget, int builderThreads, Duration invalidationDelay) {
+  RegionStores(
+      @Nullable Path root, long memoryBudget, int builderThreads, Duration invalidationDelay) {
+    this.root = root;
     this.memoryBudget = memoryBudget;
     this.invalidationDelay = invalidationDelay;
+    this.disk = Executors.newSingleThreadExecutor(daemons("cobblestone-regions-disk"));
     ScheduledThreadPoolExecutor pool =
         new ScheduledThreadPoolExecutor(
             Math.max(1, builderThreads), daemons("cobblestone-regions"));
@@ -93,7 +110,14 @@ public final class RegionStores implements AutoCloseable {
    */
   public RegionStore<MinecraftChunk> of(MinecraftWorld world) {
     return stores.computeIfAbsent(
-        world.key(), key -> new RegionStore<>(MinecraftTerrain.spec(world), memoryBudget, threads));
+        world.key(),
+        key ->
+            new RegionStore<>(
+                MinecraftTerrain.spec(world),
+                memoryBudget,
+                root == null ? null : root.resolve(RegionFiles.directoryName(key)),
+                disk,
+                threads));
   }
 
   /**
@@ -152,20 +176,56 @@ public final class RegionStores implements AutoCloseable {
   }
 
   /**
-   * Drops a world's store, once the world has unloaded.
+   * Drops a world's store, once the world has unloaded, writing what it has not written.
    *
    * @param worldKey the world's key
    */
   public void worldUnloaded(String worldKey) {
-    stores.remove(worldKey);
+    RegionStore<MinecraftChunk> store = stores.remove(worldKey);
+    if (store != null) {
+      store.flush().whenComplete((written, failed) -> store.close());
+    }
   }
 
-  /** Stops building, letting builds still running finish for a moment; pending changes are moot. */
+  /**
+   * Writes every world's unwritten columns.
+   *
+   * @return a future completing when every write is done
+   */
+  public CompletableFuture<Void> flush() {
+    List<CompletableFuture<Void>> writes = new ArrayList<>();
+    for (RegionStore<MinecraftChunk> store : stores.values()) {
+      writes.add(store.flush());
+    }
+    return CompletableFuture.allOf(writes.toArray(new CompletableFuture<?>[0]));
+  }
+
+  /**
+   * Stops building, writes what is unwritten, and stops the disk thread. Changes still waiting to
+   * be forgotten are moot.
+   *
+   * <p>Builds still running are let finish for a moment, so their columns are written too. Call it
+   * after the searches have stopped, so nothing builds a column behind the final write.
+   */
   @Override
   public void close() {
     threads.shutdown();
     try {
       threads.awaitTermination(5, TimeUnit.SECONDS);
+    } catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt();
+    }
+    try {
+      flush().get(30, TimeUnit.SECONDS);
+    } catch (Exception failed) {
+      // Unwritten columns are built again after the restart; nothing is lost but time.
+    }
+    for (RegionStore<MinecraftChunk> store : stores.values()) {
+      store.close();
+    }
+    disk.shutdown();
+    try {
+      disk.awaitTermination(5, TimeUnit.SECONDS);
     } catch (InterruptedException interrupted) {
       Thread.currentThread().interrupt();
     }

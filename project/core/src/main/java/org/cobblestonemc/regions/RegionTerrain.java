@@ -32,6 +32,14 @@ package org.cobblestonemc.regions;
 public interface RegionTerrain<C> {
 
   /**
+   * Returns the version of these rules. Columns stored under any other version are built again:
+   * read back, they would mix two models in one search.
+   *
+   * @return the version
+   */
+  int version();
+
+  /**
    * Returns one more than the highest class number. Classes are numbered from 0, and fewer than
    * 128.
    *
