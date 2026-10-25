@@ -23,7 +23,7 @@ minecraft:overworld:
     capture: around-mountain
     tier: LOCAL
     tags: [surface, no-pickaxe]
-    verify: [player-no-pickaxe]
+    verify: [player, player-no-pickaxe, player-with-boat]
     io: zero
     origin: { x: 631, y: 70, z: -317 }
     destination: { x: 517, y: 63, z: -161 }
@@ -35,7 +35,7 @@ minecraft:overworld:
     origin: { x: 5504, y: 75, z: -5448 }
     destination: { x: 5504, y: 81, z: -5748 }
     tags: [surface, no-pickaxe]
-    verify: [player-no-pickaxe]
+    verify: [player, player-no-pickaxe, player-with-boat]
 
   cave-lateral:
     capture: cave-lateral
@@ -95,7 +95,7 @@ minecraft:overworld:
     origin: { x: 2288, y: 70, z: 2840 }
     destination: { x: 2403, y: 62, z: 3117 }
     tags: [surface, no-pickaxe]
-    verify: [player-no-pickaxe]
+    verify: [player, player-no-pickaxe, player-with-boat]
 
   dripstone-caves:
     capture: dripstone-caves
@@ -104,6 +104,7 @@ minecraft:overworld:
     origin: { x: -19, y: 12, z: 26 }
     destination: { x: 134, y: 27, z: 22 }
     tags: [underground]
+    verify: [player]
 
   frozen-ocean:
     capture: frozen-ocean
@@ -112,6 +113,7 @@ minecraft:overworld:
     origin: { x: 2608, y: 62, z: 216 }
     destination: { x: 2808, y: 62, z: 216 }
     tags: [surface]
+    verify: [player, player-with-boat]
 
   hilly-jungle:
     capture: jungle
@@ -205,7 +207,7 @@ minecraft:overworld:
     capture: mountain-peaks
     tier: LOCAL
     tags: [surface, no-pickaxe]
-    verify: [player-no-pickaxe]
+    verify: [player, player-no-pickaxe, player-with-boat]
     io: zero
     origin: { x: 7, y: 124, z: -413 }
     destination: { x: 146, y: 127, z: -450 }
@@ -294,6 +296,7 @@ minecraft:overworld:
     origin: { x: 1008, y: 62, z: -744 }
     destination: { x: 1220, y: 62, z: -532 }
     tags: [surface]
+    verify: [player, player-with-boat]
 
   trial-chambers:
     capture: trial-chambers
@@ -372,6 +375,7 @@ minecraft:the_nether:
     origin: { x: -60, y: 57, z: -50 }
     destination: { x: -150, y: 56, z: -150 }
     tags: [nether]
+    verify: [player, player-soul-speed]
 
   bastion:
     capture: bastion
@@ -433,6 +437,7 @@ minecraft:the_nether:
     origin: { x: -597, y: 74, z: -465 }
     destination: { x: -517, y: 83, z: -352 }
     tags: [nether]
+    verify: [player, player-soul-speed]
 
   short-nether:
     capture: short-nether
@@ -456,6 +461,7 @@ minecraft:the_nether:
     capture: through-wart
     tier: LOCAL
     tags: [nether]
+    verify: [player, player-soul-speed]
     io: zero
     origin: { x: 71, y: 85, z: -42 }
     destination: { x: 231, y: 92, z: -19 }
