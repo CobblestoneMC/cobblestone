@@ -62,7 +62,11 @@ public final class RegionColumn {
 
   final int[] portalA;
   final int[] portalB;
-  final boolean[] portalDirected;
+
+  /**
+   * Per portal: how far a body falls through it, from A to B only, or 0 if it is crossed both ways.
+   */
+  final byte[] portalFall;
 
   /** Six ints per portal, as {@link #regionBox}. */
   final int[] portalBox;
@@ -80,7 +84,7 @@ public final class RegionColumn {
       int[] regionBox,
       int[] portalA,
       int[] portalB,
-      boolean[] portalDirected,
+      byte[] portalFall,
       int[] portalBox) {
     this.columnX = columnX;
     this.columnZ = columnZ;
@@ -94,7 +98,7 @@ public final class RegionColumn {
     this.regionBox = regionBox;
     this.portalA = portalA;
     this.portalB = portalB;
-    this.portalDirected = portalDirected;
+    this.portalFall = portalFall;
     this.portalBox = portalBox;
   }
 
@@ -134,7 +138,7 @@ public final class RegionColumn {
         new int[0],
         new int[0],
         new int[0],
-        new boolean[0],
+        new byte[0],
         new int[0]);
   }
 

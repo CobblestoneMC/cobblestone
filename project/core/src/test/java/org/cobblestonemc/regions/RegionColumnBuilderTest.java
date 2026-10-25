@@ -23,6 +23,17 @@ class RegionColumnBuilderTest {
   private static final class NoDigging implements RegionAgent {
     private final ToyWorld.Walker walker = new ToyWorld.Walker();
 
+    /** The deepest fall onto ground it survives. */
+    private final int safeFall;
+
+    NoDigging(int safeFall) {
+      this.safeFall = safeFall;
+    }
+
+    NoDigging() {
+      this(3);
+    }
+
     @Override
     public boolean usable(int clazz) {
       return clazz == ToyWorld.Terrain.GROUND || clazz == ToyWorld.Terrain.POOL;
@@ -42,6 +53,11 @@ class RegionColumnBuilderTest {
     @Override
     public double fallback() {
       return walker.fallback();
+    }
+
+    @Override
+    public double fall(int clazz, int depth) {
+      return clazz == ToyWorld.Terrain.POOL || depth <= safeFall ? 0 : Double.POSITIVE_INFINITY;
     }
   }
 
@@ -79,12 +95,28 @@ class RegionColumnBuilderTest {
    * @return the estimate from {@code from} to {@code to} for an agent that cannot dig
    */
   private static double across(int edge, int rise, Cell from, Cell to) {
+    return across(edge, rise, from, to, new NoDigging());
+  }
+
+  private static double across(int edge, int rise, Cell from, Cell to, RegionAgent agent) {
     ToyWorld.Blocks ledge =
         (x, y, z) ->
             y <= (x >= edge ? 10 + rise : 10) ? ToyWorld.Material.STONE : ToyWorld.Material.AIR;
     RegionStore<ToyWorld.Column> store = RegionStore.inMemory(ToyWorld.spec());
     RegionGraph<ToyWorld.Column> graph = new RegionGraph<>(store, new ToyWorld.Source(ledge, 16));
-    return new RegionSearch(graph, new NoDigging(), from, to::equals, cell -> to).costToGoal(from);
+    return new RegionSearch(graph, agent, from, to::equals, cell -> to).costToGoal(from);
+  }
+
+  /** A fall too deep for one agent is still in the graph: whether to take it is the agent's. */
+  @ParameterizedTest
+  @ValueSource(ints = {8, 16})
+  void aDeepFallIsTheAgentsToTake(int edge) {
+    Cell top = new Cell(edge + 5, 16, 4);
+    Cell bottom = new Cell(edge - 5, 11, 4);
+    double distance = top.distance(bottom);
+
+    assertEquals(2.8 * distance, across(edge, 5, top, bottom, new NoDigging(3)), 1e-9);
+    assertTrue(across(edge, 5, top, bottom, new NoDigging(5)) < 0.2 * distance * 1.5);
   }
 
   /** Steps and falls join regions the same way across a seam between columns as inside one. */

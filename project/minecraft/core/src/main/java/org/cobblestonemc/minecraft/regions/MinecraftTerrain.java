@@ -26,8 +26,8 @@ import org.cobblestonemc.regions.RegionTerrain;
  * org.cobblestonemc.minecraft.MiningClass}. Lava and unbreakable blocks belong to no region.
  *
  * <p><b>The joining rules are a walking body's.</b> Ground steps a level up or down into ground,
- * water or a ladder, and drops off a ledge onto ground up to {@link #MAX_DROP} below, onto a ladder
- * as far, and into water from any height up to {@link #MAX_WATER_DROP}.
+ * water or a ladder, and drops off a ledge onto ground, a ladder or water up to {@link
+ * #DEEPEST_FALL} below. Which of those falls a player survives is {@link MinecraftAgent}'s to say.
  *
  * <p><b>One per environment,</b> because what soft rock is depends on the dimension: netherrack in
  * the Nether, mostly sandstone elsewhere, at twice the hardness. A rock region's class is chosen by
@@ -47,17 +47,8 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
   /** A chunk is 16 blocks along X and Z: {@code 1 << 4}. */
   private static final int CHUNK_SHIFT = 4;
 
-  /**
-   * The deepest drop onto ground a fall portal joins.
-   *
-   * <p>{@code MovementCosts.SAFE_FALL_BLOCKS}. FallMode will go further at the price of damage,
-   * which it charges at several seconds a block; a route that needs that is rare, and pricing it as
-   * a cheap drop would invite the fine search to every cliff edge.
-   */
-  static final int MAX_DROP = 3;
-
-  /** The deepest drop into water a fall portal joins: water breaks any fall. */
-  static final int MAX_WATER_DROP = 32;
+  /** The deepest fall a portal joins: two sections, far past anything a player survives on land. */
+  static final int DEEPEST_FALL = 32;
 
   /** The environment of the worlds this terrain classifies, which says what its soft rock is. */
   private final Environment environment;
@@ -206,16 +197,15 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
   public boolean landing(int clazz, int depth) {
     // One block down onto ground is a step, already joined by the step contacts.
     return switch (of(clazz).body()) {
-      case GROUND -> depth >= 2 && depth <= MAX_DROP;
-      case WATER -> true;
-      case CLIMB -> depth <= MAX_DROP;
+      case GROUND -> depth >= 2;
+      case WATER, CLIMB -> true;
       case OPEN, SOLID -> false;
     };
   }
 
   @Override
   public int deepestFall() {
-    return MAX_WATER_DROP;
+    return DEEPEST_FALL;
   }
 
   /**

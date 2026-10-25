@@ -82,7 +82,7 @@ public final class RegionGraph<C> {
   private int portalCount;
   private int[] portalA = new int[1024];
   private int[] portalB = new int[1024];
-  private boolean[] portalDirected = new boolean[1024];
+  private byte[] portalFall = new byte[1024];
   private int[] portalBox = new int[6 * 1024];
 
   private long placeNanos;
@@ -185,7 +185,18 @@ public final class RegionGraph<C> {
    * @return {@code true} if one-way
    */
   public boolean directed(int portal) {
-    return portalDirected[portal];
+    return portalFall[portal] != 0;
+  }
+
+  /**
+   * Returns how far a body falls through a portal, from {@link #portalA} into {@link #portalB}: the
+   * shallowest of its ledge's falls.
+   *
+   * @param portal the portal
+   * @return the depth in blocks, or 0 if the portal is no fall
+   */
+  public int fall(int portal) {
+    return portalFall[portal];
   }
 
   /**
@@ -377,7 +388,7 @@ public final class RegionGraph<C> {
     int[] box = new int[6];
     for (int p = 0; p < column.portalA.length; p++) {
       System.arraycopy(column.portalBox, p * 6, box, 0, 6);
-      newPortal(base + column.portalA[p], base + column.portalB[p], column.portalDirected[p], box);
+      newPortal(base + column.portalA[p], base + column.portalB[p], column.portalFall[p], box);
     }
     return new Placed(column, base);
   }
@@ -448,18 +459,18 @@ public final class RegionGraph<C> {
     return id;
   }
 
-  private void newPortal(int a, int b, boolean directed, int[] box) {
+  private void newPortal(int a, int b, int fall, int[] box) {
     if (portalCount == portalA.length) {
       int size = portalCount * 2;
       portalA = Arrays.copyOf(portalA, size);
       portalB = Arrays.copyOf(portalB, size);
-      portalDirected = Arrays.copyOf(portalDirected, size);
+      portalFall = Arrays.copyOf(portalFall, size);
       portalBox = Arrays.copyOf(portalBox, size * 6);
     }
     int id = portalCount++;
     portalA[id] = a;
     portalB[id] = b;
-    portalDirected[id] = directed;
+    portalFall[id] = (byte) fall;
     System.arraycopy(box, 0, portalBox, id * 6, 6);
     attach(a, id);
     attach(b, id);

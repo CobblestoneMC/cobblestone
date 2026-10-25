@@ -80,7 +80,7 @@ public final class RegionColumnBuilder<C> {
   private int portalCount;
   private int[] portalA = new int[256];
   private int[] portalB = new int[256];
-  private boolean[] portalDirected = new boolean[256];
+  private byte[] portalFall = new byte[256];
   private int[] portalBox = new int[256 * 6];
 
   /**
@@ -173,7 +173,7 @@ public final class RegionColumnBuilder<C> {
         Arrays.copyOf(regionBox, regionCount * 6),
         Arrays.copyOf(portalA, portalCount),
         Arrays.copyOf(portalB, portalCount),
-        Arrays.copyOf(portalDirected, portalCount),
+        Arrays.copyOf(portalFall, portalCount),
         Arrays.copyOf(portalBox, portalCount * 6));
   }
 
@@ -396,18 +396,18 @@ public final class RegionColumnBuilder<C> {
     return id;
   }
 
-  private void newPortal(int a, int b, boolean directed, int[] box) {
+  private void newPortal(int a, int b, int fall, int[] box) {
     if (portalCount == portalA.length) {
       int size = portalCount * 2;
       portalA = Arrays.copyOf(portalA, size);
       portalB = Arrays.copyOf(portalB, size);
-      portalDirected = Arrays.copyOf(portalDirected, size);
+      portalFall = Arrays.copyOf(portalFall, size);
       portalBox = Arrays.copyOf(portalBox, size * 6);
     }
     int id = portalCount++;
     portalA[id] = a;
     portalB[id] = b;
-    portalDirected[id] = directed;
+    portalFall[id] = (byte) fall;
     System.arraycopy(box, 0, portalBox, id * 6, 6);
   }
 }

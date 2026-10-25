@@ -70,6 +70,14 @@ public final class MinecraftAgent implements RegionAgent {
   /** {@code MovementCosts.FALL_PER_BLOCK}, which a mining step down pays on top of breaking. */
   private static final double FALL = 0.18;
 
+  /**
+   * The deepest fall onto ground or a ladder taken without damage: {@code
+   * MovementCosts.SAFE_FALL_BLOCKS}. FallMode will go further at the price of damage, which it
+   * charges at several seconds a block; a route that needs that is rare, and pricing it as a cheap
+   * drop would invite the fine search to every cliff edge. Feather Falling raises it.
+   */
+  private static final int SAFE_FALL = 3;
+
   /** Soul sand's speed factor, as the platforms report it: a walker without Soul Speed drags. */
   private static final double SOUL_SAND_SPEED = 0.4;
 
@@ -272,6 +280,23 @@ public final class MinecraftAgent implements RegionAgent {
   @Override
   public double fallback() {
     return FALLBACK_COST_PER_BLOCK;
+  }
+
+  /**
+   * Water breaks any fall; ground and ladders only one of {@link #SAFE_FALL} blocks or less. The
+   * fall itself adds nothing: the height fallen is priced in crossing the region landed in.
+   */
+  @Override
+  public double fall(int clazz, int depth) {
+    RegionClass known = RegionClass.byId(clazz);
+    if (known == null) {
+      return Double.POSITIVE_INFINITY;
+    }
+    return switch (known.body()) {
+      case WATER -> 0;
+      case GROUND, CLIMB -> depth <= SAFE_FALL ? 0 : Double.POSITIVE_INFINITY;
+      case OPEN, SOLID -> Double.POSITIVE_INFINITY;
+    };
   }
 
   private static boolean has(double rate) {

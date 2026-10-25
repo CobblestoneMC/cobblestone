@@ -101,7 +101,7 @@ final class ToyWorld {
 
     @Override
     public boolean landing(int clazz, int depth) {
-      return (clazz == GROUND && depth >= 2 && depth <= 3) || clazz == POOL;
+      return (clazz == GROUND && depth >= 2) || clazz == POOL;
     }
 
     @Override
@@ -148,6 +148,11 @@ final class ToyWorld {
     @Override
     public double fallback() {
       return 2.8;
+    }
+
+    @Override
+    public double fall(int clazz, int depth) {
+      return clazz == Terrain.POOL || depth <= 3 ? 0 : Double.POSITIVE_INFINITY;
     }
   }
 

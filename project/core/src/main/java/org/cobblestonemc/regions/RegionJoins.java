@@ -125,7 +125,7 @@ final class RegionJoins {
         continue;
       }
       if (terrain.landing(clazz, k)) {
-        contacts.drop(from, below, fx, y, fz, tx, y, tz);
+        contacts.drop(from, below, k, fx, y, fz, tx, y, tz);
       }
       return;
     }

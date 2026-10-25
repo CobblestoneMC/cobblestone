@@ -435,7 +435,9 @@ public final class RegionSearch {
     double nx = clamp(fx, portal, 0);
     double ny = clamp(fy, portal, 1);
     double nz = clamp(fz, portal, 2);
-    double near = base + onward(region, nx, ny, nz, onward, fx, fy, fz);
+    double fall =
+        graph.directed(portal) ? agent.fall(graph.regionClass(region), graph.fall(portal)) : 0;
+    double near = base + fall + onward(region, nx, ny, nz, onward, fx, fy, fz);
 
     // The point of the segment toward the origin closest to the portal's centre, pulled onto it.
     double ox = origin.x() - fx;
@@ -452,7 +454,7 @@ public final class RegionSearch {
     double ax = clamp(fx + t * ox, portal, 0);
     double ay = clamp(fy + t * oy, portal, 1);
     double az = clamp(fz + t * oz, portal, 2);
-    double aimed = base + onward(region, ax, ay, az, onward, fx, fy, fz);
+    double aimed = base + fall + onward(region, ax, ay, az, onward, fx, fy, fz);
 
     if (aimed + focus(ax, ay, az) < near + focus(nx, ny, nz)) {
       label(portal, aimed, ax, ay, az);
@@ -476,11 +478,13 @@ public final class RegionSearch {
 
   /**
    * Whether an agent can arrive in {@code region} through {@code portal}: the other side must be
-   * somewhere it can be, and a fall must land here rather than start here.
+   * somewhere it can be, and a fall must land here rather than start here, and be one it can take.
    */
   private boolean enters(int portal, int region) {
     int other = graph.portalA(portal) == region ? graph.portalB(portal) : graph.portalA(portal);
-    if (graph.directed(portal) && graph.portalB(portal) != region) {
+    if (graph.directed(portal)
+        && (graph.portalB(portal) != region
+            || Double.isInfinite(agent.fall(graph.regionClass(region), graph.fall(portal))))) {
       return false;
     }
     return agent.usable(graph.regionClass(other));

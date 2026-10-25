@@ -94,7 +94,11 @@ public interface RegionTerrain<C> {
   boolean open(int clazz);
 
   /**
-   * Returns whether a fall of {@code depth} blocks onto this class is worth a portal.
+   * Returns whether a body falling {@code depth} blocks comes to rest on this class, and so whether
+   * the fall is a portal.
+   *
+   * <p>Where a body lands, not whether it survives: every agent shares the graph, and which falls
+   * it can take is {@link RegionAgent#fall}'s to say.
    *
    * @param clazz the class landed on
    * @param depth how far the body falls, at least 1
@@ -103,7 +107,7 @@ public interface RegionTerrain<C> {
   boolean landing(int clazz, int depth);
 
   /**
-   * Returns the deepest fall worth looking for a landing at.
+   * Returns the deepest fall to look for a landing at: deeper falls are no portal for any agent.
    *
    * @return the depth, in cells
    */
