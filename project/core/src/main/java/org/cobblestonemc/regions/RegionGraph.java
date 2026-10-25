@@ -20,7 +20,7 @@ import org.cobblestonemc.FutureOr;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The world as a graph of terrain regions joined by portals, as one search sees it.
+ * The domain as a graph of terrain regions joined by portals, as one search sees it.
  *
  * <p><b>Exact about topology, loose about geometry.</b> Every region is a flood-filled connected
  * piece of one class of terrain, so two regions are joined only where a body could actually cross
@@ -30,11 +30,11 @@ import org.jetbrains.annotations.Nullable;
  * as a doorway — costs it thousands, so connections are computed from blocks and prices are allowed
  * to be rough.
  *
- * <p><b>Columns come from a {@link RegionStore}; seams are built here.</b> A column — every region
- * and portal inside one column of terrain — is built once and shared by every search through the
- * store. This graph places each column it needs at an offset of its own, and joins neighbouring
- * columns at seams the first time the search needs to leave one: seams need both columns, and are
- * cheap enough to compute per search. A column whose four seams are built is <em>complete</em>: its
+ * <p><b>Stacks come from a {@link RegionStore}; seams are built here.</b> A stack — every region
+ * and portal inside one stack of terrain — is built once and shared by every search through the
+ * store. This graph places each stack it needs at an offset of its own, and joins neighbouring
+ * stacks at seams the first time the search needs to leave one: seams need both stacks, and are
+ * cheap enough to compute per search. A stack whose four seams are built is <em>complete</em>: its
  * regions will never gain another portal, which is what lets a search relax across a region once
  * and trust that it saw everything.
  *
@@ -45,7 +45,7 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class RegionGraph<C> {
 
-  /** No region: unbreakable, lava, outside the world, or a column that cannot be read. */
+  /** No region: unbreakable, lava, outside the domain, or a stack that cannot be read. */
   public static final int NONE = -1;
 
   private final RegionStore<C> store;
@@ -57,16 +57,16 @@ public final class RegionGraph<C> {
   private final int shift;
   private final int mask;
 
-  private final Map<Long, Placed> columns = new HashMap<>();
+  private final Map<Long, Placed> stacks = new HashMap<>();
   private final Set<Long> seams = new HashSet<>();
 
   /**
-   * Columns the store handed over after this graph had to wait for them, by column.
+   * Stacks the store handed over after this graph had to wait for them, by stack.
    *
    * <p>Kept here rather than asked for again: the store has them in memory too, but under a tight
    * budget it may already have evicted one, and a search asking again would wait again.
    */
-  private final Map<Long, RegionColumn> arrived = new ConcurrentHashMap<>();
+  private final Map<Long, RegionStack> arrived = new ConcurrentHashMap<>();
 
   private final RegionJoins joins;
 
@@ -91,16 +91,16 @@ public final class RegionGraph<C> {
   /**
    * Creates a graph over a store.
    *
-   * @param store where built columns are kept: a world's shared store, or one of the search's own
+   * @param store where built stacks are kept: a domain's shared store, or one of the search's own
    *     ({@link RegionStore#inMemory})
-   * @param source where this search reads a column the store has to build
+   * @param source where this search reads a stack the store has to build
    */
   public RegionGraph(RegionStore<C> store, TerrainSource<C> source) {
     this.store = store;
     this.spec = store.spec();
     this.terrain = spec.terrain();
     this.source = source;
-    this.minY = spec.columnMinY();
+    this.minY = spec.stackMinY();
     this.height = spec.height();
     this.shift = spec.shift();
     this.mask = spec.width() - 1;
@@ -112,19 +112,19 @@ public final class RegionGraph<C> {
   // ------------------------------------------------------------------------------------------
 
   /**
-   * Returns the region at a world cell, or {@link #NONE}, if its column is placed.
+   * Returns the region at a cell, or {@link #NONE}, if its stack is placed.
    *
-   * @param x the world X
-   * @param y the world Y
-   * @param z the world Z
-   * @return the region, or {@link #NONE} — including when the column has not been placed
+   * @param x the X
+   * @param y the Y
+   * @param z the Z
+   * @return the region, or {@link #NONE} — including when the stack has not been placed
    */
   public int regionAt(int x, int y, int z) {
-    Placed column = columns.get(RegionColumn.key(x >> shift, z >> shift));
-    if (column == null) {
+    Placed stack = stacks.get(RegionStack.key(x >> shift, z >> shift));
+    if (stack == null) {
       return NONE;
     }
-    return column.regionAt(x & mask, y - minY, z & mask);
+    return stack.regionAt(x & mask, y - minY, z & mask);
   }
 
   /**
@@ -204,7 +204,7 @@ public final class RegionGraph<C> {
    *
    * @param portal the portal
    * @param bound 0–2 the minimum X, Y, Z and 3–5 the maximum
-   * @return the bound, in world coordinates
+   * @return the bound, in domain coordinates
    */
   public int portalBound(int portal, int bound) {
     return portalBox[portal * 6 + bound];
@@ -215,19 +215,19 @@ public final class RegionGraph<C> {
    *
    * @param region the region
    * @param bound 0–2 the minimum X, Y, Z and 3–5 the maximum
-   * @return the bound, in world coordinates
+   * @return the bound, in domain coordinates
    */
   public int regionBound(int region, int bound) {
     return regionBox[region * 6 + bound];
   }
 
   /**
-   * Returns the column holding a world X or Z.
+   * Returns the stack holding a X or Z.
    *
-   * @param coordinate the world X or Z
-   * @return the column X or Z
+   * @param coordinate the X or Z
+   * @return the stack X or Z
    */
-  public int columnOf(int coordinate) {
+  public int stackOf(int coordinate) {
     return coordinate >> shift;
   }
 
@@ -250,8 +250,8 @@ public final class RegionGraph<C> {
   }
 
   /**
-   * Returns the time spent placing stored columns into this graph: copying their regions and
-   * portals in at this graph's numbering. Building a column is the store's, and counted there.
+   * Returns the time spent placing stored stacks into this graph: copying their regions and portals
+   * in at this graph's numbering. Building a stack is the store's, and counted there.
    *
    * @return nanoseconds
    */
@@ -260,7 +260,7 @@ public final class RegionGraph<C> {
   }
 
   /**
-   * Returns the time spent joining columns at their seams.
+   * Returns the time spent joining stacks at their seams.
    *
    * @return nanoseconds
    */
@@ -271,14 +271,14 @@ public final class RegionGraph<C> {
   /**
    * Returns roughly how much memory this graph holds of its own, in bytes.
    *
-   * <p>Its regions and portals, which it copies; not the columns' cell maps, which it shares with
+   * <p>Its regions and portals, which it copies; not the stacks' cell maps, which it shares with
    * the store.
    *
    * @return the approximate footprint
    */
   public long footprintBytes() {
-    long bytes = columns.size() * 64L;
-    // Per region: class, box, column, portal list header and count.
+    long bytes = stacks.size() * 64L;
+    // Per region: class, box, stack, portal list header and count.
     bytes += regionCount * (1L + 24 + 8 + 16 + 4);
     for (int region = 0; region < regionCount; region++) {
       bytes += regionPortals[region].length * 4L;
@@ -293,38 +293,38 @@ public final class RegionGraph<C> {
   // ------------------------------------------------------------------------------------------
 
   /**
-   * Makes sure the column holding a world cell is placed and complete, so every region in it has
-   * all of its portals.
+   * Makes sure the stack holding a cell is placed and complete, so every region in it has all of
+   * its portals.
    *
-   * @param x the world X
-   * @param z the world Z
-   * @return a future completing when the columns it needs arrive, or {@code null} if it is ready
+   * @param x the X
+   * @param z the Z
+   * @return a future completing when the stacks it needs arrive, or {@code null} if it is ready
    */
   public @Nullable CompletableFuture<Void> complete(int x, int z) {
-    return completeColumn(x >> shift, z >> shift);
+    return completeStack(x >> shift, z >> shift);
   }
 
   /**
-   * Makes sure a region's column is complete.
+   * Makes sure a region's stack is complete.
    *
    * @param region the region
-   * @return a future completing when the columns it needs arrive, or {@code null} if it is ready
+   * @return a future completing when the stacks it needs arrive, or {@code null} if it is ready
    */
   public @Nullable CompletableFuture<Void> completeRegion(int region) {
     long key = regionColumn[region];
-    Placed column = columns.get(key);
-    if (column != null && column.complete) {
+    Placed stack = stacks.get(key);
+    if (stack != null && stack.complete) {
       return null; // the common case, and it allocates nothing
     }
-    return completeColumn(unpackX(key), unpackZ(key));
+    return completeStack(unpackX(key), unpackZ(key));
   }
 
-  private @Nullable CompletableFuture<Void> completeColumn(int cx, int cz) {
-    Placed column = columns.get(RegionColumn.key(cx, cz));
-    if (column != null && column.complete) {
+  private @Nullable CompletableFuture<Void> completeStack(int cx, int cz) {
+    Placed stack = stacks.get(RegionStack.key(cx, cz));
+    if (stack != null && stack.complete) {
       return null;
     }
-    // Every column a seam reads, asked for together: one park for all five rather than five.
+    // Every stack a seam reads, asked for together: one park for all five rather than five.
     List<CompletableFuture<?>> waiting = null;
     int[][] around = {{0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1}};
     for (int[] offset : around) {
@@ -345,52 +345,52 @@ public final class RegionGraph<C> {
     seam(cx, cz, false);
     seam(cx, cz - 1, false);
     seamNanos += System.nanoTime() - started;
-    columns.get(RegionColumn.key(cx, cz)).complete = true;
+    stacks.get(RegionStack.key(cx, cz)).complete = true;
     return null;
   }
 
-  /** Places a column if the store has it ready, or returns the future it arrives on. */
+  /** Places a stack if the store has it ready, or returns the future it arrives on. */
   private @Nullable CompletableFuture<?> place(int cx, int cz) {
-    long key = RegionColumn.key(cx, cz);
-    if (columns.containsKey(key)) {
+    long key = RegionStack.key(cx, cz);
+    if (stacks.containsKey(key)) {
       return null;
     }
-    RegionColumn ready = arrived.remove(key);
+    RegionStack ready = arrived.remove(key);
     if (ready == null) {
-      FutureOr<RegionColumn> column = store.column(cx, cz, source);
-      if (!column.isImmediate()) {
+      FutureOr<RegionStack> stack = store.stack(cx, cz, source);
+      if (!stack.isImmediate()) {
         // Kept as it lands, so the search finds it on waking whatever the store does meanwhile. A
-        // failure is a column that cannot be known, like an ungenerated one.
-        return column
+        // failure is a stack that cannot be known, like an ungenerated one.
+        return stack
             .future()
             .handle(
                 (built, failure) -> {
-                  arrived.put(key, built != null ? built : RegionColumn.empty(spec, cx, cz));
+                  arrived.put(key, built != null ? built : RegionStack.empty(spec, cx, cz));
                   return null;
                 });
       }
-      ready = column.value();
+      ready = stack.value();
     }
     long started = System.nanoTime();
-    columns.put(key, placed(ready));
+    stacks.put(key, placed(ready));
     placeNanos += System.nanoTime() - started;
     return null;
   }
 
-  /** Copies a column's regions and portals in at this graph's numbering. */
-  private Placed placed(RegionColumn column) {
+  /** Copies a stack's regions and portals in at this graph's numbering. */
+  private Placed placed(RegionStack stack) {
     int base = regionCount;
-    long key = RegionColumn.key(column.columnX, column.columnZ);
-    for (int r = 0; r < column.regionClass.length; r++) {
-      int id = newRegion(column.regionClass[r], key);
-      System.arraycopy(column.regionBox, r * 6, regionBox, id * 6, 6);
+    long key = RegionStack.key(stack.stackX, stack.stackZ);
+    for (int r = 0; r < stack.regionClass.length; r++) {
+      int id = newRegion(stack.regionClass[r], key);
+      System.arraycopy(stack.regionBox, r * 6, regionBox, id * 6, 6);
     }
     int[] box = new int[6];
-    for (int p = 0; p < column.portalA.length; p++) {
-      System.arraycopy(column.portalBox, p * 6, box, 0, 6);
-      newPortal(base + column.portalA[p], base + column.portalB[p], column.portalFall[p], box);
+    for (int p = 0; p < stack.portalA.length; p++) {
+      System.arraycopy(stack.portalBox, p * 6, box, 0, 6);
+      newPortal(base + stack.portalA[p], base + stack.portalB[p], stack.portalFall[p], box);
     }
-    return new Placed(column, base);
+    return new Placed(stack, base);
   }
 
   // ------------------------------------------------------------------------------------------
@@ -398,25 +398,25 @@ public final class RegionGraph<C> {
   // ------------------------------------------------------------------------------------------
 
   /**
-   * Joins a column to its neighbour in positive X (or positive Z), once.
+   * Joins a stack to its neighbour in positive X (or positive Z), once.
    *
-   * <p>The same rules a column applies inside itself — faces touching, a walking step a level up or
-   * down, a fall from a ledge — across the boundary between two. Both columns must be placed.
+   * <p>The same rules a stack applies inside itself — faces touching, a walking step a level up or
+   * down, a fall from a ledge — across the boundary between two. Both stacks must be placed.
    */
   private void seam(int cx, int cz, boolean alongX) {
-    long key = (RegionColumn.key(cx, cz) << 1) | (alongX ? 1 : 0);
+    long key = (RegionStack.key(cx, cz) << 1) | (alongX ? 1 : 0);
     if (!seams.add(key)) {
       return;
     }
-    Placed low = columns.get(RegionColumn.key(cx, cz));
-    Placed high = columns.get(alongX ? RegionColumn.key(cx + 1, cz) : RegionColumn.key(cx, cz + 1));
+    Placed low = stacks.get(RegionStack.key(cx, cz));
+    Placed high = stacks.get(alongX ? RegionStack.key(cx + 1, cz) : RegionStack.key(cx, cz + 1));
     int ox = cx << shift;
     int oz = cz << shift;
     int width = mask + 1;
     for (int ly = 0; ly < height; ly++) {
       int y = minY + ly;
       for (int t = 0; t < width; t++) {
-        // a is the low column's edge cell, b the high column's, face to face.
+        // a is the low stack's edge cell, b the high stack's, face to face.
         int ax = alongX ? mask : t;
         int az = alongX ? t : mask;
         int bx = alongX ? 0 : t;
@@ -443,7 +443,7 @@ public final class RegionGraph<C> {
   // Storage
   // ------------------------------------------------------------------------------------------
 
-  private int newRegion(int clazz, long column) {
+  private int newRegion(int clazz, long stack) {
     if (regionCount == regionClass.length) {
       int size = regionCount * 2;
       regionClass = Arrays.copyOf(regionClass, size);
@@ -454,7 +454,7 @@ public final class RegionGraph<C> {
     }
     int id = regionCount++;
     regionClass[id] = (byte) clazz;
-    regionColumn[id] = column;
+    regionColumn[id] = stack;
     regionPortals[id] = new int[4];
     return id;
   }
@@ -493,22 +493,22 @@ public final class RegionGraph<C> {
     return (int) key;
   }
 
-  /** A stored column, placed in this graph at an offset. */
+  /** A stored stack, placed in this graph at an offset. */
   private static final class Placed implements RegionJoins.Cells {
 
-    final RegionColumn column;
+    final RegionStack stack;
     final int base;
     boolean complete;
 
-    Placed(RegionColumn column, int base) {
-      this.column = column;
+    Placed(RegionStack stack, int base) {
+      this.stack = stack;
       this.base = base;
     }
 
     @Override
     public int regionAt(int lx, int ly, int lz) {
-      int local = column.regionAt(lx, ly, lz);
-      return local == RegionColumn.NONE ? NONE : base + local;
+      int local = stack.regionAt(lx, ly, lz);
+      return local == RegionStack.NONE ? NONE : base + local;
     }
   }
 }

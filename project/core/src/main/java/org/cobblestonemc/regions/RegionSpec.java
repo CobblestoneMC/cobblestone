@@ -7,18 +7,22 @@
 
 package org.cobblestonemc.regions;
 
+import org.cobblestonemc.DomainBounds;
+
 /**
- * Everything that decides how one world's terrain is cut into regions: the terrain's rules, the
- * world's height, and the fill's detour ratio. Two columns built under equal specs are the same
+ * Everything that decides how one domain's terrain is cut into regions: the terrain's rules, the
+ * domain's bounds, and the fill's detour ratio. Two stacks built under equal specs are the same
  * graph; under different ones they are not, and must never meet in one search.
  *
- * <p><b>The geometry is the terrain's.</b> A column is {@code width} cells along X and Z, as the
- * terrain's own unit of reading is ({@link RegionTerrain#columnShift()}), and is stacked from cubic
- * sections of that size from {@link #columnMinY()} up. Cell {@code (x, y, z)} of a section is
- * {@code (y << 2·shift) | (z << shift) | x}; of a column, {@code y} counts from {@link
- * #columnMinY()}.
+ * <p><b>The geometry is the terrain's and the domain's.</b> Terrain is built in cubic sections, as
+ * wide as the terrain says ({@link RegionTerrain#sectionShift()}). A <em>stack</em> is the sections
+ * at one X and Z from the domain's floor to its ceiling, which is why the domain must bound Y, the
+ * axis bodies fall along: a stack is the unit terrain is read, built, kept and joined in. Cell
+ * {@code (x, y, z)} of a section is {@code (y << 2·shift) | (z << shift) | x}; of a stack, {@code
+ * y} counts from {@link #stackMinY()}. Bounds along X or Z, where a domain has them, leave a
+ * stack's shape alone: cells outside them belong to no region.
  *
- * @param <C> the platform's column of terrain
+ * @param <C> the platform's stack of terrain
  */
 public final class RegionSpec<C> {
 
@@ -33,47 +37,51 @@ public final class RegionSpec<C> {
   public static final double DEFAULT_DETOUR_RATIO = 1.5;
 
   private final RegionTerrain<C> terrain;
-  private final int worldMinY;
-  private final int worldMaxY;
+  private final DomainBounds bounds;
   private final double detourRatio;
   private final int shift;
-  private final int columnMinY;
+  private final int stackMinY;
   private final int sections;
 
   /**
    * Creates a spec.
    *
    * @param terrain what the cells are, and how they join
-   * @param worldMinY the world's lowest Y, inclusive
-   * @param worldMaxY the world's highest Y, inclusive
+   * @param bounds the cells the domain holds; it must bound Y
    * @param detourRatio how much longer than a straight line a walk inside one region may be; see
    *     {@link #DEFAULT_DETOUR_RATIO}
+   * @throws IllegalArgumentException if the domain does not bound Y
    */
-  public RegionSpec(RegionTerrain<C> terrain, int worldMinY, int worldMaxY, double detourRatio) {
+  public RegionSpec(RegionTerrain<C> terrain, DomainBounds bounds, double detourRatio) {
+    if (!bounds.bounded(DomainBounds.Y)) {
+      // Lifting this means joining stacks above and below each other, falls included.
+      throw new IllegalArgumentException(
+          "regions stack sections along Y, the axis bodies fall along, so the domain must bound"
+              + " it: "
+              + bounds);
+    }
     this.terrain = terrain;
-    this.worldMinY = worldMinY;
-    this.worldMaxY = worldMaxY;
+    this.bounds = bounds;
     this.detourRatio = detourRatio;
-    this.shift = terrain.columnShift();
+    this.shift = terrain.sectionShift();
     if (shift < 1 || shift > 5) {
       // A section's cells are numbered in a short; 32³ is the most that leaves room for "none".
-      throw new IllegalArgumentException("column shift " + shift + " is outside 1-5");
+      throw new IllegalArgumentException("section shift " + shift + " is outside 1-5");
     }
-    // Whole sections, so a section never straddles the world's floor or ceiling; cells outside the
-    // world are classified as nothing.
-    this.columnMinY = (worldMinY >> shift) << shift;
-    this.sections = (worldMaxY >> shift) - (worldMinY >> shift) + 1;
+    // Whole sections, so a section never straddles the domain's floor or ceiling; cells outside
+    // the domain are classified as nothing.
+    this.stackMinY = (bounds.minY() >> shift) << shift;
+    this.sections = (bounds.maxY() >> shift) - (bounds.minY() >> shift) + 1;
   }
 
   /**
    * Creates a spec with the default detour ratio.
    *
    * @param terrain what the cells are, and how they join
-   * @param worldMinY the world's lowest Y, inclusive
-   * @param worldMaxY the world's highest Y, inclusive
+   * @param bounds the cells the domain holds; it must bound Y
    */
-  public RegionSpec(RegionTerrain<C> terrain, int worldMinY, int worldMaxY) {
-    this(terrain, worldMinY, worldMaxY, DEFAULT_DETOUR_RATIO);
+  public RegionSpec(RegionTerrain<C> terrain, DomainBounds bounds) {
+    this(terrain, bounds, DEFAULT_DETOUR_RATIO);
   }
 
   /**
@@ -86,21 +94,12 @@ public final class RegionSpec<C> {
   }
 
   /**
-   * Returns the world's lowest Y, inclusive.
+   * Returns the cells the domain holds.
    *
-   * @return the floor
+   * @return the bounds
    */
-  public int worldMinY() {
-    return worldMinY;
-  }
-
-  /**
-   * Returns the world's highest Y, inclusive.
-   *
-   * @return the ceiling
-   */
-  public int worldMaxY() {
-    return worldMaxY;
+  public DomainBounds bounds() {
+    return bounds;
   }
 
   /**
@@ -113,7 +112,7 @@ public final class RegionSpec<C> {
   }
 
   /**
-   * Returns the base-2 log of a column's width, and of a section's every side.
+   * Returns the base-2 log of a stack's width, and of a section's every side.
    *
    * @return the shift
    */
@@ -122,7 +121,7 @@ public final class RegionSpec<C> {
   }
 
   /**
-   * Returns how many cells wide a column is along X and Z, and how tall a section is.
+   * Returns how many cells wide a stack is along X and Z, and how tall a section is.
    *
    * @return the width
    */
@@ -140,17 +139,17 @@ public final class RegionSpec<C> {
   }
 
   /**
-   * Returns the lowest Y a column counts its cells from: the world's floor, rounded down to a
+   * Returns the lowest Y a stack counts its cells from: the domain's floor, rounded down to a
    * section.
    *
-   * @return the column floor
+   * @return the stack floor
    */
-  public int columnMinY() {
-    return columnMinY;
+  public int stackMinY() {
+    return stackMinY;
   }
 
   /**
-   * Returns how many sections tall a column is.
+   * Returns how many sections tall a stack is.
    *
    * @return the section count
    */
@@ -159,21 +158,21 @@ public final class RegionSpec<C> {
   }
 
   /**
-   * Returns how many cells tall a column is.
+   * Returns how many cells tall a stack is.
    *
-   * @return the column height
+   * @return the stack height
    */
   public int height() {
     return sections << shift;
   }
 
   /**
-   * Returns the column holding a world X or Z.
+   * Returns the stack holding an X or Z coordinate.
    *
-   * @param coordinate the world X or Z
-   * @return the column X or Z
+   * @param coordinate the X or Z
+   * @return the stack X or Z
    */
-  public int columnOf(int coordinate) {
+  public int stackOf(int coordinate) {
     return coordinate >> shift;
   }
 }

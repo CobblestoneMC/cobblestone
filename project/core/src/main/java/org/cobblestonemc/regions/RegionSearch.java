@@ -25,7 +25,7 @@ import org.jetbrains.annotations.Nullable;
  * origin, A* style, with straight-line distance to the origin at the agent's cheapest rate as its
  * heuristic. A portal it settles knows its true cost to the destination over the graph, and that
  * stays true however much further the search runs, so every answer is final the moment it is given.
- * Focusing on the origin is what keeps it from flooding the whole world around the destination —
+ * Focusing on the origin is what keeps it from flooding the whole domain around the destination —
  * the fine search starts at the origin and works outward, so that is where the questions come from.
  *
  * <p><b>Portals carry a point, not just a cost.</b> A portal is a box (a whole section face, for a
@@ -164,7 +164,7 @@ public final class RegionSearch {
 
   /**
    * Returns the time spent searching: answering, less whatever the answers spent waiting on the
-   * graph for terrain — placing columns, joining seams, and any read or build that ran inside.
+   * graph for terrain — placing stacks, joining seams, and any read or build that ran inside.
    *
    * @return nanoseconds
    */
@@ -221,7 +221,7 @@ public final class RegionSearch {
       return backstop;
     }
 
-    // A ceiling, so a region the graph cannot reach does not send the search across the world to
+    // A ceiling, so a region the graph cannot reach does not send the search across the domain to
     // prove it: past the price of tunnelling straight there, no answer is worth more search.
     double answer = cell.distance(goal) * agent.fallback();
     if (arrivals.contains(region)) {
@@ -370,7 +370,7 @@ public final class RegionSearch {
       return -1;
     }
     // Resident first, then commit: a settle that discovered halfway through that it needed a
-    // column would leave half its neighbours relaxed.
+    // stack would leave half its neighbours relaxed.
     CompletableFuture<Void> waiting = completingRegion(graph.portalA(portal));
     if (waiting == null) {
       waiting = completingRegion(graph.portalB(portal));
@@ -535,9 +535,9 @@ public final class RegionSearch {
     for (int[] offset : around) {
       int nx = x + offset[0];
       int nz = z + offset[2];
-      // Only within the cell's own column: a neighbour's region would have to be completed, and
+      // Only within the cell's own stack: a neighbour's region would have to be completed, and
       // this is a fallback, not a reason to fetch.
-      if (graph.columnOf(nx) != graph.columnOf(x) || graph.columnOf(nz) != graph.columnOf(z)) {
+      if (graph.stackOf(nx) != graph.stackOf(x) || graph.stackOf(nz) != graph.stackOf(z)) {
         continue;
       }
       region = graph.regionAt(nx, y + offset[1], nz);

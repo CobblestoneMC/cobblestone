@@ -8,9 +8,10 @@
 package org.cobblestonemc.regions;
 
 import java.util.concurrent.CompletableFuture;
+import org.cobblestonemc.DomainBounds;
 import org.cobblestonemc.FutureOr;
 
-/** A toy world for testing the region layer without any game: air, stone and water. */
+/** A toy domain for testing the region layer without any game: air, stone and water. */
 final class ToyWorld {
 
   static final int MIN_Y = 0;
@@ -18,20 +19,20 @@ final class ToyWorld {
 
   private ToyWorld() {}
 
-  /** What a toy world is made of, cell by cell. */
+  /** What a toy domain is made of, cell by cell. */
   enum Material {
     AIR,
     STONE,
     WATER
   }
 
-  /** A toy world's material at each cell, by world X, Y and Z. */
+  /** A toy domain's material at each cell, by X, Y and Z. */
   interface Blocks {
     Material at(int x, int y, int z);
   }
 
-  /** One column of a toy world: its material by local X and Z and world Y. */
-  interface Column {
+  /** One stack of a toy domain: its material by local X and Z and Y. */
+  interface Stack {
     Material at(int x, int y, int z);
   }
 
@@ -39,7 +40,7 @@ final class ToyWorld {
    * A toy terrain with the shape of a game's: ground where air sits on stone, air above it, water,
    * and stone that is dug through.
    */
-  static final class Terrain implements RegionTerrain<Column> {
+  static final class Terrain implements RegionTerrain<Stack> {
     static final int GROUND = 0;
     static final int OPEN = 1;
     static final int POOL = 2;
@@ -57,29 +58,29 @@ final class ToyWorld {
     }
 
     @Override
-    public int columnShift() {
+    public int sectionShift() {
       return shift;
     }
 
     @Override
     public void classify(
-        Column column, int worldMinY, int worldMaxY, int columnMinY, byte[] classes) {
+        Stack stack, int domainMinY, int domainMaxY, int stackMinY, byte[] classes) {
       int mask = (1 << shift) - 1;
       for (int cell = 0; cell < classes.length; cell++) {
-        int y = columnMinY + (cell >> (2 * shift));
+        int y = stackMinY + (cell >> (2 * shift));
         int x = cell & mask;
         int z = (cell >> shift) & mask;
-        if (y < worldMinY || y > worldMaxY) {
+        if (y < domainMinY || y > domainMaxY) {
           classes[cell] = -1;
           continue;
         }
         classes[cell] =
             (byte)
-                switch (column.at(x, y, z)) {
+                switch (stack.at(x, y, z)) {
                   case STONE -> ROCK;
                   case WATER -> POOL;
                   case AIR ->
-                      y > worldMinY && column.at(x, y - 1, z) == Material.STONE ? GROUND : OPEN;
+                      y > domainMinY && stack.at(x, y - 1, z) == Material.STONE ? GROUND : OPEN;
                 };
       }
     }
@@ -117,8 +118,8 @@ final class ToyWorld {
 
   static final Terrain TERRAIN = new Terrain(4);
 
-  static RegionSpec<Column> spec() {
-    return new RegionSpec<>(TERRAIN, MIN_Y, MAX_Y);
+  static RegionSpec<Stack> spec() {
+    return new RegionSpec<>(TERRAIN, DomainBounds.vertical(MIN_Y, MAX_Y));
   }
 
   /** Walks ground, swims water, and digs stone. */
@@ -156,7 +157,7 @@ final class ToyWorld {
     }
   }
 
-  /** Hills, a pond and a cave, so a column has mixed sections, falls and several classes. */
+  /** Hills, a pond and a cave, so a stack has mixed sections, falls and several classes. */
   static Material hills(int x, int y, int z) {
     int ground = 10 + Math.floorMod(x / 5 + z / 7, 4);
     if (y > ground) {
@@ -170,14 +171,14 @@ final class ToyWorld {
     return Material.STONE;
   }
 
-  /** A terrain source over a toy world, which counts what it is asked for. */
-  static final class Source implements TerrainSource<Column> {
+  /** A terrain source over a toy domain, which counts what it is asked for. */
+  static final class Source implements TerrainSource<Stack> {
     private final Blocks blocks;
     private final int width;
     int reads;
     boolean unreadable;
 
-    /** When set, columns arrive only when this completes. */
+    /** When set, stacks arrive only when this completes. */
     CompletableFuture<Void> gate;
 
     Source(Blocks blocks, int width) {
@@ -190,16 +191,16 @@ final class ToyWorld {
     }
 
     @Override
-    public FutureOr<Column> column(int columnX, int columnZ) {
+    public FutureOr<Stack> stack(int stackX, int stackZ) {
       reads++;
       if (unreadable) {
         return FutureOr.of(null);
       }
-      Column column = (x, y, z) -> blocks.at(columnX * width + x, y, columnZ * width + z);
+      Stack stack = (x, y, z) -> blocks.at(stackX * width + x, y, stackZ * width + z);
       if (gate != null) {
-        return FutureOr.from(gate.thenApply(ignored -> column));
+        return FutureOr.from(gate.thenApply(ignored -> stack));
       }
-      return FutureOr.of(column);
+      return FutureOr.of(stack);
     }
   }
 }

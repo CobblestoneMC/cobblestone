@@ -12,13 +12,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.cobblestonemc.DomainBounds;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld.Environment;
 import org.cobblestonemc.minecraft.MiningClass;
-import org.cobblestonemc.regions.RegionColumn;
-import org.cobblestonemc.regions.RegionColumnBuilder;
 import org.cobblestonemc.regions.RegionSpec;
+import org.cobblestonemc.regions.RegionStack;
+import org.cobblestonemc.regions.RegionStackBuilder;
 import org.junit.jupiter.api.Test;
 
 /** Rock of every hardness fills as one, and a region is the band nearest its average. */
@@ -130,10 +131,10 @@ class MinecraftTerrainTest {
   }
 
   private static int regions(MinecraftChunk chunk) {
-    RegionColumnBuilder<MinecraftChunk> builder =
-        new RegionColumnBuilder<>(new RegionSpec<>(TERRAIN, 0, 31));
-    RegionColumn column = builder.build(0, 0, chunk);
-    return column.regions();
+    RegionStackBuilder<MinecraftChunk> builder =
+        new RegionStackBuilder<>(new RegionSpec<>(TERRAIN, DomainBounds.vertical(0, 31)));
+    RegionStack stack = builder.build(0, 0, chunk);
+    return stack.regions();
   }
 
   @Test
@@ -151,7 +152,7 @@ class MinecraftTerrainTest {
       assertEquals(clazz, RegionClass.byId(clazz.id()));
     }
     for (MiningClass mining : MiningClass.values()) {
-      assertEquals(mining, RegionClass.of(mining).mining());
+      assertEquals(RegionClass.Body.SOLID, MinecraftTerrain.solid(mining).body());
     }
   }
 }

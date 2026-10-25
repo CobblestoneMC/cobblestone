@@ -18,7 +18,7 @@ import java.util.Map;
  * ordinary contacts because they are one-way: {@code (a, b)} and {@code (b, a)} are different
  * falls, while a contact is the same whichever side it is seen from.
  *
- * <p>Region numbers are whatever the caller uses: column-local while a column is built, the graph's
+ * <p>Region numbers are whatever the caller uses: stack-local while a stack is built, the graph's
  * own at a seam. Not thread-safe; reused by one builder or one graph.
  */
 final class RegionContacts {

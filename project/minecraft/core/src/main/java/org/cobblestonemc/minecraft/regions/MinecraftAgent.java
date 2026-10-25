@@ -30,10 +30,9 @@ import org.cobblestonemc.regions.RegionAgent;
  * apart where the two levels see differently. The fine search will grow costs this layer cannot see
  * — a turn, a wall close by, danger nearby — that adjust its base walk, while a region is priced
  * only by its class; neither set of numbers is a precise constant the other must match. What keeps
- * them honest is measurement: {@code bench verify} compares these estimates with the fine search's
- * true costs, and a drift of either side shows up there as the suite's ratios moving: they average
- * about 0.85 of the truth, with about one sample in fifteen over it. Change either side, run verify
- * and a sweep.
+ * them honest is measurement: {@code bench verify-regions} compares these estimates with the fine
+ * search's true costs, and a drift of either side shows up there as the suite's ratios moving.
+ * Change either side, run {@code ./gradlew verifyRegions} and a sweep.
  *
  * <p><b>Every rate is at least {@link #cheapest()} per block of straight-line distance.</b> The
  * backward search focuses itself with that bound, and a crossing priced below it would let the

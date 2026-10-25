@@ -27,7 +27,7 @@ package org.cobblestonemc.regions;
  *
  * <p>Must be safe to call from several threads at once: builds run in parallel.
  *
- * @param <C> the platform's column of terrain, such as a chunk
+ * @param <C> the platform's stack of terrain
  */
 public interface RegionTerrain<C> {
 
@@ -40,29 +40,29 @@ public interface RegionTerrain<C> {
   int classes();
 
   /**
-   * Returns the base-2 log of how wide a column of this terrain is along X and Z: 4 for a column 16
+   * Returns the base-2 log of how wide a stack of this terrain is along X and Z: 4 for a stack 16
    * cells wide. The region layer's sections are cubes of that size.
    *
    * @return the shift, from 1 to 5
    */
-  int columnShift();
+  int sectionShift();
 
   /**
-   * Classifies every cell of a column.
+   * Classifies every cell of a stack.
    *
-   * <p>With {@code s} the {@link #columnShift()}, cell {@code (x, y, z)} of the column, with {@code
-   * y} counted from {@code columnMinY}, is {@code classes[(y << 2s) | (z << s) | x]}: its class, or
-   * {@code -1} for a cell that belongs to no region, such as one outside the world or one nothing
+   * <p>With {@code s} the {@link #sectionShift()}, cell {@code (x, y, z)} of the stack, with {@code
+   * y} counted from {@code stackMinY}, is {@code classes[(y << 2s) | (z << s) | x]}: its class, or
+   * {@code -1} for a cell that belongs to no region, such as one outside the domain or one nothing
    * can enter or break.
    *
-   * @param column the column
-   * @param worldMinY the world's lowest Y, inclusive
-   * @param worldMaxY the world's highest Y, inclusive
-   * @param columnMinY the Y the column's cells count from, at or below {@code worldMinY}
+   * @param stack the stack
+   * @param domainMinY the domain's lowest Y, inclusive
+   * @param domainMaxY the domain's highest Y, inclusive
+   * @param stackMinY the Y the stack's cells count from, at or below {@code domainMinY}
    * @param classes where to write each cell's class; its length is a whole number of cubic sections
-   *     of the column's width
+   *     of the stack's width
    */
-  void classify(C column, int worldMinY, int worldMaxY, int columnMinY, byte[] classes);
+  void classify(C stack, int domainMinY, int domainMaxY, int stackMinY, byte[] classes);
 
   /**
    * Returns whether a body stands in cells of this class, so that steps a level up or down join

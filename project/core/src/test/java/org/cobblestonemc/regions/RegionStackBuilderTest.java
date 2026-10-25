@@ -10,14 +10,16 @@ package org.cobblestonemc.regions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.cobblestonemc.Cell;
+import org.cobblestonemc.DomainBounds;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-class RegionColumnBuilderTest {
+class RegionStackBuilderTest {
 
   /** Walks ground and swims water, and cannot dig: only portals join anything for it. */
   private static final class NoDigging implements RegionAgent {
@@ -72,21 +74,48 @@ class RegionColumnBuilderTest {
                 : y < 32 && ((x + y + z) & 1) == 0
                     ? ToyWorld.Material.STONE
                     : ToyWorld.Material.AIR;
-    RegionSpec<ToyWorld.Column> spec = ToyWorld.spec();
-    ToyWorld.Column column = new ToyWorld.Source(checkerboard, 16).column(0, 0).value();
-    RegionColumn built = new RegionColumnBuilder<>(spec).build(0, 0, column);
+    RegionSpec<ToyWorld.Stack> spec = ToyWorld.spec();
+    ToyWorld.Stack stack = new ToyWorld.Source(checkerboard, 16).stack(0, 0).value();
+    RegionStack built = new RegionStackBuilder<>(spec).build(0, 0, stack);
 
     assertNotNull(built.wideCells[1], "more than 255 regions: a short per cell");
     assertTrue(built.regions() > 2048);
     for (int ly = 16; ly < 32; ly++) {
       for (int z = 0; z < 16; z++) {
         for (int x = 0; x < 16; x++) {
-          assertNotEquals(RegionColumn.NONE, built.regionAt(x, ly, z), "no cell left a hole");
+          assertNotEquals(RegionStack.NONE, built.regionAt(x, ly, z), "no cell left a hole");
         }
       }
     }
     // Two stone cells a diagonal apart are separate regions.
     assertNotEquals(built.regionAt(0, 16, 0), built.regionAt(1, 17, 0));
+  }
+
+  @Test
+  void cellsPastTheDomainsEdgeBelongToNoRegion() {
+    // A domain that ends at x 7: the stack at x 0..15 keeps only its first half.
+    DomainBounds bounds =
+        new DomainBounds(
+            Integer.MIN_VALUE,
+            7,
+            ToyWorld.MIN_Y,
+            ToyWorld.MAX_Y,
+            Integer.MIN_VALUE,
+            Integer.MAX_VALUE);
+    RegionSpec<ToyWorld.Stack> spec = new RegionSpec<>(ToyWorld.TERRAIN, bounds);
+    RegionStack built =
+        new RegionStackBuilder<>(spec).build(0, 0, new ToyWorld.Source().stack(0, 0).value());
+
+    int ly = 5 - spec.stackMinY(); // stone, well below the hills' ground
+    assertNotEquals(RegionStack.NONE, built.regionAt(7, ly, 3));
+    assertEquals(RegionStack.NONE, built.regionAt(8, ly, 3));
+  }
+
+  @Test
+  void aDomainThatDoesNotBoundYIsRefused() {
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> new RegionSpec<>(ToyWorld.TERRAIN, DomainBounds.UNBOUNDED));
   }
 
   /**
@@ -102,8 +131,8 @@ class RegionColumnBuilderTest {
     ToyWorld.Blocks ledge =
         (x, y, z) ->
             y <= (x >= edge ? 10 + rise : 10) ? ToyWorld.Material.STONE : ToyWorld.Material.AIR;
-    RegionStore<ToyWorld.Column> store = RegionStore.inMemory(ToyWorld.spec());
-    RegionGraph<ToyWorld.Column> graph = new RegionGraph<>(store, new ToyWorld.Source(ledge, 16));
+    RegionStore<ToyWorld.Stack> store = RegionStore.inMemory(ToyWorld.spec());
+    RegionGraph<ToyWorld.Stack> graph = new RegionGraph<>(store, new ToyWorld.Source(ledge, 16));
     return new RegionSearch(graph, agent, from, to::equals, cell -> to).costToGoal(from);
   }
 
@@ -119,7 +148,7 @@ class RegionColumnBuilderTest {
     assertTrue(across(edge, 5, top, bottom, new NoDigging(5)) < 0.2 * distance * 1.5);
   }
 
-  /** Steps and falls join regions the same way across a seam between columns as inside one. */
+  /** Steps and falls join regions the same way across a seam between stacks as inside one. */
   @ParameterizedTest
   @ValueSource(ints = {8, 16})
   void stepsAndFallsJoinTheSameAcrossASeam(int edge) {

@@ -20,7 +20,7 @@ seeded Paper server and captures what `data/needed-chunks.yml` asks for.
 | `sweep` | Runs at several heuristic weights and prints nodes expanded against path cost. |
 | `check` | Says whether a scenario can be benchmarked: each heuristic's result and Dijkstra's optimum. |
 | `path` | Prints the cells of the route each loadout's search found. |
-| `verify` | Samples cells along each route and compares the region estimate there with Dijkstra's true cost. With no selection, it runs the verify suite: the loadouts each scenario lists under `verify`. |
+| `verify-regions` | Samples cells along each route's cheapest path and compares the region estimate there with the true cost. With no selection, it runs the region verify suite: the loadouts each scenario lists under `verifyRegions`. |
 
 | Option | Effect |
 | --- | --- |
@@ -35,9 +35,19 @@ seeded Paper server and captures what `data/needed-chunks.yml` asks for.
 `-Dregions.detour=<ratio>` sets the region fill's detour ratio, for measuring it. A long Dijkstra
 needs a large heap: `JAVA_OPTS=-Xmx8G`.
 
-The verify suite runs each of its routes in a JVM of its own, with a 2 GB heap and 5 minutes, as
-many at once as fit in half the free memory and half the processors. A route that runs out of
-either fails the suite.
+## The region verify suite
+
+```bash
+./gradlew verifyRegions
+```
+
+Checks the region layer's estimate against the true cost on a handful of routes per dimension, in
+a minute or two. Each route runs in a JVM of its own, with 1 GB and 3 minutes, as many at once as
+fit in half the free memory and half the processors; a route that runs out of either fails the
+suite. It needs the corpus captured first, and says so if it is not.
+
+The truth is one Dijkstra per route: every stretch of a cheapest path is itself cheapest, so what
+remains from each cell on it is the total less what came before.
 
 ## Reading results
 
@@ -79,9 +89,10 @@ Pick and check it with the [utility plugin](../utility/README.md), copy its entr
 `data/scenarios.yml` and `data/needed-chunks.yml`, and run `captureCorpus`. A scenario's
 destination is a point, or an area with `box: { from: {x, y, z}, to: {x, y, z} }`.
 
-`verify: [player, ...]` puts the scenario in the verify suite for those loadouts. List a loadout
-only if `verify --scenario <id> --agent <loadout>` finishes within 2 GB of heap and 5 minutes:
-Dijkstra on a long or open route, and any flyer's, takes far more.
+`verifyRegions: [player, ...]` puts the scenario in the region verify suite for those loadouts.
+List a loadout only if `verify-regions --scenario <id> --agent <loadout>` finishes within 1 GB of
+heap and 3 minutes: Dijkstra on a long or open route, and any flyer's, takes far more. Keep the
+suite to a few routes per dimension that between them cover its kinds of terrain.
 
 `warps: [{x, y, z}, ...]` gives a scenario teleports usable from anywhere in its world, as
 Essentials' `/warp` is, at 3 seconds each. Tier 1 then picks between walking and each warp. Keep

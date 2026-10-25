@@ -12,23 +12,23 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.junit.jupiter.api.Test;
 
 /** The suite takes no more than half of either the memory or the processors, and at least one. */
-class VerifySuiteTest {
+class RegionVerifySuiteTest {
 
   private static final long GB = 1L << 30;
 
   @Test
   void halfTheProcessorsWhenMemoryIsPlenty() {
-    assertEquals(10, VerifySuite.parallelism(128 * GB, 20));
+    assertEquals(10, RegionVerifySuite.parallelism(128 * GB, 20));
   }
 
   @Test
   void halfTheFreeMemoryWhenProcessorsArePlenty() {
-    // Half of 16 GB holds three routes of 2.5 GB each.
-    assertEquals(3, VerifySuite.parallelism(16 * GB, 64));
+    // Half of 16 GB holds five routes of 1.5 GB each.
+    assertEquals(5, RegionVerifySuite.parallelism(16 * GB, 64));
   }
 
   @Test
   void alwaysAtLeastOne() {
-    assertEquals(1, VerifySuite.parallelism(GB, 1));
+    assertEquals(1, RegionVerifySuite.parallelism(GB, 1));
   }
 }
