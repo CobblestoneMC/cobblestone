@@ -54,7 +54,6 @@ import org.cobblestonemc.stonebrick.platform.Capture;
 import org.cobblestonemc.stonebrick.platform.DeterministicScheduler;
 import org.cobblestonemc.stonebrick.platform.StonebrickPlatformApi;
 import org.cobblestonemc.stonebrick.platform.StonebrickPlayer;
-import org.cobblestonemc.stonebrick.platform.StonebrickSolve;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -206,21 +205,12 @@ public final class ScenarioRunner {
     MinecraftMovementBehavior behavior =
         MinecraftMovementBehavior.forPlayer(chunks, player, excluded);
 
-    Cell goal = scenario.destination();
-    int radius = scenario.destinationRadius();
-    DomainRegion<MinecraftWorld> target;
-    if (scenario.destinationBox() != null) {
-      target =
-          StonebrickSolve.box(world, scenario.destinationBox()[0], scenario.destinationBox()[1]);
-    } else if (radius > 0) {
-      target =
-          StonebrickSolve.box(
-              world,
-              new Cell(goal.x() - radius, goal.y() - radius, goal.z() - radius),
-              new Cell(goal.x() + radius, goal.y() + radius, goal.z() + radius));
-    } else {
-      target = StonebrickSolve.at(world, goal);
-    }
+    DomainRegion<MinecraftWorld> target =
+        new DomainRegion.Impl<>(
+            world,
+            scenario::arrives,
+            scenario::nearestArrival,
+            () -> "the destination of " + scenario.id());
 
     SearchSettings.Builder builder =
         SearchSettings.builder()
