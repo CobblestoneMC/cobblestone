@@ -135,14 +135,15 @@ class RegionFilesTest {
     ToyWorld.Source source = new ToyWorld.Source();
     RegionStore<ToyWorld.Column> first = store(root);
     double before =
-        new RegionSearch(new RegionGraph<>(first, source), walker, goal, from, goal::equals)
+        new RegionSearch(new RegionGraph<>(first, source), walker, from, goal::equals, cell -> goal)
             .costToGoal(from);
     first.flush().join();
     int readsBefore = source.reads;
 
     RegionStore<ToyWorld.Column> restarted = store(root);
     double after =
-        new RegionSearch(new RegionGraph<>(restarted, source), walker, goal, from, goal::equals)
+        new RegionSearch(
+                new RegionGraph<>(restarted, source), walker, from, goal::equals, cell -> goal)
             .costToGoal(from);
 
     assertEquals(before, after, 1e-9);

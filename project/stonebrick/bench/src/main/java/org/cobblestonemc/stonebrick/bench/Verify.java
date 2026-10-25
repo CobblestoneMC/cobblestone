@@ -45,16 +45,13 @@ final class Verify {
   private Verify() {}
 
   /**
-   * How far from the destination a sample has to be to count against the band.
-   *
-   * <p>{@code Tier2Search}'s endgame radius: inside it the search decays its weight towards 1, so
-   * the floor the weight sets does not apply there, and the ratios are noisy divisions by small
-   * remaining costs besides.
+   * The property a suite sets on each route's JVM, so the route also prints its ratios on a line of
+   * their own for the suite to gather.
    */
-  static final double FAR = 64.0;
+  static final String RATIOS_PROPERTY = "bench.verify.ratios";
 
-  /** Every route's far samples' ratios, for the aggregate at the end. */
-  static final List<Double> FAR_RATIOS = new ArrayList<>();
+  /** How the line of ratios a route prints for its suite begins. */
+  static final String RATIOS_PREFIX = "ratios:";
 
   /** Dijkstra expands everything, so it needs far more room than a normal solve. */
   private static final Scenario.SearchLimits DIJKSTRA_LIMITS =
@@ -91,9 +88,10 @@ final class Verify {
    * @param loadout the traveller
    * @param samples how many cells to check
    * @param logger where the searches log
+   * @return the ratio of estimate to true cost at every informative sample
    * @throws IOException if the capture cannot be read
    */
-  static void run(
+  static List<Double> run(
       Path corpusRoot, Scenario scenario, Loadout loadout, int samples, CobblestoneLogger logger)
       throws IOException {
     ScenarioRunner runner = new ScenarioRunner(corpusRoot, logger);
@@ -133,7 +131,7 @@ final class Verify {
           scenario.id(),
           loadout.name(),
           found.outcome());
-      return;
+      return List.of();
     }
 
     Capture capture = Capture.load(CorpusLayout.at(corpusRoot).capture(scenario.capture()).root());
@@ -149,11 +147,11 @@ final class Verify {
                         ScenarioRunner.REGION_DETOUR)),
                 new DirectChunkColumns(capture, scenario.world())),
             loadout.regionAgent(capture.environment(scenario.world())),
+            path.get(0),
             // The destination the route was solved to, area and all: measured to its centre
             // instead, an area's estimates read as over the cost the whole way there.
-            scenario.nearestArrival(path.get(0)),
-            path.get(0),
-            scenario::arrives);
+            scenario::arrives,
+            scenario::nearestArrival);
 
     System.out.printf(Locale.ROOT, "%n%s@%s%n", scenario.id(), loadout.name());
     System.out.printf(
@@ -186,18 +184,17 @@ final class Verify {
           sample.informative() ? String.format(Locale.ROOT, "%.3f", sample.ratio()) : "-");
     }
     summarise(measured);
-    // Only the far samples count against the band: they are the ones the weight's floor is about.
-    List<Double> far = new ArrayList<>();
-    for (Sample sample : measured) {
-      if (sample.informative() && sample.cell().distance(scenario.destination()) >= FAR) {
-        far.add(sample.ratio());
-      }
+    List<Double> ratios = measured.stream().filter(Sample::informative).map(Sample::ratio).toList();
+    if (!ratios.isEmpty()) {
+      System.out.println(header(ratios.size() + " informative samples"));
+      System.out.println("  " + band(ratios));
     }
-    if (!far.isEmpty()) {
-      FAR_RATIOS.addAll(far);
-      System.out.println(header(far.size() + " samples beyond " + (int) FAR + " blocks"));
-      System.out.println("  " + band(far));
+    if (System.getProperty(RATIOS_PROPERTY) != null) {
+      StringBuilder line = new StringBuilder(RATIOS_PREFIX);
+      ratios.forEach(ratio -> line.append(' ').append(ratio));
+      System.out.println(line);
     }
+    return ratios;
   }
 
   private static String header(String note) {
@@ -237,17 +234,19 @@ final class Verify {
         100.0 * over / n);
   }
 
-  /** Prints the band across every route verified. */
-  static void aggregate() {
-    if (FAR_RATIOS.isEmpty()) {
+  /**
+   * Prints the band across every route verified.
+   *
+   * @param ratios every route's informative ratios
+   */
+  static void aggregate(List<Double> ratios) {
+    if (ratios.isEmpty()) {
       return;
     }
     System.out.printf(
-        Locale.ROOT,
-        "%nAcross every route, samples beyond %.0f blocks (the band: >= 1/weight, <= 1)%n",
-        FAR);
-    System.out.println(header("n=" + FAR_RATIOS.size()));
-    System.out.println("  " + band(FAR_RATIOS));
+        Locale.ROOT, "%nAcross every route, informative samples (the band: >= 1/weight, <= 1)%n");
+    System.out.println(header("n=" + ratios.size()));
+    System.out.println("  " + band(ratios));
   }
 
   private static void summarise(List<Sample> samples) {

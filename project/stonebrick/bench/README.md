@@ -34,8 +34,11 @@ seeded Paper server and captures what `data/needed-chunks.yml` asks for.
 | `--corpus <dir>`, `--scenarios <file>`, `--baselines <dir>` | read from or write to elsewhere |
 
 `-Dregions.detour=<ratio>` sets the region fill's detour ratio, for measuring it. A long Dijkstra
-needs a large heap: `JAVA_OPTS=-Xmx8G`. The verify suite's routes each verify within 1.5 GB and 3
-minutes, so the suite runs in `JAVA_OPTS=-Xmx1536m`.
+needs a large heap: `JAVA_OPTS=-Xmx8G`.
+
+The verify suite runs each of its routes in a JVM of its own, with a 2 GB heap and 5 minutes, as
+many at once as fit in half the free memory and half the processors. A route that runs out of
+either fails the suite.
 
 ## Reading results
 
@@ -76,7 +79,7 @@ Pick and check it with the [utility plugin](../utility/README.md), copy its entr
 destination is a point, or an area with `box: { from: {x, y, z}, to: {x, y, z} }`.
 
 `verify: [player, ...]` puts the scenario in the verify suite for those loadouts. List a loadout
-only if `verify --scenario <id> --agent <loadout>` finishes within 1.5 GB of heap and 3 minutes:
+only if `verify --scenario <id> --agent <loadout>` finishes within 2 GB of heap and 5 minutes:
 Dijkstra on a long or open route, and any flyer's, takes far more.
 
 `warps: [{x, y, z}, ...]` gives a scenario teleports usable from anywhere in its world, as

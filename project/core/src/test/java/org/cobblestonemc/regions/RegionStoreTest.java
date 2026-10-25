@@ -39,11 +39,11 @@ class RegionStoreTest {
     RegionAgent walker = new ToyWorld.Walker();
 
     double first =
-        new RegionSearch(new RegionGraph<>(store, source), walker, goal, from, goal::equals)
+        new RegionSearch(new RegionGraph<>(store, source), walker, from, goal::equals, cell -> goal)
             .costToGoal(from);
     int reads = source.reads;
     double second =
-        new RegionSearch(new RegionGraph<>(store, source), walker, goal, from, goal::equals)
+        new RegionSearch(new RegionGraph<>(store, source), walker, from, goal::equals, cell -> goal)
             .costToGoal(from);
 
     assertEquals(first, second, 1e-9);

@@ -66,23 +66,42 @@ public final class BenchMain {
         selectLoadouts(Loadout.loadAll(options.corpusRoot().resolve(Loadout.FILE_NAME)), options);
 
     if (options.command().equals("verify")) {
-      // Unselected, the suite: the routes and loadouts each scenario names as cheap to verify.
-      // Selected, whatever was asked for, however long its Dijkstra takes.
+      // Unselected, the suite: the routes each scenario declares cheap to verify, held to the
+      // suite's limits. Selected, whatever was asked for, however long its Dijkstra takes.
       boolean suite =
           options.scenarioId() == null
               && options.tag() == null
               && options.tier() == null
               && options.agent() == null;
+      if (suite) {
+        List<VerifySuite.Route> routes = new ArrayList<>();
+        for (Scenario scenario : scenarios) {
+          for (Loadout loadout : loadouts) {
+            if (loadout.appliesTo(scenario) && scenario.verify().contains(loadout.name())) {
+              routes.add(new VerifySuite.Route(scenario, loadout));
+            }
+          }
+        }
+        try {
+          if (!VerifySuite.run(routes, options.corpusRoot(), options.scenariosDir())) {
+            System.exit(1);
+          }
+        } catch (InterruptedException interrupted) {
+          Thread.currentThread().interrupt();
+          System.exit(1);
+        }
+        return;
+      }
+      List<Double> ratios = new ArrayList<>();
       for (Scenario scenario : scenarios) {
         for (Loadout loadout : loadouts) {
-          if (!loadout.appliesTo(scenario)
-              || (suite && !scenario.verify().contains(loadout.name()))) {
-            continue;
+          if (loadout.appliesTo(scenario)) {
+            ratios.addAll(
+                Verify.run(options.corpusRoot(), scenario, loadout, 12, new QuietLogger()));
           }
-          Verify.run(options.corpusRoot(), scenario, loadout, 12, new QuietLogger());
         }
       }
-      Verify.aggregate();
+      Verify.aggregate(ratios);
       return;
     }
 

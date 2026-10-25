@@ -166,8 +166,7 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
         // Seeded at the first cell asked about, which is the solve's start: the search focuses on
         // it, and the goal cell worth aiming at depends on where the route begins.
         search =
-            new RegionSearch(
-                graph, agent, target.nearestBoundaryCell(from), from, target::contains);
+            new RegionSearch(graph, agent, from, target::contains, target::nearestBoundaryCell);
       }
       return search;
     }
