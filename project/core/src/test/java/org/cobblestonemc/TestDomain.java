@@ -15,12 +15,7 @@ package org.cobblestonemc;
 record TestDomain(String key) implements Domain {
 
   @Override
-  public int minY() {
-    return -64;
-  }
-
-  @Override
-  public int maxY() {
-    return 320;
+  public DomainBounds bounds() {
+    return DomainBounds.vertical(-64, 320);
   }
 }
