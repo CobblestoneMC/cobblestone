@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.MinecraftBlock;
@@ -95,7 +96,7 @@ class RegionSearchTest {
   }
 
   private static RegionSearch search(Terrain terrain, MinecraftAgent agent, Cell goal, Cell from) {
-    return new RegionSearch(graph(new World(terrain)), agent, goal, from, goal::equals);
+    return new RegionSearch(graph(new World(terrain)), agent, from, goal::equals, cell -> goal);
   }
 
   private static MinecraftAgent walker() {
@@ -218,13 +219,31 @@ class RegionSearchTest {
     Cell goal = new Cell(0, FEET, 0);
     Cell from = new Cell(400, FEET, 0);
     World world = new World(RegionSearchTest::flat);
-    RegionSearch search = new RegionSearch(graph(world), walker(), goal, from, goal::equals);
+    RegionSearch search =
+        new RegionSearch(graph(world), walker(), from, goal::equals, cell -> goal);
 
     search.costToGoal(from);
 
     // Focused on the origin: a corridor between the two ends, not a disc of radius 400 around the
     // goal. A disc would read on the order of 2,000 columns.
     assertTrue(world.read < 400, "the search should not flood the world: " + world.read);
+  }
+
+  @Test
+  void anAreaDestinationIsReachedAtItsEdgeNotDeeperIn() {
+    // Flat ground, and a destination of everything east of x 100. The ground region the traveller
+    // stands in reaches across the edge; arriving is reaching x 100, not walking on into it.
+    Predicate<Cell> inside = cell -> cell.x() >= 100;
+    UnaryOperator<Cell> nearestInside = cell -> new Cell(Math.max(cell.x(), 100), FEET, cell.z());
+    Cell from = new Cell(90, FEET, 0);
+    RegionSearch search =
+        new RegionSearch(
+            graph(new World(RegionSearchTest::flat)), walker(), from, inside, nearestInside);
+
+    double estimate = search.costToGoal(from);
+
+    assertTrue(estimate <= 10 * 0.2 * 1.01, "ten blocks of walking, not more: " + estimate);
+    assertEquals(0.0, search.costToGoal(new Cell(105, FEET, 0)), "inside, nothing is left");
   }
 
   @Test
@@ -241,15 +260,18 @@ class RegionSearchTest {
         };
     Predicate<Cell> inside =
         cell -> cell.x() > 100 && cell.x() < 160 && cell.z() > -30 && cell.z() < 30;
+    UnaryOperator<Cell> nearestInside =
+        cell -> new Cell(Math.clamp(cell.x(), 101, 159), cell.y(), Math.clamp(cell.z(), -29, 29));
     Cell from = new Cell(60, FEET, 0);
     Cell nearest = new Cell(101, FEET, 0);
     MinecraftAgent cost = walker();
 
     double toPoint =
-        new RegionSearch(graph(new World(town)), cost, nearest, from, nearest::equals)
+        new RegionSearch(graph(new World(town)), cost, from, nearest::equals, cell -> nearest)
             .costToGoal(from);
     double toArea =
-        new RegionSearch(graph(new World(town)), cost, nearest, from, inside).costToGoal(from);
+        new RegionSearch(graph(new World(town)), cost, from, inside, nearestInside)
+            .costToGoal(from);
 
     double around = (Math.hypot(40, 31) + 60 + Math.hypot(1, 31)) * 0.2;
     assertTrue(

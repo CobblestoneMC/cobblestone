@@ -84,7 +84,7 @@ class RegionColumnBuilderTest {
             y <= (x >= edge ? 10 + rise : 10) ? ToyWorld.Material.STONE : ToyWorld.Material.AIR;
     RegionStore<ToyWorld.Column> store = RegionStore.inMemory(ToyWorld.spec());
     RegionGraph<ToyWorld.Column> graph = new RegionGraph<>(store, new ToyWorld.Source(ledge, 16));
-    return new RegionSearch(graph, new NoDigging(), to, from, to::equals).costToGoal(from);
+    return new RegionSearch(graph, new NoDigging(), from, to::equals, cell -> to).costToGoal(from);
   }
 
   /** Steps and falls join regions the same way across a seam between columns as inside one. */
