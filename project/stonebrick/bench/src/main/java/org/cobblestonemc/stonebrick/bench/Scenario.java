@@ -326,7 +326,6 @@ public record Scenario(
    * @return the variant, or this scenario if nothing changed
    */
   public Scenario withHeuristic(Heuristic value) {
-<<<<<<< HEAD
     if (value == heuristic) {
       return this;
     }
@@ -354,30 +353,8 @@ public record Scenario(
         onMissingCapture,
         expectedOutcome,
         ungenerated,
-        value);
-=======
-    return value == heuristic
-        ? this
-        : new Scenario(
-            id,
-            description,
-            tags,
-            tier,
-            capture,
-            world,
-            origin,
-            destination,
-            destinationRadius,
-            destinationBox,
-            warps,
-            settings,
-            io,
-            onMissingCapture,
-            expectedOutcome,
-            ungenerated,
-            value,
-            verify);
->>>>>>> whim/regions
+        value,
+        verify);
   }
 
   /**
@@ -564,16 +541,8 @@ public record Scenario(
             string(root, "onMissingCapture", "ERROR").toUpperCase(Locale.ROOT)),
         string(root, "expect", "success"),
         ungenerated(root, file),
-<<<<<<< HEAD
-        heuristic);
-=======
-        Heuristic.valueOf(
-            // Whatever production ships, so the gate guards the search players actually get.
-            string(root, "heuristic", SearchSettings.DEFAULT_HEURISTIC.name())
-                .toUpperCase(Locale.ROOT)
-                .replace('-', '_')),
+        heuristic,
         new LinkedHashSet<>(stringList(root, "verify")));
->>>>>>> whim/regions
   }
 
   /**
