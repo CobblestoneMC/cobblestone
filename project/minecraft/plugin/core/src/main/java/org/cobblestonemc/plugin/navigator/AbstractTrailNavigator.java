@@ -633,9 +633,9 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
   }
 
   /**
-   * Spawns ~{@code density} Gaussian-scattered particles per block around a random point on segment
-   * {@code i} of {@code path} as drawn, flowing along it. A fractional density is probabilistic
-   * (0.7 → 70%).
+   * Spawns ~{@code density} particles per block on segment {@code i} of {@code path} as drawn, each
+   * at its own random point along it, Gaussian-scattered around that point and flowing along it, so
+   * the segment fills evenly. A fractional density is probabilistic (0.7 → 70%).
    */
   private void scatter(SmoothedTrail path, int i, ThreadLocalRandom random) {
     double floatCount = density * path.segmentLength(i);
@@ -643,10 +643,10 @@ public abstract class AbstractTrailNavigator<L> implements Navigator<L> {
     if (random.nextDouble() < floatCount - count) {
       count++;
     }
-    TrailCurve.Sample sample = path.sample(i, random.nextDouble());
-    var center = sample.point();
-    var velocity = sample.direction().times(PARTICLE_FLOW_SPEED);
     for (int p = 0; p < count; p++) {
+      TrailCurve.Sample sample = path.sample(i, random.nextDouble());
+      var center = sample.point();
+      var velocity = sample.direction().times(PARTICLE_FLOW_SPEED);
       spawnTrailParticle(
           center.x() + random.nextGaussian() * SPREAD_HORIZONTAL,
           center.y() + random.nextGaussian() * SPREAD_VERTICAL,

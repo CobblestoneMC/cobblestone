@@ -59,10 +59,12 @@ only: wall time and heap.
 point overworld/ocean@player RUNNING_AVERAGE w=2.00 success cost=195.020 expanded=26461 closest=0 legs=1
 ```
 
-Under `REGIONS` a point adds how many columns the region layer read (`columns`, `regionReads`) and
-where it spent its time and memory: reading and building columns (`readMs`, `buildMs`), joining
-them (`placeMs`, `seamMs`), its own search (`searchMs`, `queries`, `settled`), and its size
-(`built`, `regions`, `portals`, `graphKB`, `storeKB`).
+Every point also prints what it cost: wall time (`ms`), time parked on the modelled disk (`ioMs`),
+chunk reads (`reads`, `coldReads` for first reads) and cells opened (`opened`). Under `REGIONS` it
+adds how many columns the region layer read (`columns`, `regionReads`) and where it spent its time
+and memory: reading and building columns (`readMs`, `buildMs`), joining them (`placeMs`,
+`seamMs`), its own search (`searchMs`, `queries`, `settled`), and its size (`built`, `regions`,
+`portals`, `graphKB`, `storeKB`).
 
 `closest` is how near the search came, in blocks from the nearest cell it settled to the
 destination: 0 when it arrived. When every heuristic fails a route, the one that came closer did
