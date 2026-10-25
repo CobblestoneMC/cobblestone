@@ -53,6 +53,8 @@ import org.yaml.snakeyaml.Yaml;
  * @param expectedOutcome the outcome the scenario asserts, or {@code null} to assert nothing
  * @param ungenerated chunks to present as never generated, whatever the capture holds
  * @param heuristic which estimate the fine search runs on
+ * @param verify the loadouts {@code bench verify} checks this route for by default: those whose
+ *     Dijkstra samples are cheap enough to run as a suite
  */
 public record Scenario(
     String id,
@@ -71,7 +73,8 @@ public record Scenario(
     MissingCapturePolicy onMissingCapture,
     String expectedOutcome,
     Set<Long> ungenerated,
-    Heuristic heuristic) {
+    Heuristic heuristic,
+    Set<String> verify) {
 
   /**
    * Which estimate the fine search runs on.
@@ -262,6 +265,57 @@ public record Scenario(
   }
 
   /**
+   * Returns whether a cell counts as arriving: inside {@link #destinationBox()}, or within {@link
+   * #destinationRadius()} of {@link #destination()} along every axis, or the destination itself.
+   *
+   * @param cell the cell
+   * @return {@code true} if the route ends there
+   */
+  public boolean arrives(Cell cell) {
+    Cell[] area = arrival();
+    if (area == null) {
+      return cell.equals(destination);
+    }
+    return cell.x() >= area[0].x()
+        && cell.x() <= area[1].x()
+        && cell.y() >= area[0].y()
+        && cell.y() <= area[1].y()
+        && cell.z() >= area[0].z()
+        && cell.z() <= area[1].z();
+  }
+
+  /**
+   * Returns the cell of the destination nearest another cell.
+   *
+   * @param from the cell
+   * @return the nearest cell that {@link #arrives}
+   */
+  public Cell nearestArrival(Cell from) {
+    Cell[] area = arrival();
+    if (area == null) {
+      return destination;
+    }
+    return new Cell(
+        Math.clamp(from.x(), area[0].x(), area[1].x()),
+        Math.clamp(from.y(), area[0].y(), area[1].y()),
+        Math.clamp(from.z(), area[0].z(), area[1].z()));
+  }
+
+  /** The destination as an area, least and greatest corners, or {@code null} for a point. */
+  private Cell @Nullable [] arrival() {
+    if (destinationBox != null) {
+      return destinationBox;
+    }
+    if (destinationRadius > 0) {
+      int r = destinationRadius;
+      return new Cell[] {
+        destination.plus(-r, -r, -r), destination.plus(r, r, r),
+      };
+    }
+    return null;
+  }
+
+  /**
    * Returns this scenario run under a different heuristic.
    *
    * <p>A variant is an override rather than a second entry in {@code scenarios.yml}, so that the
@@ -272,6 +326,7 @@ public record Scenario(
    * @return the variant, or this scenario if nothing changed
    */
   public Scenario withHeuristic(Heuristic value) {
+<<<<<<< HEAD
     if (value == heuristic) {
       return this;
     }
@@ -300,6 +355,29 @@ public record Scenario(
         expectedOutcome,
         ungenerated,
         value);
+=======
+    return value == heuristic
+        ? this
+        : new Scenario(
+            id,
+            description,
+            tags,
+            tier,
+            capture,
+            world,
+            origin,
+            destination,
+            destinationRadius,
+            destinationBox,
+            warps,
+            settings,
+            io,
+            onMissingCapture,
+            expectedOutcome,
+            ungenerated,
+            value,
+            verify);
+>>>>>>> whim/regions
   }
 
   /**
@@ -329,7 +407,8 @@ public record Scenario(
         onMissingCapture,
         expectedOutcome,
         ungenerated,
-        heuristic);
+        heuristic,
+        verify);
   }
 
   /**
@@ -356,7 +435,8 @@ public record Scenario(
         onMissingCapture,
         expectedOutcome,
         ungenerated,
-        heuristic);
+        heuristic,
+        verify);
   }
 
   /**
@@ -388,7 +468,8 @@ public record Scenario(
         onMissingCapture,
         expectedOutcome,
         ungenerated,
-        heuristic);
+        heuristic,
+        verify);
   }
 
   /**
@@ -431,7 +512,8 @@ public record Scenario(
         onMissingCapture,
         expectedOutcome,
         ungenerated,
-        heuristic);
+        heuristic,
+        verify);
   }
 
   private static Scenario from(Map<String, Object> root, Path file) throws IOException {
@@ -482,7 +564,16 @@ public record Scenario(
             string(root, "onMissingCapture", "ERROR").toUpperCase(Locale.ROOT)),
         string(root, "expect", "success"),
         ungenerated(root, file),
+<<<<<<< HEAD
         heuristic);
+=======
+        Heuristic.valueOf(
+            // Whatever production ships, so the gate guards the search players actually get.
+            string(root, "heuristic", SearchSettings.DEFAULT_HEURISTIC.name())
+                .toUpperCase(Locale.ROOT)
+                .replace('-', '_')),
+        new LinkedHashSet<>(stringList(root, "verify")));
+>>>>>>> whim/regions
   }
 
   /**

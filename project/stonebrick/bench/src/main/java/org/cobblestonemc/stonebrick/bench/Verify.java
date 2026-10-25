@@ -149,9 +149,11 @@ final class Verify {
                         ScenarioRunner.REGION_DETOUR)),
                 new DirectChunkColumns(capture, scenario.world())),
             loadout.regionAgent(capture.environment(scenario.world())),
-            scenario.destination(),
+            // The destination the route was solved to, area and all: measured to its centre
+            // instead, an area's estimates read as over the cost the whole way there.
+            scenario.nearestArrival(path.get(0)),
             path.get(0),
-            scenario.destination()::equals);
+            scenario::arrives);
 
     System.out.printf(Locale.ROOT, "%n%s@%s%n", scenario.id(), loadout.name());
     System.out.printf(

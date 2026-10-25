@@ -20,7 +20,7 @@ seeded Paper server and captures what `data/needed-chunks.yml` asks for.
 | `sweep` | Runs at several heuristic weights and prints nodes expanded against path cost. |
 | `check` | Says whether a scenario can be benchmarked: each heuristic's result and Dijkstra's optimum. |
 | `path` | Prints the cells of the route each loadout's search found. |
-| `verify` | Samples cells along each route and compares the region estimate there with Dijkstra's true cost. |
+| `verify` | Samples cells along each route and compares the region estimate there with Dijkstra's true cost. With no selection, it runs the verify suite: the loadouts each scenario lists under `verify`. |
 
 | Option | Effect |
 | --- | --- |
@@ -33,7 +33,8 @@ seeded Paper server and captures what `data/needed-chunks.yml` asks for.
 | `--corpus <dir>`, `--scenarios <file>`, `--baselines <dir>` | read from or write to elsewhere |
 
 `-Dregions.detour=<ratio>` sets the region fill's detour ratio, for measuring it. A long Dijkstra
-needs a large heap: `JAVA_OPTS=-Xmx8G`.
+needs a large heap: `JAVA_OPTS=-Xmx8G`. The verify suite's routes each verify within 1.5 GB and 3
+minutes, so the suite runs in `JAVA_OPTS=-Xmx1536m`.
 
 ## Reading results
 
@@ -72,6 +73,10 @@ chooses between routes and may solve legs it then does not take.
 Pick and check it with the [utility plugin](../utility/README.md), copy its entries into
 `data/scenarios.yml` and `data/needed-chunks.yml`, and run `captureCorpus`. A scenario's
 destination is a point, or an area with `box: { from: {x, y, z}, to: {x, y, z} }`.
+
+`verify: [player, ...]` puts the scenario in the verify suite for those loadouts. List a loadout
+only if `verify --scenario <id> --agent <loadout>` finishes within 1.5 GB of heap and 3 minutes:
+Dijkstra on a long or open route, and any flyer's, takes far more.
 
 `warps: [{x, y, z}, ...]` gives a scenario teleports usable from anywhere in its world, as
 Essentials' `/warp` is, at 3 seconds each. Tier 1 then picks between walking and each warp. Keep
