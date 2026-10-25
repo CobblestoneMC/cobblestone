@@ -44,11 +44,11 @@ import org.jetbrains.annotations.Nullable;
  * starts from where they are, and is released when their last trip ends. Everything else is kept
  * within the memory budget, least recently used out.
  *
- * <p><b>Changes are forgotten in batches.</b> A block change marks its column, and the column is
+ * <p><b>Changes are forgotten in batches.</b> A block change marks its stack, and the stack is
  * forgotten {@link #INVALIDATION_DELAY} later, however many more changes it had meanwhile: a farm
- * or a flowing river would otherwise have its columns rebuilt for every search that passes. A
- * search in that window reads the column as it was, which costs the estimate a little and never the
- * route, since the fine search reads the blocks themselves.
+ * or a flowing river would otherwise have its stacks rebuilt for every search that passes. A search
+ * in that window reads the stack as it was, which costs the estimate a little and never the route,
+ * since the fine search reads the blocks themselves.
  *
  * <p><b>Two kinds of thread of its own.</b> One for the disk, so reads and writes of the same files
  * never race; and a small pool for building and those delays, so a chunk that arrives on the server
@@ -61,7 +61,7 @@ public final class RegionStores implements AutoCloseable {
    */
   public static final int PIN_RADIUS = 4;
 
-  /** How long after a block changes its column is forgotten, with every change meanwhile. */
+  /** How long after a block changes its stack is forgotten, with every change meanwhile. */
   public static final Duration INVALIDATION_DELAY = Duration.ofSeconds(10);
 
   private final @Nullable Path root;
@@ -71,7 +71,7 @@ public final class RegionStores implements AutoCloseable {
   private final ScheduledExecutorService threads;
   private final Map<String, RegionStore<MinecraftChunk>> stores = new ConcurrentHashMap<>();
 
-  /** Columns marked as changed and waiting to be forgotten. */
+  /** Stacks marked as changed and waiting to be forgotten. */
   private final Set<Changed> changed = ConcurrentHashMap.newKeySet();
 
   private record Changed(String world, int chunkX, int chunkZ) {}
@@ -80,9 +80,9 @@ public final class RegionStores implements AutoCloseable {
    * Creates the registry.
    *
    * @param root where to keep each world's files, under a directory per world; {@code null} to keep
-   *     columns in memory only, shared between searches but lost on restart
-   * @param memoryBudget how many bytes of columns not pinned each world keeps in memory
-   * @param builderThreads how many threads build columns from chunks that arrive later
+   *     stacks in memory only, shared between searches but lost on restart
+   * @param memoryBudget how many bytes of stacks not pinned each world keeps in memory
+   * @param builderThreads how many threads build stacks from chunks that arrive later
    */
   public RegionStores(@Nullable Path root, long memoryBudget, int builderThreads) {
     this(root, memoryBudget, builderThreads, INVALIDATION_DELAY);
@@ -121,7 +121,7 @@ public final class RegionStores implements AutoCloseable {
   }
 
   /**
-   * Marks a column as changed, to be forgotten after {@link #INVALIDATION_DELAY} with every other
+   * Marks a stack as changed, to be forgotten after {@link #INVALIDATION_DELAY} with every other
    * change it has meanwhile. Cheap enough for every block event.
    *
    * @param world the world
@@ -129,19 +129,19 @@ public final class RegionStores implements AutoCloseable {
    * @param chunkZ the chunk Z
    */
   public void invalidate(MinecraftWorld world, int chunkX, int chunkZ) {
-    Changed column = new Changed(world.key(), chunkX, chunkZ);
-    if (!changed.add(column)) {
+    Changed stack = new Changed(world.key(), chunkX, chunkZ);
+    if (!changed.add(stack)) {
       return; // already waiting: this change is forgotten with it
     }
-    threads.schedule(() -> forget(column), invalidationDelay.toNanos(), TimeUnit.NANOSECONDS);
+    threads.schedule(() -> forget(stack), invalidationDelay.toNanos(), TimeUnit.NANOSECONDS);
   }
 
-  private void forget(Changed column) {
-    // Unmarked first, so a change that lands while the column is forgotten marks it again.
-    changed.remove(column);
-    RegionStore<MinecraftChunk> store = stores.get(column.world());
+  private void forget(Changed stack) {
+    // Unmarked first, so a change that lands while the stack is forgotten marks it again.
+    changed.remove(stack);
+    RegionStore<MinecraftChunk> store = stores.get(stack.world());
     if (store != null) {
-      store.invalidate(column.chunkX(), column.chunkZ());
+      store.invalidate(stack.chunkX(), stack.chunkZ());
     }
   }
 
@@ -161,7 +161,7 @@ public final class RegionStores implements AutoCloseable {
     }
     RegionStore<MinecraftChunk> store = of(world);
     RegionSpec<MinecraftChunk> spec = store.spec();
-    store.pin(player, spec.columnOf(at.x()), spec.columnOf(at.z()), PIN_RADIUS);
+    store.pin(player, spec.stackOf(at.x()), spec.stackOf(at.z()), PIN_RADIUS);
   }
 
   /**

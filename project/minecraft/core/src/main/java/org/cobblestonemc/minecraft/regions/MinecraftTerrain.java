@@ -13,6 +13,7 @@ import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.MinecraftWorld.Environment;
+import org.cobblestonemc.minecraft.MiningClass;
 import org.cobblestonemc.regions.RegionSpec;
 import org.cobblestonemc.regions.RegionTerrain;
 
@@ -26,8 +27,8 @@ import org.cobblestonemc.regions.RegionTerrain;
  * org.cobblestonemc.minecraft.MiningClass}. Lava and unbreakable blocks belong to no region.
  *
  * <p><b>The joining rules are a walking body's.</b> Ground steps a level up or down into ground,
- * water or a ladder, and drops off a ledge onto ground up to {@link #MAX_DROP} below, onto a ladder
- * as far, and into water from any height up to {@link #MAX_WATER_DROP}.
+ * water or a ladder, and drops off a ledge onto ground, a ladder or water up to {@link
+ * #DEEPEST_FALL} below. Which of those falls a player survives is {@link MinecraftAgent}'s to say.
  *
  * <p><b>Change any of it, bump {@link #VERSION}.</b> Stored columns built under other rules are
  * built again.
@@ -48,27 +49,18 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
   }
 
   /** The version of these rules; see {@link RegionTerrain#version()}. */
-  public static final int VERSION = 6;
+  public static final int VERSION = 7;
 
   /** A chunk is 16 blocks along X and Z: {@code 1 << 4}. */
   private static final int CHUNK_SHIFT = 4;
 
-  /**
-   * The deepest drop onto ground a fall portal joins.
-   *
-   * <p>{@code MovementCosts.SAFE_FALL_BLOCKS}. FallMode will go further at the price of damage,
-   * which it charges at several seconds a block; a route that needs that is rare, and pricing it as
-   * a cheap drop would invite the fine search to every cliff edge.
-   */
-  static final int MAX_DROP = 3;
-
-  /** The deepest drop into water a fall portal joins: water breaks any fall. */
-  static final int MAX_WATER_DROP = 32;
+  /** The deepest fall a portal joins: two sections, far past anything a player survives on land. */
+  static final int DEEPEST_FALL = 32;
 
   /** The environment of the worlds this terrain classifies, which says what its soft rock is. */
   private final Environment environment;
 
-  /** A column's blocks, per thread: builds run in parallel. */
+  /** A stack's blocks, per thread: builds run in parallel. */
   private final ThreadLocal<MinecraftBlock[]> scratch = new ThreadLocal<>();
 
   private MinecraftTerrain(Environment environment) {
@@ -96,7 +88,7 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
   }
 
   @Override
-  public int columnShift() {
+  public int sectionShift() {
     return CHUNK_SHIFT;
   }
 
@@ -107,12 +99,12 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
    * @return its spec
    */
   public static RegionSpec<MinecraftChunk> spec(MinecraftWorld world) {
-    return new RegionSpec<>(of(world.environment()), world.minY(), world.maxY());
+    return new RegionSpec<>(of(world.environment()), world.bounds());
   }
 
   @Override
   public void classify(
-      MinecraftChunk chunk, int worldMinY, int worldMaxY, int columnMinY, byte[] classes) {
+      MinecraftChunk chunk, int domainMinY, int domainMaxY, int stackMinY, byte[] classes) {
     int volume = classes.length;
     MinecraftBlock[] blocks = scratch.get();
     if (blocks == null || blocks.length != volume) {
@@ -122,9 +114,9 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
     int layer = 1 << (2 * CHUNK_SHIFT);
     int mask = (1 << CHUNK_SHIFT) - 1;
     for (int cell = 0; cell < volume; cell++) {
-      int y = columnMinY + (cell >> (2 * CHUNK_SHIFT));
+      int y = stackMinY + (cell >> (2 * CHUNK_SHIFT));
       blocks[cell] =
-          y >= worldMinY && y <= worldMaxY
+          y >= domainMinY && y <= domainMaxY
               ? chunk.block(cell & mask, y, (cell >> CHUNK_SHIFT) & mask)
               : null;
     }
@@ -147,7 +139,7 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
         boolean stands = floor != null && floor.isSolidTop() && (head == null || head.isPassable());
         classes[cell] = (byte) (stands ? ground(floor) : RegionClass.AIR).id();
       } else if (!block.isLava() && !Double.isInfinite(block.breakTimeSeconds())) {
-        classes[cell] = (byte) RegionClass.of(block.miningClass()).id();
+        classes[cell] = (byte) solid(block.miningClass()).id();
       }
       // Lava, and unbreakable blocks such as bedrock: nothing, not a region a miner could be priced
       // through.
@@ -159,7 +151,7 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
    *
    * <p>A cell's class is read from its own block and the blocks above and below it, by the
    * properties compared here, so a change none of them sees changes no region: a crop growing, a
-   * fluid's level moving, grass turning to dirt. A listener that skips those saves the column a
+   * fluid's level moving, grass turning to dirt. A listener that skips those saves the stack a
    * rebuild. Reads what {@link #classify} reads; change one, change both.
    *
    * @param before the block that was there
@@ -178,6 +170,19 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
         && Double.isInfinite(before.breakTimeSeconds())
             == Double.isInfinite(after.breakTimeSeconds())
         && before.miningClass() == after.miningClass();
+  }
+
+  /** The class of breakable material in a mining bucket: one each, and no block is mixed rock. */
+  static RegionClass solid(MiningClass mining) {
+    return switch (mining) {
+      case SOFT -> RegionClass.SOFT;
+      case SOFT_ROCK -> RegionClass.SOFT_ROCK;
+      case ROCK -> RegionClass.ROCK;
+      case HARD_ROCK -> RegionClass.HARD_ROCK;
+      case VERY_HARD_ROCK -> RegionClass.VERY_HARD_ROCK;
+      case LOOSE -> RegionClass.LOOSE;
+      case WOODEN -> RegionClass.WOODEN;
+    };
   }
 
   /**
@@ -217,16 +222,15 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
   public boolean landing(int clazz, int depth) {
     // One block down onto ground is a step, already joined by the step contacts.
     return switch (of(clazz).body()) {
-      case GROUND -> depth >= 2 && depth <= MAX_DROP;
-      case WATER -> true;
-      case CLIMB -> depth <= MAX_DROP;
+      case GROUND -> depth >= 2;
+      case WATER, CLIMB -> true;
       case OPEN, SOLID -> false;
     };
   }
 
   @Override
   public int deepestFall() {
-    return MAX_WATER_DROP;
+    return DEEPEST_FALL;
   }
 
   /**
@@ -275,7 +279,10 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
   /** Sandstone's hardness: soft rock outside the Nether. */
   private static final double SANDSTONE_HARDNESS = 0.8;
 
-  /** The classes a rock region can be, softest first. */
+  /**
+   * The classes a rock region can be labelled, softest first. Very hard rock is not one: it fills
+   * on its own; see {@link RegionClass#VERY_HARD_ROCK}.
+   */
   private static final RegionClass[] ROCK_BANDS = {
     RegionClass.SOFT_ROCK, RegionClass.ROCK, RegionClass.MIXED_ROCK, RegionClass.HARD_ROCK
   };

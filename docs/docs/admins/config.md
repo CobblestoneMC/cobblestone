@@ -139,16 +139,16 @@ search until a block in the chunk changes.
 | Setting | Default | |
 | --- | --- | --- |
 | `search.regions.persist` | `true` | restart |
-| `search.regions.memory_megabytes` | `128` | restart |
+| `search.regions.memory` | `128` | restart |
 | `search.regions.flush_seconds` | `60` | restart |
 
 - **`persist`**: Keep regions on disk under `plugins/Cobblestone/regions/`, so a restart does not
   start from nothing. A few kilobytes per chunk, only for chunks searches touched. Delete the
   folder to force everything to be built again.
-- **`memory_megabytes`**: Memory each world's regions may use, least recently used dropped first
-  and read back from disk when needed. The chunks around each navigating player are kept on top of
-  this, about 3 MB a player, until their trip ends, so the searches that re-plan around them stay
-  fast.
+- **`memory`**: Memory each world's regions may use, in megabytes, least recently used dropped
+  first and read back from disk when needed. The chunks around each navigating player are kept on
+  top of this, about 3 MB a player, until their trip ends, so the searches that re-plan around them
+  stay fast.
 - **`flush_seconds`**: How often new regions are written. They are also written when a world saves
   and when the server stops. A write touches only the chunks that changed.
 
@@ -241,17 +241,24 @@ own configuration.
 | Setting | Default | |
 | --- | --- | --- |
 | `navigators.trail.buffer_cells` | `256` | live |
-| `navigators.trail.particles` | `[SCRAPE, WAX_OFF]` | live |
+| `navigators.trail.particles` | `[TRAIL]` | live |
 | `navigators.trail.highlight_particles` | `[END_ROD]` | live |
-| `navigators.trail.colors` | `[55FFFF, FFAA00, FFFFFF]` | live |
+| `navigators.trail.colors` | `[FFFFFF, 4AA8FF]` | live |
 | `navigators.trail.density` | `0.2` | live |
+| `navigators.trail.particle_ticks` | `10` | live |
 
 - **`buffer_cells`**: Length of the rendered path segment ahead of the player.
-- **`particles`**: Particle types, chosen at random per particle. `DUST` uses `colors`; other types
-  render as-is. Particles requiring data other than a color are not supported.
+- **`particles`**: Particle types, chosen at random per particle. `TRAIL` and `DUST` use `colors`;
+  other types render as-is. A `TRAIL` particle drifts along the trail and lasts exactly
+  `particle_ticks`, so the trail stays crisp ahead of a moving player. On a server too old to
+  have `TRAIL` (before 1.21.2, such as Sponge for 1.21.1), `DUST` is drawn in its place. Particles
+  requiring other data are not supported.
 - **`highlight_particles`**: Particles at highlighted points, such as action steps.
-- **`colors`**: `DUST` colors as `RRGGBB`, chosen at random per particle.
+- **`colors`**: `TRAIL` and `DUST` colors as `RRGGBB`, chosen at random per particle.
 - **`density`**: Mean particles per cell per tick. Fractional values are probabilities: `0.7` means
   a 70% chance of one particle per cell per tick.
+- **`particle_ticks`**: How long each `TRAIL` particle lasts. Shorter is crisper on the move;
+  longer is fuller. Each particle drifts in a straight line at about a block a second, so beyond
+  about 40 ticks it visibly strays off a curving trail.
 
 Particle names follow the server's particle registry.

@@ -32,7 +32,7 @@ class RegionStoresTest {
     TestWorld world = TestWorld.builder("w").build();
     try (RegionStores stores = new RegionStores(null, Long.MAX_VALUE, 1, DELAY)) {
       RegionStore<MinecraftChunk> store = stores.of(world);
-      store.column(0, 0, ROCK);
+      store.stack(0, 0, ROCK);
 
       stores.invalidate(world, 0, 0);
       stores.invalidate(world, 0, 0);
@@ -42,7 +42,7 @@ class RegionStoresTest {
       assertFalse(store.inMemory(0, 0), "but once the delay has passed");
 
       // Built again: the second change above went with the first, so nothing forgets it now.
-      store.column(0, 0, ROCK);
+      store.stack(0, 0, ROCK);
       Thread.sleep(DELAY.multipliedBy(3).toMillis());
       assertTrue(store.inMemory(0, 0), "one batch, one forgetting");
 

@@ -17,7 +17,7 @@ import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 import org.cobblestonemc.minecraft.regions.MinecraftAgent;
 import org.cobblestonemc.minecraft.regions.MinecraftTerrain;
 import org.cobblestonemc.minecraft.regions.RegionStores;
-import org.cobblestonemc.minecraft.regions.WorldChunkColumns;
+import org.cobblestonemc.minecraft.regions.WorldChunks;
 import org.cobblestonemc.regions.RegionHeuristic;
 import org.cobblestonemc.regions.RegionStore;
 import org.jetbrains.annotations.Nullable;
@@ -69,8 +69,7 @@ public final class MinecraftHeuristics {
       case REGIONS ->
           new RegionHeuristic<MinecraftChunk>(
               target ->
-                  new WorldChunkColumns(
-                      chunks, worldOf(target), target.nearestBoundaryCell(origin)),
+                  new WorldChunks(chunks, worldOf(target), target.nearestBoundaryCell(origin)),
               target ->
                   stores == null
                       ? RegionStore.inMemory(MinecraftTerrain.spec(worldOf(target)))

@@ -18,13 +18,13 @@ import java.util.Map;
  * ordinary contacts because they are one-way: {@code (a, b)} and {@code (b, a)} are different
  * falls, while a contact is the same whichever side it is seen from.
  *
- * <p>Region numbers are whatever the caller uses: column-local while a column is built, the graph's
+ * <p>Region numbers are whatever the caller uses: stack-local while a stack is built, the graph's
  * own at a seam. Not thread-safe; reused by one builder or one graph.
  */
 final class RegionContacts {
 
   private final Map<Long, int[]> contacts = new HashMap<>();
-  private final Map<Long, int[]> drops = new HashMap<>();
+  private final Map<Long, Map<Integer, int[]>> drops = new HashMap<>();
 
   /** The last contact touched, since consecutive cells nearly always join the same two regions. */
   private long lastContact = Long.MIN_VALUE;
@@ -33,7 +33,15 @@ final class RegionContacts {
 
   /** Receives each gathered contact as a portal. */
   interface Sink {
-    void portal(int a, int b, boolean directed, int[] box);
+    /**
+     * Receives a portal.
+     *
+     * @param a the first region, the one a fall leaves
+     * @param b the second, the one a fall lands in
+     * @param fall how far the body falls, or 0 for a contact crossed both ways
+     * @param box the cells on both sides of the contact
+     */
+    void portal(int a, int b, int fall, int[] box);
   }
 
   /** Records that two cells of different regions share a face; {@code -1} is no region. */
@@ -55,15 +63,19 @@ final class RegionContacts {
   }
 
   /**
-   * Records a fall from region {@code from} into region {@code to}, one-way at the ledge: the box
-   * is the ledge and the air beside it, and the height fallen is priced inside the region landed
-   * in.
+   * Records a fall of {@code depth} blocks from region {@code from} into region {@code to}, one-way
+   * at the ledge: the box is the ledge and the air beside it. Falls of different depths between the
+   * same two regions are separate portals, so an agent that can take only the shallow ones is
+   * priced from where those are.
    */
-  void drop(int from, int to, int fx, int fy, int fz, int ax, int ay, int az) {
+  void drop(int from, int to, int depth, int fx, int fy, int fz, int ax, int ay, int az) {
     if (from < 0 || to < 0 || to == from) {
       return;
     }
-    int[] box = drops.computeIfAbsent(((long) from << 32) | to, k -> empty());
+    int[] box =
+        drops
+            .computeIfAbsent(((long) from << 32) | to, k -> new HashMap<>())
+            .computeIfAbsent(depth, k -> empty());
     grow(box, fx, fy, fz);
     grow(box, ax, ay, az);
   }
@@ -72,11 +84,13 @@ final class RegionContacts {
   void flush(Sink sink) {
     for (Map.Entry<Long, int[]> entry : contacts.entrySet()) {
       long key = entry.getKey();
-      sink.portal((int) (key >>> 32), (int) key, false, entry.getValue());
+      sink.portal((int) (key >>> 32), (int) key, 0, entry.getValue());
     }
-    for (Map.Entry<Long, int[]> entry : drops.entrySet()) {
+    for (Map.Entry<Long, Map<Integer, int[]>> entry : drops.entrySet()) {
       long key = entry.getKey();
-      sink.portal((int) (key >>> 32), (int) key, true, entry.getValue());
+      for (Map.Entry<Integer, int[]> fall : entry.getValue().entrySet()) {
+        sink.portal((int) (key >>> 32), (int) key, fall.getKey(), fall.getValue());
+      }
     }
     contacts.clear();
     drops.clear();

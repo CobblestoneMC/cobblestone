@@ -26,7 +26,7 @@ public final class RegionConfig {
   public static RegionStores stores(ConfigManager config, ConfigKeys keys, Path dataFolder) {
     return new RegionStores(
         config.get(keys.regionsPersist) ? dataFolder.resolve("regions") : null,
-        Math.max(16, config.get(keys.regionsMemoryMegabytes)) * 1024L * 1024L,
+        Math.max(16, config.get(keys.regionsMemory)) * 1024L * 1024L,
         Math.max(1, Runtime.getRuntime().availableProcessors() / 4));
   }
 

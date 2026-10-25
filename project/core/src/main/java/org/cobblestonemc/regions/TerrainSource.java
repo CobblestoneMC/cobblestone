@@ -10,23 +10,23 @@ package org.cobblestonemc.regions;
 import org.cobblestonemc.FutureOr;
 
 /**
- * Where a search reads its terrain from: one column at a time, as wide as the terrain's {@link
- * RegionTerrain#columnShift()} says.
+ * Where a search reads its terrain from: one stack at a time, as wide as the terrain's {@link
+ * RegionTerrain#sectionShift()} says.
  *
  * <p>⚠️ <b>An implementation must remember what it fetched.</b> Once a returned future has
- * completed, a later call for the same column has to answer immediately, or the search parks on the
- * same column forever.
+ * completed, a later call for the same stack has to answer immediately, or the search parks on the
+ * same stack forever.
  *
- * @param <C> the platform's column of terrain
+ * @param <C> the platform's stack of terrain
  */
 public interface TerrainSource<C> {
 
   /**
-   * Returns a column of terrain, or an immediate {@code null} if it cannot be known.
+   * Returns a stack of terrain, or an immediate {@code null} if it cannot be known.
    *
-   * @param columnX the column X
-   * @param columnZ the column Z
-   * @return the column
+   * @param stackX the stack X
+   * @param stackZ the stack Z
+   * @return the stack
    */
-  FutureOr<C> column(int columnX, int columnZ);
+  FutureOr<C> stack(int stackX, int stackZ);
 }

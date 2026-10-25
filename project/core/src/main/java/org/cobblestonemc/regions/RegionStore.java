@@ -22,31 +22,30 @@ import org.cobblestonemc.FutureOr;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Every built {@link RegionColumn} of one world, shared by every search over it.
+ * Every built {@link RegionStack} of one domain, shared by every search over it.
  *
- * <p><b>Three places a column can come from,</b> tried in order: memory, disk, and building it from
+ * <p><b>Three places a stack can come from,</b> tried in order: memory, disk, and building it from
  * the terrain. Building is the expensive one — it is most of what a search over new terrain spends
- * — and a column only needs building again when a block in it changes, so a column built once
- * serves every later search, by every agent, until then; and through {@link RegionFiles}, across
- * restarts. A column built but not yet written is held until the next {@link #flush}, whatever the
- * budget, so evicting it never loses it.
+ * — and a stack only needs building again when a block in it changes, so a stack built once serves
+ * every later search, by every agent, until then; and through {@link RegionFiles}, across restarts.
+ * A stack built but not yet written is held until the next {@link #flush}, whatever the budget, so
+ * evicting it never loses it.
  *
- * <p><b>Two kinds of column in memory.</b> <em>Pinned</em> columns are kept whatever the budget,
+ * <p><b>Two kinds of stack in memory.</b> <em>Pinned</em> stacks are kept whatever the budget,
  * until their last pin is released: a navigating player's surroundings, so the short searches that
  * re-plan around them never build. The rest are kept up to a byte budget, least recently used first
- * out. The two are held apart, so evicting never has to look past a pinned column.
+ * out. The two are held apart, so evicting never has to look past a pinned stack.
  *
- * <p><b>Changes invalidate.</b> {@link #invalidate} drops a column from memory, and from disk at
- * the next flush, and the next search to need it builds it again. A column being built when its
- * terrain changes is handed to the search that asked for it — it is at most a moment stale — but
- * not kept. Only seams cross columns, and seams are built per search, so a change never reaches a
- * neighbour.
+ * <p><b>Changes invalidate.</b> {@link #invalidate} drops a stack from memory, and from disk at the
+ * next flush, and the next search to need it builds it again. A stack being built when its terrain
+ * changes is handed to the search that asked for it — it is at most a moment stale — but not kept.
+ * Only seams cross stacks, and seams are built per search, so a change never reaches a neighbour.
  *
  * <p>Thread-safe. Searches on several workers, block-change listeners on the server thread and
  * builds all use it at once; its maps are guarded by the store's own lock, and nothing slow —
  * building, reading, writing — happens while holding it.
  *
- * @param <C> the platform's column of terrain
+ * @param <C> the platform's stack of terrain
  */
 public final class RegionStore<C> {
 
@@ -55,33 +54,33 @@ public final class RegionStore<C> {
   private final @Nullable RegionFiles files;
   private final Executor disk;
   private final Executor builds;
-  private final ThreadLocal<RegionColumnBuilder<C>> builders;
+  private final ThreadLocal<RegionStackBuilder<C>> builders;
 
   // --- guarded by this ---
 
-  /** Columns not pinned, least recently used first. */
-  private final LinkedHashMap<Long, RegionColumn> memory = new LinkedHashMap<>(256, 0.75f, true);
+  /** Stacks not pinned, least recently used first. */
+  private final LinkedHashMap<Long, RegionStack> memory = new LinkedHashMap<>(256, 0.75f, true);
 
   private long memoryBytes;
 
-  /** Pinned columns that have been built. */
-  private final Map<Long, RegionColumn> pinned = new HashMap<>();
+  /** Pinned stacks that have been built. */
+  private final Map<Long, RegionStack> pinned = new HashMap<>();
 
   private long pinnedBytes;
 
-  /** How many pins hold each column, built or not. */
+  /** How many pins hold each stack, built or not. */
   private final Map<Long, Integer> pinCounts = new HashMap<>();
 
-  /** Each owner's pinned columns. */
+  /** Each owner's pinned stacks. */
   private final Map<Object, Set<Long>> pins = new HashMap<>();
 
   /** Built since the last flush, and not yet on disk. Kept whatever the budget says. */
-  private final Map<Long, RegionColumn> unwritten = new HashMap<>();
+  private final Map<Long, RegionStack> unwritten = new HashMap<>();
 
   /** Invalidated since the last flush: to come off disk. */
   private final Set<Long> removed = new HashSet<>();
 
-  private final Map<Long, CompletableFuture<RegionColumn>> loading = new HashMap<>();
+  private final Map<Long, CompletableFuture<RegionStack>> loading = new HashMap<>();
   private final Set<Long> changedWhileLoading = new HashSet<>();
 
   private long memoryHits;
@@ -94,11 +93,11 @@ public final class RegionStore<C> {
   /**
    * Creates a store.
    *
-   * @param spec how the world's terrain is cut into regions
-   * @param memoryBudget how many bytes of columns not pinned to keep in memory
-   * @param directory where to keep columns on disk, or {@code null} to keep them only in memory
+   * @param spec how the domain's terrain is cut into regions
+   * @param memoryBudget how many bytes of stacks not pinned to keep in memory
+   * @param directory where to keep stacks on disk, or {@code null} to keep them only in memory
    * @param disk where disk reads and writes run; one thread, so they never race
-   * @param builds where a column is built when its terrain arrives later rather than at once
+   * @param builds where a stack is built when its terrain arrives later rather than at once
    */
   public RegionStore(
       RegionSpec<C> spec,
@@ -111,15 +110,15 @@ public final class RegionStore<C> {
     this.files = directory == null ? null : new RegionFiles(directory, spec);
     this.disk = disk;
     this.builds = builds;
-    this.builders = ThreadLocal.withInitial(() -> new RegionColumnBuilder<>(spec));
+    this.builders = ThreadLocal.withInitial(() -> new RegionStackBuilder<>(spec));
   }
 
   /**
    * Creates a store that keeps everything in memory, on the caller's thread: one search's worth, as
    * for a benchmark or a test.
    *
-   * @param spec how the world's terrain is cut into regions
-   * @param <C> the platform's column of terrain
+   * @param spec how the domain's terrain is cut into regions
+   * @param <C> the platform's stack of terrain
    * @return the store
    */
   public static <C> RegionStore<C> inMemory(RegionSpec<C> spec) {
@@ -127,7 +126,7 @@ public final class RegionStore<C> {
   }
 
   /**
-   * Returns how this store's columns are built.
+   * Returns how this store's stacks are built.
    *
    * @return the spec
    */
@@ -136,24 +135,24 @@ public final class RegionStore<C> {
   }
 
   /**
-   * Returns a column, from memory, from disk, or by building it from terrain {@code source}
+   * Returns a stack, from memory, from disk, or by building it from terrain {@code source}
    * supplies.
    *
-   * <p>Immediate when the column is in memory, or when every step on the way to it — the disk read,
-   * the terrain — answered at once. Otherwise a future that completes once the column is ready; a
+   * <p>Immediate when the stack is in memory, or when every step on the way to it — the disk read,
+   * the terrain — answered at once. Otherwise a future that completes once the stack is ready; a
    * search should keep what it was handed rather than ask again, since a tight budget may already
    * have evicted it.
    *
-   * @param columnX the column X
-   * @param columnZ the column Z
-   * @param source where to read the terrain if the column has to be built
-   * @return the column
+   * @param stackX the stack X
+   * @param stackZ the stack Z
+   * @param source where to read the terrain if the stack has to be built
+   * @return the stack
    */
-  public FutureOr<RegionColumn> column(int columnX, int columnZ, TerrainSource<C> source) {
-    long key = RegionColumn.key(columnX, columnZ);
-    CompletableFuture<RegionColumn> promise;
+  public FutureOr<RegionStack> stack(int stackX, int stackZ, TerrainSource<C> source) {
+    long key = RegionStack.key(stackX, stackZ);
+    CompletableFuture<RegionStack> promise;
     synchronized (this) {
-      RegionColumn known = pinned.get(key);
+      RegionStack known = pinned.get(key);
       if (known == null) {
         known = memory.get(key);
       }
@@ -167,7 +166,7 @@ public final class RegionStore<C> {
         memoryHits++;
         return FutureOr.of(known);
       }
-      CompletableFuture<RegionColumn> inFlight = loading.get(key);
+      CompletableFuture<RegionStack> inFlight = loading.get(key);
       if (inFlight != null) {
         return FutureOr.from(inFlight);
       }
@@ -176,30 +175,30 @@ public final class RegionStore<C> {
       promise = new CompletableFuture<>();
       loading.put(key, promise);
     }
-    load(columnX, columnZ, source, promise);
+    load(stackX, stackZ, source, promise);
     return FutureOr.from(promise);
   }
 
   private void load(
-      int columnX, int columnZ, TerrainSource<C> source, CompletableFuture<RegionColumn> to) {
+      int stackX, int stackZ, TerrainSource<C> source, CompletableFuture<RegionStack> to) {
     boolean stale;
     synchronized (this) {
       // Invalidated and not yet removed from disk: what is there is the terrain before the change.
-      stale = removed.contains(RegionColumn.key(columnX, columnZ));
+      stale = removed.contains(RegionStack.key(stackX, stackZ));
     }
     if (files == null || stale) {
-      build(columnX, columnZ, source, to);
+      build(stackX, stackZ, source, to);
       return;
     }
     disk.execute(
         () -> {
-          RegionColumn stored;
+          RegionStack stored;
           long started = System.nanoTime();
           try {
-            stored = files.read(columnX, columnZ);
+            stored = files.read(stackX, stackZ);
           } catch (IOException | RuntimeException unreadable) {
-            // A file that cannot be read is a column that has to be built again; the next write
-            // of that column replaces it.
+            // A file that cannot be read is a stack that has to be built again; the next write
+            // of that stack replaces it.
             stored = null;
           }
           long took = System.nanoTime() - started;
@@ -210,31 +209,32 @@ public final class RegionStore<C> {
             }
           }
           if (stored != null) {
-            settle(columnX, columnZ, stored, true, false, to);
+            settle(stackX, stackZ, stored, true, false, to);
           } else {
-            // Built on the build pool: the disk thread is one thread, shared by every world's reads
+            // Built on the build pool: the disk thread is one thread, shared by every domain's
+            // reads
             // and writes, and a build is far slower than a read.
-            builds.execute(() -> build(columnX, columnZ, source, to));
+            builds.execute(() -> build(stackX, stackZ, source, to));
           }
         });
   }
 
   private void build(
-      int columnX, int columnZ, TerrainSource<C> source, CompletableFuture<RegionColumn> to) {
+      int stackX, int stackZ, TerrainSource<C> source, CompletableFuture<RegionStack> to) {
     FutureOr<C> terrain;
     try {
-      terrain = source.column(columnX, columnZ);
+      terrain = source.stack(stackX, stackZ);
     } catch (RuntimeException failed) {
-      fail(columnX, columnZ, to, failed);
+      fail(stackX, stackZ, to, failed);
       return;
     }
     if (terrain.isImmediate()) {
       boolean readable = terrain.value() != null;
       try {
-        settle(columnX, columnZ, built(columnX, columnZ, terrain.value()), readable, readable, to);
+        settle(stackX, stackZ, built(stackX, stackZ, terrain.value()), readable, readable, to);
       } catch (RuntimeException failed) {
-        // Failed, not thrown: left in flight, the column would park every later search on it.
-        fail(columnX, columnZ, to, failed);
+        // Failed, not thrown: left in flight, the stack would park every later search on it.
+        fail(stackX, stackZ, to, failed);
       }
       return;
     }
@@ -246,83 +246,82 @@ public final class RegionStore<C> {
               try {
                 C readable = failure == null ? arrived : null;
                 boolean real = readable != null;
-                settle(columnX, columnZ, built(columnX, columnZ, readable), real, real, to);
+                settle(stackX, stackZ, built(stackX, stackZ, readable), real, real, to);
               } catch (RuntimeException failed) {
-                fail(columnX, columnZ, to, failed);
+                fail(stackX, stackZ, to, failed);
               }
             },
             builds);
   }
 
-  private RegionColumn built(int columnX, int columnZ, @Nullable C terrain) {
+  private RegionStack built(int stackX, int stackZ, @Nullable C terrain) {
     long started = System.nanoTime();
-    RegionColumn column = builders.get().build(columnX, columnZ, terrain);
+    RegionStack stack = builders.get().build(stackX, stackZ, terrain);
     long took = System.nanoTime() - started;
     synchronized (this) {
       built++;
       buildNanos += took;
     }
-    return column;
+    return stack;
   }
 
   /**
-   * Keeps a column that has arrived, unless its terrain changed meanwhile, and hands it over.
+   * Keeps a stack that has arrived, unless its terrain changed meanwhile, and hands it over.
    *
-   * <p>A column whose terrain could not be read is handed over but not kept: the terrain may be
-   * generated, or a load policy relax, and a remembered empty column would wall it off for every
+   * <p>A stack whose terrain could not be read is handed over but not kept: the terrain may be
+   * generated, or a load policy relax, and a remembered empty stack would wall it off for every
    * later search.
    *
    * @param keep whether it describes real terrain, built or read back
    * @param fresh whether it was built just now, and so belongs on disk
    */
   private void settle(
-      int columnX,
-      int columnZ,
-      RegionColumn column,
+      int stackX,
+      int stackZ,
+      RegionStack stack,
       boolean keep,
       boolean fresh,
-      CompletableFuture<RegionColumn> to) {
-    long key = RegionColumn.key(columnX, columnZ);
+      CompletableFuture<RegionStack> to) {
+    long key = RegionStack.key(stackX, stackZ);
     synchronized (this) {
       loading.remove(key);
       boolean changed = changedWhileLoading.remove(key);
       if (!changed && keep) {
-        remember(key, column);
+        remember(key, stack);
         if (fresh && files != null) {
-          unwritten.put(key, column);
+          unwritten.put(key, stack);
           removed.remove(key);
         }
       }
     }
-    to.complete(column);
+    to.complete(stack);
   }
 
-  private void fail(
-      int columnX, int columnZ, CompletableFuture<RegionColumn> to, Throwable failure) {
+  private void fail(int stackX, int stackZ, CompletableFuture<RegionStack> to, Throwable failure) {
     synchronized (this) {
-      loading.remove(RegionColumn.key(columnX, columnZ));
-      changedWhileLoading.remove(RegionColumn.key(columnX, columnZ));
+      loading.remove(RegionStack.key(stackX, stackZ));
+      changedWhileLoading.remove(RegionStack.key(stackX, stackZ));
     }
     to.completeExceptionally(failure);
   }
 
   /**
-   * Pins the columns within {@code radius} of a column for an owner, releasing whatever the owner
-   * had pinned before.
+   * Pins the stacks within {@code radius} of a stack for an owner, releasing whatever the owner had
+   * pinned before.
    *
-   * <p>A pinned column is kept in memory whatever the budget, once built; pinning does not build
-   * it. A column pinned by several owners stays until the last releases it.
+   * <p>A pinned stack is kept in memory whatever the budget, once built; pinning does not build it.
+   * A stack pinned by several owners stays until the last releases it.
    *
    * @param owner whoever the pin is for, such as a navigating player's id
-   * @param columnX the centre column X
-   * @param columnZ the centre column Z
-   * @param radius how many columns out from the centre, along X and Z
+   * @param stackX the centre stack X
+   * @param stackZ the centre stack Z
+   * @param radius how many stacks out from the centre, along X and Z
    */
-  public synchronized void pin(Object owner, int columnX, int columnZ, int radius) {
+  public synchronized void pin(Object owner, int stackX, int stackZ, int radius) {
     Set<Long> wanted = new HashSet<>();
     for (int dx = -radius; dx <= radius; dx++) {
       for (int dz = -radius; dz <= radius; dz++) {
-        wanted.add(RegionColumn.key(columnX + dx, columnZ + dz));
+        wanted.add(RegionStack.key(stackX + dx, stackZ + dz));
       }
     }
     Set<Long> before = pins.put(owner, wanted);
@@ -342,7 +341,7 @@ public final class RegionStore<C> {
   }
 
   /**
-   * Releases everything an owner has pinned. Its columns are then kept only as the budget allows.
+   * Releases everything an owner has pinned. Its stacks are then kept only as the budget allows.
    *
    * @param owner whoever the pin was for
    */
@@ -359,11 +358,11 @@ public final class RegionStore<C> {
 
   private void hold(long key) {
     if (pinCounts.merge(key, 1, Integer::sum) == 1) {
-      RegionColumn column = memory.remove(key);
-      if (column != null) {
-        memoryBytes -= column.footprintBytes();
-        pinned.put(key, column);
-        pinnedBytes += column.footprintBytes();
+      RegionStack stack = memory.remove(key);
+      if (stack != null) {
+        memoryBytes -= stack.footprintBytes();
+        pinned.put(key, stack);
+        pinnedBytes += stack.footprintBytes();
       }
     }
   }
@@ -371,27 +370,27 @@ public final class RegionStore<C> {
   private void letGo(long key) {
     if (pinCounts.merge(key, -1, Integer::sum) == 0) {
       pinCounts.remove(key);
-      RegionColumn column = pinned.remove(key);
-      if (column != null) {
-        pinnedBytes -= column.footprintBytes();
+      RegionStack stack = pinned.remove(key);
+      if (stack != null) {
+        pinnedBytes -= stack.footprintBytes();
         // Most recently used: the owner was just near it.
-        memory.put(key, column);
-        memoryBytes += column.footprintBytes();
+        memory.put(key, stack);
+        memoryBytes += stack.footprintBytes();
       }
     }
   }
 
   /**
-   * Forgets a column because a block in it changed.
+   * Forgets a stack because a block in it changed.
    *
    * <p>Cheap, and safe to call on the server thread for every block event.
    *
-   * @param columnX the column X
-   * @param columnZ the column Z
+   * @param stackX the stack X
+   * @param stackZ the stack Z
    */
-  public synchronized void invalidate(int columnX, int columnZ) {
-    long key = RegionColumn.key(columnX, columnZ);
-    RegionColumn dropped = memory.remove(key);
+  public synchronized void invalidate(int stackX, int stackZ) {
+    long key = RegionStack.key(stackX, stackZ);
+    RegionStack dropped = memory.remove(key);
     if (dropped != null) {
       memoryBytes -= dropped.footprintBytes();
     }
@@ -409,22 +408,22 @@ public final class RegionStore<C> {
   }
 
   /**
-   * Returns whether a column is in memory, pinned or not. Says nothing about disk.
+   * Returns whether a stack is in memory, pinned or not. Says nothing about disk.
    *
-   * @param columnX the column X
-   * @param columnZ the column Z
+   * @param stackX the stack X
+   * @param stackZ the stack Z
    * @return {@code true} if it is
    */
-  public synchronized boolean inMemory(int columnX, int columnZ) {
-    long key = RegionColumn.key(columnX, columnZ);
+  public synchronized boolean inMemory(int stackX, int stackZ) {
+    long key = RegionStack.key(stackX, stackZ);
     return memory.containsKey(key) || pinned.containsKey(key);
   }
 
   /**
-   * Writes every column built since the last flush, and removes every invalidated one, on the disk
+   * Writes every stack built since the last flush, and removes every invalidated one, on the disk
    * thread.
    *
-   * <p>A write that fails puts its columns back, so the next flush tries again.
+   * <p>A write that fails puts its stacks back, so the next flush tries again.
    *
    * @return a future completing when the write is done
    */
@@ -432,7 +431,7 @@ public final class RegionStore<C> {
     if (files == null) {
       return CompletableFuture.completedFuture(null);
     }
-    Map<Long, RegionColumn> writing;
+    Map<Long, RegionStack> writing;
     Set<Long> removing;
     synchronized (this) {
       if (unwritten.isEmpty() && removed.isEmpty()) {
@@ -449,12 +448,12 @@ public final class RegionStore<C> {
             files.write(writing.values(), removing);
           } catch (IOException failed) {
             synchronized (this) {
-              // Not a column invalidated while the write ran: putting it back would serve, and
+              // Not a stack invalidated while the write ran: putting it back would serve, and
               // then write, the terrain before the change.
               writing.forEach(
-                  (key, column) -> {
+                  (key, stack) -> {
                     if (!removed.contains(key)) {
-                      unwritten.putIfAbsent(key, column);
+                      unwritten.putIfAbsent(key, stack);
                     }
                   });
               removed.addAll(removing);
@@ -466,7 +465,7 @@ public final class RegionStore<C> {
   }
 
   /**
-   * Releases the files the store holds open, on the disk thread. Unwritten columns are not written:
+   * Releases the files the store holds open, on the disk thread. Unwritten stacks are not written:
    * {@link #flush} first.
    *
    * @return a future completing once they are closed
@@ -511,17 +510,17 @@ public final class RegionStore<C> {
   /**
    * What a store has done.
    *
-   * @param unpinnedColumns columns held in memory now that are not pinned, within the budget
+   * @param unpinnedColumns stacks held in memory now that are not pinned, within the budget
    * @param unpinnedBytes their approximate footprint
-   * @param pinnedColumns pinned columns held in memory now, beyond the budget
+   * @param pinnedColumns pinned stacks held in memory now, beyond the budget
    * @param pinnedBytes their approximate footprint
-   * @param unwrittenColumns columns built and not yet on disk
-   * @param memoryHits columns answered from memory
-   * @param diskLoads columns read back from disk
+   * @param unwrittenStacks stacks built and not yet on disk
+   * @param memoryHits stacks answered from memory
+   * @param diskLoads stacks read back from disk
    * @param diskNanos time spent reading the disk, including reads that found nothing
-   * @param builds columns built from terrain
+   * @param builds stacks built from terrain
    * @param buildNanos time spent building them
-   * @param evictions columns dropped from memory for the budget
+   * @param evictions stacks dropped from memory for the budget
    * @param diskBytesRead record bytes read
    * @param diskBytesWritten bytes written
    */
@@ -530,7 +529,7 @@ public final class RegionStore<C> {
       long unpinnedBytes,
       int pinnedColumns,
       long pinnedBytes,
-      int unwrittenColumns,
+      int unwrittenStacks,
       long memoryHits,
       long diskLoads,
       long diskNanos,
@@ -540,29 +539,29 @@ public final class RegionStore<C> {
       long diskBytesRead,
       long diskBytesWritten) {}
 
-  /** Puts a column in memory as most recently used, evicting the least recent past the budget. */
-  private void remember(long key, RegionColumn column) {
+  /** Puts a stack in memory as most recently used, evicting the least recent past the budget. */
+  private void remember(long key, RegionStack stack) {
     if (pinCounts.containsKey(key)) {
-      RegionColumn previous = pinned.put(key, column);
+      RegionStack previous = pinned.put(key, stack);
       if (previous != null) {
         pinnedBytes -= previous.footprintBytes();
       }
-      pinnedBytes += column.footprintBytes();
+      pinnedBytes += stack.footprintBytes();
       return;
     }
-    RegionColumn previous = memory.put(key, column);
+    RegionStack previous = memory.put(key, stack);
     if (previous != null) {
       memoryBytes -= previous.footprintBytes();
     }
-    memoryBytes += column.footprintBytes();
+    memoryBytes += stack.footprintBytes();
     trim(key);
   }
 
-  /** Evicts the least recently used columns past the budget, but never {@code keep}. */
+  /** Evicts the least recently used stacks past the budget, but never {@code keep}. */
   private void trim(long keep) {
-    Iterator<Map.Entry<Long, RegionColumn>> eldest = memory.entrySet().iterator();
+    Iterator<Map.Entry<Long, RegionStack>> eldest = memory.entrySet().iterator();
     while (memoryBytes > memoryBudget && eldest.hasNext()) {
-      Map.Entry<Long, RegionColumn> entry = eldest.next();
+      Map.Entry<Long, RegionStack> entry = eldest.next();
       if (entry.getKey() == keep) {
         continue; // never the one just asked for
       }

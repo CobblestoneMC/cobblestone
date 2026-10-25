@@ -196,10 +196,13 @@ class TripManagerTest {
         null,
         false,
         0L,
-        () -> {
-          checks.incrementAndGet();
-          return exists.get();
-        });
+        new TripTarget(
+            () -> {
+              checks.incrementAndGet();
+              return exists.get();
+            },
+            false,
+            Optional::empty));
     for (int i = 0; i < 2 * Trip.EXISTENCE_CHECK_TICKS; i++) {
       scheduler.tickAll();
     }

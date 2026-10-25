@@ -8,11 +8,12 @@
 package org.cobblestonemc.regions;
 
 import java.util.Arrays;
+import org.cobblestonemc.DomainBounds;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Turns one column of terrain into a {@link RegionColumn}: classify every cell, flood-fill each
- * section into regions, and record where regions inside the column touch.
+ * Turns one stack of terrain into a {@link RegionStack}: classify every cell, flood-fill each
+ * section into regions, and record where regions inside the stack touch.
  *
  * <p><b>Three passes.</b>
  *
@@ -26,22 +27,22 @@ import org.jetbrains.annotations.Nullable;
  *   <li><b>Contacts</b> scans for neighbouring cells in different regions — and for walking steps a
  *       level up or down, and ledges a body can drop from — and turns each touching pair into a
  *       portal whose box covers every cell where they meet. The rules are {@link RegionJoins}, the
- *       same a graph joins columns by; which steps and drops count is the terrain's to say.
+ *       same a graph joins stacks by; which steps and drops count is the terrain's to say.
  * </ol>
  *
- * <p><b>Change the rules, bump {@link #FILL_VERSION} or the terrain's version.</b> A built column
- * is a fact about the rules it was built by; one built under others is a different graph.
+ * <p><b>Change the rules, bump {@link #FILL_VERSION} or the terrain's version.</b> A built stack is
+ * a fact about the rules it was built by; one built under others is a different graph.
  *
- * <p>Not thread-safe: it reuses a column's worth of scratch between builds. One per thread.
+ * <p>Not thread-safe: it reuses a stack's worth of scratch between builds. One per thread.
  *
- * @param <C> the platform's column of terrain
+ * @param <C> the platform's stack of terrain
  */
-public final class RegionColumnBuilder<C> {
+public final class RegionStackBuilder<C> {
 
   /**
    * The version of how this fills regions and finds contacts, apart from the terrain's own rules.
    */
-  public static final int FILL_VERSION = 4;
+  public static final int FILL_VERSION = 5;
 
   /**
    * Blocks of detour allowed regardless of distance, so a seed's immediate neighbours never split.
@@ -78,28 +79,28 @@ public final class RegionColumnBuilder<C> {
   private final int[] steps;
   private final RegionJoins joins;
 
-  /** The column being built's cells, as the joining rules read them. */
+  /** The stack being built's cells, as the joining rules read them. */
   private final RegionJoins.Cells local;
 
-  // --- the column being built ---
+  // --- the stack being built ---
   private int regionCount;
   private byte[] regionClass = new byte[256];
   private int[] regionBox = new int[256 * 6];
   private int portalCount;
   private int[] portalA = new int[256];
   private int[] portalB = new int[256];
-  private boolean[] portalDirected = new boolean[256];
+  private byte[] portalFall = new byte[256];
   private int[] portalBox = new int[256 * 6];
 
   /**
-   * Creates a builder for one world.
+   * Creates a builder for one domain.
    *
-   * @param spec how the world's terrain is cut into regions
+   * @param spec how the domain's terrain is cut into regions
    */
-  public RegionColumnBuilder(RegionSpec<C> spec) {
+  public RegionStackBuilder(RegionSpec<C> spec) {
     this.spec = spec;
     this.terrain = spec.terrain();
-    this.minY = spec.columnMinY();
+    this.minY = spec.stackMinY();
     this.sections = spec.sections();
     this.shift = spec.shift();
     this.width = spec.width();
@@ -119,40 +120,41 @@ public final class RegionColumnBuilder<C> {
   }
 
   /**
-   * Builds one column.
+   * Builds one stack.
    *
-   * @param columnX the column X
-   * @param columnZ the column Z
-   * @param terrainColumn the column of terrain, or {@code null} if it cannot be read
-   * @return the column
+   * @param stackX the stack X
+   * @param stackZ the stack Z
+   * @param terrainStack the stack of terrain, or {@code null} if it cannot be read
+   * @return the stack
    */
-  public RegionColumn build(int columnX, int columnZ, @Nullable C terrainColumn) {
-    if (terrainColumn == null) {
-      // A column that cannot be read is nothing at all: no regions, so no portals into it. The
+  public RegionStack build(int stackX, int stackZ, @Nullable C terrainStack) {
+    if (terrainStack == null) {
+      // A stack that cannot be read is nothing at all: no regions, so no portals into it. The
       // search routes around it, as the fine search will have to.
-      return RegionColumn.empty(spec, columnX, columnZ);
+      return RegionStack.empty(spec, stackX, stackZ);
     }
-    terrain.classify(terrainColumn, spec.worldMinY(), spec.worldMaxY(), minY, cls);
+    terrain.classify(terrainStack, spec.bounds().minY(), spec.bounds().maxY(), minY, cls);
+    outsideTheDomain(stackX << shift, stackZ << shift);
     for (int cell = 0; cell < cls.length; cell++) {
       family[cell] = cls[cell] < 0 ? -1 : (byte) terrain.family(cls[cell]);
     }
     uniformSections();
     regionCount = 0;
     portalCount = 0;
-    Arrays.fill(regionOf, RegionColumn.NONE);
+    Arrays.fill(regionOf, RegionStack.NONE);
     int[] uniform = new int[sections];
     int[] base = new int[sections];
     byte[][] cells = new byte[sections][];
     short[][] wideCells = new short[sections][];
-    int ox = columnX << shift;
-    int oz = columnZ << shift;
+    int ox = stackX << shift;
+    int oz = stackZ << shift;
     for (int s = 0; s < sections; s++) {
       int first = regionCount;
       int from = s * sectionVolume;
       if (sectionClass[s] != MIXED) {
         // Solid rock, open sky, deep water: one class edge to edge. A full cube is convex and
         // connected, so the fill would make it one region anyway; this skips the fill.
-        uniform[s] = RegionColumn.NONE;
+        uniform[s] = RegionStack.NONE;
         if (sectionClass[s] >= 0) {
           whole(s, ox, oz);
           uniform[s] = first;
@@ -160,7 +162,7 @@ public final class RegionColumnBuilder<C> {
         continue;
       }
       for (int cell = from; cell < from + sectionVolume; cell++) {
-        if (regionOf[cell] == RegionColumn.NONE && cls[cell] >= 0) {
+        if (regionOf[cell] == RegionStack.NONE && cls[cell] >= 0) {
           fill(cell, s, ox, oz);
         }
       }
@@ -168,9 +170,9 @@ public final class RegionColumnBuilder<C> {
     }
     columnContacts(ox, oz);
     joins.flush(this::newPortal);
-    return new RegionColumn(
-        columnX,
-        columnZ,
+    return new RegionStack(
+        stackX,
+        stackZ,
         minY,
         shift,
         uniform,
@@ -181,7 +183,7 @@ public final class RegionColumnBuilder<C> {
         Arrays.copyOf(regionBox, regionCount * 6),
         Arrays.copyOf(portalA, portalCount),
         Arrays.copyOf(portalB, portalCount),
-        Arrays.copyOf(portalDirected, portalCount),
+        Arrays.copyOf(portalFall, portalCount),
         Arrays.copyOf(portalBox, portalCount * 6));
   }
 
@@ -207,18 +209,18 @@ public final class RegionColumnBuilder<C> {
       return;
     }
     base[section] = first;
-    if (regionCount - first < RegionColumn.NARROW_NONE) {
+    if (regionCount - first < RegionStack.NARROW_NONE) {
       byte[] narrow = new byte[sectionVolume];
       for (int i = 0; i < sectionVolume; i++) {
         int r = regionOf[from + i];
-        narrow[i] = (byte) (r == RegionColumn.NONE ? RegionColumn.NARROW_NONE : r - first);
+        narrow[i] = (byte) (r == RegionStack.NONE ? RegionStack.NARROW_NONE : r - first);
       }
       cells[section] = narrow;
     } else {
       short[] wide = new short[sectionVolume];
       for (int i = 0; i < sectionVolume; i++) {
         int r = regionOf[from + i];
-        wide[i] = (short) (r == RegionColumn.NONE ? RegionColumn.WIDE_NONE : r - first);
+        wide[i] = (short) (r == RegionStack.NONE ? RegionStack.WIDE_NONE : r - first);
       }
       wideCells[section] = wide;
     }
@@ -232,6 +234,27 @@ public final class RegionColumnBuilder<C> {
     int y = minY + (section << shift);
     int[] box = {ox, y, oz, ox + mask, y + mask, oz + mask};
     System.arraycopy(box, 0, regionBox, id * 6, 6);
+  }
+
+  /**
+   * Makes the cells beyond a domain's edge along X or Z belong to no region. Almost every stack is
+   * wholly inside, and is left alone.
+   */
+  private void outsideTheDomain(int ox, int oz) {
+    DomainBounds bounds = spec.bounds();
+    if (ox >= bounds.minX()
+        && (long) ox + mask <= bounds.maxX()
+        && oz >= bounds.minZ()
+        && (long) oz + mask <= bounds.maxZ()) {
+      return;
+    }
+    for (int cell = 0; cell < cls.length; cell++) {
+      int x = ox + (cell & mask);
+      int z = oz + ((cell >> shift) & mask);
+      if (x < bounds.minX() || x > bounds.maxX() || z < bounds.minZ() || z > bounds.maxZ()) {
+        cls[cell] = -1;
+      }
+    }
   }
 
   /** Notes which sections hold one class edge to edge, which need no fill. */
@@ -330,7 +353,7 @@ public final class RegionColumnBuilder<C> {
       int sz,
       boolean capped) {
     int cell = (y << (2 * shift)) | (z << shift) | x;
-    if (regionOf[cell] != RegionColumn.NONE || family[cell] != c) {
+    if (regionOf[cell] != RegionStack.NONE || family[cell] != c) {
       return tail;
     }
     if (capped) {
@@ -349,7 +372,7 @@ public final class RegionColumnBuilder<C> {
     return tail + 1;
   }
 
-  /** Finds every contact between two regions inside the column just filled. */
+  /** Finds every contact between two regions inside the stack just filled. */
   private void columnContacts(int ox, int oz) {
     int volume = cls.length;
     int layer = 2 * shift;
@@ -362,7 +385,7 @@ public final class RegionColumnBuilder<C> {
         continue;
       }
       int r = regionOf[cell];
-      if (r == RegionColumn.NONE) {
+      if (r == RegionStack.NONE) {
         continue;
       }
       int x = cell & mask;
@@ -404,18 +427,18 @@ public final class RegionColumnBuilder<C> {
     return id;
   }
 
-  private void newPortal(int a, int b, boolean directed, int[] box) {
+  private void newPortal(int a, int b, int fall, int[] box) {
     if (portalCount == portalA.length) {
       int size = portalCount * 2;
       portalA = Arrays.copyOf(portalA, size);
       portalB = Arrays.copyOf(portalB, size);
-      portalDirected = Arrays.copyOf(portalDirected, size);
+      portalFall = Arrays.copyOf(portalFall, size);
       portalBox = Arrays.copyOf(portalBox, size * 6);
     }
     int id = portalCount++;
     portalA[id] = a;
     portalB[id] = b;
-    portalDirected[id] = directed;
+    portalFall[id] = (byte) fall;
     System.arraycopy(box, 0, portalBox, id * 6, 6);
   }
 }

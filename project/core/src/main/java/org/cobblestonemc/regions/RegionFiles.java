@@ -28,33 +28,33 @@ import java.util.zip.InflaterInputStream;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Built columns on disk, for one world: what lets a server start a search on terrain it built
+ * Built stacks on disk, for one domain: what lets a server start a search on terrain it built
  * before it restarted.
  *
- * <p><b>32×32 columns to a file, in sectors,</b> the way Minecraft keeps its own chunks. A file is
- * a header with a slot per column, then records in whole sectors of {@value #SECTOR} bytes:
+ * <p><b>32×32 stacks to a file, in sectors.</b> A file is a header with a slot per stack, then
+ * records in whole sectors of {@value #SECTOR} bytes:
  *
  * <pre>
  *   int    magic "CRG2"
- *   int    format version        layout of this file and of a column record
- *   int    rules version         the fill's and the terrain's rules the columns were built by
+ *   int    format version        layout of this file and of a stack record
+ *   int    rules version         the fill's and the terrain's rules the stacks were built by
  *   double detour ratio          a fill setting that changes the regions
- *   int    column floor, int sections, int column shift
- *   1024 x { int first sector, int length in bytes }   0, 0 for no column
- *   ... sectors: each record is { int length, int CRC32, deflated column }, padded to a sector
+ *   int    stack floor, int sections, int stack shift
+ *   1024 x { int first sector, int length in bytes }   0, 0 for no stack
+ *   ... sectors: each record is { int length, int CRC32, deflated stack }, padded to a sector
  * </pre>
  *
- * <p><b>A write touches only its own record and slot.</b> A column that still fits its sectors is
+ * <p><b>A write touches only its own record and slot.</b> A stack that still fits its sectors is
  * written over them; one that has grown takes the first free run big enough, or the end of the
- * file, and gives its old sectors back; a removed column only clears its slot. One changed column
+ * file, and gives its old sectors back; a removed stack only clears its slot. One changed stack
  * costs a few kilobytes, not the file.
  *
  * <p><b>A torn write reads as missing,</b> never as wrong: each record carries its length and a
- * checksum, and a record that does not match them is a column to build again. The files are a
- * cache, so that is all a crash can cost.
+ * checksum, and a record that does not match them is a stack to build again. The files are a cache,
+ * so that is all a crash can cost.
  *
- * <p><b>A file whose header does not match is empty.</b> Columns built under different rules or a
- * different world height are a different graph; they are ignored on read, and the file is started
+ * <p><b>A file whose header does not match is empty.</b> Stacks built under different rules or a
+ * different domain height are a different graph; they are ignored on read, and the file is started
  * afresh on the next write, never mixed in.
  *
  * <p>Thread-safe by being synchronized. {@link RegionStore} calls it from one disk thread, so the
@@ -64,10 +64,10 @@ public final class RegionFiles {
 
   private static final int MAGIC = 0x43524732; // "CRG2"
 
-  /** The layout of a file and of a column record. Bump it with any change to either. */
+  /** The layout of a file and of a stack record. Bump it with any change to either. */
   static final int FORMAT_VERSION = 4;
 
-  /** Columns a file holds along each axis. */
+  /** Stacks a file holds along each axis. */
   static final int SPAN = 32;
 
   /** Bytes in a sector, the unit a record is allocated in. */
@@ -81,7 +81,7 @@ public final class RegionFiles {
   /** Sectors the header takes, slots included. */
   static final int HEADER_SECTORS = (PREAMBLE + SLOTS * 8 + SECTOR - 1) / SECTOR;
 
-  /** Files kept open: a search reads the columns of a few files one after another. */
+  /** Files kept open: a search reads the stacks of a few files one after another. */
   private static final int OPEN_FILES = 8;
 
   private final Path directory;
@@ -96,42 +96,42 @@ public final class RegionFiles {
   private long bytesWritten;
 
   /**
-   * Creates the store for one world.
+   * Creates the store for one domain.
    *
-   * @param directory where this world's files go; created on the first write
-   * @param spec how the world's terrain is cut, recorded so a change of it is not read back
+   * @param directory where this domain's files go; created on the first write
+   * @param spec how the domain's terrain is cut, recorded so a change of it is not read back
    */
   public RegionFiles(Path directory, RegionSpec<?> spec) {
     this.directory = directory;
     this.spec = spec;
     // The fill's rules and the terrain's, in one number: a change to either is a different graph.
-    this.rules = (RegionColumnBuilder.FILL_VERSION << 16) | spec.terrain().version();
+    this.rules = (RegionStackBuilder.FILL_VERSION << 16) | spec.terrain().version();
   }
 
   /**
-   * Returns a directory name for a world key, safe on any file system.
+   * Returns a directory name for a domain key, safe on any file system.
    *
-   * @param worldKey a namespaced key, such as {@code minecraft:overworld}
+   * @param domainKey the domain's key, such as a namespaced domain key
    * @return the directory name
    */
-  public static String directoryName(String worldKey) {
-    return worldKey.replaceAll("[^A-Za-z0-9._-]", "_");
+  public static String directoryName(String domainKey) {
+    return domainKey.replaceAll("[^A-Za-z0-9._-]", "_");
   }
 
   /**
-   * Reads a column, or returns {@code null} if none is stored or the stored one is unreadable.
+   * Reads a stack, or returns {@code null} if none is stored or the stored one is unreadable.
    *
-   * @param columnX the column X
-   * @param columnZ the column Z
-   * @return the column, or {@code null}
+   * @param stackX the stack X
+   * @param stackZ the stack Z
+   * @return the stack, or {@code null}
    * @throws IOException if the file cannot be read at all
    */
-  public synchronized @Nullable RegionColumn read(int columnX, int columnZ) throws IOException {
-    Open file = open(fileKey(columnX, columnZ), false);
+  public synchronized @Nullable RegionStack read(int stackX, int stackZ) throws IOException {
+    Open file = open(fileKey(stackX, stackZ), false);
     if (file == null) {
       return null;
     }
-    int slot = slot(columnX, columnZ);
+    int slot = slot(stackX, stackZ);
     int first = file.first[slot];
     int length = file.length[slot];
     if (first == 0 || length <= 8 || (long) first * SECTOR + length > file.handle.length()) {
@@ -151,41 +151,41 @@ public final class RegionFiles {
       return null; // torn by a crash: build it again
     }
     try {
-      RegionColumn column = decode(record);
-      if (column.columnX != columnX || column.columnZ != columnZ) {
-        return null; // filed under the wrong column: treat it as missing and rebuild
+      RegionStack stack = decode(record);
+      if (stack.stackX != stackX || stack.stackZ != stackZ) {
+        return null; // filed under the wrong stack: treat it as missing and rebuild
       }
-      return column;
+      return stack;
     } catch (IOException malformed) {
       return null;
     }
   }
 
   /**
-   * Writes columns and removes others, each in place in its file.
+   * Writes stacks and removes others, each in place in its file.
    *
-   * @param columns the columns to store, replacing any stored before
-   * @param removed the columns to remove, packed as {@code (columnX << 32) | columnZ}
-   * @throws IOException if a file cannot be written; columns already written stay written
+   * @param stacks the stacks to store, replacing any stored before
+   * @param removed the stacks to remove, packed as {@code (stackX << 32) | stackZ}
+   * @throws IOException if a file cannot be written; stacks already written stay written
    */
-  public synchronized void write(Collection<RegionColumn> columns, Collection<Long> removed)
+  public synchronized void write(Collection<RegionStack> stacks, Collection<Long> removed)
       throws IOException {
     for (long packed : removed) {
-      int columnX = (int) (packed >> 32);
-      int columnZ = (int) packed;
-      Open file = open(fileKey(columnX, columnZ), false);
+      int stackX = (int) (packed >> 32);
+      int stackZ = (int) packed;
+      Open file = open(fileKey(stackX, stackZ), false);
       if (file != null) {
-        file.clear(slot(columnX, columnZ));
+        file.clear(slot(stackX, stackZ));
       }
     }
-    for (RegionColumn column : columns) {
-      Open file = open(fileKey(column.columnX, column.columnZ), true);
-      bytesWritten += file.put(slot(column.columnX, column.columnZ), encode(column));
+    for (RegionStack stack : stacks) {
+      Open file = open(fileKey(stack.stackX, stack.stackZ), true);
+      bytesWritten += file.put(slot(stack.stackX, stack.stackZ), encode(stack));
     }
   }
 
   /**
-   * Returns how many column records have been read.
+   * Returns how many stack records have been read.
    *
    * @return the record count
    */
@@ -255,14 +255,14 @@ public final class RegionFiles {
     return opened;
   }
 
-  private static byte[] encode(RegionColumn column) throws IOException {
+  private static byte[] encode(RegionStack stack) throws IOException {
     ByteArrayOutputStream bytes = new ByteArrayOutputStream(8192);
     // Room for the length and checksum, filled in once the body is known.
     bytes.write(new byte[8]);
     Deflater deflater = new Deflater(Deflater.BEST_SPEED);
     try (DataOutputStream out =
         new DataOutputStream(new DeflaterOutputStream(bytes, deflater, 4096))) {
-      column.write(out);
+      stack.write(out);
     } finally {
       deflater.end();
     }
@@ -274,11 +274,11 @@ public final class RegionFiles {
     return record;
   }
 
-  private RegionColumn decode(byte[] record) throws IOException {
+  private RegionStack decode(byte[] record) throws IOException {
     try (DataInputStream in =
         new DataInputStream(
             new InflaterInputStream(new ByteArrayInputStream(record, 8, record.length - 8)))) {
-      return RegionColumn.read(in, spec);
+      return RegionStack.read(in, spec);
     }
   }
 
@@ -293,13 +293,13 @@ public final class RegionFiles {
     return directory.resolve("r." + (int) (file >> 32) + "." + (int) file + ".crg");
   }
 
-  private static long fileKey(int columnX, int columnZ) {
-    return ((long) Math.floorDiv(columnX, SPAN) << 32)
-        | (Math.floorDiv(columnZ, SPAN) & 0xFFFF_FFFFL);
+  private static long fileKey(int stackX, int stackZ) {
+    return ((long) Math.floorDiv(stackX, SPAN) << 32)
+        | (Math.floorDiv(stackZ, SPAN) & 0xFFFF_FFFFL);
   }
 
-  private static int slot(int columnX, int columnZ) {
-    return Math.floorMod(columnX, SPAN) * SPAN + Math.floorMod(columnZ, SPAN);
+  private static int slot(int stackX, int stackZ) {
+    return Math.floorMod(stackX, SPAN) * SPAN + Math.floorMod(stackZ, SPAN);
   }
 
   /** One open file: its slots, and which of its sectors are taken. */
@@ -310,7 +310,7 @@ public final class RegionFiles {
     final int[] length = new int[SLOTS];
     final BitSet used = new BitSet();
 
-    /** Whether the header is this world's; a file that is not reads as empty. */
+    /** Whether the header is this domain's; a file that is not reads as empty. */
     boolean matches;
 
     Open(RandomAccessFile handle) throws IOException {
@@ -327,7 +327,7 @@ public final class RegionFiles {
               && in.readInt() == FORMAT_VERSION
               && in.readInt() == rules
               && in.readDouble() == spec.detourRatio()
-              && in.readInt() == spec.columnMinY()
+              && in.readInt() == spec.stackMinY()
               && in.readInt() == spec.sections()
               && in.readInt() == spec.shift();
       if (!matches) {
@@ -346,7 +346,7 @@ public final class RegionFiles {
       }
     }
 
-    /** Starts the file afresh with this world's header and no columns. */
+    /** Starts the file afresh with this domain's header and no stacks. */
     void reset() throws IOException {
       ByteArrayOutputStream bytes = new ByteArrayOutputStream(HEADER_SECTORS * SECTOR);
       DataOutputStream out = new DataOutputStream(bytes);
@@ -354,7 +354,7 @@ public final class RegionFiles {
       out.writeInt(FORMAT_VERSION);
       out.writeInt(rules);
       out.writeDouble(spec.detourRatio());
-      out.writeInt(spec.columnMinY());
+      out.writeInt(spec.stackMinY());
       out.writeInt(spec.sections());
       out.writeInt(spec.shift());
       handle.setLength(0);

@@ -13,26 +13,26 @@ import java.io.IOException;
 import java.util.Arrays;
 
 /**
- * One column of terrain, built: which region every cell belongs to, the regions, and the portals
- * that join them inside the column.
+ * One stack of terrain, built: which region every cell belongs to, the regions, and the portals
+ * that join them inside the stack.
  *
- * <p><b>Immutable, and agent-independent.</b> A column says what the terrain is and nothing about
- * who crosses it, so once built it is right for every search over that column until a block in it
+ * <p><b>Immutable, and agent-independent.</b> A stack says what the terrain is and nothing about
+ * who crosses it, so once built it is right for every search over that stack until a block in it
  * changes. That is what lets a {@link RegionStore} keep it in memory, share it between concurrent
  * searches, and write it to disk to survive a restart.
  *
- * <p><b>Region and portal numbers are column-local.</b> A {@link RegionGraph} places a column at an
- * offset of its own when a search first needs it. Portals between columns — seams — are not here:
- * they need both columns, and are cheap enough to compute per search.
+ * <p><b>Region and portal numbers are stack-local.</b> A {@link RegionGraph} places a stack at an
+ * offset of its own when a search first needs it. Portals between stacks — seams — are not here:
+ * they need both stacks, and are cheap enough to compute per search.
  *
  * <p><b>Most sections are one region from edge to edge</b> — open sky, solid rock — and keep a
- * single number instead of a cell map, which is most of what keeps a column small. The rest map
- * each cell to its region in a byte, or in a short for the rare section with more than 255 regions,
- * so no section can run out of numbers.
+ * single number instead of a cell map, which is most of what keeps a stack small. The rest map each
+ * cell to its region in a byte, or in a short for the rare section with more than 255 regions, so
+ * no section can run out of numbers.
  */
-public final class RegionColumn {
+public final class RegionStack {
 
-  /** No region, as a column-local number. */
+  /** No region, as a stack-local number. */
   static final int NONE = -1;
 
   /** A byte cell map's "no region". */
@@ -41,8 +41,8 @@ public final class RegionColumn {
   /** A short cell map's "no region". */
   static final int WIDE_NONE = 0xFFFF;
 
-  final int columnX;
-  final int columnZ;
+  final int stackX;
+  final int stackZ;
   final int minY;
   final int shift;
 
@@ -60,19 +60,23 @@ public final class RegionColumn {
 
   final byte[] regionClass;
 
-  /** Six ints per region: minimum X, Y, Z and maximum X, Y, Z, in world coordinates. */
+  /** Six ints per region: minimum X, Y, Z and maximum X, Y, Z, in domain coordinates. */
   final int[] regionBox;
 
   final int[] portalA;
   final int[] portalB;
-  final boolean[] portalDirected;
+
+  /**
+   * Per portal: how far a body falls through it, from A to B only, or 0 if it is crossed both ways.
+   */
+  final byte[] portalFall;
 
   /** Six ints per portal, as {@link #regionBox}. */
   final int[] portalBox;
 
-  RegionColumn(
-      int columnX,
-      int columnZ,
+  RegionStack(
+      int stackX,
+      int stackZ,
       int minY,
       int shift,
       int[] uniform,
@@ -83,10 +87,10 @@ public final class RegionColumn {
       int[] regionBox,
       int[] portalA,
       int[] portalB,
-      boolean[] portalDirected,
+      byte[] portalFall,
       int[] portalBox) {
-    this.columnX = columnX;
-    this.columnZ = columnZ;
+    this.stackX = stackX;
+    this.stackZ = stackZ;
     this.minY = minY;
     this.shift = shift;
     this.uniform = uniform;
@@ -97,37 +101,37 @@ public final class RegionColumn {
     this.regionBox = regionBox;
     this.portalA = portalA;
     this.portalB = portalB;
-    this.portalDirected = portalDirected;
+    this.portalFall = portalFall;
     this.portalBox = portalBox;
   }
 
   /**
-   * Returns the number a column is kept under, by its coordinates.
+   * Returns the number a stack is kept under, by its coordinates.
    *
-   * @param columnX the column X
-   * @param columnZ the column Z
+   * @param stackX the stack X
+   * @param stackZ the stack Z
    * @return the key
    */
-  public static long key(int columnX, int columnZ) {
-    return ((long) columnX << 32) | (columnZ & 0xFFFF_FFFFL);
+  public static long key(int stackX, int stackZ) {
+    return ((long) stackX << 32) | (stackZ & 0xFFFF_FFFFL);
   }
 
   /**
-   * Returns a column with no regions at all: one whose terrain cannot be read.
+   * Returns a stack with no regions at all: one whose terrain cannot be read.
    *
-   * @param spec the world's spec
-   * @param columnX the column X
-   * @param columnZ the column Z
-   * @return the empty column
+   * @param spec the domain's spec
+   * @param stackX the stack X
+   * @param stackZ the stack Z
+   * @return the empty stack
    */
-  static RegionColumn empty(RegionSpec<?> spec, int columnX, int columnZ) {
+  static RegionStack empty(RegionSpec<?> spec, int stackX, int stackZ) {
     int sections = spec.sections();
     int[] uniform = new int[sections];
     Arrays.fill(uniform, NONE);
-    return new RegionColumn(
-        columnX,
-        columnZ,
-        spec.columnMinY(),
+    return new RegionStack(
+        stackX,
+        stackZ,
+        spec.stackMinY(),
         spec.shift(),
         uniform,
         new int[sections],
@@ -137,16 +141,16 @@ public final class RegionColumn {
         new int[0],
         new int[0],
         new int[0],
-        new boolean[0],
+        new byte[0],
         new int[0]);
   }
 
   /**
-   * Returns the column-local region of a cell, or {@link #NONE}.
+   * Returns the stack-local region of a cell, or {@link #NONE}.
    *
-   * @param lx the X within the column
+   * @param lx the X within the stack
    * @param ly the Y counted from {@link #minY}
-   * @param lz the Z within the column
+   * @param lz the Z within the stack
    * @return the region
    */
   int regionAt(int lx, int ly, int lz) {
@@ -170,7 +174,7 @@ public final class RegionColumn {
   }
 
   /**
-   * Returns how many regions the column holds.
+   * Returns how many regions the stack holds.
    *
    * @return the region count
    */
@@ -179,7 +183,7 @@ public final class RegionColumn {
   }
 
   /**
-   * Returns how many portals join regions inside the column.
+   * Returns how many portals join regions inside the stack.
    *
    * @return the portal count
    */
@@ -188,7 +192,7 @@ public final class RegionColumn {
   }
 
   /**
-   * Returns roughly how many bytes the column holds in memory.
+   * Returns roughly how many bytes the stack holds in memory.
    *
    * @return the approximate footprint
    */
@@ -215,17 +219,17 @@ public final class RegionColumn {
   private static final int WIDE = 2;
 
   /**
-   * Writes the column.
+   * Writes the stack.
    *
-   * <p>Boxes are written relative to the column's corner, which keeps them small enough for the
+   * <p>Boxes are written relative to the stack's corner, which keeps them small enough for the
    * compression around this to do well; the format is versioned by the file that holds it.
    *
    * @param out where to write
    * @throws IOException if the write fails
    */
   void write(DataOutput out) throws IOException {
-    out.writeInt(columnX);
-    out.writeInt(columnZ);
+    out.writeInt(stackX);
+    out.writeInt(stackZ);
     out.writeShort(uniform.length);
     for (int s = 0; s < uniform.length; s++) {
       if (cells[s] != null) {
@@ -252,25 +256,25 @@ public final class RegionColumn {
     for (int p = 0; p < portalA.length; p++) {
       out.writeInt(portalA[p]);
       out.writeInt(portalB[p]);
-      out.writeBoolean(portalDirected[p]);
+      out.writeByte(portalFall[p]);
       writeBox(out, portalBox, p);
     }
   }
 
   /**
-   * Reads a column written by {@link #write}.
+   * Reads a stack written by {@link #write}.
    *
    * @param in where to read
-   * @param spec the world's spec, which the column must have been built under
-   * @return the column
+   * @param spec the world's spec, which the stack must have been built under
+   * @return the stack
    * @throws IOException if the read fails or the data is malformed
    */
-  static RegionColumn read(DataInput in, RegionSpec<?> spec) throws IOException {
-    int columnX = in.readInt();
-    int columnZ = in.readInt();
+  static RegionStack read(DataInput in, RegionSpec<?> spec) throws IOException {
+    int stackX = in.readInt();
+    int stackZ = in.readInt();
     int sections = in.readUnsignedShort();
     if (sections != spec.sections()) {
-      throw new IOException("malformed column: " + sections + " sections");
+      throw new IOException("malformed stack: " + sections + " sections");
     }
     int volume = spec.sectionVolume();
     int[] uniform = new int[sections];
@@ -293,46 +297,46 @@ public final class RegionColumn {
             wideCells[s][i] = in.readShort();
           }
         }
-        default -> throw new IOException("malformed column: section kind " + kind);
+        default -> throw new IOException("malformed stack: section kind " + kind);
       }
     }
     int regions = in.readInt();
     if (regions < 0 || regions > sections * volume) {
-      throw new IOException("malformed column: " + regions + " regions");
+      throw new IOException("malformed stack: " + regions + " regions");
     }
-    int minY = spec.columnMinY();
-    int ox = columnX << spec.shift();
-    int oz = columnZ << spec.shift();
+    int minY = spec.stackMinY();
+    int ox = stackX << spec.shift();
+    int oz = stackZ << spec.shift();
     int classes = spec.terrain().classes();
     byte[] regionClass = new byte[regions];
     int[] regionBox = new int[regions * 6];
     for (int r = 0; r < regions; r++) {
       regionClass[r] = in.readByte();
       if (regionClass[r] < 0 || regionClass[r] >= classes) {
-        throw new IOException("malformed column: region class " + regionClass[r]);
+        throw new IOException("malformed stack: region class " + regionClass[r]);
       }
       readBox(in, regionBox, r, ox, minY, oz);
     }
     int portals = in.readInt();
     if (portals < 0) {
-      throw new IOException("malformed column: " + portals + " portals");
+      throw new IOException("malformed stack: " + portals + " portals");
     }
     int[] portalA = new int[portals];
     int[] portalB = new int[portals];
-    boolean[] portalDirected = new boolean[portals];
+    byte[] portalFall = new byte[portals];
     int[] portalBox = new int[portals * 6];
     for (int p = 0; p < portals; p++) {
       portalA[p] = in.readInt();
       portalB[p] = in.readInt();
       if (portalA[p] < 0 || portalA[p] >= regions || portalB[p] < 0 || portalB[p] >= regions) {
-        throw new IOException("malformed column: portal to a region it does not have");
+        throw new IOException("malformed stack: portal to a region it does not have");
       }
-      portalDirected[p] = in.readBoolean();
+      portalFall[p] = in.readByte();
       readBox(in, portalBox, p, ox, minY, oz);
     }
-    return new RegionColumn(
-        columnX,
-        columnZ,
+    return new RegionStack(
+        stackX,
+        stackZ,
         minY,
         spec.shift(),
         uniform,
@@ -343,15 +347,15 @@ public final class RegionColumn {
         regionBox,
         portalA,
         portalB,
-        portalDirected,
+        portalFall,
         portalBox);
   }
 
   private void writeBox(DataOutput out, int[] boxes, int index) throws IOException {
-    int ox = columnX << shift;
-    int oz = columnZ << shift;
+    int ox = stackX << shift;
+    int oz = stackZ << shift;
     int at = index * 6;
-    // A box can reach one block past its column on either side, so relative values fit a short.
+    // A box can reach one block past its stack on either side, so relative values fit a short.
     out.writeShort(boxes[at] - ox);
     out.writeShort(boxes[at + 1] - minY);
     out.writeShort(boxes[at + 2] - oz);

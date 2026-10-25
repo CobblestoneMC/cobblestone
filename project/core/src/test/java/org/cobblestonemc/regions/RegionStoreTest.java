@@ -19,21 +19,21 @@ import org.junit.jupiter.api.Test;
 
 class RegionStoreTest {
 
-  private static RegionStore<ToyWorld.Column> store(long memoryBudget) {
+  private static RegionStore<ToyWorld.Stack> store(long memoryBudget) {
     return new RegionStore<>(ToyWorld.spec(), memoryBudget, null, Runnable::run, Runnable::run);
   }
 
-  private static RegionColumn column(
-      RegionStore<ToyWorld.Column> store, int cx, int cz, ToyWorld.Source source) {
-    FutureOr<RegionColumn> column = store.column(cx, cz, source);
-    assertTrue(column.isImmediate(), "every step here answers at once");
-    return column.value();
+  private static RegionStack stack(
+      RegionStore<ToyWorld.Stack> store, int cx, int cz, ToyWorld.Source source) {
+    FutureOr<RegionStack> stack = store.stack(cx, cz, source);
+    assertTrue(stack.isImmediate(), "every step here answers at once");
+    return stack.value();
   }
 
   @Test
   void aColumnIsBuiltOnceAndSharedBetweenSearches() {
     ToyWorld.Source source = new ToyWorld.Source();
-    RegionStore<ToyWorld.Column> store = store(Long.MAX_VALUE);
+    RegionStore<ToyWorld.Stack> store = store(Long.MAX_VALUE);
     Cell goal = new Cell(0, 13, 0);
     Cell from = new Cell(150, 13, 40);
     RegionAgent walker = new ToyWorld.Walker();
@@ -54,22 +54,22 @@ class RegionStoreTest {
   @Test
   void anInvalidatedColumnIsBuiltAgain() {
     ToyWorld.Source source = new ToyWorld.Source();
-    RegionStore<ToyWorld.Column> store = store(Long.MAX_VALUE);
-    column(store, 0, 0, source);
-    column(store, 0, 0, source);
+    RegionStore<ToyWorld.Stack> store = store(Long.MAX_VALUE);
+    stack(store, 0, 0, source);
+    stack(store, 0, 0, source);
     assertEquals(1, source.reads);
 
     store.invalidate(0, 0);
-    column(store, 0, 0, source);
-    assertEquals(2, source.reads, "a changed column is built again");
+    stack(store, 0, 0, source);
+    assertEquals(2, source.reads, "a changed stack is built again");
   }
 
   @Test
   void aColumnChangedWhileItIsBuiltIsHandedOverButNotKept() {
     ToyWorld.Source source = new ToyWorld.Source();
     source.gate = new CompletableFuture<>();
-    RegionStore<ToyWorld.Column> store = store(Long.MAX_VALUE);
-    FutureOr<RegionColumn> pending = store.column(0, 0, source);
+    RegionStore<ToyWorld.Stack> store = store(Long.MAX_VALUE);
+    FutureOr<RegionStack> pending = store.stack(0, 0, source);
     assertFalse(pending.isImmediate());
 
     store.invalidate(0, 0);
@@ -83,52 +83,52 @@ class RegionStoreTest {
   void aColumnWhoseTerrainCannotBeReadIsNotKept() {
     ToyWorld.Source source = new ToyWorld.Source();
     source.unreadable = true;
-    RegionStore<ToyWorld.Column> store = store(Long.MAX_VALUE);
-    assertEquals(0, column(store, 5, 5, source).regions());
+    RegionStore<ToyWorld.Stack> store = store(Long.MAX_VALUE);
+    assertEquals(0, stack(store, 5, 5, source).regions());
 
     // Generated since: a store that had kept it empty would wall it off for good.
     source.unreadable = false;
-    assertTrue(column(store, 5, 5, source).regions() > 0);
+    assertTrue(stack(store, 5, 5, source).regions() > 0);
   }
 
   @Test
   void aColumnThatFailsToBuildDoesNotHoldUpTheNextAsk() {
-    RegionStore<ToyWorld.Column> store = store(Long.MAX_VALUE);
+    RegionStore<ToyWorld.Stack> store = store(Long.MAX_VALUE);
     ToyWorld.Source broken =
         new ToyWorld.Source(
             (x, y, z) -> {
               throw new IllegalStateException("a block nothing can classify");
             },
             16);
-    assertTrue(store.column(0, 0, broken).future().isCompletedExceptionally());
+    assertTrue(store.stack(0, 0, broken).future().isCompletedExceptionally());
 
-    assertTrue(column(store, 0, 0, new ToyWorld.Source()).regions() > 0, "asked again, it builds");
+    assertTrue(stack(store, 0, 0, new ToyWorld.Source()).regions() > 0, "asked again, it builds");
   }
 
   @Test
   void aTightBudgetEvictsTheLeastRecentlyUsed() {
     ToyWorld.Source source = new ToyWorld.Source();
-    // A byte: every column but the newest is evicted at once.
-    RegionStore<ToyWorld.Column> tight = store(1);
+    // A byte: every stack but the newest is evicted at once.
+    RegionStore<ToyWorld.Stack> tight = store(1);
     for (int cx = 0; cx < 4; cx++) {
-      column(tight, cx, 0, source);
+      stack(tight, cx, 0, source);
     }
     assertEquals(3, tight.stats().evictions());
-    assertTrue(tight.inMemory(3, 0), "never the column just asked for");
+    assertTrue(tight.inMemory(3, 0), "never the stack just asked for");
     assertFalse(tight.inMemory(0, 0));
   }
 
   @Test
   void aPinnedColumnStaysWhateverTheBudgetUntilItsLastPinIsReleased() {
     ToyWorld.Source source = new ToyWorld.Source();
-    RegionStore<ToyWorld.Column> tight = store(1);
+    RegionStore<ToyWorld.Stack> tight = store(1);
     UUID alice = UUID.randomUUID();
     UUID bob = UUID.randomUUID();
     tight.pin(alice, 0, 0, 0);
     tight.pin(bob, 0, 0, 0);
-    column(tight, 0, 0, source);
+    stack(tight, 0, 0, source);
     for (int cx = 1; cx < 5; cx++) {
-      column(tight, cx, 0, source);
+      stack(tight, cx, 0, source);
     }
     assertTrue(tight.inMemory(0, 0), "pinned, it stays");
     assertFalse(tight.inMemory(1, 0), "the others go past the budget");
@@ -143,16 +143,16 @@ class RegionStoreTest {
   @Test
   void pinningAgainMovesAnOwnersPin() {
     ToyWorld.Source source = new ToyWorld.Source();
-    RegionStore<ToyWorld.Column> tight = store(1);
+    RegionStore<ToyWorld.Stack> tight = store(1);
     UUID owner = UUID.randomUUID();
     tight.pin(owner, 0, 0, 1);
-    column(tight, 0, 0, source);
-    column(tight, 1, 1, source);
+    stack(tight, 0, 0, source);
+    stack(tight, 1, 1, source);
     assertEquals(2, tight.stats().pinnedColumns());
 
     // Walked on: the old surroundings are let go, the new ones held.
     tight.pin(owner, 10, 0, 1);
-    column(tight, 10, 0, source);
+    stack(tight, 10, 0, source);
     assertFalse(tight.inMemory(0, 0));
     assertFalse(tight.inMemory(1, 1));
     assertTrue(tight.inMemory(10, 0));
@@ -161,12 +161,12 @@ class RegionStoreTest {
   @Test
   void aPinnedColumnIsStillDroppedWhenItsTerrainChanges() {
     ToyWorld.Source source = new ToyWorld.Source();
-    RegionStore<ToyWorld.Column> store = store(Long.MAX_VALUE);
+    RegionStore<ToyWorld.Stack> store = store(Long.MAX_VALUE);
     store.pin("trip", 0, 0, 0);
-    column(store, 0, 0, source);
+    stack(store, 0, 0, source);
     store.invalidate(0, 0);
     assertFalse(store.inMemory(0, 0));
-    column(store, 0, 0, source);
+    stack(store, 0, 0, source);
     assertEquals(2, source.reads);
     assertEquals(1, store.stats().pinnedColumns(), "rebuilt, it is pinned again");
   }

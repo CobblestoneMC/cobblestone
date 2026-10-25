@@ -21,33 +21,34 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.cobblestonemc.stonebrick.format.CorpusLayout;
 
 /**
- * The verify suite: every route a scenario lists under {@code verify}, each checked in a JVM of its
- * own, several at once.
+ * The region verify suite: every route a scenario lists under {@code verifyRegions}, each checked
+ * in a JVM of its own, several at once.
  *
  * <p><b>A route in the suite promises to fit its limits.</b> Listing a loadout under a scenario's
- * {@code verify} says that verifying it completes within {@link #HEAP} and {@link #TIME_LIMIT}, and
- * the suite holds it to that: a route that runs out of memory or time fails the suite, the same as
- * any other broken expectation. A JVM per route is what makes the memory limit a limit: threads in
- * one JVM share one heap, and one route's Dijkstra could starve every other.
+ * {@code verifyRegions} says that verifying it completes within {@link #HEAP} and {@link
+ * #TIME_LIMIT}, and the suite holds it to that: a route that runs out of memory or time fails the
+ * suite, the same as any other broken expectation. A JVM per route is what makes the memory limit a
+ * limit: threads in one JVM share one heap, and one route's Dijkstra could starve every other.
  *
  * <p><b>Half the machine.</b> Routes run as many at once as fit in half the memory free when the
  * suite starts and half the processors, and never fewer than one: a developer's machine should run
  * the suite in a reasonable time and still be usable while it does.
  */
-final class VerifySuite {
+final class RegionVerifySuite {
 
   /** Each route's heap. */
-  static final long HEAP = 2L << 30;
+  static final long HEAP = 1L << 30;
 
   /** Each route's time. */
-  static final Duration TIME_LIMIT = Duration.ofMinutes(5);
+  static final Duration TIME_LIMIT = Duration.ofMinutes(3);
 
   /** What a route's JVM holds beyond its heap: code, threads, metaspace. */
   private static final long OVERHEAD = 512L << 20;
 
-  private VerifySuite() {}
+  private RegionVerifySuite() {}
 
   /** One route of the suite. */
   record Route(Scenario scenario, Loadout loadout) {
@@ -70,10 +71,26 @@ final class VerifySuite {
    */
   static boolean run(List<Route> routes, Path corpusRoot, Path scenariosFile)
       throws InterruptedException {
+    List<String> uncaptured =
+        routes.stream()
+            .map(route -> route.scenario().capture())
+            .distinct()
+            .filter(
+                capture -> !Files.isDirectory(CorpusLayout.at(corpusRoot).capture(capture).root()))
+            .toList();
+    if (!uncaptured.isEmpty()) {
+      System.out.printf(
+          Locale.ROOT,
+          "The suite needs captures that are not in %s: %s.%nMake them first, once: ./gradlew"
+              + " captureCorpus -PacceptMinecraftEula=true%n",
+          corpusRoot.toAbsolutePath(),
+          String.join(", ", uncaptured));
+      return false;
+    }
     int parallel = parallelism(availableMemory(), Runtime.getRuntime().availableProcessors());
     System.out.printf(
         Locale.ROOT,
-        "Verify suite: %d routes, %d at a time, each within %d GB and %d minutes%n",
+        "Region verify suite: %d routes, %d at a time, each within %d GB and %d minutes%n",
         routes.size(),
         parallel,
         HEAP >> 30,
@@ -101,12 +118,12 @@ final class VerifySuite {
           System.out.printf(Locale.ROOT, "  FAILED: %s%n", outcome.failure());
         }
       }
-      Verify.aggregate(ratios);
+      RegionVerify.aggregate(ratios);
       if (!failed.isEmpty()) {
         System.out.printf(
             Locale.ROOT,
             "%n%d of %d routes did not verify within their limits. Fix them, or take them out of"
-                + " their scenario's verify list:%n",
+                + " their scenario's verifyRegions list:%n",
             failed.size(),
             routes.size());
         for (Outcome outcome : failed) {
@@ -140,7 +157,7 @@ final class VerifySuite {
     command.add(ProcessHandle.current().info().command().orElse("java"));
     command.add("-Xmx" + (HEAP >> 20) + "m");
     command.add("-XX:+ExitOnOutOfMemoryError");
-    command.add("-D" + Verify.RATIOS_PROPERTY + "=true");
+    command.add("-D" + RegionVerify.RATIOS_PROPERTY + "=true");
     // The tuning knobs a run was started with apply to its routes too.
     System.getProperties().stringPropertyNames().stream()
         .filter(name -> name.startsWith("regions."))
@@ -150,7 +167,7 @@ final class VerifySuite {
     command.add(BenchMain.class.getName());
     command.addAll(
         List.of(
-            "verify",
+            "verify-regions",
             "--scenario",
             route.scenario().id(),
             "--agent",
@@ -176,8 +193,9 @@ final class VerifySuite {
       StringBuilder output = new StringBuilder();
       boolean outOfMemory = false;
       for (String line : Files.readAllLines(log, StandardCharsets.UTF_8)) {
-        if (line.startsWith(Verify.RATIOS_PREFIX)) {
-          for (String ratio : line.substring(Verify.RATIOS_PREFIX.length()).trim().split(" ")) {
+        if (line.startsWith(RegionVerify.RATIOS_PREFIX)) {
+          for (String ratio :
+              line.substring(RegionVerify.RATIOS_PREFIX.length()).trim().split(" ")) {
             if (!ratio.isEmpty()) {
               ratios.add(Double.parseDouble(ratio));
             }

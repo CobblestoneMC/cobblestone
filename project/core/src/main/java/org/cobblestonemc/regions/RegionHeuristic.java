@@ -30,7 +30,7 @@ import org.jetbrains.annotations.Nullable;
  * its frontier could undercut the answer, so a cell asked about twice gets the same number, and the
  * answers are cached by cell for the fine search's many repeat questions.
  *
- * @param <C> the platform's column of terrain
+ * @param <C> the platform's stack of terrain
  */
 public final class RegionHeuristic<C> implements HeuristicStrategy {
 
@@ -51,21 +51,21 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
    * Creates a heuristic that reads a terrain source, a store and an agent per solve.
    *
    * <p>Per solve, not per strategy: one strategy is built per navigate, but a trip may have legs in
-   * several worlds, and a source bound to the first would answer every later leg from the wrong
-   * terrain without ever failing. The target region knows which world its leg is in. The agent too,
-   * since what it pays for a kind of terrain can depend on the world.
+   * several domains, and a source bound to the first would answer every later leg from the wrong
+   * terrain without ever failing. The target region knows which domain its leg is in. The agent
+   * too, since what it pays for a kind of terrain can depend on the domain.
    *
-   * <p>A server's store is its world's, shared by every search, so a column built by any search is
+   * <p>A server's store is its domain's, shared by every search, so a stack built by any search is
    * read back instead of built again. A store of each solve's own ({@link RegionStore#inMemory})
-   * builds every column it needs and forgets them.
+   * builds every stack it needs and forgets them.
    *
    * <p>Estimates are the region search's own answers, unscaled. How far the fine search trusts them
    * is the search's heuristic weight, and nothing else.
    *
-   * @param sourceFor the terrain source for a solve's target region, for the columns the store has
+   * @param sourceFor the terrain source for a solve's target region, for the stacks the store has
    *     to build
-   * @param storeFor the store for a solve's target region's world
-   * @param agentFor who is travelling, as priced in a solve's target region's world
+   * @param storeFor the store for a solve's target region's domain
+   * @param agentFor who is travelling, as priced in a solve's target region's domain
    * @param tierOneRate the least the agent can pay per block by any movement at all, which Tier 1
    *     prices unsolved legs with: lower than {@link RegionAgent#cheapest()} for an agent who can
    *     move in ways the region layer does not price, such as riding

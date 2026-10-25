@@ -30,10 +30,9 @@ import org.cobblestonemc.regions.RegionAgent;
  * apart where the two levels see differently. The fine search will grow costs this layer cannot see
  * — a turn, a wall close by, danger nearby — that adjust its base walk, while a region is priced
  * only by its class; neither set of numbers is a precise constant the other must match. What keeps
- * them honest is measurement: {@code bench verify} compares these estimates with the fine search's
- * true costs, and a drift of either side shows up there as the suite's ratios moving: they average
- * about 0.85 of the truth, with about one sample in fifteen over it. Change either side, run verify
- * and a sweep.
+ * them honest is measurement: {@code bench verify-regions} compares these estimates with the fine
+ * search's true costs, and a drift of either side shows up there as the suite's ratios moving.
+ * Change either side, run {@code ./gradlew verifyRegions} and a sweep.
  *
  * <p><b>Every rate is at least {@link #cheapest()} per block of straight-line distance.</b> The
  * backward search focuses itself with that bound, and a crossing priced below it would let the
@@ -69,6 +68,14 @@ public final class MinecraftAgent implements RegionAgent {
 
   /** {@code MovementCosts.FALL_PER_BLOCK}, which a mining step down pays on top of breaking. */
   private static final double FALL = 0.18;
+
+  /**
+   * The deepest fall onto ground or a ladder taken without damage: {@code
+   * MovementCosts.SAFE_FALL_BLOCKS}. FallMode will go further at the price of damage, which it
+   * charges at several seconds a block; a route that needs that is rare, and pricing it as a cheap
+   * drop would invite the fine search to every cliff edge. Feather Falling raises it.
+   */
+  private static final int SAFE_FALL = 3;
 
   /** Soul sand's speed factor, as the platforms report it: a walker without Soul Speed drags. */
   private static final double SOUL_SAND_SPEED = 0.4;
@@ -272,6 +279,23 @@ public final class MinecraftAgent implements RegionAgent {
   @Override
   public double fallback() {
     return FALLBACK_COST_PER_BLOCK;
+  }
+
+  /**
+   * Water breaks any fall; ground and ladders only one of {@link #SAFE_FALL} blocks or less. The
+   * fall itself adds nothing: the height fallen is priced in crossing the region landed in.
+   */
+  @Override
+  public double fall(int clazz, int depth) {
+    RegionClass known = RegionClass.byId(clazz);
+    if (known == null) {
+      return Double.POSITIVE_INFINITY;
+    }
+    return switch (known.body()) {
+      case WATER -> 0;
+      case GROUND, CLIMB -> depth <= SAFE_FALL ? 0 : Double.POSITIVE_INFINITY;
+      case OPEN, SOLID -> Double.POSITIVE_INFINITY;
+    };
   }
 
   private static boolean has(double rate) {

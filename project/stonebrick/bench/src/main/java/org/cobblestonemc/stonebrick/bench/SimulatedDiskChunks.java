@@ -13,7 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.ChunkFetch;
 import org.cobblestonemc.minecraft.MinecraftChunk;
-import org.cobblestonemc.regions.RegionColumn;
+import org.cobblestonemc.regions.RegionStack;
 import org.cobblestonemc.regions.TerrainSource;
 import org.cobblestonemc.stonebrick.platform.MissingCaptureLog;
 import org.cobblestonemc.stonebrick.platform.StonebrickPlatformApi;
@@ -26,7 +26,7 @@ import org.cobblestonemc.stonebrick.platform.StonebrickPlatformApi;
  * resident comes back pending and the fine search parks, which is the path a live server is in
  * constantly.
  */
-final class CaptureChunkColumns implements TerrainSource<MinecraftChunk> {
+final class SimulatedDiskChunks implements TerrainSource<MinecraftChunk> {
 
   private final StonebrickPlatformApi platform;
   private final String world;
@@ -40,7 +40,7 @@ final class CaptureChunkColumns implements TerrainSource<MinecraftChunk> {
    */
   private final MissingCaptureLog beyond = new MissingCaptureLog();
 
-  CaptureChunkColumns(StonebrickPlatformApi platform, String world) {
+  SimulatedDiskChunks(StonebrickPlatformApi platform, String world) {
     this.platform = platform;
     this.world = world;
   }
@@ -58,8 +58,8 @@ final class CaptureChunkColumns implements TerrainSource<MinecraftChunk> {
   }
 
   @Override
-  public FutureOr<MinecraftChunk> column(int chunkX, int chunkZ) {
-    long key = RegionColumn.key(chunkX, chunkZ);
+  public FutureOr<MinecraftChunk> stack(int chunkX, int chunkZ) {
+    long key = RegionStack.key(chunkX, chunkZ);
     if (chunks.containsKey(key)) {
       return FutureOr.of(chunks.get(key));
     }

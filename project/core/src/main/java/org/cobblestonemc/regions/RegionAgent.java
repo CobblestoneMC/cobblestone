@@ -57,4 +57,17 @@ public interface RegionAgent {
    * @return the fallback rate, in seconds per block
    */
   double fallback();
+
+  /**
+   * Returns what a fall adds to crossing the region it lands in, or {@link
+   * Double#POSITIVE_INFINITY} if this agent cannot take it.
+   *
+   * <p>The terrain says where a body lands; whether it survives, and at what cost, is the agent's:
+   * a player in Feather Falling boots takes falls another would not.
+   *
+   * @param clazz the class of the region landed in
+   * @param depth how far the body falls, in blocks
+   * @return the cost the fall adds, at least 0
+   */
+  double fall(int clazz, int depth);
 }

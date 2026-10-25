@@ -17,13 +17,11 @@ minecraft:overworld:
     origin: { x: 1534, y: -47, z: -1739 }
     destination: { x: 1713, y: -51, z: -1664 }
     tags: [underground]
-    verify: [player]
 
   around-mountain:
     capture: around-mountain
     tier: LOCAL
     tags: [surface, no-pickaxe]
-    verify: [player, player-no-pickaxe, player-with-boat]
     io: zero
     origin: { x: 631, y: 70, z: -317 }
     destination: { x: 517, y: 63, z: -161 }
@@ -35,13 +33,12 @@ minecraft:overworld:
     origin: { x: 5504, y: 75, z: -5448 }
     destination: { x: 5504, y: 81, z: -5748 }
     tags: [surface, no-pickaxe]
-    verify: [player, player-no-pickaxe, player-with-boat]
 
   cave-lateral:
     capture: cave-lateral
     tier: LOCAL
     tags: [underground]
-    verify: [player]
+    verifyRegions: [player]
     io: zero
     origin: { x: 96, y: -41, z: -119 }
     destination: { x: 19, y: -32, z: -92 }
@@ -58,7 +55,6 @@ minecraft:overworld:
     capture: cave-tunnel
     tier: LOCAL
     tags: [underground]
-    verify: [player]
     io: zero
     origin: { x: 4, y: -11, z: -155 }
     destination: { x: -47, y: 4, z: -133 }
@@ -67,7 +63,7 @@ minecraft:overworld:
     capture: cliff-down
     tier: LOCAL
     tags: [surface]
-    verify: [player, player-with-boat]
+    verifyRegions: [player]
     io: zero
     origin: { x: 780, y: 116, z: 100 }
     destination: { x: 780, y: 64, z: 101 }
@@ -95,7 +91,6 @@ minecraft:overworld:
     origin: { x: 2288, y: 70, z: 2840 }
     destination: { x: 2403, y: 62, z: 3117 }
     tags: [surface, no-pickaxe]
-    verify: [player, player-no-pickaxe, player-with-boat]
 
   dripstone-caves:
     capture: dripstone-caves
@@ -104,7 +99,6 @@ minecraft:overworld:
     origin: { x: -19, y: 12, z: 26 }
     destination: { x: 134, y: 27, z: 22 }
     tags: [underground]
-    verify: [player]
 
   frozen-ocean:
     capture: frozen-ocean
@@ -113,7 +107,7 @@ minecraft:overworld:
     origin: { x: 2608, y: 62, z: 216 }
     destination: { x: 2808, y: 62, z: 216 }
     tags: [surface]
-    verify: [player, player-with-boat]
+    verifyRegions: [player]
 
   hilly-jungle:
     capture: jungle
@@ -180,7 +174,6 @@ minecraft:overworld:
     origin: { x: 220, y: -47, z: 255 }
     destination: { x: 322, y: -52, z: 342 }
     tags: [underground]
-    verify: [player]
 
   mixed-biome-surface:
     capture: mixed-biome-surface
@@ -201,13 +194,12 @@ minecraft:overworld:
       z: -270
       box: { from: { x: 507, y: 65, z: -285 }, to: { x: 478, y: 73, z: -255 } }
     tags: [surface, no-pickaxe]
-    verify: [player, player-no-pickaxe, player-with-boat]
+    verifyRegions: [player-no-pickaxe]
 
   mountain-peaks:
     capture: mountain-peaks
     tier: LOCAL
     tags: [surface, no-pickaxe]
-    verify: [player, player-no-pickaxe, player-with-boat]
     io: zero
     origin: { x: 7, y: 124, z: -413 }
     destination: { x: 146, y: 127, z: -450 }
@@ -240,7 +232,7 @@ minecraft:overworld:
     capture: savanna-small
     tier: LOCAL
     tags: [surface]
-    verify: [player, player-with-boat]
+    verifyRegions: [player, player-with-boat]
     io: zero
     origin: { x: 1056, y: 63, z: -227 }
     destination: { x: 1208, y: 64, z: -337 }
@@ -252,7 +244,6 @@ minecraft:overworld:
     origin: { x: 398, y: 63, z: 84 }
     destination: { x: 440, y: 62, z: 120 }
     tags: [surface, no-pickaxe]
-    verify: [player, player-no-pickaxe, player-with-boat]
 
   short-hill:
     capture: short-hill
@@ -261,7 +252,6 @@ minecraft:overworld:
     origin: { x: 272, y: 62, z: 304 }
     destination: { x: 336, y: 72, z: 330 }
     tags: [surface, no-pickaxe]
-    verify: [player, player-no-pickaxe, player-with-boat]
 
   short-river:
     capture: short-river
@@ -270,7 +260,6 @@ minecraft:overworld:
     origin: { x: 2, y: 64, z: -43 }
     destination: { x: 60, y: 62, z: -15 }
     tags: [surface]
-    verify: [player, player-with-boat]
 
   snowy-slopes:
     capture: snowy-slopes
@@ -287,7 +276,6 @@ minecraft:overworld:
     origin: { x: 1638, y: -25, z: -204 }
     destination: { x: 1678, y: -22, z: -118 }
     tags: [underground]
-    verify: [player]
 
   swamp:
     capture: swamp
@@ -296,7 +284,6 @@ minecraft:overworld:
     origin: { x: 1008, y: 62, z: -744 }
     destination: { x: 1220, y: 62, z: -532 }
     tags: [surface]
-    verify: [player, player-with-boat]
 
   trial-chambers:
     capture: trial-chambers
@@ -305,7 +292,6 @@ minecraft:overworld:
     origin: { x: -334, y: -24, z: 269 }
     destination: { x: -234, y: -31, z: 280 }
     tags: [underground]
-    verify: [player]
 
   village-plains:
     capture: village-plains
@@ -314,7 +300,6 @@ minecraft:overworld:
     origin: { x: -880, y: 86, z: 60 }
     destination: { x: -788, y: 97, z: 8 }
     tags: [surface, no-pickaxe]
-    verify: [player-no-pickaxe]
 
   village-river:
     capture: village-river
@@ -327,7 +312,7 @@ minecraft:overworld:
       z: 816
       box: { from: { x: -224, y: 63, z: 881 }, to: { x: -350, y: 90, z: 752 } }
     tags: [surface, no-pickaxe]
-    verify: [player, player-no-pickaxe, player-with-boat]
+    verifyRegions: [player]
 
   village-short:
     capture: village-short
@@ -336,7 +321,6 @@ minecraft:overworld:
     origin: { x: -828, y: 93, z: 11 }
     destination: { x: -788, y: 97, z: 7 }
     tags: [surface, no-pickaxe]
-    verify: [player, player-no-pickaxe, player-with-boat]
 
 
 minecraft:the_end:
@@ -347,13 +331,13 @@ minecraft:the_end:
     origin: { x: -1830, y: 59, z: 80 }
     destination: { x: -1568, y: 62, z: 80 }
     tags: [end]
-    verify: [player]
+    verifyRegions: [player]
 
   end-small:
     capture: end-small
     tier: LOCAL
     tags: [end]
-    verify: [player]
+    verifyRegions: [player]
     io: zero
     origin: { x: 93, y: 57, z: -18 }
     destination: { x: -95, y: 57, z: 50 }
@@ -375,7 +359,7 @@ minecraft:the_nether:
     origin: { x: -60, y: 57, z: -50 }
     destination: { x: -150, y: 56, z: -150 }
     tags: [nether]
-    verify: [player, player-soul-speed]
+    verifyRegions: [player]
 
   bastion:
     capture: bastion
@@ -384,7 +368,7 @@ minecraft:the_nether:
     origin: { x: -350, y: 46, z: 215 }
     destination: { x: -300, y: 36, z: 260 }
     tags: [nether]
-    verify: [player, player-soul-speed]
+    verifyRegions: [player]
 
   distance:
     capture: distance
@@ -437,7 +421,6 @@ minecraft:the_nether:
     origin: { x: -597, y: 74, z: -465 }
     destination: { x: -517, y: 83, z: -352 }
     tags: [nether]
-    verify: [player, player-soul-speed]
 
   short-nether:
     capture: short-nether
@@ -446,13 +429,12 @@ minecraft:the_nether:
     origin: { x: 71, y: 85, z: -42 }
     destination: { x: 120, y: 99, z: -30 }
     tags: [nether]
-    verify: [player, player-soul-speed]
+    verifyRegions: [player]
 
   soul-sand-valley:
     capture: soul-sand-valley
     tier: LOCAL
     tags: [nether]
-    verify: [player-soul-speed]
     io: zero
     origin: { x: -58, y: 63, z: 93 }
     destination: { x: -206, y: 102, z: 179 }
@@ -461,7 +443,6 @@ minecraft:the_nether:
     capture: through-wart
     tier: LOCAL
     tags: [nether]
-    verify: [player, player-soul-speed]
     io: zero
     origin: { x: 71, y: 85, z: -42 }
     destination: { x: 231, y: 92, z: -19 }
@@ -470,7 +451,6 @@ minecraft:the_nether:
     capture: vertical-small
     tier: LOCAL
     tags: [nether]
-    verify: [player, player-soul-speed]
     io: zero
     origin: { x: 80, y: 50, z: -161 }
     destination: { x: 71, y: 95, z: -174 }
@@ -479,7 +459,7 @@ minecraft:the_nether:
     capture: vertical-small-down
     tier: LOCAL
     tags: [nether]
-    verify: [player, player-soul-speed]
+    verifyRegions: [player-soul-speed]
     io: zero
     origin: { x: -168, y: 92, z: 181 }
     destination: { x: -174, y: 34, z: 197 }

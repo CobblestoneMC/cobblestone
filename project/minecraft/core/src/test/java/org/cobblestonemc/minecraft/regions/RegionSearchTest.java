@@ -15,6 +15,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 import org.cobblestonemc.Cell;
+import org.cobblestonemc.DomainBounds;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftChunk;
@@ -64,7 +65,7 @@ class RegionSearchTest {
 
   private static final int FEET = GROUND + 1;
 
-  /** A world described by a function of world coordinates, read a column at a time. */
+  /** A world described by a function of world coordinates, read a stack at a time. */
   private interface Terrain {
     MinecraftBlock at(int x, int y, int z);
   }
@@ -78,7 +79,7 @@ class RegionSearchTest {
     }
 
     @Override
-    public FutureOr<MinecraftChunk> column(int chunkX, int chunkZ) {
+    public FutureOr<MinecraftChunk> stack(int chunkX, int chunkZ) {
       read++;
       MinecraftChunk chunk = (x, y, z) -> terrain.at(chunkX * 16 + x, y, chunkZ * 16 + z);
       return FutureOr.of(chunk);
@@ -91,7 +92,9 @@ class RegionSearchTest {
 
   private static RegionGraph<MinecraftChunk> graph(World world) {
     return new RegionGraph<>(
-        RegionStore.inMemory(new RegionSpec<>(MinecraftTerrain.of(Environment.OVERWORLD), 0, 47)),
+        RegionStore.inMemory(
+            new RegionSpec<>(
+                MinecraftTerrain.of(Environment.OVERWORLD), DomainBounds.vertical(0, 47))),
         world);
   }
 
@@ -225,7 +228,7 @@ class RegionSearchTest {
     search.costToGoal(from);
 
     // Focused on the origin: a corridor between the two ends, not a disc of radius 400 around the
-    // goal. A disc would read on the order of 2,000 columns.
+    // goal. A disc would read on the order of 2,000 stacks.
     assertTrue(world.read < 400, "the search should not flood the world: " + world.read);
   }
 
