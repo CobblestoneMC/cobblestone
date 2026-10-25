@@ -31,6 +31,7 @@ import org.cobblestonemc.stonebrick.platform.IoProfile;
  *   bench list                                                   show the corpus
  *   bench sweep    [--heuristic h] [--weights 1.5,2.0] [--io p] [--warm]   the nodes-versus-cost curve
  *   bench verify   [--scenario id] [--agent a]                    estimates against Dijkstra's cost
+ *                                                                  (no selection: the verify suite)
  *   bench check    [--scenario id]                                 can the bench use a new scenario?
  *   bench path     [--scenario id] [--agent a]                    the cells of the route found
  * </pre>
@@ -65,9 +66,17 @@ public final class BenchMain {
         selectLoadouts(Loadout.loadAll(options.corpusRoot().resolve(Loadout.FILE_NAME)), options);
 
     if (options.command().equals("verify")) {
+      // Unselected, the suite: the routes and loadouts each scenario names as cheap to verify.
+      // Selected, whatever was asked for, however long its Dijkstra takes.
+      boolean suite =
+          options.scenarioId() == null
+              && options.tag() == null
+              && options.tier() == null
+              && options.agent() == null;
       for (Scenario scenario : scenarios) {
         for (Loadout loadout : loadouts) {
-          if (!loadout.appliesTo(scenario)) {
+          if (!loadout.appliesTo(scenario)
+              || (suite && !scenario.verify().contains(loadout.name()))) {
             continue;
           }
           Verify.run(options.corpusRoot(), scenario, loadout, 12, new QuietLogger());
