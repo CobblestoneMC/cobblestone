@@ -19,31 +19,33 @@ import org.junit.jupiter.api.Test;
 
 class RegionStoreTest {
 
-  private static RegionStore<ToyWorld.Stack> store(long memoryBudget) {
+  private static RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store(long memoryBudget) {
     return new RegionStore<>(ToyWorld.spec(), memoryBudget, Runnable::run);
   }
 
-  private static RegionStack stack(
-      RegionStore<ToyWorld.Stack> store, int cx, int cz, ToyWorld.Source source) {
-    FutureOr<RegionStack> stack = store.stack(cx, cz, source);
-    assertTrue(stack.isImmediate(), "every step here answers at once");
-    return stack.value();
+  private static RegionSection section(
+      RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store, int sx, int sz, ToyWorld.Source source) {
+    FutureOr<RegionSection> section = store.section(sx, 0, sz, source);
+    assertTrue(section.isImmediate(), "every step here answers at once");
+    return section.value();
   }
 
   @Test
-  void aColumnIsBuiltOnceAndSharedBetweenSearches() {
+  void aSectionIsBuiltOnceAndSharedBetweenSearches() {
     ToyWorld.Source source = new ToyWorld.Source();
-    RegionStore<ToyWorld.Stack> store = store(Long.MAX_VALUE);
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store = store(Long.MAX_VALUE);
     Cell goal = new Cell(0, 13, 0);
     Cell from = new Cell(150, 13, 40);
-    RegionAgent walker = new ToyWorld.Walker();
+    RegionAgent<ToyWorld.Toy> walker = new ToyWorld.Walker();
 
     double first =
-        new RegionSearch(new RegionGraph<>(store, source), walker, from, goal::equals, cell -> goal)
+        new RegionSearch<>(
+                new RegionGraph<>(store, source), walker, from, goal::equals, cell -> goal)
             .costToGoal(from);
     int reads = source.reads;
     double second =
-        new RegionSearch(new RegionGraph<>(store, source), walker, from, goal::equals, cell -> goal)
+        new RegionSearch<>(
+                new RegionGraph<>(store, source), walker, from, goal::equals, cell -> goal)
             .costToGoal(from);
 
     assertEquals(first, second, 1e-9);
@@ -52,122 +54,121 @@ class RegionStoreTest {
   }
 
   @Test
-  void anInvalidatedColumnIsBuiltAgain() {
+  void anInvalidatedSectionIsBuiltAgain() {
     ToyWorld.Source source = new ToyWorld.Source();
-    RegionStore<ToyWorld.Stack> store = store(Long.MAX_VALUE);
-    stack(store, 0, 0, source);
-    stack(store, 0, 0, source);
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store = store(Long.MAX_VALUE);
+    section(store, 0, 0, source);
+    section(store, 0, 0, source);
     assertEquals(1, source.reads);
 
-    store.invalidate(0, 0);
-    stack(store, 0, 0, source);
-    assertEquals(2, source.reads, "a changed stack is built again");
+    store.invalidate(0, 0, 0);
+    section(store, 0, 0, source);
+    assertEquals(2, source.reads, "a changed section is built again");
   }
 
   @Test
-  void aColumnChangedWhileItIsBuiltIsHandedOverButNotKept() {
+  void aSectionChangedWhileItIsBuiltIsHandedOverButNotKept() {
     ToyWorld.Source source = new ToyWorld.Source();
     source.gate = new CompletableFuture<>();
-    RegionStore<ToyWorld.Stack> store = store(Long.MAX_VALUE);
-    FutureOr<RegionStack> pending = store.stack(0, 0, source);
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store = store(Long.MAX_VALUE);
+    FutureOr<RegionSection> pending = store.section(0, 0, 0, source);
     assertFalse(pending.isImmediate());
 
-    store.invalidate(0, 0);
+    store.invalidate(0, 0, 0);
     source.gate.complete(null);
 
     assertTrue(pending.future().join().regions() > 0, "the asking search still gets it");
-    assertFalse(store.inMemory(0, 0), "but it describes the terrain before the change");
+    assertFalse(store.inMemory(0, 0, 0), "but it describes the terrain before the change");
   }
 
   @Test
-  void aColumnWhoseTerrainCannotBeReadIsNotKept() {
+  void aSectionWhoseTerrainCannotBeReadIsNotKept() {
     ToyWorld.Source source = new ToyWorld.Source();
     source.unreadable = true;
-    RegionStore<ToyWorld.Stack> store = store(Long.MAX_VALUE);
-    assertEquals(0, stack(store, 5, 5, source).regions());
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store = store(Long.MAX_VALUE);
+    assertEquals(0, section(store, 5, 5, source).regions());
 
     // Generated since: a store that had kept it empty would wall it off for good.
     source.unreadable = false;
-    assertTrue(stack(store, 5, 5, source).regions() > 0);
+    assertTrue(section(store, 5, 5, source).regions() > 0);
   }
 
   @Test
-  void aColumnThatFailsToBuildDoesNotHoldUpTheNextAsk() {
-    RegionStore<ToyWorld.Stack> store = store(Long.MAX_VALUE);
+  void aSectionThatFailsToBuildDoesNotHoldUpTheNextAsk() {
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store = store(Long.MAX_VALUE);
     ToyWorld.Source broken =
         new ToyWorld.Source(
             (x, y, z) -> {
               throw new IllegalStateException("a block nothing can classify");
-            },
-            16);
-    assertTrue(store.stack(0, 0, broken).future().isCompletedExceptionally());
+            });
+    assertTrue(store.section(0, 0, 0, broken).future().isCompletedExceptionally());
 
-    assertTrue(stack(store, 0, 0, new ToyWorld.Source()).regions() > 0, "asked again, it builds");
+    assertTrue(section(store, 0, 0, new ToyWorld.Source()).regions() > 0, "asked again, it builds");
   }
 
   @Test
   void aTightBudgetEvictsTheLeastRecentlyUsed() {
     ToyWorld.Source source = new ToyWorld.Source();
-    // A byte: every stack but the newest is evicted at once.
-    RegionStore<ToyWorld.Stack> tight = store(1);
+    // A byte: every section but the newest is evicted at once.
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> tight = store(1);
     for (int cx = 0; cx < 4; cx++) {
-      stack(tight, cx, 0, source);
+      section(tight, cx, 0, source);
     }
     assertEquals(3, tight.stats().evictions());
-    assertTrue(tight.inMemory(3, 0), "never the stack just asked for");
-    assertFalse(tight.inMemory(0, 0));
+    assertTrue(tight.inMemory(3, 0, 0), "never the section just asked for");
+    assertFalse(tight.inMemory(0, 0, 0));
   }
 
   @Test
-  void aPinnedColumnStaysWhateverTheBudgetUntilItsLastPinIsReleased() {
+  void aPinnedSectionStaysWhateverTheBudgetUntilItsLastPinIsReleased() {
     ToyWorld.Source source = new ToyWorld.Source();
-    RegionStore<ToyWorld.Stack> tight = store(1);
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> tight = store(1);
     UUID alice = UUID.randomUUID();
     UUID bob = UUID.randomUUID();
-    tight.pin(alice, 0, 0, 0);
-    tight.pin(bob, 0, 0, 0);
-    stack(tight, 0, 0, source);
+    tight.pin(alice, 0, 0, 0, 0);
+    tight.pin(bob, 0, 0, 0, 0);
+    section(tight, 0, 0, source);
     for (int cx = 1; cx < 5; cx++) {
-      stack(tight, cx, 0, source);
+      section(tight, cx, 0, source);
     }
-    assertTrue(tight.inMemory(0, 0), "pinned, it stays");
-    assertFalse(tight.inMemory(1, 0), "the others go past the budget");
-    assertEquals(1, tight.stats().pinnedColumns());
+    assertTrue(tight.inMemory(0, 0, 0), "pinned, it stays");
+    assertFalse(tight.inMemory(1, 0, 0), "the others go past the budget");
+    assertEquals(1, tight.stats().pinnedSections());
 
     tight.release(alice);
-    assertTrue(tight.inMemory(0, 0), "still pinned for bob");
+    assertTrue(tight.inMemory(0, 0, 0), "still pinned for bob");
     tight.release(bob);
-    assertFalse(tight.inMemory(0, 0), "released, it goes too");
+    assertFalse(tight.inMemory(0, 0, 0), "released, it goes too");
   }
 
   @Test
   void pinningAgainMovesAnOwnersPin() {
     ToyWorld.Source source = new ToyWorld.Source();
-    RegionStore<ToyWorld.Stack> tight = store(1);
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> tight = store(1);
     UUID owner = UUID.randomUUID();
-    tight.pin(owner, 0, 0, 1);
-    stack(tight, 0, 0, source);
-    stack(tight, 1, 1, source);
-    assertEquals(2, tight.stats().pinnedColumns());
+    tight.pin(owner, 0, 0, 0, 1);
+    section(tight, 0, 0, source);
+    section(tight, 1, 1, source);
+    assertEquals(2, tight.stats().pinnedSections());
 
     // Walked on: the old surroundings are let go, the new ones held.
-    tight.pin(owner, 10, 0, 1);
-    stack(tight, 10, 0, source);
-    assertFalse(tight.inMemory(0, 0));
-    assertFalse(tight.inMemory(1, 1));
-    assertTrue(tight.inMemory(10, 0));
+    tight.pin(owner, 10, 0, 0, 1);
+    section(tight, 10, 0, source);
+    assertFalse(tight.inMemory(0, 0, 0));
+    assertFalse(tight.inMemory(1, 0, 1));
+    assertTrue(tight.inMemory(10, 0, 0));
   }
 
   @Test
-  void aPinnedColumnIsStillDroppedWhenItsTerrainChanges() {
+  void aPinnedSectionIsStillDroppedWhenItsTerrainChanges() {
     ToyWorld.Source source = new ToyWorld.Source();
-    RegionStore<ToyWorld.Stack> store = store(Long.MAX_VALUE);
-    store.pin("trip", 0, 0, 0);
-    stack(store, 0, 0, source);
-    store.invalidate(0, 0);
-    assertFalse(store.inMemory(0, 0));
-    stack(store, 0, 0, source);
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store = store(Long.MAX_VALUE);
+    store.pin("trip", 0, 0, 0, 0);
+    section(store, 0, 0, source);
+    store.invalidate(0, 0, 0);
+    assertFalse(store.inMemory(0, 0, 0));
+    section(store, 0, 0, source);
     assertEquals(2, source.reads);
-    assertEquals(1, store.stats().pinnedColumns(), "rebuilt, it is pinned again");
+    assertEquals(1, store.stats().pinnedSections(), "rebuilt, it is pinned again");
   }
 }

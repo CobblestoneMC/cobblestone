@@ -11,20 +11,19 @@ import org.cobblestonemc.DomainBounds;
 
 /**
  * Everything that decides how one domain's terrain is cut into regions: the terrain's rules, the
- * domain's bounds, and the fill's detour ratio. Two stacks built under equal specs are the same
+ * domain's bounds, and the fill's detour ratio. Two sections built under equal specs are the same
  * graph; under different ones they are not, and must never meet in one search.
  *
- * <p><b>The geometry is the terrain's and the domain's.</b> Terrain is built in cubic sections, as
- * wide as the terrain says ({@link RegionTerrain#sectionShift()}). A <em>stack</em> is the sections
- * at one X and Z from the domain's floor to its ceiling, which is why the domain must bound Y, the
- * axis bodies fall along: a stack is the unit terrain is read, built, kept and joined in. Cell
- * {@code (x, y, z)} of a section is {@code (y << 2·shift) | (z << shift) | x}; of a stack, {@code
- * y} counts from {@link #stackMinY()}. Bounds along X or Z, where a domain has them, leave a
- * stack's shape alone: cells outside them belong to no region.
+ * <p><b>The geometry is the terrain's.</b> Terrain is built in cubic sections, as wide as the
+ * terrain says ({@link RegionTerrain#sectionShift()}), on a grid from the origin. Cell {@code (x,
+ * y, z)} of a section is {@code (y << 2·shift) | (z << shift) | x}. The domain's bounds, along any
+ * axis or none, only say which cells are its: cells past them belong to no region, and a section
+ * with no cell inside them is never read.
  *
- * @param <C> the platform's stack of terrain
+ * @param <C> the platform's terrain, as a {@link TerrainSource} reads it
+ * @param <K> the terrain's classes
  */
-public final class RegionSpec<C> {
+public final class RegionSpec<C, K extends Enum<K> & RegionKind> {
 
   /**
    * How much longer than a straight line the walk from a region's seed to one of its cells may be,
@@ -36,31 +35,28 @@ public final class RegionSpec<C> {
    */
   public static final double DEFAULT_DETOUR_RATIO = 1.5;
 
-  private final RegionTerrain<C> terrain;
+  private final RegionTerrain<C, K> terrain;
+  private final K[] classes;
   private final DomainBounds bounds;
   private final double detourRatio;
   private final int shift;
-  private final int stackMinY;
-  private final int sections;
+  private final int fallSections;
 
   /**
    * Creates a spec.
    *
-   * @param terrain what the cells are, and how they join
-   * @param bounds the cells the domain holds; it must bound Y
+   * @param terrain what the cells are
+   * @param bounds the cells the domain holds
    * @param detourRatio how much longer than a straight line a walk inside one region may be; see
    *     {@link #DEFAULT_DETOUR_RATIO}
-   * @throws IllegalArgumentException if the domain does not bound Y
    */
-  public RegionSpec(RegionTerrain<C> terrain, DomainBounds bounds, double detourRatio) {
-    if (!bounds.bounded(DomainBounds.Y)) {
-      // Lifting this means joining stacks above and below each other, falls included.
-      throw new IllegalArgumentException(
-          "regions stack sections along Y, the axis bodies fall along, so the domain must bound"
-              + " it: "
-              + bounds);
-    }
+  public RegionSpec(RegionTerrain<C, K> terrain, DomainBounds bounds, double detourRatio) {
     this.terrain = terrain;
+    this.classes = terrain.classes().getEnumConstants();
+    if (classes.length > Byte.MAX_VALUE) {
+      // A region keeps its class in a byte, and -1 is "none".
+      throw new IllegalArgumentException(classes.length + " classes is more than 127");
+    }
     this.bounds = bounds;
     this.detourRatio = detourRatio;
     this.shift = terrain.sectionShift();
@@ -68,29 +64,45 @@ public final class RegionSpec<C> {
       // A section's cells are numbered in a short; 32³ is the most that leaves room for "none".
       throw new IllegalArgumentException("section shift " + shift + " is outside 1-5");
     }
-    // Whole sections, so a section never straddles the domain's floor or ceiling; cells outside
-    // the domain are classified as nothing.
-    this.stackMinY = (bounds.minY() >> shift) << shift;
-    this.sections = (bounds.maxY() >> shift) - (bounds.minY() >> shift) + 1;
+    this.fallSections = (terrain.deepestFall() + width() - 1) >> shift;
   }
 
   /**
    * Creates a spec with the default detour ratio.
    *
-   * @param terrain what the cells are, and how they join
-   * @param bounds the cells the domain holds; it must bound Y
+   * @param terrain what the cells are
+   * @param bounds the cells the domain holds
    */
-  public RegionSpec(RegionTerrain<C> terrain, DomainBounds bounds) {
+  public RegionSpec(RegionTerrain<C, K> terrain, DomainBounds bounds) {
     this(terrain, bounds, DEFAULT_DETOUR_RATIO);
   }
 
   /**
-   * Returns what the cells are, and how they join.
+   * Returns what the cells are.
    *
    * @return the terrain
    */
-  public RegionTerrain<C> terrain() {
+  public RegionTerrain<C, K> terrain() {
     return terrain;
+  }
+
+  /**
+   * Returns the class a region stores as a number.
+   *
+   * @param stored the class's ordinal
+   * @return the class
+   */
+  K classOf(int stored) {
+    return classes[stored];
+  }
+
+  /**
+   * Returns how many classes the terrain has.
+   *
+   * @return the class count
+   */
+  int classCount() {
+    return classes.length;
   }
 
   /**
@@ -112,7 +124,7 @@ public final class RegionSpec<C> {
   }
 
   /**
-   * Returns the base-2 log of a stack's width, and of a section's every side.
+   * Returns the base-2 log of a section's side.
    *
    * @return the shift
    */
@@ -121,7 +133,7 @@ public final class RegionSpec<C> {
   }
 
   /**
-   * Returns how many cells wide a stack is along X and Z, and how tall a section is.
+   * Returns how many cells a section's side is.
    *
    * @return the width
    */
@@ -139,40 +151,60 @@ public final class RegionSpec<C> {
   }
 
   /**
-   * Returns the lowest Y a stack counts its cells from: the domain's floor, rounded down to a
-   * section.
+   * Returns the section holding a coordinate, along any axis.
    *
-   * @return the stack floor
+   * @param coordinate the X, Y or Z
+   * @return the section's X, Y or Z
    */
-  public int stackMinY() {
-    return stackMinY;
+  public int sectionOf(int coordinate) {
+    return coordinate >> shift;
   }
 
   /**
-   * Returns how many sections tall a stack is.
+   * Returns how many sections below its own a fall can land in: the terrain's deepest fall, in
+   * sections, rounded up.
    *
    * @return the section count
    */
-  public int sections() {
-    return sections;
+  int fallSections() {
+    return fallSections;
   }
 
   /**
-   * Returns how many cells tall a stack is.
+   * Returns whether a section holds no cell of the domain, and so has no regions to read.
    *
-   * @return the stack height
+   * @param sectionX the section X
+   * @param sectionY the section Y
+   * @param sectionZ the section Z
+   * @return {@code true} if it is wholly outside
    */
-  public int height() {
-    return sections << shift;
+  boolean outside(int sectionX, int sectionY, int sectionZ) {
+    return beyond(sectionX, bounds.minX(), bounds.maxX())
+        || beyond(sectionY, bounds.minY(), bounds.maxY())
+        || beyond(sectionZ, bounds.minZ(), bounds.maxZ());
+  }
+
+  private boolean beyond(int section, int min, int max) {
+    long low = (long) section << shift;
+    return low + width() - 1 < min || low > max;
   }
 
   /**
-   * Returns the stack holding an X or Z coordinate.
+   * Returns whether a section holds a cell outside the domain.
    *
-   * @param coordinate the X or Z
-   * @return the stack X or Z
+   * @param sectionX the section X
+   * @param sectionY the section Y
+   * @param sectionZ the section Z
+   * @return {@code true} if the domain's edge crosses it
    */
-  public int stackOf(int coordinate) {
-    return coordinate >> shift;
+  boolean straddles(int sectionX, int sectionY, int sectionZ) {
+    return crosses(sectionX, bounds.minX(), bounds.maxX())
+        || crosses(sectionY, bounds.minY(), bounds.maxY())
+        || crosses(sectionZ, bounds.minZ(), bounds.maxZ());
+  }
+
+  private boolean crosses(int section, int min, int max) {
+    long low = (long) section << shift;
+    return low < min || low + width() - 1 > max;
   }
 }

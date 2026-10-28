@@ -7,51 +7,52 @@
 
 package org.cobblestonemc.regions;
 
-import java.util.function.IntUnaryOperator;
+import java.util.function.IntFunction;
 
 /**
  * How regions join, gathered into {@link RegionContacts}: faces that touch, and from a standing
  * cell a walking step a level up or down and a fall off a ledge.
  *
- * <p><b>One set of rules, inside a stack and across a seam.</b> A {@link RegionStackBuilder}
- * applies them between neighbouring cells of the stack it builds, and a {@link RegionGraph} between
- * the edge cells of two stacks. Both read regions through {@link Cells} and classes by region, so a
- * ledge joins the same whichever side of a seam it is on.
+ * <p><b>One set of rules, inside a section and across a seam.</b> A {@link RegionSectionBuilder}
+ * applies them between cells of the section it builds, and a {@link RegionGraph} between cells of
+ * neighbouring sections. Both read regions through {@link Cells} in domain coordinates and classes
+ * by region, so a ledge joins the same whichever side of a seam it is on.
  *
  * <p>Not thread-safe; one per builder or graph.
  */
 final class RegionJoins {
 
-  /** Regions by cell within one stack, in the caller's numbering. */
+  /** A cell the caller cannot see, such as one past the section being built. */
+  static final int OUTSIDE = -2;
+
+  /** Regions by cell, in the caller's numbering. */
   interface Cells {
 
     /**
-     * Returns the region of a cell, or {@link RegionStack#NONE}.
+     * Returns the region of a cell: {@link RegionSection#NONE} for none, or {@link #OUTSIDE} for a
+     * cell these cells do not cover.
      *
-     * @param lx the X within the stack
-     * @param ly the Y counted from the stack's floor
-     * @param lz the Z within the stack
+     * @param x the X
+     * @param y the Y
+     * @param z the Z
      * @return the region
      */
-    int regionAt(int lx, int ly, int lz);
+    int regionAt(int x, int y, int z);
   }
 
-  private final RegionTerrain<?> terrain;
-  private final IntUnaryOperator classOf;
-  private final int height;
+  private final IntFunction<? extends RegionKind> classOf;
+  private final int deepestFall;
   private final RegionContacts contacts = new RegionContacts();
 
   /**
    * Creates the rules for one domain.
    *
-   * @param terrain what the classes mean
    * @param classOf a region's class, by region
-   * @param height how many cells tall a stack is
+   * @param deepestFall the deepest fall to look for a landing at
    */
-  RegionJoins(RegionTerrain<?> terrain, IntUnaryOperator classOf, int height) {
-    this.terrain = terrain;
+  RegionJoins(IntFunction<? extends RegionKind> classOf, int deepestFall) {
     this.classOf = classOf;
-    this.height = height;
+    this.deepestFall = deepestFall;
   }
 
   /** Records that two cells of different regions share a face; see {@link RegionContacts#touch}. */
@@ -63,72 +64,66 @@ final class RegionJoins {
    * Returns whether a region is one a body stands in, and so joins by steps and falls as well as
    * faces.
    *
-   * @param region the region, not {@link RegionStack#NONE}
+   * @param region the region, or {@link RegionSection#NONE}
    * @return {@code true} if it is ground
    */
   boolean standing(int region) {
-    return terrain.standing(classOf.applyAsInt(region));
+    return region >= 0 && classOf.apply(region).standing();
   }
 
   /**
-   * Joins a standing region to what a body in it can step or drop into beside it.
-   *
-   * <p>The cell beside is {@code (lx, ly, lz)} of {@code beside}, on the same level as the standing
-   * cell: a step reaches a level above or below it, and a fall starts in it when it is open.
-   *
-   * @param from the standing region
-   * @param fx the standing cell's X
-   * @param y the standing cell's Y
-   * @param fz the standing cell's Z
-   * @param beside the stack the cell beside is in
-   * @param lx the cell beside, X within its stack
-   * @param ly the cell beside, Y counted from the stack's floor
-   * @param lz the cell beside, Z within its stack
-   * @param tx the cell beside's X
-   * @param tz the cell beside's Z
+   * Joins a standing region to what a body in it steps up into beside it: the cell a level above
+   * {@code (tx, y, tz)}.
    */
-  void beside(
-      int from, int fx, int y, int fz, Cells beside, int lx, int ly, int lz, int tx, int tz) {
-    if (ly + 1 < height) {
-      step(from, beside.regionAt(lx, ly + 1, lz), fx, y, fz, tx, y + 1, tz);
-    }
-    if (ly > 0) {
-      step(from, beside.regionAt(lx, ly - 1, lz), fx, y, fz, tx, y - 1, tz);
-    }
-    int air = beside.regionAt(lx, ly, lz);
-    if (air != RegionStack.NONE && terrain.open(classOf.applyAsInt(air))) {
-      drop(from, fx, y, fz, beside, lx, ly, lz, tx, tz);
-    }
+  void stepUp(int from, int fx, int y, int fz, Cells cells, int tx, int tz) {
+    step(from, cells.regionAt(tx, y + 1, tz), fx, y, fz, tx, y + 1, tz);
+  }
+
+  /**
+   * Joins a standing region to what a body in it steps down into beside it: the cell a level below
+   * {@code (tx, y, tz)}.
+   */
+  void stepDown(int from, int fx, int y, int fz, Cells cells, int tx, int tz) {
+    step(from, cells.regionAt(tx, y - 1, tz), fx, y, fz, tx, y - 1, tz);
   }
 
   /** A walking step from a standing region into the region {@code to}, a level above or below. */
   private void step(int from, int to, int fx, int fy, int fz, int tx, int ty, int tz) {
-    if (to != RegionStack.NONE && to != from && terrain.steppable(classOf.applyAsInt(to))) {
+    if (to >= 0 && to != from && classOf.apply(to).steppable()) {
       contacts.touch(from, to, fx, fy, fz, tx, ty, tz);
     }
   }
 
   /**
-   * Finds where a body stepping off a ledge into the open cell {@code (lx, ly, lz)} lands, and
-   * joins the ledge to it, one way: the ledge reaches the ground, and the ground does not reach the
-   * ledge.
+   * Finds where a body stepping off a ledge into the cell beside it, {@code (tx, y, tz)}, lands if
+   * that cell is open, and joins the ledge to it, one way: the ledge reaches the ground, and the
+   * ground does not reach the ledge.
+   *
+   * @return {@code true} if the fall left the cells: the landing is somewhere they do not cover
    */
-  private void drop(
-      int from, int fx, int y, int fz, Cells beside, int lx, int ly, int lz, int tx, int tz) {
-    for (int k = 1; k <= terrain.deepestFall() && ly - k >= 0; k++) {
-      int below = beside.regionAt(lx, ly - k, lz);
-      if (below == RegionStack.NONE) {
-        return;
+  boolean drop(int from, int fx, int y, int fz, Cells cells, int tx, int tz) {
+    int air = cells.regionAt(tx, y, tz);
+    if (air < 0 || !classOf.apply(air).open()) {
+      return false;
+    }
+    for (int k = 1; k <= deepestFall; k++) {
+      int below = cells.regionAt(tx, y - k, tz);
+      if (below == OUTSIDE) {
+        return true;
       }
-      int clazz = classOf.applyAsInt(below);
-      if (terrain.open(clazz)) {
+      if (below == RegionSection.NONE) {
+        return false;
+      }
+      RegionKind kind = classOf.apply(below);
+      if (kind.open()) {
         continue;
       }
-      if (terrain.landing(clazz, k)) {
+      if (kind.landing(k)) {
         contacts.drop(from, below, k, fx, y, fz, tx, y, tz);
       }
-      return;
+      return false;
     }
+    return false;
   }
 
   /** Emits everything gathered as portals and starts afresh; see {@link RegionContacts#flush}. */

@@ -11,6 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
@@ -65,22 +67,24 @@ class RegionSearchTest {
 
   private static final int FEET = GROUND + 1;
 
-  /** A world described by a function of world coordinates, read a stack at a time. */
+  /** A world described by a function of world coordinates, read a chunk at a time. */
   private interface Terrain {
     MinecraftBlock at(int x, int y, int z);
   }
 
   private static final class World implements TerrainSource<MinecraftChunk> {
     private final Terrain terrain;
-    int read;
+
+    /** Every chunk read, by X and Z. */
+    final Set<List<Integer>> read = new HashSet<>();
 
     World(Terrain terrain) {
       this.terrain = terrain;
     }
 
     @Override
-    public FutureOr<MinecraftChunk> stack(int chunkX, int chunkZ) {
-      read++;
+    public FutureOr<MinecraftChunk> section(int chunkX, int sectionY, int chunkZ) {
+      read.add(List.of(chunkX, chunkZ));
       MinecraftChunk chunk = (x, y, z) -> terrain.at(chunkX * 16 + x, y, chunkZ * 16 + z);
       return FutureOr.of(chunk);
     }
@@ -90,7 +94,7 @@ class RegionSearchTest {
     return y <= GROUND ? STONE : AIR;
   }
 
-  private static RegionGraph<MinecraftChunk> graph(World world) {
+  private static RegionGraph<MinecraftChunk, RegionClass> graph(World world) {
     return new RegionGraph<>(
         RegionStore.inMemory(
             new RegionSpec<>(
@@ -98,8 +102,9 @@ class RegionSearchTest {
         world);
   }
 
-  private static RegionSearch search(Terrain terrain, MinecraftAgent agent, Cell goal, Cell from) {
-    return new RegionSearch(graph(new World(terrain)), agent, from, goal::equals, cell -> goal);
+  private static RegionSearch<RegionClass> search(
+      Terrain terrain, MinecraftAgent agent, Cell goal, Cell from) {
+    return new RegionSearch<>(graph(new World(terrain)), agent, from, goal::equals, cell -> goal);
   }
 
   private static MinecraftAgent walker() {
@@ -115,7 +120,7 @@ class RegionSearchTest {
   void flatGroundIsPricedAtTheWalkingRate() {
     Cell goal = new Cell(0, FEET, 0);
     Cell from = new Cell(200, FEET, 37);
-    RegionSearch search = search(RegionSearchTest::flat, walker(), goal, from);
+    RegionSearch<RegionClass> search = search(RegionSearchTest::flat, walker(), goal, from);
 
     double estimate = search.costToGoal(from);
     double straight = from.distance(goal) * 0.20;
@@ -135,7 +140,7 @@ class RegionSearchTest {
     Terrain walled = (x, y, z) -> x == 64 && z > -200 && z < 200 ? BEDROCK : flat(x, y, z);
     Cell goal = new Cell(100, FEET, 0);
     Cell from = new Cell(30, FEET, 0);
-    RegionSearch search = search(walled, walker(), goal, from);
+    RegionSearch<RegionClass> search = search(walled, walker(), goal, from);
 
     double estimate = search.costToGoal(from);
     double around = (Math.hypot(34, 200) + Math.hypot(36, 200)) * 0.2;
@@ -206,7 +211,7 @@ class RegionSearchTest {
   void answersAreFinalAndRepeatQueriesAreFree() {
     Cell goal = new Cell(0, FEET, 0);
     Cell from = new Cell(300, FEET, 0);
-    RegionSearch search = search(RegionSearchTest::flat, walker(), goal, from);
+    RegionSearch<RegionClass> search = search(RegionSearchTest::flat, walker(), goal, from);
 
     double first = search.costToGoal(new Cell(150, FEET, 5));
     search.costToGoal(from);
@@ -222,14 +227,15 @@ class RegionSearchTest {
     Cell goal = new Cell(0, FEET, 0);
     Cell from = new Cell(400, FEET, 0);
     World world = new World(RegionSearchTest::flat);
-    RegionSearch search =
-        new RegionSearch(graph(world), walker(), from, goal::equals, cell -> goal);
+    RegionSearch<RegionClass> search =
+        new RegionSearch<>(graph(world), walker(), from, goal::equals, cell -> goal);
 
     search.costToGoal(from);
 
     // Focused on the origin: a corridor between the two ends, not a disc of radius 400 around the
-    // goal. A disc would read on the order of 2,000 stacks.
-    assertTrue(world.read < 400, "the search should not flood the world: " + world.read);
+    // goal. A disc would read on the order of 2,000 chunks.
+    assertTrue(
+        world.read.size() < 400, "the search should not flood the world: " + world.read.size());
   }
 
   @Test
@@ -239,8 +245,8 @@ class RegionSearchTest {
     Predicate<Cell> inside = cell -> cell.x() >= 100;
     UnaryOperator<Cell> nearestInside = cell -> new Cell(Math.max(cell.x(), 100), FEET, cell.z());
     Cell from = new Cell(90, FEET, 0);
-    RegionSearch search =
-        new RegionSearch(
+    RegionSearch<RegionClass> search =
+        new RegionSearch<>(
             graph(new World(RegionSearchTest::flat)), walker(), from, inside, nearestInside);
 
     double estimate = search.costToGoal(from);
@@ -270,10 +276,10 @@ class RegionSearchTest {
     MinecraftAgent cost = walker();
 
     double toPoint =
-        new RegionSearch(graph(new World(town)), cost, from, nearest::equals, cell -> nearest)
+        new RegionSearch<>(graph(new World(town)), cost, from, nearest::equals, cell -> nearest)
             .costToGoal(from);
     double toArea =
-        new RegionSearch(graph(new World(town)), cost, from, inside, nearestInside)
+        new RegionSearch<>(graph(new World(town)), cost, from, inside, nearestInside)
             .costToGoal(from);
 
     double around = (Math.hypot(40, 31) + 60 + Math.hypot(1, 31)) * 0.2;

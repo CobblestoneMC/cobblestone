@@ -25,30 +25,30 @@ class RegionStoresTest {
   private static final Duration DELAY = Duration.ofMillis(200);
 
   private static final TerrainSource<MinecraftChunk> ROCK =
-      (chunkX, chunkZ) -> FutureOr.of((x, y, z) -> TestBlocks.solid());
+      (chunkX, sectionY, chunkZ) -> FutureOr.of((x, y, z) -> TestBlocks.solid());
 
   @Test
   void changesAreForgottenTogetherOnceTheDelayHasPassed() throws InterruptedException {
     TestWorld world = TestWorld.builder("w").build();
     try (RegionStores stores = new RegionStores(Long.MAX_VALUE, 1, DELAY)) {
-      RegionStore<MinecraftChunk> store = stores.of(world);
-      store.stack(0, 0, ROCK);
+      RegionStore<MinecraftChunk, RegionClass> store = stores.of(world);
+      store.section(0, 0, 0, ROCK);
 
-      stores.invalidate(world, 0, 0);
-      stores.invalidate(world, 0, 0);
-      assertTrue(store.inMemory(0, 0), "a change is not forgotten at once");
+      stores.invalidate(world, 5, 5, 5);
+      stores.invalidate(world, 5, 5, 5);
+      assertTrue(store.inMemory(0, 0, 0), "a change is not forgotten at once");
 
       Thread.sleep(DELAY.multipliedBy(3).toMillis());
-      assertFalse(store.inMemory(0, 0), "but once the delay has passed");
+      assertFalse(store.inMemory(0, 0, 0), "but once the delay has passed");
 
       // Built again: the second change above went with the first, so nothing forgets it now.
-      store.stack(0, 0, ROCK);
+      store.section(0, 0, 0, ROCK);
       Thread.sleep(DELAY.multipliedBy(3).toMillis());
-      assertTrue(store.inMemory(0, 0), "one batch, one forgetting");
+      assertTrue(store.inMemory(0, 0, 0), "one batch, one forgetting");
 
-      stores.invalidate(world, 0, 0);
+      stores.invalidate(world, 5, 5, 5);
       Thread.sleep(DELAY.multipliedBy(3).toMillis());
-      assertFalse(store.inMemory(0, 0), "a later change starts a batch of its own");
+      assertFalse(store.inMemory(0, 0, 0), "a later change starts a batch of its own");
     }
   }
 }

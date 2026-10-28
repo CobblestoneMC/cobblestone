@@ -17,8 +17,10 @@ package org.cobblestonemc.regions;
  * <p><b>Every crossing costs at least {@link #cheapest()} per block of straight-line distance.</b>
  * The backward search focuses itself with that bound, and a crossing priced below it would let the
  * search settle a portal before a cheaper route to it had been seen.
+ *
+ * @param <K> the terrain's classes
  */
-public interface RegionAgent {
+public interface RegionAgent<K extends Enum<K> & RegionKind> {
 
   /**
    * Returns whether the agent can be inside a region of this class.
@@ -26,7 +28,7 @@ public interface RegionAgent {
    * @param clazz the class
    * @return {@code true} if usable
    */
-  boolean usable(int clazz);
+  boolean usable(K clazz);
 
   /**
    * Returns the seconds to cross a region of this class in a straight line from one point to
@@ -41,7 +43,7 @@ public interface RegionAgent {
    * @param tz where it ends, Z
    * @return the cost in seconds
    */
-  double traverse(int clazz, double fx, double fy, double fz, double tx, double ty, double tz);
+  double traverse(K clazz, double fx, double fy, double fz, double tx, double ty, double tz);
 
   /**
    * Returns the least any crossing can cost per block.
@@ -69,5 +71,5 @@ public interface RegionAgent {
    * @param depth how far the body falls, in blocks
    * @return the cost the fall adds, at least 0
    */
-  double fall(int clazz, int depth);
+  double fall(K clazz, int depth);
 }
