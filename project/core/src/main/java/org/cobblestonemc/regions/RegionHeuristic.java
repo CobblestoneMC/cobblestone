@@ -66,7 +66,7 @@ public final class RegionHeuristic<C, K extends Enum<K> & RegionKind> implements
    * @param sourceFor the terrain source for a solve's target region, for the sections the store has
    *     to build
    * @param storeFor the store for a solve's target region's domain
-   * @param agentFor who is travelling, as priced in a solve's target region's domain
+   * @param agentFor who is traveling, as priced in a solve's target region's domain
    * @param tierOneRate the least the agent can pay per block by any movement at all, which Tier 1
    *     prices unsolved legs with: lower than {@link RegionAgent#cheapest()} for an agent who can
    *     move in ways the region layer does not price, such as riding

@@ -86,7 +86,7 @@ final class RegionVerify {
    *
    * @param corpusRoot the corpus
    * @param scenario the route
-   * @param loadout the traveller
+   * @param loadout the traveler
    * @param samples how many cells to check
    * @param logger where the searches log
    * @return the ratio of estimate to true cost at every informative sample
@@ -147,7 +147,7 @@ final class RegionVerify {
                 new DirectCaptureChunks(capture, scenario.world())),
             loadout.regionAgent(capture.environment(scenario.world())),
             path.get(0),
-            // The destination the route was solved to, area and all: measured to its centre
+            // The destination the route was solved to, area and all: measured to its center
             // instead, an area's estimates read as over the cost the whole way there.
             scenario::arrives,
             scenario::nearestArrival);

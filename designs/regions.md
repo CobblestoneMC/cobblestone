@@ -6,7 +6,7 @@
   knows no game, only a voxel grid under gravity (Y is up): it fills cells of one class into
   regions, joins them with portals, stores them, and searches over them. Two interfaces plug a
   game in: `RegionTerrain` (which class each cell is, how classes join: standing, steps, falls, and
-  how wide a column of its terrain is) and `RegionAgent` (what a class costs a traveller).
+  how wide a column of its terrain is) and `RegionAgent` (what a class costs a traveler).
   `RegionSpec` gathers everything that decides how one world is cut: the terrain, the world's
   height and the detour ratio.
 - **Minecraft's side** is in `project/minecraft/core/src/main/java/org/cobblestonemc/minecraft/regions`:
@@ -27,7 +27,7 @@ the terrain ahead. REGIONS reads the terrain ahead.
 - **Portals.** Every contact between two regions, as one box: faces touching, a walking step up
   or down, and falls of up to 3 blocks (32 into water), which are one-way. Inside a column they are
   built with it; across columns they are built per search at the seams.
-- **Agent-independent.** The graph knows terrain, not travellers. A `RegionClass` is only a tag;
+- **Agent-independent.** The graph knows terrain, not travelers. A `RegionClass` is only a tag;
   `MinecraftAgent` is the agent, built from the player and the operator's exclusions, and says what
   each class costs it: soul sand is 2.5x ground on foot and fast in Soul Speed boots, and only a
   water surface takes a boat. A kind of terrain earns its own class only when some agent would pay
@@ -138,7 +138,7 @@ destinations are unchanged node for node.
 1.25: 715 nodes, +1.9%. 1.5: 730, +1.4%. 2.0: 743, +1.5%. 3.0: 758, +1.5%. Flat; 1.5 stays.
 
 ### Time and memory (2026-10-13, weight 2.0)
-Server time per run, all 58 runs, mean / median / p90 / max in ms, CPU plus modelled disk wait.
+Server time per run, all 58 runs, mean / median / p90 / max in ms, CPU plus modeled disk wait.
 "Warm" is after a restart, reading columns back from disk.
 
 | Disk | RUNNING_AVERAGE | REGIONS cold | REGIONS warm |
@@ -152,7 +152,7 @@ Server time per run, all 58 runs, mean / median / p90 / max in ms, CPU plus mode
 - Warm SATA, mean per run: reading and decoding columns 195 ms, seams 43, region search 196,
   fine search 92, disk wait 20.
 - Region memory per search: median 12 MB, mean 27 MB, p90 62 MB, max 179 MB.
-- The bench's region-file reads come from the OS cache; only chunk reads are modelled.
+- The bench's region-file reads come from the OS cache; only chunk reads are modeled.
 - **The slowest routes** are long ones, and the cost is how far the backward search reaches. Its
   focus is the straight line to the origin at the agent's cheapest rate, so it settles every
   portal in an ellipse around that line whose half-width is about `D/2 * sqrt(r^2 - 1)`, where `r`

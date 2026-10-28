@@ -138,10 +138,10 @@ class MinecraftTerrainTest {
   @Test
   void aChangeMattersOnlyIfItChangesWhatClassesAreReadFrom() {
     // A crop growing another stage: passable before and after, so no cell's class moves.
-    assertTrue(MinecraftTerrain.classifiesAlike(air(), air()));
-    assertFalse(MinecraftTerrain.classifiesAlike(air(), STONE), "a wall where there was none");
-    assertFalse(MinecraftTerrain.classifiesAlike(STONE, GRAVEL), "dug differently");
-    assertTrue(MinecraftTerrain.classifiesAlike(STONE, solid(MiningClass.ROCK)), "ore for stone");
+    assertTrue(air().identicalClassification(air()));
+    assertFalse(air().identicalClassification(STONE), "a wall where there was none");
+    assertFalse(STONE.identicalClassification(GRAVEL), "dug differently");
+    assertTrue(STONE.identicalClassification(solid(MiningClass.ROCK)), "ore for stone");
   }
 
   @Test

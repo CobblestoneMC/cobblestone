@@ -14,7 +14,7 @@ import org.cobblestonemc.FutureOr;
  *
  * <p>How terrain is read is the platform's business. A source may answer many sections with the
  * same object, as a whole chunk answers each of the sections stacked in it, and should read it once
- * for all of them: a search asks for a section and its neighbours above and below together.
+ * for all of them: a search asks for a section and its neighbors above and below together.
  *
  * <p>⚠️ <b>An implementation must remember what it fetched.</b> Once a returned future has
  * completed, a later call for the same section has to answer immediately, or the search parks on

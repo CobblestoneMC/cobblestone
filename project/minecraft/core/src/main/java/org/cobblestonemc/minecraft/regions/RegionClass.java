@@ -58,7 +58,7 @@ public enum RegionClass implements RegionKind {
 
   /*
    * The rock classes below fill as one family, so stone dithered into deepslate makes one region
-   * rather than shreds of each; each region of that family is then labelled with the class nearest
+   * rather than shreds of each; each region of that family is then labeled with the class nearest
    * its cells' average hardness, and the label is what an agent prices. See
    * MinecraftTerrain#family and MinecraftTerrain#label.
    */

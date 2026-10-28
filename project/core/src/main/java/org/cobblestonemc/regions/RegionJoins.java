@@ -15,7 +15,7 @@ import java.util.function.IntFunction;
  *
  * <p><b>One set of rules, inside a section and across a seam.</b> A {@link RegionSectionBuilder}
  * applies them between cells of the section it builds, and a {@link RegionGraph} between cells of
- * neighbouring sections. Both read regions through {@link Cells} in domain coordinates and classes
+ * neighboring sections. Both read regions through {@link Cells} in domain coordinates and classes
  * by region, so a ledge joins the same whichever side of a seam it is on.
  *
  * <p>Not thread-safe; one per builder or graph.

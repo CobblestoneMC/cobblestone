@@ -171,4 +171,29 @@ public interface MinecraftBlock {
   default boolean isPressurePlate() {
     return false;
   }
+
+  /**
+   * Returns whether another block in this one's place would leave every region class as it was.
+   *
+   * <p>A cell's class is read from its own block and the blocks above and below it, by the
+   * properties compared here, so a change none of them sees changes no region: a crop growing, a
+   * fluid's level moving, grass turning to dirt. A listener that skips those saves the section a
+   * rebuild. Reads what {@link org.cobblestonemc.minecraft.regions.MinecraftTerrain#classify}
+   * reads; change one, change both.
+   *
+   * @param other the block in its place
+   * @return {@code true} if the regions need not be rebuilt for it
+   */
+  default boolean identicalClassification(MinecraftBlock other) {
+    return isWater() == other.isWater()
+        && isLava() == other.isLava()
+        && isClimbable() == other.isClimbable()
+        && isScaffolding() == other.isScaffolding()
+        && isPassable() == other.isPassable()
+        && isSolidTop() == other.isSolidTop()
+        && boostsSoulSpeed() == other.boostsSoulSpeed()
+        && (speedFactor() < 1) == (other.speedFactor() < 1)
+        && Double.isInfinite(breakTimeSeconds()) == Double.isInfinite(other.breakTimeSeconds())
+        && miningClass() == other.miningClass();
+  }
 }

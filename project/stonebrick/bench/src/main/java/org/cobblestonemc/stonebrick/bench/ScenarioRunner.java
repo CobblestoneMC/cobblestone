@@ -94,7 +94,7 @@ public final class ScenarioRunner {
    * Runs a scenario.
    *
    * @param scenario the route
-   * @param loadout what the traveller can do about it
+   * @param loadout what the traveler can do about it
    * @param observer receives what the search did; pass {@link SearchObserver#none()} when timing
    * @return what it cost
    * @throws IOException if the capture cannot be loaded

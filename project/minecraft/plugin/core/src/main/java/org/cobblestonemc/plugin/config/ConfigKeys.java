@@ -80,9 +80,14 @@ public final class ConfigKeys {
   public final ConfigKey<Integer> algorithmRunningAverageWidth;
 
   /**
-   * A* heuristic weight (1.0 = optimal; &gt;1 = faster weighted A*, slightly sub-optimal). Mutable.
+   * A* heuristic weight for {@code RUNNING_AVERAGE} (1.0 = optimal; &gt;1 = faster weighted A*,
+   * slightly sub-optimal). Mutable. Deprecated: it predates {@code REGIONS}, which reads {@link
+   * #regionsHeuristicWeight}, and goes with the running average. See {@link #heuristicWeight}.
    */
   public final ConfigKey<Double> algorithmHeuristicWeight;
+
+  /** Which estimate the fine search runs on. Mutable. */
+  public final ConfigKey<SearchSettings.Heuristic> algorithmHeuristic;
 
   /**
    * How far Cobblestone may go to obtain a chunk a search wants to walk through. The accepted
@@ -114,6 +119,9 @@ public final class ConfigKeys {
 
   /** How often new regions are written to disk, in seconds. Requires a restart. */
   public final ConfigKey<Integer> regionsFlushSeconds;
+
+  /** A* heuristic weight for {@code REGIONS}. Mutable. See {@link #heuristicWeight}. */
+  public final ConfigKey<Double> regionsHeuristicWeight;
 
   /** Whether Cobblestone discovers vanilla portal links by watching players teleport. Mutable. */
   public final ConfigKey<Boolean> portalsDiscovery;
@@ -360,12 +368,34 @@ public final class ConfigKeys {
         manager
             .key(
                 "search.algorithm.heuristic_weight",
-                SearchSettings.DEFAULT_HEURISTIC_WEIGHT,
+                SearchSettings.Heuristic.RUNNING_AVERAGE.defaultWeight(),
                 Codec.ofDouble())
             .comment(
                 """
-                A* heuristic weight. 1.0 finds optimal paths but explores a lot; higher is much
-                faster and slightly suboptimal (bounded by this factor).""")
+                Deprecated: the A* heuristic weight for RUNNING_AVERAGE only. REGIONS reads
+                search.regions.heuristic_weight instead. 1.0 finds optimal paths but explores a
+                lot; higher is much faster and slightly suboptimal (bounded by this factor).""")
+            .mutable()
+            .register();
+
+    this.algorithmHeuristic =
+        manager
+            .key(
+                "search.algorithm.heuristic",
+                SearchSettings.DEFAULT_HEURISTIC,
+                Codec.ofEnum(SearchSettings.Heuristic.class))
+            .comment(
+                """
+                Which estimate the search prices its remaining journey with.
+
+                REGIONS searches connected patches of ground, water, rock and air backwards from
+                the destination, so it reasons about where the terrain actually goes. It finds much
+                better paths and solves routes RUNNING_AVERAGE cannot solve at all. The terrain it
+                reasons over is cut into regions once and shared by every search (see
+                search.regions), but the first search over new terrain pays for reading it.
+
+                RUNNING_AVERAGE extrapolates from the cost of the last few steps. Nearly free, and
+                it mistakes a cheap river for a cheap route.""")
             .mutable()
             .register();
 
@@ -468,6 +498,20 @@ public final class ConfigKeys {
                 a world saves and when the server stops; a crash loses at most this much, and what
                 is lost is built again when next needed.""")
             .requiresRestart()
+            .register();
+    this.regionsHeuristicWeight =
+        manager
+            .key(
+                "search.regions.heuristic_weight",
+                SearchSettings.Heuristic.REGIONS.defaultWeight(),
+                Codec.ofDouble())
+            .comment(
+                """
+                A* heuristic weight under REGIONS. 1.0 finds optimal paths but explores a lot;
+                higher is much faster and slightly suboptimal (bounded by this factor). The
+                default is measured: the region estimate runs close to the true cost, so it bears
+                a higher weight than the running average did.""")
+            .mutable()
             .register();
 
     manager.section(
@@ -652,5 +696,20 @@ public final class ConfigKeys {
                 strays off a curving trail.""")
             .mutable()
             .register();
+  }
+
+  /**
+   * Returns the weight setting a heuristic runs at: {@code REGIONS} has its own, and the older
+   * {@code search.algorithm.heuristic_weight} stays the running average's, so a server that tuned
+   * it for the running average does not carry that tuning over to a different estimate.
+   *
+   * @param heuristic the heuristic
+   * @return its weight setting
+   */
+  public ConfigKey<Double> heuristicWeight(SearchSettings.Heuristic heuristic) {
+    return switch (heuristic) {
+      case RUNNING_AVERAGE -> algorithmHeuristicWeight;
+      case REGIONS -> regionsHeuristicWeight;
+    };
   }
 }

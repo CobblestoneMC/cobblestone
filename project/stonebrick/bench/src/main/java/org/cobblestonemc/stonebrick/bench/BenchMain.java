@@ -316,7 +316,7 @@ public final class BenchMain {
         if (!loadout.appliesTo(scenario)) {
           continue;
         }
-        // The same overrides a run honours. Accepting a configuration other than the one just
+        // The same overrides a run honors. Accepting a configuration other than the one just
         // measured would make the baseline a record of something nobody looked at.
         RunResult result =
             runner.run(applyOverrides(scenario, options), loadout, SearchObserver.none());

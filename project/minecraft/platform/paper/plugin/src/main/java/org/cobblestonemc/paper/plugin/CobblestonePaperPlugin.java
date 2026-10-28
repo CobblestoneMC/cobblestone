@@ -35,6 +35,7 @@ import org.cobblestonemc.plugin.config.ConfigKeys;
 import org.cobblestonemc.plugin.config.ConfigManager;
 import org.cobblestonemc.plugin.config.MenuIcons;
 import org.cobblestonemc.plugin.config.RegionConfig;
+import org.cobblestonemc.plugin.config.SearchConfig;
 import org.cobblestonemc.plugin.data.DataStore;
 import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.DataStores;
@@ -229,15 +230,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
 
     SearchGate searchGate = new SearchGate(config.get(keys.searchMaxConcurrentPerPlayer));
     long liveIntervalMillis = config.get(keys.tripsLiveIntervalTicks) * 50L; // 50 ms per tick
-    Supplier<SearchSettings> searchSettings =
-        () ->
-            SearchSettings.builder()
-                .maxCellsVisited(config.get(keys.algorithmMaxCellsVisited))
-                .maxWallClockMillis(config.get(keys.algorithmMaxWallClockSeconds) * 1000L)
-                .tier1UnsolvedPessimism(config.get(keys.algorithmTier1UnsolvedPessimism))
-                .runningAverageWidth(config.get(keys.algorithmRunningAverageWidth))
-                .heuristicWeight(config.get(keys.algorithmHeuristicWeight))
-                .build();
+    Supplier<SearchSettings> searchSettings = () -> SearchConfig.read(config, keys);
 
     // The trip service is the shared "search-then-guide" code path: the /navigate command and
     // integration plugins both start trips through it. Registered as a service like the rest.

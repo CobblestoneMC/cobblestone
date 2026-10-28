@@ -144,7 +144,7 @@ final class Sweep {
                 result.closestBlocks(),
                 runner.lastLegs(),
                 result.realMillis(),
-                // Time parked on the modelled disk: the virtual clock only moves for that.
+                // Time parked on the modeled disk: the virtual clock only moves for that.
                 result.virtualMillis(),
                 result.chunkReads(),
                 result.coldChunkReads(),
