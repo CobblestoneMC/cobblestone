@@ -27,16 +27,16 @@ import org.junit.jupiter.api.io.TempDir;
 
 class RegionFilesTest {
 
-  private final List<RegionStore<ToyWorld.Stack>> opened = new ArrayList<>();
+  private final List<RegionStore<ToyWorld.Blocks, ToyWorld.Toy>> opened = new ArrayList<>();
   private final List<RegionFiles> openedFiles = new ArrayList<>();
 
-  private RegionStore<ToyWorld.Stack> store(Path root) {
+  private RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store(Path root) {
     return store(root, ToyWorld.spec(), Long.MAX_VALUE);
   }
 
-  private RegionStore<ToyWorld.Stack> store(
-      Path root, RegionSpec<ToyWorld.Stack> spec, long memoryBudget) {
-    RegionStore<ToyWorld.Stack> store =
+  private RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store(
+      Path root, RegionSpec<ToyWorld.Blocks, ToyWorld.Toy> spec, long memoryBudget) {
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store =
         new RegionStore<>(spec, memoryBudget, root, Runnable::run, Runnable::run);
     opened.add(store);
     return store;
@@ -57,31 +57,30 @@ class RegionFilesTest {
     }
   }
 
-  private static RegionStack stack(
-      RegionStore<ToyWorld.Stack> store, int cx, int cz, ToyWorld.Source source) {
-    FutureOr<RegionStack> stack = store.stack(cx, cz, source);
-    assertTrue(stack.isImmediate(), "every step here answers at once");
-    return stack.value();
+  /** The section Y holding the toy hills' ground, so a section there has several regions. */
+  private static final int GROUND = 0;
+
+  private static RegionSection section(
+      RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store, int sx, int sz, ToyWorld.Source source) {
+    FutureOr<RegionSection> section = store.section(sx, GROUND, sz, source);
+    assertTrue(section.isImmediate(), "every step here answers at once");
+    return section.value();
   }
 
-  private static RegionStack build(ToyWorld.Blocks blocks, int cx, int cz) {
-    ToyWorld.Stack terrain = new ToyWorld.Source(blocks, 16).stack(cx, cz).value();
-    return new RegionStackBuilder<>(ToyWorld.spec()).build(cx, cz, terrain);
+  private static RegionSection build(ToyWorld.Blocks blocks, int sx, int sy, int sz) {
+    return new RegionSectionBuilder<>(ToyWorld.spec()).build(sx, sy, sz, blocks);
   }
 
-  private static void assertSame(RegionStack expected, RegionStack actual) {
+  private static void assertSame(RegionSection expected, RegionSection actual) {
     assertArrayEquals(expected.regionClass, actual.regionClass);
     assertArrayEquals(expected.regionBox, actual.regionBox);
     assertArrayEquals(expected.portalA, actual.portalA);
     assertArrayEquals(expected.portalB, actual.portalB);
     assertArrayEquals(expected.portalFall, actual.portalFall);
     assertArrayEquals(expected.portalBox, actual.portalBox);
-    for (int ly = 0; ly < expected.uniform.length * 16; ly++) {
-      for (int z = 0; z < 16; z++) {
-        for (int x = 0; x < 16; x++) {
-          assertEquals(expected.regionAt(x, ly, z), actual.regionAt(x, ly, z));
-        }
-      }
+    assertArrayEquals(expected.exits, actual.exits);
+    for (int cell = 0; cell < 16 * 16 * 16; cell++) {
+      assertEquals(expected.regionAt(cell), actual.regionAt(cell));
     }
   }
 
@@ -94,16 +93,16 @@ class RegionFilesTest {
   }
 
   @Test
-  void aColumnReadBackFromDiskIsTheColumnThatWasBuilt(@TempDir Path root) {
+  void aSectionReadBackFromDiskIsTheSectionThatWasBuilt(@TempDir Path root) {
     ToyWorld.Source source = new ToyWorld.Source();
-    RegionStore<ToyWorld.Stack> first = store(root);
-    RegionStack built = stack(first, 3, -2, source);
-    assertTrue(built.regions() > 3, "the toy terrain gives a stack several regions");
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> first = store(root);
+    RegionSection built = section(first, 3, -2, source);
+    assertTrue(built.regions() > 3, "the toy terrain gives a section several regions");
     first.flush().join();
 
     // A new store over the same directory: a restart.
-    RegionStore<ToyWorld.Stack> restarted = store(root);
-    RegionStack read = stack(restarted, 3, -2, source);
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> restarted = store(root);
+    RegionSection read = section(restarted, 3, -2, source);
 
     assertEquals(1, source.reads, "the restarted store reads the disk, not the terrain");
     assertEquals(1, restarted.stats().diskLoads());
@@ -120,30 +119,52 @@ class RegionFilesTest {
                 : y < 32 && ((x + y + z) & 1) == 0
                     ? ToyWorld.Material.STONE
                     : ToyWorld.Material.AIR;
-    RegionStack built = build(checkerboard, 0, 0);
-    assertNotNull(built.wideCells[1]);
+    RegionSection built = build(checkerboard, 0, 1, 0);
+    assertNotNull(built.wideCells);
 
     files(root).write(List.of(built), List.of());
-    assertSame(built, files(root).read(0, 0));
+    assertSame(built, files(root).read(0, 1, 0));
   }
 
   @Test
-  void aSearchOverStoredColumnsGivesTheSameAnswerAfterARestart(@TempDir Path root) {
+  void aWholeSectionIsKeptInItsSlotAlone(@TempDir Path root) throws Exception {
+    // Solid stone, and open sky over the hills: one region each, and nothing to join.
+    RegionSection rock = build((x, y, z) -> ToyWorld.Material.STONE, 0, 0, 0);
+    RegionSection sky = build(ToyWorld::hills, 0, 2, 0);
+    assertTrue(rock.uniform() && sky.uniform());
+
+    RegionFiles files = files(root);
+    files.write(List.of(rock, sky), List.of());
+    assertEquals(
+        (long) RegionFiles.HEADER_SECTORS * RegionFiles.SECTOR,
+        Files.size(onlyFile(root)),
+        "no record, no sector");
+    files.close();
+
+    RegionFiles reopened = files(root);
+    assertSame(rock, reopened.read(0, 0, 0));
+    assertSame(sky, reopened.read(0, 2, 0));
+    assertEquals(0, reopened.recordsRead(), "read back without reading a record");
+  }
+
+  @Test
+  void aSearchOverStoredSectionsGivesTheSameAnswerAfterARestart(@TempDir Path root) {
     Cell goal = new Cell(0, 13, 0);
     Cell from = new Cell(150, 13, 40);
-    RegionAgent walker = new ToyWorld.Walker();
+    RegionAgent<ToyWorld.Toy> walker = new ToyWorld.Walker();
 
     ToyWorld.Source source = new ToyWorld.Source();
-    RegionStore<ToyWorld.Stack> first = store(root);
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> first = store(root);
     double before =
-        new RegionSearch(new RegionGraph<>(first, source), walker, from, goal::equals, cell -> goal)
+        new RegionSearch<>(
+                new RegionGraph<>(first, source), walker, from, goal::equals, cell -> goal)
             .costToGoal(from);
     first.flush().join();
     int readsBefore = source.reads;
 
-    RegionStore<ToyWorld.Stack> restarted = store(root);
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> restarted = store(root);
     double after =
-        new RegionSearch(
+        new RegionSearch<>(
                 new RegionGraph<>(restarted, source), walker, from, goal::equals, cell -> goal)
             .costToGoal(from);
 
@@ -152,91 +173,91 @@ class RegionFilesTest {
   }
 
   @Test
-  void anInvalidatedColumnIsBuiltAgainAndForgottenOnDisk(@TempDir Path root) {
+  void anInvalidatedSectionIsBuiltAgainAndForgottenOnDisk(@TempDir Path root) {
     ToyWorld.Source source = new ToyWorld.Source();
-    RegionStore<ToyWorld.Stack> store = store(root);
-    stack(store, 0, 0, source);
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store = store(root);
+    section(store, 0, 0, source);
     store.flush().join();
 
-    store.invalidate(0, 0);
+    store.invalidate(0, GROUND, 0);
     store.flush().join();
-    stack(store, 0, 0, source);
+    section(store, 0, 0, source);
 
-    assertEquals(2, source.reads, "a changed stack is built again");
-    RegionStore<ToyWorld.Stack> restarted = store(root);
-    stack(restarted, 0, 0, source);
-    // The rebuilt stack was not flushed, and the stale one was removed, so a restart rebuilds.
+    assertEquals(2, source.reads, "a changed section is built again");
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> restarted = store(root);
+    section(restarted, 0, 0, source);
+    // The rebuilt section was not flushed, and the stale one was removed, so a restart rebuilds.
     assertEquals(3, source.reads);
   }
 
   @Test
-  void anInvalidatedColumnIsNotReadBackFromDiskBeforeTheNextFlush(@TempDir Path root) {
+  void anInvalidatedSectionIsNotReadBackFromDiskBeforeTheNextFlush(@TempDir Path root) {
     ToyWorld.Source source = new ToyWorld.Source();
-    RegionStore<ToyWorld.Stack> store = store(root);
-    stack(store, 0, 0, source);
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store = store(root);
+    section(store, 0, 0, source);
     store.flush().join();
 
     // Dropped from memory by a block change, still on disk until the next flush: the copy there is
     // the terrain before the change, and must not come back.
-    store.invalidate(0, 0);
-    stack(store, 0, 0, source);
+    store.invalidate(0, GROUND, 0);
+    section(store, 0, 0, source);
 
-    assertEquals(2, source.reads, "a changed stack is built again, not read back stale");
+    assertEquals(2, source.reads, "a changed section is built again, not read back stale");
     assertEquals(0, store.stats().diskLoads());
   }
 
   @Test
-  void aColumnWhoseTerrainCannotBeReadIsNeverWritten(@TempDir Path root) {
+  void aSectionWhoseTerrainCannotBeReadIsNeverWritten(@TempDir Path root) {
     ToyWorld.Source source = new ToyWorld.Source();
     source.unreadable = true;
-    RegionStore<ToyWorld.Stack> store = store(root);
-    assertEquals(0, stack(store, 5, 5, source).regions());
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store = store(root);
+    assertEquals(0, section(store, 5, 5, source).regions());
     store.flush().join();
 
     source.unreadable = false;
-    RegionStore<ToyWorld.Stack> restarted = store(root);
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> restarted = store(root);
     // Generated since: a store that had saved it empty would wall it off for good.
-    assertTrue(stack(restarted, 5, 5, source).regions() > 0);
+    assertTrue(section(restarted, 5, 5, source).regions() > 0);
   }
 
   @Test
   void filesWrittenUnderOtherRulesAreIgnoredAndStartedAfresh(@TempDir Path root) throws Exception {
     ToyWorld.Source source = new ToyWorld.Source();
-    RegionStore<ToyWorld.Stack> first = store(root);
-    stack(first, 1, 1, source);
-    stack(first, 2, 1, source);
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> first = store(root);
+    section(first, 1, 1, source);
+    section(first, 2, 1, source);
     first.flush().join();
     first.close().join();
 
     // The same files, read as though the fill's detour ratio had changed, and then the terrain's
     // rules.
-    RegionSpec<ToyWorld.Stack> otherDetour =
+    RegionSpec<ToyWorld.Blocks, ToyWorld.Toy> otherDetour =
         new RegionSpec<>(
             ToyWorld.TERRAIN, DomainBounds.vertical(ToyWorld.MIN_Y, ToyWorld.MAX_Y), 2.0);
-    RegionSpec<ToyWorld.Stack> otherRules =
+    RegionSpec<ToyWorld.Blocks, ToyWorld.Toy> otherRules =
         new RegionSpec<>(
             new ToyWorld.Terrain(2, 4), DomainBounds.vertical(ToyWorld.MIN_Y, ToyWorld.MAX_Y));
-    for (RegionSpec<ToyWorld.Stack> spec : List.of(otherDetour, otherRules)) {
-      RegionStore<ToyWorld.Stack> other = store(root, spec, Long.MAX_VALUE);
-      stack(other, 1, 1, source);
+    for (RegionSpec<ToyWorld.Blocks, ToyWorld.Toy> spec : List.of(otherDetour, otherRules)) {
+      RegionStore<ToyWorld.Blocks, ToyWorld.Toy> other = store(root, spec, Long.MAX_VALUE);
+      section(other, 1, 1, source);
       assertEquals(0, other.stats().diskLoads());
       assertEquals(1, other.stats().builds(), "built again, not read under the wrong rules");
       other.flush().join();
       other.close().join();
     }
 
-    // The last write started the file afresh under its own rules: stack (2, 1), written under
+    // The last write started the file afresh under its own rules: section (2, 0, 1), written under
     // the first, is gone rather than mixed in.
     RegionFiles underLast = new RegionFiles(root, otherRules);
     openedFiles.add(underLast);
-    assertNotNull(underLast.read(1, 1));
-    assertNull(underLast.read(2, 1));
+    assertNotNull(underLast.read(1, GROUND, 1));
+    assertNull(underLast.read(2, GROUND, 1));
     onlyFile(root);
   }
 
   @Test
   void aTornRecordReadsAsMissing(@TempDir Path root) throws Exception {
-    RegionStack built = build(ToyWorld::hills, 0, 0);
+    RegionSection built = build(ToyWorld::hills, 0, GROUND, 0);
     RegionFiles files = files(root);
     files.write(List.of(built), List.of());
     files.close();
@@ -245,70 +266,72 @@ class RegionFilesTest {
     Path file = onlyFile(root);
     try (RandomAccessFile handle = new RandomAccessFile(file.toFile(), "rw")) {
       // The first record starts right after the header; its first 8 bytes are length and checksum.
-      long middle = (long) RegionFiles.HEADER_SECTORS * RegionFiles.SECTOR + 100;
+      long middle = (long) RegionFiles.HEADER_SECTORS * RegionFiles.SECTOR + 50;
       handle.seek(middle);
       int was = handle.read();
       handle.seek(middle);
       handle.write(was ^ 0xFF);
     }
-    assertNull(files(root).read(0, 0), "a torn record is a stack to build again");
+    assertNull(files(root).read(0, GROUND, 0), "a torn record is a section to build again");
   }
 
   @Test
-  void rewritingAColumnWritesOnlyItsRecordInPlace(@TempDir Path root) throws Exception {
+  void rewritingASectionWritesOnlyItsRecordInPlace(@TempDir Path root) throws Exception {
     RegionFiles files = files(root);
-    List<RegionStack> many = new ArrayList<>();
-    for (int cx = 0; cx < 8; cx++) {
-      many.add(build(ToyWorld::hills, cx, 0));
+    List<RegionSection> many = new ArrayList<>();
+    for (int sx = 0; sx < 8; sx++) {
+      many.add(build(ToyWorld::hills, sx, GROUND, 0));
     }
     files.write(many, List.of());
     long size = Files.size(onlyFile(root));
     long written = files.bytesWritten();
 
-    // The same stack again: its sectors are reused, the file does not grow, and only one record
+    // The same section again: its sectors are reused, the file does not grow, and only one record
     // is written, not the file.
-    RegionStack again = build(ToyWorld::hills, 3, 0);
+    RegionSection again = build(ToyWorld::hills, 3, GROUND, 0);
     files.write(List.of(again), List.of());
     assertEquals(size, Files.size(onlyFile(root)));
     long once = files.bytesWritten() - written;
     assertTrue(once < size / 4, "one record, not the file: " + once + " of " + size);
-    assertSame(again, files.read(3, 0));
+    assertSame(again, files.read(3, GROUND, 0));
   }
 
   @Test
-  void aRemovedColumnsSectorsAreReused(@TempDir Path root) throws Exception {
+  void aRemovedSectionsSectorsAreReused(@TempDir Path root) throws Exception {
     RegionFiles files = files(root);
-    files.write(List.of(build(ToyWorld::hills, 0, 0), build(ToyWorld::hills, 1, 0)), List.of());
+    files.write(
+        List.of(build(ToyWorld::hills, 0, GROUND, 0), build(ToyWorld::hills, 1, GROUND, 0)),
+        List.of());
     long size = Files.size(onlyFile(root));
 
-    files.write(List.of(), List.of(0L)); // stack (0, 0)
-    assertNull(files.read(0, 0));
-    files.write(List.of(build(ToyWorld::hills, 0, 0)), List.of());
+    files.write(List.of(), List.of(RegionSection.key(0, GROUND, 0)));
+    assertNull(files.read(0, GROUND, 0));
+    files.write(List.of(build(ToyWorld::hills, 0, GROUND, 0)), List.of());
     assertEquals(size, Files.size(onlyFile(root)), "written back into the space it left");
-    assertNotNull(files.read(1, 0));
+    assertNotNull(files.read(1, GROUND, 0));
 
     // And a restart sees the same layout.
     files.close();
     RegionFiles reopened = files(root);
-    assertNotNull(reopened.read(0, 0));
-    assertNotNull(reopened.read(1, 0));
+    assertNotNull(reopened.read(0, GROUND, 0));
+    assertNotNull(reopened.read(1, GROUND, 0));
   }
 
   @Test
-  void aTightBudgetEvictsButNeverLosesAnUnwrittenColumn(@TempDir Path root) {
+  void aTightBudgetEvictsButNeverLosesAnUnwrittenSection(@TempDir Path root) {
     ToyWorld.Source source = new ToyWorld.Source();
-    // A byte: every stack but the newest is evicted at once.
-    RegionStore<ToyWorld.Stack> tight = store(root, ToyWorld.spec(), 1);
+    // A byte: every section but the newest is evicted at once.
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> tight = store(root, ToyWorld.spec(), 1);
     for (int cx = 0; cx < 4; cx++) {
-      stack(tight, cx, 0, source);
+      section(tight, cx, 0, source);
     }
     assertTrue(tight.stats().evictions() >= 3);
     tight.flush().join();
 
-    RegionStore<ToyWorld.Stack> restarted = store(root);
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> restarted = store(root);
     for (int cx = 0; cx < 4; cx++) {
-      stack(restarted, cx, 0, source);
+      section(restarted, cx, 0, source);
     }
-    assertEquals(4, restarted.stats().diskLoads(), "every evicted stack still reached the disk");
+    assertEquals(4, restarted.stats().diskLoads(), "every evicted section still reached the disk");
   }
 }

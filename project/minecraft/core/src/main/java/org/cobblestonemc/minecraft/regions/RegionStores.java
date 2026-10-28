@@ -38,17 +38,17 @@ import org.jetbrains.annotations.Nullable;
  * block-change listeners tell it what to forget, trips tell it whose surroundings to keep, and a
  * timer, world saves and shutdown tell it to write.
  *
- * <p><b>Navigating players' surroundings stay in memory.</b> A trip's searches pin the chunks
+ * <p><b>Navigating players' surroundings stay in memory.</b> A trip's searches pin the sections
  * within {@link #PIN_RADIUS} of where they start, under the player's id, so the short searches that
  * re-plan around a navigating player never build; the pin follows the player as each new search
  * starts from where they are, and is released when their last trip ends. Everything else is kept
  * within the memory budget, least recently used out.
  *
- * <p><b>Changes are forgotten in batches.</b> A block change marks its stack, and the stack is
- * forgotten {@link #INVALIDATION_DELAY} later, however many more changes it had meanwhile: a farm
- * or a flowing river would otherwise have its stacks rebuilt for every search that passes. A search
- * in that window reads the stack as it was, which costs the estimate a little and never the route,
- * since the fine search reads the blocks themselves.
+ * <p><b>Changes are forgotten in batches.</b> A block change marks the sections whose classes read
+ * it, and each is forgotten {@link #INVALIDATION_DELAY} later, however many more changes it had
+ * meanwhile: a farm or a flowing river would otherwise have its sections rebuilt for every search
+ * that passes. A search in that window reads the section as it was, which costs the estimate a
+ * little and never the route, since the fine search reads the blocks themselves.
  *
  * <p><b>Two kinds of thread of its own.</b> One for the disk, so reads and writes of the same files
  * never race; and a small pool for building and those delays, so a chunk that arrives on the server
@@ -57,11 +57,12 @@ import org.jetbrains.annotations.Nullable;
 public final class RegionStores implements AutoCloseable {
 
   /**
-   * How many chunks out from a navigating player their pin reaches: 4 holds 9×9 chunks, about 3 MB.
+   * How many sections out from a navigating player their pin reaches, along every axis: 4 holds a
+   * cube of 9×9×9 sections, 144 blocks a side.
    */
   public static final int PIN_RADIUS = 4;
 
-  /** How long after a block changes its stack is forgotten, with every change meanwhile. */
+  /** How long after a block changes its sections are forgotten, with every change meanwhile. */
   public static final Duration INVALIDATION_DELAY = Duration.ofSeconds(10);
 
   private final @Nullable Path root;
@@ -69,20 +70,21 @@ public final class RegionStores implements AutoCloseable {
   private final Duration invalidationDelay;
   private final ExecutorService disk;
   private final ScheduledExecutorService threads;
-  private final Map<String, RegionStore<MinecraftChunk>> stores = new ConcurrentHashMap<>();
+  private final Map<String, RegionStore<MinecraftChunk, RegionClass>> stores =
+      new ConcurrentHashMap<>();
 
-  /** Stacks marked as changed and waiting to be forgotten. */
+  /** Sections marked as changed and waiting to be forgotten. */
   private final Set<Changed> changed = ConcurrentHashMap.newKeySet();
 
-  private record Changed(String world, int chunkX, int chunkZ) {}
+  private record Changed(String world, int sectionX, int sectionY, int sectionZ) {}
 
   /**
    * Creates the registry.
    *
    * @param root where to keep each world's files, under a directory per world; {@code null} to keep
-   *     stacks in memory only, shared between searches but lost on restart
-   * @param memoryBudget how many bytes of stacks not pinned each world keeps in memory
-   * @param builderThreads how many threads build stacks from chunks that arrive later
+   *     sections in memory only, shared between searches but lost on restart
+   * @param memoryBudget how many bytes of sections not pinned each world keeps in memory
+   * @param builderThreads how many threads build sections from chunks that arrive later
    */
   public RegionStores(@Nullable Path root, long memoryBudget, int builderThreads) {
     this(root, memoryBudget, builderThreads, INVALIDATION_DELAY);
@@ -108,7 +110,7 @@ public final class RegionStores implements AutoCloseable {
    * @param world the world
    * @return its store
    */
-  public RegionStore<MinecraftChunk> of(MinecraftWorld world) {
+  public RegionStore<MinecraftChunk, RegionClass> of(MinecraftWorld world) {
     return stores.computeIfAbsent(
         world.key(),
         key ->
@@ -121,27 +123,38 @@ public final class RegionStores implements AutoCloseable {
   }
 
   /**
-   * Marks a stack as changed, to be forgotten after {@link #INVALIDATION_DELAY} with every other
-   * change it has meanwhile. Cheap enough for every block event.
+   * Marks the sections a changed block is read by as changed, to be forgotten after {@link
+   * #INVALIDATION_DELAY} with every other change they have meanwhile: its own, and the one above or
+   * below where the block is on its section's edge, since a class reads the blocks over and under
+   * it. Cheap enough for every block event.
    *
    * @param world the world
-   * @param chunkX the chunk X
-   * @param chunkZ the chunk Z
+   * @param x the block's X
+   * @param y the block's Y
+   * @param z the block's Z
    */
-  public void invalidate(MinecraftWorld world, int chunkX, int chunkZ) {
-    Changed stack = new Changed(world.key(), chunkX, chunkZ);
-    if (!changed.add(stack)) {
-      return; // already waiting: this change is forgotten with it
+  public void invalidate(MinecraftWorld world, int x, int y, int z) {
+    RegionSpec<MinecraftChunk, RegionClass> spec = of(world).spec();
+    int sectionX = spec.sectionOf(x);
+    int sectionZ = spec.sectionOf(z);
+    for (int dy = -1; dy <= 1; dy++) {
+      mark(new Changed(world.key(), sectionX, spec.sectionOf(y + dy), sectionZ));
     }
-    threads.schedule(() -> forget(stack), invalidationDelay.toNanos(), TimeUnit.NANOSECONDS);
   }
 
-  private void forget(Changed stack) {
-    // Unmarked first, so a change that lands while the stack is forgotten marks it again.
-    changed.remove(stack);
-    RegionStore<MinecraftChunk> store = stores.get(stack.world());
+  private void mark(Changed section) {
+    if (!changed.add(section)) {
+      return; // already waiting: this change is forgotten with it
+    }
+    threads.schedule(() -> forget(section), invalidationDelay.toNanos(), TimeUnit.NANOSECONDS);
+  }
+
+  private void forget(Changed section) {
+    // Unmarked first, so a change that lands while the section is forgotten marks it again.
+    changed.remove(section);
+    RegionStore<MinecraftChunk, RegionClass> store = stores.get(section.world());
     if (store != null) {
-      store.invalidate(stack.chunkX(), stack.chunkZ());
+      store.invalidate(section.sectionX(), section.sectionY(), section.sectionZ());
     }
   }
 
@@ -154,14 +167,15 @@ public final class RegionStores implements AutoCloseable {
    */
   public void pin(UUID player, MinecraftWorld world, Cell at) {
     // A pin in another world first lets go of the last one: a player is in one world at a time.
-    for (Map.Entry<String, RegionStore<MinecraftChunk>> entry : stores.entrySet()) {
+    for (Map.Entry<String, RegionStore<MinecraftChunk, RegionClass>> entry : stores.entrySet()) {
       if (!entry.getKey().equals(world.key())) {
         entry.getValue().release(player);
       }
     }
-    RegionStore<MinecraftChunk> store = of(world);
-    RegionSpec<MinecraftChunk> spec = store.spec();
-    store.pin(player, spec.stackOf(at.x()), spec.stackOf(at.z()), PIN_RADIUS);
+    RegionStore<MinecraftChunk, RegionClass> store = of(world);
+    RegionSpec<MinecraftChunk, RegionClass> spec = store.spec();
+    store.pin(
+        player, spec.sectionOf(at.x()), spec.sectionOf(at.y()), spec.sectionOf(at.z()), PIN_RADIUS);
   }
 
   /**
@@ -170,7 +184,7 @@ public final class RegionStores implements AutoCloseable {
    * @param player the player's id
    */
   public void release(UUID player) {
-    for (RegionStore<MinecraftChunk> store : stores.values()) {
+    for (RegionStore<MinecraftChunk, RegionClass> store : stores.values()) {
       store.release(player);
     }
   }
@@ -181,20 +195,20 @@ public final class RegionStores implements AutoCloseable {
    * @param worldKey the world's key
    */
   public void worldUnloaded(String worldKey) {
-    RegionStore<MinecraftChunk> store = stores.remove(worldKey);
+    RegionStore<MinecraftChunk, RegionClass> store = stores.remove(worldKey);
     if (store != null) {
       store.flush().whenComplete((written, failed) -> store.close());
     }
   }
 
   /**
-   * Writes every world's unwritten columns.
+   * Writes every world's unwritten sections.
    *
    * @return a future completing when every write is done
    */
   public CompletableFuture<Void> flush() {
     List<CompletableFuture<Void>> writes = new ArrayList<>();
-    for (RegionStore<MinecraftChunk> store : stores.values()) {
+    for (RegionStore<MinecraftChunk, RegionClass> store : stores.values()) {
       writes.add(store.flush());
     }
     return CompletableFuture.allOf(writes.toArray(new CompletableFuture<?>[0]));
@@ -204,8 +218,8 @@ public final class RegionStores implements AutoCloseable {
    * Stops building, writes what is unwritten, and stops the disk thread. Changes still waiting to
    * be forgotten are moot.
    *
-   * <p>Builds still running are let finish for a moment, so their columns are written too. Call it
-   * after the searches have stopped, so nothing builds a column behind the final write.
+   * <p>Builds still running are let finish for a moment, so their sections are written too. Call it
+   * after the searches have stopped, so nothing builds a section behind the final write.
    */
   @Override
   public void close() {
@@ -218,9 +232,9 @@ public final class RegionStores implements AutoCloseable {
     try {
       flush().get(30, TimeUnit.SECONDS);
     } catch (Exception failed) {
-      // Unwritten columns are built again after the restart; nothing is lost but time.
+      // Unwritten sections are built again after the restart; nothing is lost but time.
     }
-    for (RegionStore<MinecraftChunk> store : stores.values()) {
+    for (RegionStore<MinecraftChunk, RegionClass> store : stores.values()) {
       store.close();
     }
     disk.shutdown();

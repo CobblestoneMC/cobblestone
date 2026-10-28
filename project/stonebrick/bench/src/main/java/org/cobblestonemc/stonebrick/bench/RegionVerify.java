@@ -17,6 +17,7 @@ import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.DomainBounds;
 import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.minecraft.regions.MinecraftTerrain;
+import org.cobblestonemc.minecraft.regions.RegionClass;
 import org.cobblestonemc.regions.RegionGraph;
 import org.cobblestonemc.regions.RegionSearch;
 import org.cobblestonemc.regions.RegionSpec;
@@ -134,8 +135,8 @@ final class RegionVerify {
 
     Capture capture = Capture.load(CorpusLayout.at(corpusRoot).capture(scenario.capture()).root());
     // Focused on the route's start, as the heuristic's own search is.
-    RegionSearch regions =
-        new RegionSearch(
+    RegionSearch<RegionClass> regions =
+        new RegionSearch<>(
             new RegionGraph<>(
                 RegionStore.inMemory(
                     new RegionSpec<>(

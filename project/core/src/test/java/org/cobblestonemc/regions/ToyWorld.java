@@ -31,20 +31,60 @@ final class ToyWorld {
     Material at(int x, int y, int z);
   }
 
-  /** One stack of a toy domain: its material by local X and Z and Y. */
-  interface Stack {
-    Material at(int x, int y, int z);
+  /** A toy terrain's classes, with the shape of a game's. */
+  enum Toy implements RegionKind {
+    /** Air on stone: stood in. */
+    GROUND(true, true, false, true),
+    /** Air on nothing: fallen through. */
+    OPEN(false, false, true, true),
+    /** Water: stepped into, and landed in from any height. */
+    POOL(false, true, false, true),
+    /** Stone, dug through in straight lines. */
+    ROCK(false, false, false, false);
+
+    private final boolean standing;
+    private final boolean steppable;
+    private final boolean open;
+    private final boolean convex;
+
+    Toy(boolean standing, boolean steppable, boolean open, boolean convex) {
+      this.standing = standing;
+      this.steppable = steppable;
+      this.open = open;
+      this.convex = convex;
+    }
+
+    @Override
+    public boolean standing() {
+      return standing;
+    }
+
+    @Override
+    public boolean steppable() {
+      return steppable;
+    }
+
+    @Override
+    public boolean open() {
+      return open;
+    }
+
+    @Override
+    public boolean landing(int depth) {
+      return (this == GROUND && depth >= 2) || this == POOL;
+    }
+
+    @Override
+    public boolean convex() {
+      return convex;
+    }
   }
 
   /**
-   * A toy terrain with the shape of a game's: ground where air sits on stone, air above it, water,
-   * and stone that is dug through.
+   * A toy terrain: ground where air sits on stone, air above it, water, and stone that is dug
+   * through.
    */
-  static final class Terrain implements RegionTerrain<Stack> {
-    static final int GROUND = 0;
-    static final int OPEN = 1;
-    static final int POOL = 2;
-    static final int ROCK = 3;
+  static final class Terrain implements RegionTerrain<Blocks, Toy> {
 
     private final int version;
     private final int shift;
@@ -60,8 +100,8 @@ final class ToyWorld {
     }
 
     @Override
-    public int classes() {
-      return 4;
+    public Class<Toy> classes() {
+      return Toy.class;
     }
 
     @Override
@@ -71,79 +111,54 @@ final class ToyWorld {
 
     @Override
     public void classify(
-        Stack stack, int domainMinY, int domainMaxY, int stackMinY, byte[] classes) {
+        Blocks blocks, int originX, int originY, int originZ, DomainBounds bounds, Toy[] cells) {
       int mask = (1 << shift) - 1;
-      for (int cell = 0; cell < classes.length; cell++) {
-        int y = stackMinY + (cell >> (2 * shift));
-        int x = cell & mask;
-        int z = (cell >> shift) & mask;
-        if (y < domainMinY || y > domainMaxY) {
-          classes[cell] = -1;
+      for (int cell = 0; cell < cells.length; cell++) {
+        int x = originX + (cell & mask);
+        int y = originY + (cell >> (2 * shift));
+        int z = originZ + ((cell >> shift) & mask);
+        if (y < bounds.minY() || y > bounds.maxY()) {
           continue;
         }
-        classes[cell] =
-            (byte)
-                switch (stack.at(x, y, z)) {
-                  case STONE -> ROCK;
-                  case WATER -> POOL;
-                  case AIR ->
-                      y > domainMinY && stack.at(x, y - 1, z) == Material.STONE ? GROUND : OPEN;
-                };
+        cells[cell] =
+            switch (blocks.at(x, y, z)) {
+              case STONE -> Toy.ROCK;
+              case WATER -> Toy.POOL;
+              case AIR ->
+                  y > bounds.minY() && blocks.at(x, y - 1, z) == Material.STONE
+                      ? Toy.GROUND
+                      : Toy.OPEN;
+            };
       }
-    }
-
-    @Override
-    public boolean standing(int clazz) {
-      return clazz == GROUND;
-    }
-
-    @Override
-    public boolean steppable(int clazz) {
-      return clazz == GROUND || clazz == POOL;
-    }
-
-    @Override
-    public boolean open(int clazz) {
-      return clazz == OPEN;
-    }
-
-    @Override
-    public boolean landing(int clazz, int depth) {
-      return (clazz == GROUND && depth >= 2) || clazz == POOL;
     }
 
     @Override
     public int deepestFall() {
       return 32;
     }
-
-    @Override
-    public boolean convex(int clazz) {
-      return clazz != ROCK;
-    }
   }
 
   static final Terrain TERRAIN = new Terrain(1, 4);
 
-  static RegionSpec<Stack> spec() {
+  static RegionSpec<Blocks, Toy> spec() {
     return new RegionSpec<>(TERRAIN, DomainBounds.vertical(MIN_Y, MAX_Y));
   }
 
   /** Walks ground, swims water, and digs stone. */
-  static final class Walker implements RegionAgent {
+  static final class Walker implements RegionAgent<Toy> {
     @Override
-    public boolean usable(int clazz) {
-      return clazz != Terrain.OPEN;
+    public boolean usable(Toy clazz) {
+      return clazz != Toy.OPEN;
     }
 
     @Override
     public double traverse(
-        int clazz, double fx, double fy, double fz, double tx, double ty, double tz) {
+        Toy clazz, double fx, double fy, double fz, double tx, double ty, double tz) {
       double length =
           Math.sqrt((tx - fx) * (tx - fx) + (ty - fy) * (ty - fy) + (tz - fz) * (tz - fz));
       return switch (clazz) {
-        case Terrain.GROUND -> 0.2 * length;
-        case Terrain.POOL -> 0.3 * length;
+        case GROUND -> 0.2 * length;
+        case POOL -> 0.3 * length;
         default -> 2.8 * Math.max(1, length);
       };
     }
@@ -159,12 +174,12 @@ final class ToyWorld {
     }
 
     @Override
-    public double fall(int clazz, int depth) {
-      return clazz == Terrain.POOL || depth <= 3 ? 0 : Double.POSITIVE_INFINITY;
+    public double fall(Toy clazz, int depth) {
+      return clazz == Toy.POOL || depth <= 3 ? 0 : Double.POSITIVE_INFINITY;
     }
   }
 
-  /** Hills, a pond and a cave, so a stack has mixed sections, falls and several classes. */
+  /** Hills, a pond and a cave, so a section has mixed cells, falls and several classes. */
   static Material hills(int x, int y, int z) {
     int ground = 10 + Math.floorMod(x / 5 + z / 7, 4);
     if (y > ground) {
@@ -179,35 +194,32 @@ final class ToyWorld {
   }
 
   /** A terrain source over a toy domain, which counts what it is asked for. */
-  static final class Source implements TerrainSource<Stack> {
+  static final class Source implements TerrainSource<Blocks> {
     private final Blocks blocks;
-    private final int width;
     int reads;
     boolean unreadable;
 
-    /** When set, stacks arrive only when this completes. */
+    /** When set, sections arrive only when this completes. */
     CompletableFuture<Void> gate;
 
-    Source(Blocks blocks, int width) {
+    Source(Blocks blocks) {
       this.blocks = blocks;
-      this.width = width;
     }
 
     Source() {
-      this(ToyWorld::hills, 16);
+      this(ToyWorld::hills);
     }
 
     @Override
-    public FutureOr<Stack> stack(int stackX, int stackZ) {
+    public FutureOr<Blocks> section(int sectionX, int sectionY, int sectionZ) {
       reads++;
       if (unreadable) {
         return FutureOr.of(null);
       }
-      Stack stack = (x, y, z) -> blocks.at(stackX * width + x, y, stackZ * width + z);
       if (gate != null) {
-        return FutureOr.from(gate.thenApply(ignored -> stack));
+        return FutureOr.from(gate.thenApply(ignored -> blocks));
       }
-      return FutureOr.of(stack);
+      return FutureOr.of(blocks);
     }
   }
 }

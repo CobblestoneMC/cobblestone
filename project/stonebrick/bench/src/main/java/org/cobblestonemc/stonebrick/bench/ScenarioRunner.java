@@ -44,6 +44,7 @@ import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 import org.cobblestonemc.minecraft.regions.MinecraftAgent;
 import org.cobblestonemc.minecraft.regions.MinecraftTerrain;
+import org.cobblestonemc.minecraft.regions.RegionClass;
 import org.cobblestonemc.regions.RegionFiles;
 import org.cobblestonemc.regions.RegionHeuristic;
 import org.cobblestonemc.regions.RegionSearch;
@@ -341,10 +342,10 @@ public final class ScenarioRunner {
   }
 
   /**
-   * The column source the last run used, or {@code null} if it did not run on regions.
+   * The terrain source the last run used, or {@code null} if it did not run on regions.
    *
-   * <p>Kept for the sweep's report of how many distinct columns the region layer read. The reads
-   * themselves are {@link RunResult#regionChunkReads()}, gated like the search's own.
+   * <p>Kept for the sweep's report of how many distinct chunk columns the region layer read. The
+   * reads themselves are {@link RunResult#regionChunkReads()}, gated like the search's own.
    */
   private @Nullable SimulatedDiskChunks lastRegionColumns;
 
@@ -358,7 +359,8 @@ public final class ScenarioRunner {
   }
 
   /** The solves the last run's region heuristic started, one per leg. */
-  private final List<RegionHeuristic<MinecraftChunk>.Solve> lastRegionSolves = new ArrayList<>();
+  private final List<RegionHeuristic<MinecraftChunk, RegionClass>.Solve> lastRegionSolves =
+      new ArrayList<>();
 
   /**
    * Returns where the last run's region layer spent its time and memory, or {@code null} if it did
@@ -382,8 +384,8 @@ public final class ScenarioRunner {
     long regions = 0;
     long portals = 0;
     long expansions = 0;
-    for (RegionHeuristic<MinecraftChunk>.Solve solve : lastRegionSolves) {
-      RegionSearch search = solve.search();
+    for (RegionHeuristic<MinecraftChunk, RegionClass>.Solve solve : lastRegionSolves) {
+      RegionSearch<RegionClass> search = solve.search();
       if (search == null) {
         continue; // a solve that was never asked anything
       }
@@ -422,7 +424,7 @@ public final class ScenarioRunner {
   }
 
   /**
-   * Writes the last run's built columns to its cache on disk, if it has one.
+   * Writes the last run's built sections to its cache on disk, if it has one.
    *
    * <p>What a server's periodic flush does; a warm sweep calls it between the run that fills the
    * cache and the run it measures.
@@ -435,8 +437,8 @@ public final class ScenarioRunner {
   }
 
   /**
-   * Sets a directory to keep built columns in across runs, as a server keeps them across restarts;
-   * {@code null} to build every column afresh each run.
+   * Sets a directory to keep built sections in across runs, as a server keeps them across restarts;
+   * {@code null} to build every section afresh each run.
    *
    * @param directory the cache directory, or {@code null}
    */
@@ -447,7 +449,7 @@ public final class ScenarioRunner {
     this.regionCache = directory;
   }
 
-  private @Nullable RegionStore<MinecraftChunk> lastRegionStore;
+  private @Nullable RegionStore<MinecraftChunk, RegionClass> lastRegionStore;
 
   private @Nullable Path regionCache;
 
@@ -468,8 +470,8 @@ public final class ScenarioRunner {
    *
    * <p>Every production estimate but REGIONS is built by {@link MinecraftHeuristics}, the same
    * factory Paper and Sponge use. REGIONS is built here with the factory's parameters, but over the
-   * bench's own column source and store, so that a run can report what the region layer read, built
-   * and kept.
+   * bench's own terrain source and store, so that a run can report what the region layer read,
+   * built and kept.
    */
   private HeuristicStrategy heuristicFor(
       Scenario scenario,
@@ -493,7 +495,7 @@ public final class ScenarioRunner {
     lastRegionColumns = columns;
     // One store for the run, on this thread: a cold start, or a restart over a cache on disk.
     MinecraftWorld world = platform.world(scenario.world());
-    RegionStore<MinecraftChunk> store =
+    RegionStore<MinecraftChunk, RegionClass> store =
         new RegionStore<>(
             new RegionSpec<>(
                 MinecraftTerrain.of(world.environment()), world.bounds(), REGION_DETOUR),
@@ -505,7 +507,7 @@ public final class ScenarioRunner {
             Runnable::run,
             Runnable::run);
     lastRegionStore = store;
-    RegionHeuristic<MinecraftChunk> regions =
+    RegionHeuristic<MinecraftChunk, RegionClass> regions =
         new RegionHeuristic<>(
             region -> columns,
             region -> store,
@@ -521,7 +523,8 @@ public final class ScenarioRunner {
 
       @Override
       public SolveHeuristic newSolve(int windowWidth, DomainRegion<?> target) {
-        RegionHeuristic<MinecraftChunk>.Solve solve = regions.newSolve(windowWidth, target);
+        RegionHeuristic<MinecraftChunk, RegionClass>.Solve solve =
+            regions.newSolve(windowWidth, target);
         lastRegionSolves.add(solve);
         return solve;
       }

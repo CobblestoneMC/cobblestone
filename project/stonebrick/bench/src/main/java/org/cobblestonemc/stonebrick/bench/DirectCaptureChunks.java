@@ -11,7 +11,6 @@ import java.util.HashMap;
 import java.util.Map;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.MinecraftChunk;
-import org.cobblestonemc.regions.RegionStack;
 import org.cobblestonemc.regions.TerrainSource;
 import org.cobblestonemc.stonebrick.format.CaptureFormatException;
 import org.cobblestonemc.stonebrick.format.ChunkColumn;
@@ -38,8 +37,8 @@ final class DirectCaptureChunks implements TerrainSource<MinecraftChunk> {
 
   @Override
   // Always immediate: the capture is already in memory.
-  public FutureOr<MinecraftChunk> stack(int chunkX, int chunkZ) {
-    long key = RegionStack.key(chunkX, chunkZ);
+  public FutureOr<MinecraftChunk> section(int chunkX, int sectionY, int chunkZ) {
+    long key = ((long) chunkX << 32) | (chunkZ & 0xFFFF_FFFFL);
     if (chunks.containsKey(key)) {
       return FutureOr.of(chunks.get(key));
     }

@@ -9,6 +9,7 @@ package org.cobblestonemc.minecraft.regions;
 
 import java.util.EnumMap;
 import java.util.Map;
+import org.cobblestonemc.DomainBounds;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -30,14 +31,14 @@ import org.cobblestonemc.regions.RegionTerrain;
  * water or a ladder, and drops off a ledge onto ground, a ladder or water up to {@link
  * #DEEPEST_FALL} below. Which of those falls a player survives is {@link MinecraftAgent}'s to say.
  *
- * <p><b>Change any of it, bump {@link #VERSION}.</b> Stored columns built under other rules are
+ * <p><b>Change any of it, bump {@link #VERSION}.</b> Stored sections built under other rules are
  * built again.
  *
  * <p><b>One per environment,</b> because what soft rock is depends on the dimension: netherrack in
  * the Nether, mostly sandstone elsewhere, at twice the hardness. A rock region's class is chosen by
  * its cells' hardness, so the same blocks can make a different class in a different dimension.
  */
-public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
+public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk, RegionClass> {
 
   private static final Map<Environment, MinecraftTerrain> BY_ENVIRONMENT =
       new EnumMap<>(Environment.class);
@@ -49,10 +50,17 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
   }
 
   /** The version of these rules; see {@link RegionTerrain#version()}. */
-  public static final int VERSION = 7;
+  public static final int VERSION = 8;
 
-  /** A chunk is 16 blocks along X and Z: {@code 1 << 4}. */
-  private static final int CHUNK_SHIFT = 4;
+  /** A chunk section is 16 blocks a side: {@code 1 << 4}. */
+  private static final int SECTION_SHIFT = 4;
+
+  private static final int WIDTH = 1 << SECTION_SHIFT;
+
+  private static final int MASK = WIDTH - 1;
+
+  /** Blocks in one layer of a section. */
+  private static final int LAYER = WIDTH * WIDTH;
 
   /** The deepest fall a portal joins: two sections, far past anything a player survives on land. */
   static final int DEEPEST_FALL = 32;
@@ -60,7 +68,10 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
   /** The environment of the worlds this terrain classifies, which says what its soft rock is. */
   private final Environment environment;
 
-  /** A stack's blocks, per thread: builds run in parallel. */
+  /**
+   * A section's blocks and the layers over and under it, which its classes read, per thread: builds
+   * run in parallel.
+   */
   private final ThreadLocal<MinecraftBlock[]> scratch = new ThreadLocal<>();
 
   private MinecraftTerrain(Environment environment) {
@@ -83,13 +94,13 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
   }
 
   @Override
-  public int classes() {
-    return RegionClass.ID_BOUND;
+  public Class<RegionClass> classes() {
+    return RegionClass.class;
   }
 
   @Override
   public int sectionShift() {
-    return CHUNK_SHIFT;
+    return SECTION_SHIFT;
   }
 
   /**
@@ -98,48 +109,55 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
    * @param world the world
    * @return its spec
    */
-  public static RegionSpec<MinecraftChunk> spec(MinecraftWorld world) {
+  public static RegionSpec<MinecraftChunk, RegionClass> spec(MinecraftWorld world) {
     return new RegionSpec<>(of(world.environment()), world.bounds());
   }
 
+  /**
+   * Classifies a section of a chunk, reading the layer under it and the layer over it as well: a
+   * cell stands on the block below it and needs headroom in the block above.
+   */
   @Override
   public void classify(
-      MinecraftChunk chunk, int domainMinY, int domainMaxY, int stackMinY, byte[] classes) {
-    int volume = classes.length;
+      MinecraftChunk chunk,
+      int originX,
+      int originY,
+      int originZ,
+      DomainBounds bounds,
+      RegionClass[] cells) {
     MinecraftBlock[] blocks = scratch.get();
-    if (blocks == null || blocks.length != volume) {
-      blocks = new MinecraftBlock[volume];
+    if (blocks == null) {
+      blocks = new MinecraftBlock[LAYER * (WIDTH + 2)];
       scratch.set(blocks);
     }
-    int layer = 1 << (2 * CHUNK_SHIFT);
-    int mask = (1 << CHUNK_SHIFT) - 1;
-    for (int cell = 0; cell < volume; cell++) {
-      int y = stackMinY + (cell >> (2 * CHUNK_SHIFT));
-      blocks[cell] =
-          y >= domainMinY && y <= domainMaxY
-              ? chunk.block(cell & mask, y, (cell >> CHUNK_SHIFT) & mask)
-              : null;
+    // Layer 0 is the one under the section, and layer WIDTH + 1 the one over it.
+    for (int layer = 0; layer < WIDTH + 2; layer++) {
+      int y = originY + layer - 1;
+      boolean inside = y >= bounds.minY() && y <= bounds.maxY();
+      for (int i = 0; i < LAYER; i++) {
+        blocks[layer * LAYER + i] = inside ? chunk.block(i & MASK, y, i >> SECTION_SHIFT) : null;
+      }
     }
-    for (int cell = 0; cell < volume; cell++) {
-      MinecraftBlock block = blocks[cell];
-      classes[cell] = -1;
+    for (int cell = 0; cell < cells.length; cell++) {
+      int at = cell + LAYER;
+      MinecraftBlock block = blocks[at];
       if (block == null) {
         continue;
       }
       if (block.isWater()) {
         // The surface is where a boat floats: open to the air, as BoatMode wants it.
-        MinecraftBlock above = cell + layer < volume ? blocks[cell + layer] : null;
+        MinecraftBlock above = blocks[at + LAYER];
         boolean open = above == null || (above.isPassable() && !above.isWater());
-        classes[cell] = (byte) (open ? RegionClass.WATER_SURFACE : RegionClass.WATER).id();
+        cells[cell] = open ? RegionClass.WATER_SURFACE : RegionClass.WATER;
       } else if (block.isClimbable() || block.isScaffolding()) {
-        classes[cell] = (byte) RegionClass.CLIMB.id();
+        cells[cell] = RegionClass.CLIMB;
       } else if (block.isPassable()) {
-        MinecraftBlock floor = cell >= layer ? blocks[cell - layer] : null;
-        MinecraftBlock head = cell + layer < volume ? blocks[cell + layer] : null;
+        MinecraftBlock floor = blocks[at - LAYER];
+        MinecraftBlock head = blocks[at + LAYER];
         boolean stands = floor != null && floor.isSolidTop() && (head == null || head.isPassable());
-        classes[cell] = (byte) (stands ? ground(floor) : RegionClass.AIR).id();
+        cells[cell] = stands ? ground(floor) : RegionClass.AIR;
       } else if (!block.isLava() && !Double.isInfinite(block.breakTimeSeconds())) {
-        classes[cell] = (byte) solid(block.miningClass()).id();
+        cells[cell] = solid(block.miningClass());
       }
       // Lava, and unbreakable blocks such as bedrock: nothing, not a region a miner could be priced
       // through.
@@ -151,7 +169,7 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
    *
    * <p>A cell's class is read from its own block and the blocks above and below it, by the
    * properties compared here, so a change none of them sees changes no region: a crop growing, a
-   * fluid's level moving, grass turning to dirt. A listener that skips those saves the stack a
+   * fluid's level moving, grass turning to dirt. A listener that skips those saves the section a
    * rebuild. Reads what {@link #classify} reads; change one, change both.
    *
    * @param before the block that was there
@@ -198,36 +216,6 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
     return floor.speedFactor() < 1 ? RegionClass.SOUL_SAND : RegionClass.SOUL_SOIL;
   }
 
-  /** The class stored as a number; the builder only asks about numbers it was given. */
-  private static RegionClass of(int clazz) {
-    return RegionClass.byId(clazz);
-  }
-
-  @Override
-  public boolean standing(int clazz) {
-    return of(clazz).body().standing();
-  }
-
-  @Override
-  public boolean steppable(int clazz) {
-    return of(clazz).body().steppable();
-  }
-
-  @Override
-  public boolean open(int clazz) {
-    return of(clazz).body().open();
-  }
-
-  @Override
-  public boolean landing(int clazz, int depth) {
-    // One block down onto ground is a step, already joined by the step contacts.
-    return switch (of(clazz).body()) {
-      case GROUND -> depth >= 2;
-      case WATER, CLIMB -> true;
-      case OPEN, SOLID -> false;
-    };
-  }
-
   @Override
   public int deepestFall() {
     return DEEPEST_FALL;
@@ -239,9 +227,9 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
    * other class is a family of its own.
    */
   @Override
-  public int family(int clazz) {
-    return switch (of(clazz)) {
-      case SOFT_ROCK, ROCK, MIXED_ROCK, HARD_ROCK -> RegionClass.ROCK.id();
+  public RegionClass family(RegionClass clazz) {
+    return switch (clazz) {
+      case SOFT_ROCK, ROCK, MIXED_ROCK, HARD_ROCK -> RegionClass.ROCK;
       default -> clazz;
     };
   }
@@ -252,15 +240,15 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
    * class is stored, so an estimate across a region is at most half a band from its true average.
    */
   @Override
-  public int label(int family, int[] counts) {
-    if (family != RegionClass.ROCK.id()) {
+  public RegionClass label(RegionClass family, int[] counts) {
+    if (family != RegionClass.ROCK) {
       return family;
     }
     double sum = 0;
     int cells = 0;
     for (RegionClass band : ROCK_BANDS) {
-      sum += counts[band.id()] * hardness(band, environment);
-      cells += counts[band.id()];
+      sum += counts[band.ordinal()] * hardness(band, environment);
+      cells += counts[band.ordinal()];
     }
     double mean = sum / cells;
     RegionClass nearest = ROCK_BANDS[0];
@@ -270,7 +258,7 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
         nearest = band;
       }
     }
-    return nearest.id();
+    return nearest;
   }
 
   /** Netherrack's hardness: soft rock in the Nether. */
@@ -312,10 +300,5 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk> {
       case WOODEN -> 2.0;
       default -> throw new IllegalArgumentException(clazz + " is not breakable material");
     };
-  }
-
-  @Override
-  public boolean convex(int clazz) {
-    return of(clazz).body().convex();
   }
 }

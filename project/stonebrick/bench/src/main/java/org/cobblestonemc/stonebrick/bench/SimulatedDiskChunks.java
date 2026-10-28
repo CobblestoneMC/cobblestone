@@ -13,7 +13,6 @@ import java.util.concurrent.CompletableFuture;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.ChunkFetch;
 import org.cobblestonemc.minecraft.MinecraftChunk;
-import org.cobblestonemc.regions.RegionStack;
 import org.cobblestonemc.regions.TerrainSource;
 import org.cobblestonemc.stonebrick.platform.MissingCaptureLog;
 import org.cobblestonemc.stonebrick.platform.StonebrickPlatformApi;
@@ -58,8 +57,9 @@ final class SimulatedDiskChunks implements TerrainSource<MinecraftChunk> {
   }
 
   @Override
-  public FutureOr<MinecraftChunk> stack(int chunkX, int chunkZ) {
-    long key = RegionStack.key(chunkX, chunkZ);
+  public FutureOr<MinecraftChunk> section(int chunkX, int sectionY, int chunkZ) {
+    // A chunk is read once for every section in it.
+    long key = ((long) chunkX << 32) | (chunkZ & 0xFFFF_FFFFL);
     if (chunks.containsKey(key)) {
       return FutureOr.of(chunks.get(key));
     }

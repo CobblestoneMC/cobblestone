@@ -36,7 +36,7 @@ import org.jetbrains.annotations.Nullable;
  * @param nodesOpened how many times a cell was placed on the open set
  * @param nodesExpanded how many cells were settled
  * @param chunkReads how many chunk reads were charged
- * @param regionChunkReads how many of those the region layer made, to build its columns
+ * @param regionChunkReads how many of those the region layer made, to build its sections
  * @param coldChunkReads how many of those were a chunk's first read
  * @param virtualMillis elapsed time on the modelled clock
  * @param ioDelayMicros total modelled IO delay charged

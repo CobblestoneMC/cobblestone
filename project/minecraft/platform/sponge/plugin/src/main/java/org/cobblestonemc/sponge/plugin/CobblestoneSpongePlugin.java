@@ -416,7 +416,7 @@ public final class CobblestoneSpongePlugin {
       regionFlush.cancel();
     }
     if (regionStores != null) {
-      // After the searches stop, so nothing builds a column behind the final write.
+      // After the searches stop, so nothing builds a section behind the final write.
       regionStores.close();
     }
     CobblestoneSpongeApi.uninstall();

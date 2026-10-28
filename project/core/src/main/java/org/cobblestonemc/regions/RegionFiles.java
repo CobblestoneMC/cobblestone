@@ -7,6 +7,8 @@
 
 package org.cobblestonemc.regions;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -24,69 +26,77 @@ import java.util.Map;
 import java.util.zip.CRC32;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
+import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Built stacks on disk, for one domain: what lets a server start a search on terrain it built
+ * Built sections on disk, for one domain: what lets a server start a search on terrain it built
  * before it restarted.
  *
- * <p><b>32×32 stacks to a file, in sectors.</b> A file is a header with a slot per stack, then
- * records in whole sectors of {@value #SECTOR} bytes:
+ * <p><b>16×16×16 sections to a file, in sectors.</b> A file is a header with a slot per section,
+ * then records in whole sectors of {@value #SECTOR} bytes:
  *
  * <pre>
- *   int    magic "CRG2"
- *   int    format version        layout of this file and of a stack record
- *   int    rules version         the fill's and the terrain's rules the stacks were built by
+ *   int    magic "CRG3"
+ *   int    format version        layout of this file and of a section record
+ *   int    rules version         the fill's and the terrain's rules the sections were built by
+ *   int    classes               the terrain's class names, in order, hashed: what a stored class means
  *   double detour ratio          a fill setting that changes the regions
- *   int    stack floor, int sections, int stack shift
- *   1024 x { int first sector, int length in bytes }   0, 0 for no stack
- *   ... sectors: each record is { int length, int CRC32, deflated stack }, padded to a sector
+ *   int    section shift
+ *   4096 x { int first sector, int length in bytes }   0, 0 for no section
+ *   ... sectors: each record is { int length, int CRC32, deflated section }, padded to a sector
  * </pre>
  *
- * <p><b>A write touches only its own record and slot.</b> A stack that still fits its sectors is
+ * <p><b>A whole section is its slot.</b> Most sections are one class edge to edge — open sky, solid
+ * rock — with nothing inside them to join, and all there is to say of one is its class. Such a
+ * section is kept in its slot alone, {@code 0, -1} for none at all and {@code 0, -2 - class} for
+ * one region, with no record and no sector: reading one back costs no read.
+ *
+ * <p><b>A write touches only its own record and slot.</b> A section that still fits its sectors is
  * written over them; one that has grown takes the first free run big enough, or the end of the
- * file, and gives its old sectors back; a removed stack only clears its slot. One changed stack
- * costs a few kilobytes, not the file.
+ * file, and gives its old sectors back; a removed section only clears its slot. One changed section
+ * costs a sector or two, not the file.
  *
  * <p><b>A torn write reads as missing,</b> never as wrong: each record carries its length and a
- * checksum, and a record that does not match them is a stack to build again. The files are a cache,
- * so that is all a crash can cost.
+ * checksum, and a record that does not match them is a section to build again. The files are a
+ * cache, so that is all a crash can cost.
  *
- * <p><b>A file whose header does not match is empty.</b> Stacks built under different rules or a
- * different domain height are a different graph; they are ignored on read, and the file is started
- * afresh on the next write, never mixed in.
+ * <p><b>A file whose header does not match is empty.</b> Sections built under different rules, or
+ * whose classes meant something else, are a different graph; they are ignored on read, and the file
+ * is started afresh on the next write, never mixed in.
  *
  * <p>Thread-safe by being synchronized. {@link RegionStore} calls it from one disk thread, so the
  * lock is never contended; it is there so that nothing else has to know that.
  */
 public final class RegionFiles {
 
-  private static final int MAGIC = 0x43524732; // "CRG2"
+  private static final int MAGIC = 0x43524733; // "CRG3"
 
-  /** The layout of a file and of a stack record. Bump it with any change to either. */
-  static final int FORMAT_VERSION = 4;
+  /** The layout of a file and of a section record. Bump it with any change to either. */
+  static final int FORMAT_VERSION = 5;
 
-  /** Stacks a file holds along each axis. */
-  static final int SPAN = 32;
+  /** Sections a file holds along each axis. */
+  static final int SPAN = 16;
 
   /** Bytes in a sector, the unit a record is allocated in. */
   static final int SECTOR = 1024;
 
-  private static final int SLOTS = SPAN * SPAN;
+  private static final int SLOTS = SPAN * SPAN * SPAN;
 
-  /** Bytes before the slots: magic, two versions, the detour, floor, sections and shift. */
-  private static final int PREAMBLE = 4 + 4 + 4 + 8 + 4 + 4 + 4;
+  /** Bytes before the slots: magic, two versions, the classes, the detour and the shift. */
+  private static final int PREAMBLE = 4 + 4 + 4 + 4 + 8 + 4;
 
   /** Sectors the header takes, slots included. */
   static final int HEADER_SECTORS = (PREAMBLE + SLOTS * 8 + SECTOR - 1) / SECTOR;
 
-  /** Files kept open: a search reads the stacks of a few files one after another. */
+  /** Files kept open: a search reads the sections of a few files one after another. */
   private static final int OPEN_FILES = 8;
 
   private final Path directory;
-  private final RegionSpec<?> spec;
+  private final RegionSpec<?, ?> spec;
   private final int rules;
+  private final int classes;
 
   /** Open files, most recently used last. */
   private final LinkedHashMap<Long, Open> open = new LinkedHashMap<>(16, 0.75f, true);
@@ -95,17 +105,35 @@ public final class RegionFiles {
   private long bytesRead;
   private long bytesWritten;
 
+  /** Reused for every record: one is costly to make, and every call here holds the lock. */
+  private final Deflater deflater = new Deflater(Deflater.BEST_SPEED);
+
+  private final Inflater inflater = new Inflater();
+
   /**
    * Creates the store for one domain.
    *
    * @param directory where this domain's files go; created on the first write
    * @param spec how the domain's terrain is cut, recorded so a change of it is not read back
    */
-  public RegionFiles(Path directory, RegionSpec<?> spec) {
+  public RegionFiles(Path directory, RegionSpec<?, ?> spec) {
     this.directory = directory;
     this.spec = spec;
     // The fill's rules and the terrain's, in one number: a change to either is a different graph.
-    this.rules = (RegionStackBuilder.FILL_VERSION << 16) | spec.terrain().version();
+    this.rules = (RegionSectionBuilder.FILL_VERSION << 16) | spec.terrain().version();
+    this.classes = classes(spec);
+  }
+
+  /**
+   * The terrain's class names in order, hashed: a section stores its classes by ordinal, so
+   * reordering, adding or retiring one changes what every stored number means.
+   */
+  private static int classes(RegionSpec<?, ?> spec) {
+    StringBuilder names = new StringBuilder();
+    for (Enum<?> clazz : spec.terrain().classes().getEnumConstants()) {
+      names.append(clazz.name()).append(',');
+    }
+    return names.toString().hashCode();
   }
 
   /**
@@ -119,21 +147,26 @@ public final class RegionFiles {
   }
 
   /**
-   * Reads a stack, or returns {@code null} if none is stored or the stored one is unreadable.
+   * Reads a section, or returns {@code null} if none is stored or the stored one is unreadable.
    *
-   * @param stackX the stack X
-   * @param stackZ the stack Z
-   * @return the stack, or {@code null}
+   * @param sectionX the section X
+   * @param sectionY the section Y
+   * @param sectionZ the section Z
+   * @return the section, or {@code null}
    * @throws IOException if the file cannot be read at all
    */
-  public synchronized @Nullable RegionStack read(int stackX, int stackZ) throws IOException {
-    Open file = open(fileKey(stackX, stackZ), false);
+  public synchronized @Nullable RegionSection read(int sectionX, int sectionY, int sectionZ)
+      throws IOException {
+    Open file = open(fileKey(sectionX, sectionY, sectionZ), false);
     if (file == null) {
       return null;
     }
-    int slot = slot(stackX, stackZ);
+    int slot = slot(sectionX, sectionY, sectionZ);
     int first = file.first[slot];
     int length = file.length[slot];
+    if (first == 0 && length < 0) {
+      return RegionSection.whole(spec, sectionX, sectionY, sectionZ, length);
+    }
     if (first == 0 || length <= 8 || (long) first * SECTOR + length > file.handle.length()) {
       return null;
     }
@@ -151,41 +184,51 @@ public final class RegionFiles {
       return null; // torn by a crash: build it again
     }
     try {
-      RegionStack stack = decode(record);
-      if (stack.stackX != stackX || stack.stackZ != stackZ) {
-        return null; // filed under the wrong stack: treat it as missing and rebuild
+      RegionSection section = decode(record);
+      if (section.sectionX != sectionX
+          || section.sectionY != sectionY
+          || section.sectionZ != sectionZ) {
+        return null; // filed under the wrong section: treat it as missing and rebuild
       }
-      return stack;
+      return section;
     } catch (IOException malformed) {
       return null;
     }
   }
 
   /**
-   * Writes stacks and removes others, each in place in its file.
+   * Writes sections and removes others, each in place in its file.
    *
-   * @param stacks the stacks to store, replacing any stored before
-   * @param removed the stacks to remove, packed as {@code (stackX << 32) | stackZ}
-   * @throws IOException if a file cannot be written; stacks already written stay written
+   * @param sections the sections to store, replacing any stored before
+   * @param removed the sections to remove, by {@link RegionSection#key}
+   * @throws IOException if a file cannot be written; sections already written stay written
    */
-  public synchronized void write(Collection<RegionStack> stacks, Collection<Long> removed)
+  public synchronized void write(Collection<RegionSection> sections, Collection<Long> removed)
       throws IOException {
-    for (long packed : removed) {
-      int stackX = (int) (packed >> 32);
-      int stackZ = (int) packed;
-      Open file = open(fileKey(stackX, stackZ), false);
+    for (long key : removed) {
+      int sx = RegionSection.keyX(key);
+      int sy = RegionSection.keyY(key);
+      int sz = RegionSection.keyZ(key);
+      Open file = open(fileKey(sx, sy, sz), false);
       if (file != null) {
-        file.clear(slot(stackX, stackZ));
+        file.clear(slot(sx, sy, sz));
       }
     }
-    for (RegionStack stack : stacks) {
-      Open file = open(fileKey(stack.stackX, stack.stackZ), true);
-      bytesWritten += file.put(slot(stack.stackX, stack.stackZ), encode(stack));
+    for (RegionSection section : sections) {
+      int sx = section.sectionX;
+      int sy = section.sectionY;
+      int sz = section.sectionZ;
+      Open file = open(fileKey(sx, sy, sz), true);
+      int whole = section.wholeCode();
+      bytesWritten +=
+          whole < 0
+              ? file.whole(slot(sx, sy, sz), whole)
+              : file.put(slot(sx, sy, sz), encode(section));
     }
   }
 
   /**
-   * Returns how many stack records have been read.
+   * Returns how many section records have been read.
    *
    * @return the record count
    */
@@ -255,16 +298,17 @@ public final class RegionFiles {
     return opened;
   }
 
-  private static byte[] encode(RegionStack stack) throws IOException {
-    ByteArrayOutputStream bytes = new ByteArrayOutputStream(8192);
+  private byte[] encode(RegionSection section) throws IOException {
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream(1024);
     // Room for the length and checksum, filled in once the body is known.
     bytes.write(new byte[8]);
-    Deflater deflater = new Deflater(Deflater.BEST_SPEED);
+    deflater.reset();
+    // Buffered: a record is written a byte or a short at a time, and the deflater, unbuffered,
+    // would be called for each.
     try (DataOutputStream out =
-        new DataOutputStream(new DeflaterOutputStream(bytes, deflater, 4096))) {
-      stack.write(out);
-    } finally {
-      deflater.end();
+        new DataOutputStream(
+            new BufferedOutputStream(new DeflaterOutputStream(bytes, deflater, 4096), 4096))) {
+      section.write(out);
     }
     byte[] record = bytes.toByteArray();
     CRC32 crc = new CRC32();
@@ -274,11 +318,16 @@ public final class RegionFiles {
     return record;
   }
 
-  private RegionStack decode(byte[] record) throws IOException {
+  private RegionSection decode(byte[] record) throws IOException {
+    inflater.reset();
+    // Buffered, as writing is: unbuffered, every byte read would be a call into the inflater.
     try (DataInputStream in =
         new DataInputStream(
-            new InflaterInputStream(new ByteArrayInputStream(record, 8, record.length - 8)))) {
-      return RegionStack.read(in, spec);
+            new BufferedInputStream(
+                new InflaterInputStream(
+                    new ByteArrayInputStream(record, 8, record.length - 8), inflater, 4096),
+                4096))) {
+      return RegionSection.read(in, spec);
     }
   }
 
@@ -290,16 +339,27 @@ public final class RegionFiles {
   }
 
   private Path path(long file) {
-    return directory.resolve("r." + (int) (file >> 32) + "." + (int) file + ".crg");
+    return directory.resolve(
+        "r."
+            + RegionSection.keyX(file)
+            + "."
+            + RegionSection.keyY(file)
+            + "."
+            + RegionSection.keyZ(file)
+            + ".crg");
   }
 
-  private static long fileKey(int stackX, int stackZ) {
-    return ((long) Math.floorDiv(stackX, SPAN) << 32)
-        | (Math.floorDiv(stackZ, SPAN) & 0xFFFF_FFFFL);
+  /** The file a section is kept in, keyed as a section is, by the file's own coordinates. */
+  private static long fileKey(int sectionX, int sectionY, int sectionZ) {
+    return RegionSection.key(
+        Math.floorDiv(sectionX, SPAN),
+        Math.floorDiv(sectionY, SPAN),
+        Math.floorDiv(sectionZ, SPAN));
   }
 
-  private static int slot(int stackX, int stackZ) {
-    return Math.floorMod(stackX, SPAN) * SPAN + Math.floorMod(stackZ, SPAN);
+  private static int slot(int sectionX, int sectionY, int sectionZ) {
+    return (Math.floorMod(sectionX, SPAN) * SPAN + Math.floorMod(sectionY, SPAN)) * SPAN
+        + Math.floorMod(sectionZ, SPAN);
   }
 
   /** One open file: its slots, and which of its sectors are taken. */
@@ -326,9 +386,8 @@ public final class RegionFiles {
           in.readInt() == MAGIC
               && in.readInt() == FORMAT_VERSION
               && in.readInt() == rules
+              && in.readInt() == classes
               && in.readDouble() == spec.detourRatio()
-              && in.readInt() == spec.stackMinY()
-              && in.readInt() == spec.sections()
               && in.readInt() == spec.shift();
       if (!matches) {
         return;
@@ -339,23 +398,22 @@ public final class RegionFiles {
         length[slot] = in.readInt();
         if (first[slot] >= HEADER_SECTORS && length[slot] > 0) {
           used.set(first[slot], first[slot] + sectors(length[slot]));
-        } else {
+        } else if (first[slot] != 0 || length[slot] < -1 - spec.classCount()) {
           first[slot] = 0;
           length[slot] = 0;
         }
       }
     }
 
-    /** Starts the file afresh with this domain's header and no stacks. */
+    /** Starts the file afresh with this domain's header and no sections. */
     void reset() throws IOException {
       ByteArrayOutputStream bytes = new ByteArrayOutputStream(HEADER_SECTORS * SECTOR);
       DataOutputStream out = new DataOutputStream(bytes);
       out.writeInt(MAGIC);
       out.writeInt(FORMAT_VERSION);
       out.writeInt(rules);
+      out.writeInt(classes);
       out.writeDouble(spec.detourRatio());
-      out.writeInt(spec.stackMinY());
-      out.writeInt(spec.sections());
       out.writeInt(spec.shift());
       handle.setLength(0);
       handle.seek(0);
@@ -367,6 +425,18 @@ public final class RegionFiles {
       used.clear();
       used.set(0, HEADER_SECTORS);
       matches = true;
+    }
+
+    /**
+     * Stores a whole section in its slot alone, giving back any sectors it held, and returns how
+     * many bytes were written.
+     */
+    long whole(int slot, int code) throws IOException {
+      if (first[slot] != 0) {
+        used.clear(first[slot], first[slot] + sectors(length[slot]));
+      }
+      setSlot(slot, 0, code);
+      return 8;
     }
 
     /** Stores a record in a slot, returning how many bytes were written. */
@@ -395,12 +465,14 @@ public final class RegionFiles {
       return (long) needed * SECTOR + 8;
     }
 
-    /** Removes a slot's record, giving its sectors back. */
+    /** Removes a slot's section, giving its sectors back. */
     void clear(int slot) throws IOException {
-      if (!matches || first[slot] == 0) {
+      if (!matches || (first[slot] == 0 && length[slot] == 0)) {
         return;
       }
-      used.clear(first[slot], first[slot] + sectors(length[slot]));
+      if (first[slot] != 0) {
+        used.clear(first[slot], first[slot] + sectors(length[slot]));
+      }
       setSlot(slot, 0, 0);
       bytesWritten += 8;
     }

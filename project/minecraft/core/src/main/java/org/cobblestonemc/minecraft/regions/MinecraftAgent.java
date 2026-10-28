@@ -38,7 +38,7 @@ import org.cobblestonemc.regions.RegionAgent;
  * backward search focuses itself with that bound, and a crossing priced below it would let the
  * search settle a portal before a cheaper route to it had been seen.
  */
-public final class MinecraftAgent implements RegionAgent {
+public final class MinecraftAgent implements RegionAgent<RegionClass> {
 
   /**
    * What a block costs where the agent has no way through but the graph needs a price: rock, for an
@@ -80,8 +80,8 @@ public final class MinecraftAgent implements RegionAgent {
   /** Soul sand's speed factor, as the platforms report it: a walker without Soul Speed drags. */
   private static final double SOUL_SAND_SPEED = 0.4;
 
-  /** Per class, by id: the agent's rate in a straight line, or {@code NaN} if it has none. */
-  private final double[] rates = new double[RegionClass.ID_BOUND];
+  /** Per class, by ordinal: the agent's rate in a straight line, or {@code NaN} if it has none. */
+  private final double[] rates = new double[RegionClass.values().length];
 
   /** The agent's rate across a water surface by boat, or {@code NaN} without one. */
   private final double boat;
@@ -119,7 +119,7 @@ public final class MinecraftAgent implements RegionAgent {
             case SOFT, SOFT_ROCK, ROCK, MIXED_ROCK, HARD_ROCK, VERY_HARD_ROCK, LOOSE, WOODEN ->
                 Double.NaN;
           };
-      rates[clazz.id()] = rate;
+      rates[clazz.ordinal()] = rate;
       if (has(rate)) {
         least = Math.min(least, rate);
       }
@@ -174,18 +174,6 @@ public final class MinecraftAgent implements RegionAgent {
     return 1 + 0.3 * (1 + 0.35 * level);
   }
 
-  @Override
-  public boolean usable(int clazz) {
-    RegionClass known = RegionClass.byId(clazz);
-    return known != null && usable(known);
-  }
-
-  @Override
-  public double traverse(
-      int clazz, double fx, double fy, double fz, double tx, double ty, double tz) {
-    return traverse(RegionClass.byId(clazz), fx, fy, fz, tx, ty, tz);
-  }
-
   /**
    * Returns whether this agent can be inside a region of the given class.
    *
@@ -199,9 +187,10 @@ public final class MinecraftAgent implements RegionAgent {
    * @param clazz the class
    * @return {@code true} if usable
    */
+  @Override
   public boolean usable(RegionClass clazz) {
     return clazz.solid()
-        || has(rates[clazz.id()])
+        || has(rates[clazz.ordinal()])
         || (clazz == RegionClass.WATER_SURFACE && has(boat));
   }
 
@@ -218,6 +207,7 @@ public final class MinecraftAgent implements RegionAgent {
    * @param tz where it ends, Z
    * @return the cost in seconds
    */
+  @Override
   public double traverse(
       RegionClass clazz, double fx, double fy, double fz, double tx, double ty, double tz) {
     double dx = tx - fx;
@@ -232,7 +222,7 @@ public final class MinecraftAgent implements RegionAgent {
           ? Math.max(mining(breakTime, dx, dy, dz), breakTime + FALL)
           : FALLBACK_COST_PER_BLOCK * Math.max(1, length);
     }
-    double rate = rates[clazz.id()];
+    double rate = rates[clazz.ordinal()];
     double cost = (has(rate) ? rate : FALLBACK_COST_PER_BLOCK) * length;
     if (clazz == RegionClass.WATER_SURFACE && has(boat)) {
       // A boat crosses the surface; anything vertical in the crossing, where a surface steps down
@@ -286,12 +276,8 @@ public final class MinecraftAgent implements RegionAgent {
    * fall itself adds nothing: the height fallen is priced in crossing the region landed in.
    */
   @Override
-  public double fall(int clazz, int depth) {
-    RegionClass known = RegionClass.byId(clazz);
-    if (known == null) {
-      return Double.POSITIVE_INFINITY;
-    }
-    return switch (known.body()) {
+  public double fall(RegionClass clazz, int depth) {
+    return switch (clazz.body()) {
       case WATER -> 0;
       case GROUND, CLIMB -> depth <= SAFE_FALL ? 0 : Double.POSITIVE_INFINITY;
       case OPEN, SOLID -> Double.POSITIVE_INFINITY;

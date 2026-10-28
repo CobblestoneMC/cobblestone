@@ -17,9 +17,8 @@ import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld.Environment;
 import org.cobblestonemc.minecraft.MiningClass;
+import org.cobblestonemc.regions.RegionSectionBuilder;
 import org.cobblestonemc.regions.RegionSpec;
-import org.cobblestonemc.regions.RegionStack;
-import org.cobblestonemc.regions.RegionStackBuilder;
 import org.junit.jupiter.api.Test;
 
 /** Rock of every hardness fills as one, and a region is the band nearest its average. */
@@ -59,10 +58,10 @@ class MinecraftTerrainTest {
 
   /** Counts of rock cells, by class. */
   private static int[] counts(int soft, int rock, int hard) {
-    int[] counts = new int[RegionClass.ID_BOUND];
-    counts[RegionClass.SOFT_ROCK.id()] = soft;
-    counts[RegionClass.ROCK.id()] = rock;
-    counts[RegionClass.HARD_ROCK.id()] = hard;
+    int[] counts = new int[RegionClass.values().length];
+    counts[RegionClass.SOFT_ROCK.ordinal()] = soft;
+    counts[RegionClass.ROCK.ordinal()] = rock;
+    counts[RegionClass.HARD_ROCK.ordinal()] = hard;
     return counts;
   }
 
@@ -71,7 +70,7 @@ class MinecraftTerrainTest {
   }
 
   private static RegionClass label(MinecraftTerrain terrain, int[] counts) {
-    return RegionClass.byId(terrain.label(RegionClass.ROCK.id(), counts));
+    return terrain.label(RegionClass.ROCK, counts);
   }
 
   @Test
@@ -96,11 +95,11 @@ class MinecraftTerrainTest {
 
   @Test
   void rockOfEveryHardnessIsOneFamilyAndDirtIsItsOwn() {
-    int rock = RegionClass.ROCK.id();
-    assertEquals(rock, TERRAIN.family(RegionClass.SOFT_ROCK.id()));
-    assertEquals(rock, TERRAIN.family(RegionClass.HARD_ROCK.id()));
-    assertEquals(RegionClass.LOOSE.id(), TERRAIN.family(RegionClass.LOOSE.id()));
-    assertNotEquals(rock, TERRAIN.family(RegionClass.WOODEN.id()));
+    RegionClass rock = RegionClass.ROCK;
+    assertEquals(rock, TERRAIN.family(RegionClass.SOFT_ROCK));
+    assertEquals(rock, TERRAIN.family(RegionClass.HARD_ROCK));
+    assertEquals(RegionClass.LOOSE, TERRAIN.family(RegionClass.LOOSE));
+    assertNotEquals(rock, TERRAIN.family(RegionClass.WOODEN));
   }
 
   @Test
@@ -131,10 +130,9 @@ class MinecraftTerrainTest {
   }
 
   private static int regions(MinecraftChunk chunk) {
-    RegionStackBuilder<MinecraftChunk> builder =
-        new RegionStackBuilder<>(new RegionSpec<>(TERRAIN, DomainBounds.vertical(0, 31)));
-    RegionStack stack = builder.build(0, 0, chunk);
-    return stack.regions();
+    RegionSectionBuilder<MinecraftChunk, RegionClass> builder =
+        new RegionSectionBuilder<>(new RegionSpec<>(TERRAIN, DomainBounds.vertical(0, 31)));
+    return builder.build(0, 0, 0, chunk).regions() + builder.build(0, 1, 0, chunk).regions();
   }
 
   @Test
@@ -147,10 +145,7 @@ class MinecraftTerrainTest {
   }
 
   @Test
-  void everyClassReadsBackFromItsId() {
-    for (RegionClass clazz : RegionClass.values()) {
-      assertEquals(clazz, RegionClass.byId(clazz.id()));
-    }
+  void everyMiningBucketIsBreakableMaterial() {
     for (MiningClass mining : MiningClass.values()) {
       assertEquals(RegionClass.Body.SOLID, MinecraftTerrain.solid(mining).body());
     }

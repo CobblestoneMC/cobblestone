@@ -30,7 +30,7 @@ seeded Paper server and captures what `data/needed-chunks.yml` asks for.
 | `--heuristic zero` | Dijkstra, for the true optimum; or any production heuristic by name |
 | `--weight 2.0`, `--weights 1,1.5,2` | heuristic weight(s) |
 | `--io sata` | simulated disk: `zero`, `nvme`, `sata`, `spinning`, `busy` |
-| `--warm` | (`sweep`) run each route twice, the second over region columns read back from disk, as after a restart |
+| `--warm` | (`sweep`) run each route twice, the second over region sections read back from disk, as after a restart |
 | `--corpus <dir>`, `--scenarios <file>`, `--baselines <dir>` | read from or write to elsewhere |
 
 `-Dregions.detour=<ratio>` sets the region fill's detour ratio, for measuring it. A long Dijkstra
@@ -72,10 +72,10 @@ point overworld/ocean@player RUNNING_AVERAGE w=2.00 success cost=195.020 expande
 
 Every point also prints what it cost: wall time (`ms`), time parked on the modelled disk (`ioMs`),
 chunk reads (`reads`, `coldReads` for first reads) and cells opened (`opened`). Under `REGIONS` it
-adds how many columns the region layer read (`columns`, `regionReads`) and where it spent its time
-and memory: reading and building columns (`readMs`, `buildMs`), joining them (`placeMs`,
-`seamMs`), its own search (`searchMs`, `queries`, `settled`), and its size (`built`, `regions`,
-`portals`, `graphKB`, `storeKB`).
+adds how many chunk columns the region layer read (`columns`, `regionReads`) and where it spent its
+time and memory: reading chunks and building sections from them (`readMs`, `buildMs`), joining the
+sections (`placeMs`, `seamMs`), its own search (`searchMs`, `queries`, `settled`), and its size
+(`built` sections, `regions`, `portals`, `graphKB`, `storeKB`).
 
 `closest` is how near the search came, in blocks from the nearest cell it settled to the
 destination: 0 when it arrived. When every heuristic fails a route, the one that came closer did

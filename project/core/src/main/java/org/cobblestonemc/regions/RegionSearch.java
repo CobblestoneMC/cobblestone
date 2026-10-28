@@ -40,15 +40,17 @@ import org.jetbrains.annotations.Nullable;
  * until nothing still on its frontier could beat that, which with an origin-focused heuristic is
  * when {@code fMin - cheapest · |cell - origin| >= answer}. Usually that is already true and the
  * query costs a scan of {@code R}'s portals and nothing else.
+ *
+ * @param <K> the terrain's classes
  */
-public final class RegionSearch {
+public final class RegionSearch<K extends Enum<K> & RegionKind> {
 
   private static final byte UNSEEN = 0;
   private static final byte OPEN = 1;
   private static final byte SETTLED = 2;
 
-  private final RegionGraph<?> graph;
-  private final RegionAgent agent;
+  private final RegionGraph<?, K> graph;
+  private final RegionAgent<K> agent;
   private final Cell goal;
   private final Cell origin;
   private final double cheapest;
@@ -110,8 +112,8 @@ public final class RegionSearch {
    * @param nearest the destination's cell nearest another cell
    */
   public RegionSearch(
-      RegionGraph<?> graph,
-      RegionAgent agent,
+      RegionGraph<?, K> graph,
+      RegionAgent<K> agent,
       Cell origin,
       Predicate<Cell> inside,
       UnaryOperator<Cell> nearest) {
@@ -164,7 +166,7 @@ public final class RegionSearch {
 
   /**
    * Returns the time spent searching: answering, less whatever the answers spent waiting on the
-   * graph for terrain — placing stacks, joining seams, and any read or build that ran inside.
+   * graph for terrain — placing sections, joining seams, and any read or build that ran inside.
    *
    * @return nanoseconds
    */
@@ -172,10 +174,10 @@ public final class RegionSearch {
     return queryNanos - terrainNanos;
   }
 
-  private @Nullable CompletableFuture<Void> completing(int x, int z) {
+  private @Nullable CompletableFuture<Void> completing(Cell cell) {
     long started = System.nanoTime();
     try {
-      return graph.complete(x, z);
+      return graph.complete(cell.x(), cell.y(), cell.z());
     } finally {
       terrainNanos += System.nanoTime() - started;
     }
@@ -195,7 +197,7 @@ public final class RegionSearch {
       return 0; // arrived
     }
     double backstop = cell.distance(goal) * cheapest;
-    CompletableFuture<Void> waiting = completing(cell.x(), cell.z());
+    CompletableFuture<Void> waiting = completing(cell);
     if (waiting != null) {
       pending = waiting;
       return backstop;
@@ -302,7 +304,7 @@ public final class RegionSearch {
    */
   private @Nullable CompletableFuture<Void> seed() {
     if (flooded.isEmpty()) {
-      CompletableFuture<Void> waiting = completing(goal.x(), goal.z());
+      CompletableFuture<Void> waiting = completing(goal);
       if (waiting != null) {
         return waiting;
       }
@@ -370,7 +372,7 @@ public final class RegionSearch {
       return -1;
     }
     // Resident first, then commit: a settle that discovered halfway through that it needed a
-    // stack would leave half its neighbours relaxed.
+    // section would leave half its neighbours relaxed.
     CompletableFuture<Void> waiting = completingRegion(graph.portalA(portal));
     if (waiting == null) {
       waiting = completingRegion(graph.portalB(portal));
@@ -535,9 +537,9 @@ public final class RegionSearch {
     for (int[] offset : around) {
       int nx = x + offset[0];
       int nz = z + offset[2];
-      // Only within the cell's own stack: a neighbour's region would have to be completed, and
-      // this is a fallback, not a reason to fetch.
-      if (graph.stackOf(nx) != graph.stackOf(x) || graph.stackOf(nz) != graph.stackOf(z)) {
+      // Only within the cell's own column of sections: a neighbour's region would have to be
+      // completed, and this is a fallback, not a reason to fetch.
+      if (graph.sectionOf(nx) != graph.sectionOf(x) || graph.sectionOf(nz) != graph.sectionOf(z)) {
         continue;
       }
       region = graph.regionAt(nx, y + offset[1], nz);
@@ -646,7 +648,7 @@ public final class RegionSearch {
    *
    * @return the graph
    */
-  public RegionGraph<?> graph() {
+  public RegionGraph<?, K> graph() {
     return graph;
   }
 

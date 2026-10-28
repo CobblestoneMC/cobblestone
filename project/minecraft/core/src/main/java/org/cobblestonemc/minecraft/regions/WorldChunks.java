@@ -14,22 +14,22 @@ import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.minecraft.ChunkSource;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
-import org.cobblestonemc.regions.RegionStack;
 import org.cobblestonemc.regions.TerrainSource;
 
 /**
- * A live world's chunks, as the region layer's stacks of terrain.
+ * A live world's chunks, as the region layer's terrain: a section is read from the chunk it is in.
  *
  * <p>Written against {@link MinecraftWorld} rather than any one platform's classes, so Paper and
- * Sponge both get it without a copy. Nothing is read up front: the graph asks for a stack the first
- * time a search needs it, and the fine search parks until it lands.
+ * Sponge both get it without a copy. Nothing is read up front: the graph asks for a section the
+ * first time a search needs it, and the fine search parks until its chunk lands. A chunk is read
+ * once for every section in it.
  */
 public final class WorldChunks implements TerrainSource<MinecraftChunk> {
 
   private final ChunkSource chunks;
   private final MinecraftWorld world;
   private final Cell destination;
-  private final Map<Long, FutureOr<MinecraftChunk>> stacks = new ConcurrentHashMap<>();
+  private final Map<Long, FutureOr<MinecraftChunk>> read = new ConcurrentHashMap<>();
 
   /**
    * Creates a source over a world.
@@ -46,12 +46,13 @@ public final class WorldChunks implements TerrainSource<MinecraftChunk> {
   }
 
   @Override
-  public FutureOr<MinecraftChunk> stack(int chunkX, int chunkZ) {
-    long key = RegionStack.key(chunkX, chunkZ);
-    FutureOr<MinecraftChunk> known = stacks.get(key);
+  public FutureOr<MinecraftChunk> section(int chunkX, int sectionY, int chunkZ) {
+    long key = ((long) chunkX << 32) | (chunkZ & 0xFFFF_FFFFL);
+    FutureOr<MinecraftChunk> known = read.get(key);
     if (known != null) {
-      // Remembered while in flight too, so a seam's five stacks queue one read each. A read that
-      // has landed answers at once, as the graph requires: from() unwraps a completed future.
+      // Remembered while in flight too, so the sections a search asks for together queue one read
+      // per chunk. A read that has landed answers at once, as the graph requires: from() unwraps a
+      // completed future.
       return known.isImmediate() ? known : FutureOr.from(known.future());
     }
     Cell anchor =
@@ -60,11 +61,11 @@ public final class WorldChunks implements TerrainSource<MinecraftChunk> {
             Math.max(world.minY(), Math.min(world.maxY(), destination.y())),
             chunkZ * 16);
     FutureOr<MinecraftChunk> chunk = chunks.chunk(anchor, world, destination);
-    // A read that fails is a stack that cannot be known; left failed, it would park the search on
+    // A read that fails is terrain that cannot be known; left failed, it would park the search on
     // a future that is forever done and never usable.
     FutureOr<MinecraftChunk> settled =
         chunk.isImmediate() ? chunk : FutureOr.from(chunk.future().exceptionally(failure -> null));
-    stacks.put(key, settled);
+    read.put(key, settled);
     return settled;
   }
 }

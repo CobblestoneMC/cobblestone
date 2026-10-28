@@ -22,65 +22,67 @@ import org.cobblestonemc.FutureOr;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Every built {@link RegionStack} of one domain, shared by every search over it.
+ * Every built {@link RegionSection} of one domain, shared by every search over it.
  *
- * <p><b>Three places a stack can come from,</b> tried in order: memory, disk, and building it from
- * the terrain. Building is the expensive one — it is most of what a search over new terrain spends
- * — and a stack only needs building again when a block in it changes, so a stack built once serves
- * every later search, by every agent, until then; and through {@link RegionFiles}, across restarts.
- * A stack built but not yet written is held until the next {@link #flush}, whatever the budget, so
- * evicting it never loses it.
+ * <p><b>Three places a section can come from,</b> tried in order: memory, disk, and building it
+ * from the terrain. Building is the expensive one — it is most of what a search over new terrain
+ * spends — and a section only needs building again when a block it was read from changes, so a
+ * section built once serves every later search, by every agent, until then; and through {@link
+ * RegionFiles}, across restarts. A section built but not yet written is held until the next {@link
+ * #flush}, whatever the budget, so evicting it never loses it.
  *
- * <p><b>Two kinds of stack in memory.</b> <em>Pinned</em> stacks are kept whatever the budget,
+ * <p><b>Two kinds of section in memory.</b> <em>Pinned</em> sections are kept whatever the budget,
  * until their last pin is released: a navigating player's surroundings, so the short searches that
  * re-plan around them never build. The rest are kept up to a byte budget, least recently used first
- * out. The two are held apart, so evicting never has to look past a pinned stack.
+ * out. The two are held apart, so evicting never has to look past a pinned section.
  *
- * <p><b>Changes invalidate.</b> {@link #invalidate} drops a stack from memory, and from disk at the
- * next flush, and the next search to need it builds it again. A stack being built when its terrain
- * changes is handed to the search that asked for it — it is at most a moment stale — but not kept.
- * Only seams cross stacks, and seams are built per search, so a change never reaches a neighbour.
+ * <p><b>Changes invalidate.</b> {@link #invalidate} drops a section from memory, and from disk at
+ * the next flush, and the next search to need it builds it again. A section being built when its
+ * terrain changes is handed to the search that asked for it — it is at most a moment stale — but
+ * not kept. Only seams cross sections, and seams are built per search, so a change never reaches a
+ * neighbour.
  *
  * <p>Thread-safe. Searches on several workers, block-change listeners on the server thread and
  * builds all use it at once; its maps are guarded by the store's own lock, and nothing slow —
  * building, reading, writing — happens while holding it.
  *
- * @param <C> the platform's stack of terrain
+ * @param <C> the platform's terrain
+ * @param <K> the terrain's classes
  */
-public final class RegionStore<C> {
+public final class RegionStore<C, K extends Enum<K> & RegionKind> {
 
-  private final RegionSpec<C> spec;
+  private final RegionSpec<C, K> spec;
   private final long memoryBudget;
   private final @Nullable RegionFiles files;
   private final Executor disk;
   private final Executor builds;
-  private final ThreadLocal<RegionStackBuilder<C>> builders;
+  private final ThreadLocal<RegionSectionBuilder<C, K>> builders;
 
   // --- guarded by this ---
 
-  /** Stacks not pinned, least recently used first. */
-  private final LinkedHashMap<Long, RegionStack> memory = new LinkedHashMap<>(256, 0.75f, true);
+  /** Sections not pinned, least recently used first. */
+  private final LinkedHashMap<Long, RegionSection> memory = new LinkedHashMap<>(256, 0.75f, true);
 
   private long memoryBytes;
 
-  /** Pinned stacks that have been built. */
-  private final Map<Long, RegionStack> pinned = new HashMap<>();
+  /** Pinned sections that have been built. */
+  private final Map<Long, RegionSection> pinned = new HashMap<>();
 
   private long pinnedBytes;
 
-  /** How many pins hold each stack, built or not. */
+  /** How many pins hold each section, built or not. */
   private final Map<Long, Integer> pinCounts = new HashMap<>();
 
-  /** Each owner's pinned stacks. */
+  /** Each owner's pinned sections. */
   private final Map<Object, Set<Long>> pins = new HashMap<>();
 
   /** Built since the last flush, and not yet on disk. Kept whatever the budget says. */
-  private final Map<Long, RegionStack> unwritten = new HashMap<>();
+  private final Map<Long, RegionSection> unwritten = new HashMap<>();
 
   /** Invalidated since the last flush: to come off disk. */
   private final Set<Long> removed = new HashSet<>();
 
-  private final Map<Long, CompletableFuture<RegionStack>> loading = new HashMap<>();
+  private final Map<Long, CompletableFuture<RegionSection>> loading = new HashMap<>();
   private final Set<Long> changedWhileLoading = new HashSet<>();
 
   private long memoryHits;
@@ -94,13 +96,13 @@ public final class RegionStore<C> {
    * Creates a store.
    *
    * @param spec how the domain's terrain is cut into regions
-   * @param memoryBudget how many bytes of stacks not pinned to keep in memory
-   * @param directory where to keep stacks on disk, or {@code null} to keep them only in memory
+   * @param memoryBudget how many bytes of sections not pinned to keep in memory
+   * @param directory where to keep sections on disk, or {@code null} to keep them only in memory
    * @param disk where disk reads and writes run; one thread, so they never race
-   * @param builds where a stack is built when its terrain arrives later rather than at once
+   * @param builds where a section is built when its terrain arrives later rather than at once
    */
   public RegionStore(
-      RegionSpec<C> spec,
+      RegionSpec<C, K> spec,
       long memoryBudget,
       @Nullable Path directory,
       Executor disk,
@@ -110,7 +112,7 @@ public final class RegionStore<C> {
     this.files = directory == null ? null : new RegionFiles(directory, spec);
     this.disk = disk;
     this.builds = builds;
-    this.builders = ThreadLocal.withInitial(() -> new RegionStackBuilder<>(spec));
+    this.builders = ThreadLocal.withInitial(() -> new RegionSectionBuilder<>(spec));
   }
 
   /**
@@ -118,41 +120,48 @@ public final class RegionStore<C> {
    * for a benchmark or a test.
    *
    * @param spec how the domain's terrain is cut into regions
-   * @param <C> the platform's stack of terrain
+   * @param <C> the platform's terrain
+   * @param <K> the terrain's classes
    * @return the store
    */
-  public static <C> RegionStore<C> inMemory(RegionSpec<C> spec) {
+  public static <C, K extends Enum<K> & RegionKind> RegionStore<C, K> inMemory(
+      RegionSpec<C, K> spec) {
     return new RegionStore<>(spec, Long.MAX_VALUE, null, Runnable::run, Runnable::run);
   }
 
   /**
-   * Returns how this store's stacks are built.
+   * Returns how this store's sections are built.
    *
    * @return the spec
    */
-  public RegionSpec<C> spec() {
+  public RegionSpec<C, K> spec() {
     return spec;
   }
 
   /**
-   * Returns a stack, from memory, from disk, or by building it from terrain {@code source}
+   * Returns a section, from memory, from disk, or by building it from terrain {@code source}
    * supplies.
    *
-   * <p>Immediate when the stack is in memory, or when every step on the way to it — the disk read,
-   * the terrain — answered at once. Otherwise a future that completes once the stack is ready; a
-   * search should keep what it was handed rather than ask again, since a tight budget may already
-   * have evicted it.
+   * <p>Immediate when the section is in memory, when every step on the way to it — the disk read,
+   * the terrain — answered at once, or when it is wholly outside the domain, which is never read.
+   * Otherwise a future that completes once the section is ready; a search should keep what it was
+   * handed rather than ask again, since a tight budget may already have evicted it.
    *
-   * @param stackX the stack X
-   * @param stackZ the stack Z
-   * @param source where to read the terrain if the stack has to be built
-   * @return the stack
+   * @param sectionX the section X
+   * @param sectionY the section Y
+   * @param sectionZ the section Z
+   * @param source where to read the terrain if the section has to be built
+   * @return the section
    */
-  public FutureOr<RegionStack> stack(int stackX, int stackZ, TerrainSource<C> source) {
-    long key = RegionStack.key(stackX, stackZ);
-    CompletableFuture<RegionStack> promise;
+  public FutureOr<RegionSection> section(
+      int sectionX, int sectionY, int sectionZ, TerrainSource<C> source) {
+    if (spec.outside(sectionX, sectionY, sectionZ)) {
+      return FutureOr.of(RegionSection.empty(spec, sectionX, sectionY, sectionZ));
+    }
+    long key = RegionSection.key(sectionX, sectionY, sectionZ);
+    CompletableFuture<RegionSection> promise;
     synchronized (this) {
-      RegionStack known = pinned.get(key);
+      RegionSection known = pinned.get(key);
       if (known == null) {
         known = memory.get(key);
       }
@@ -166,7 +175,7 @@ public final class RegionStore<C> {
         memoryHits++;
         return FutureOr.of(known);
       }
-      CompletableFuture<RegionStack> inFlight = loading.get(key);
+      CompletableFuture<RegionSection> inFlight = loading.get(key);
       if (inFlight != null) {
         return FutureOr.from(inFlight);
       }
@@ -175,30 +184,35 @@ public final class RegionStore<C> {
       promise = new CompletableFuture<>();
       loading.put(key, promise);
     }
-    load(stackX, stackZ, source, promise);
+    load(sectionX, sectionY, sectionZ, key, source, promise);
     return FutureOr.from(promise);
   }
 
   private void load(
-      int stackX, int stackZ, TerrainSource<C> source, CompletableFuture<RegionStack> to) {
+      int sx,
+      int sy,
+      int sz,
+      long key,
+      TerrainSource<C> source,
+      CompletableFuture<RegionSection> to) {
     boolean stale;
     synchronized (this) {
       // Invalidated and not yet removed from disk: what is there is the terrain before the change.
-      stale = removed.contains(RegionStack.key(stackX, stackZ));
+      stale = removed.contains(key);
     }
     if (files == null || stale) {
-      build(stackX, stackZ, source, to);
+      build(sx, sy, sz, key, source, to);
       return;
     }
     disk.execute(
         () -> {
-          RegionStack stored;
+          RegionSection stored;
           long started = System.nanoTime();
           try {
-            stored = files.read(stackX, stackZ);
+            stored = files.read(sx, sy, sz);
           } catch (IOException | RuntimeException unreadable) {
-            // A file that cannot be read is a stack that has to be built again; the next write
-            // of that stack replaces it.
+            // A file that cannot be read is a section that has to be built again; the next write
+            // of that section replaces it.
             stored = null;
           }
           long took = System.nanoTime() - started;
@@ -209,32 +223,36 @@ public final class RegionStore<C> {
             }
           }
           if (stored != null) {
-            settle(stackX, stackZ, stored, true, false, to);
+            settle(key, stored, true, false, to);
           } else {
             // Built on the build pool: the disk thread is one thread, shared by every domain's
-            // reads
-            // and writes, and a build is far slower than a read.
-            builds.execute(() -> build(stackX, stackZ, source, to));
+            // reads and writes, and a build is far slower than a read.
+            builds.execute(() -> build(sx, sy, sz, key, source, to));
           }
         });
   }
 
   private void build(
-      int stackX, int stackZ, TerrainSource<C> source, CompletableFuture<RegionStack> to) {
+      int sx,
+      int sy,
+      int sz,
+      long key,
+      TerrainSource<C> source,
+      CompletableFuture<RegionSection> to) {
     FutureOr<C> terrain;
     try {
-      terrain = source.stack(stackX, stackZ);
+      terrain = source.section(sx, sy, sz);
     } catch (RuntimeException failed) {
-      fail(stackX, stackZ, to, failed);
+      fail(key, to, failed);
       return;
     }
     if (terrain.isImmediate()) {
       boolean readable = terrain.value() != null;
       try {
-        settle(stackX, stackZ, built(stackX, stackZ, terrain.value()), readable, readable, to);
+        settle(key, built(sx, sy, sz, terrain.value()), readable, readable, to);
       } catch (RuntimeException failed) {
-        // Failed, not thrown: left in flight, the stack would park every later search on it.
-        fail(stackX, stackZ, to, failed);
+        // Failed, not thrown: left in flight, the section would park every later search on it.
+        fail(key, to, failed);
       }
       return;
     }
@@ -246,82 +264,83 @@ public final class RegionStore<C> {
               try {
                 C readable = failure == null ? arrived : null;
                 boolean real = readable != null;
-                settle(stackX, stackZ, built(stackX, stackZ, readable), real, real, to);
+                settle(key, built(sx, sy, sz, readable), real, real, to);
               } catch (RuntimeException failed) {
-                fail(stackX, stackZ, to, failed);
+                fail(key, to, failed);
               }
             },
             builds);
   }
 
-  private RegionStack built(int stackX, int stackZ, @Nullable C terrain) {
+  private RegionSection built(int sx, int sy, int sz, @Nullable C terrain) {
     long started = System.nanoTime();
-    RegionStack stack = builders.get().build(stackX, stackZ, terrain);
+    RegionSection section = builders.get().build(sx, sy, sz, terrain);
     long took = System.nanoTime() - started;
     synchronized (this) {
       built++;
       buildNanos += took;
     }
-    return stack;
+    return section;
   }
 
   /**
-   * Keeps a stack that has arrived, unless its terrain changed meanwhile, and hands it over.
+   * Keeps a section that has arrived, unless its terrain changed meanwhile, and hands it over.
    *
-   * <p>A stack whose terrain could not be read is handed over but not kept: the terrain may be
-   * generated, or a load policy relax, and a remembered empty stack would wall it off for every
+   * <p>A section whose terrain could not be read is handed over but not kept: the terrain may be
+   * generated, or a load policy relax, and a remembered empty section would wall it off for every
    * later search.
    *
    * @param keep whether it describes real terrain, built or read back
    * @param fresh whether it was built just now, and so belongs on disk
    */
   private void settle(
-      int stackX,
-      int stackZ,
-      RegionStack stack,
+      long key,
+      RegionSection section,
       boolean keep,
       boolean fresh,
-      CompletableFuture<RegionStack> to) {
-    long key = RegionStack.key(stackX, stackZ);
+      CompletableFuture<RegionSection> to) {
     synchronized (this) {
       loading.remove(key);
       boolean changed = changedWhileLoading.remove(key);
       if (!changed && keep) {
-        remember(key, stack);
+        remember(key, section);
         if (fresh && files != null) {
-          unwritten.put(key, stack);
+          unwritten.put(key, section);
           removed.remove(key);
         }
       }
     }
-    to.complete(stack);
+    to.complete(section);
   }
 
-  private void fail(int stackX, int stackZ, CompletableFuture<RegionStack> to, Throwable failure) {
+  private void fail(long key, CompletableFuture<RegionSection> to, Throwable failure) {
     synchronized (this) {
-      loading.remove(RegionStack.key(stackX, stackZ));
-      changedWhileLoading.remove(RegionStack.key(stackX, stackZ));
+      loading.remove(key);
+      changedWhileLoading.remove(key);
     }
     to.completeExceptionally(failure);
   }
 
   /**
-   * Pins the stacks within {@code radius} of a stack for an owner, releasing whatever the owner had
-   * pinned before.
+   * Pins the sections within {@code radius} of a section for an owner, releasing whatever the owner
+   * had pinned before.
    *
-   * <p>A pinned stack is kept in memory whatever the budget, once built; pinning does not build it.
-   * A stack pinned by several owners stays until the last releases it.
+   * <p>A pinned section is kept in memory whatever the budget, once built; pinning does not build
+   * it. A section pinned by several owners stays until the last releases it.
    *
    * @param owner whoever the pin is for, such as a navigating player's id
-   * @param stackX the centre stack X
-   * @param stackZ the centre stack Z
-   * @param radius how many stacks out from the centre, along X and Z
+   * @param sectionX the centre section X
+   * @param sectionY the centre section Y
+   * @param sectionZ the centre section Z
+   * @param radius how many sections out from the centre, along every axis
    */
-  public synchronized void pin(Object owner, int stackX, int stackZ, int radius) {
+  public synchronized void pin(Object owner, int sectionX, int sectionY, int sectionZ, int radius) {
     Set<Long> wanted = new HashSet<>();
     for (int dx = -radius; dx <= radius; dx++) {
-      for (int dz = -radius; dz <= radius; dz++) {
-        wanted.add(RegionStack.key(stackX + dx, stackZ + dz));
+      for (int dy = -radius; dy <= radius; dy++) {
+        for (int dz = -radius; dz <= radius; dz++) {
+          wanted.add(RegionSection.key(sectionX + dx, sectionY + dy, sectionZ + dz));
+        }
       }
     }
     Set<Long> before = pins.put(owner, wanted);
@@ -341,7 +360,7 @@ public final class RegionStore<C> {
   }
 
   /**
-   * Releases everything an owner has pinned. Its stacks are then kept only as the budget allows.
+   * Releases everything an owner has pinned. Its sections are then kept only as the budget allows.
    *
    * @param owner whoever the pin was for
    */
@@ -358,11 +377,11 @@ public final class RegionStore<C> {
 
   private void hold(long key) {
     if (pinCounts.merge(key, 1, Integer::sum) == 1) {
-      RegionStack stack = memory.remove(key);
-      if (stack != null) {
-        memoryBytes -= stack.footprintBytes();
-        pinned.put(key, stack);
-        pinnedBytes += stack.footprintBytes();
+      RegionSection section = memory.remove(key);
+      if (section != null) {
+        memoryBytes -= section.footprintBytes();
+        pinned.put(key, section);
+        pinnedBytes += section.footprintBytes();
       }
     }
   }
@@ -370,27 +389,29 @@ public final class RegionStore<C> {
   private void letGo(long key) {
     if (pinCounts.merge(key, -1, Integer::sum) == 0) {
       pinCounts.remove(key);
-      RegionStack stack = pinned.remove(key);
-      if (stack != null) {
-        pinnedBytes -= stack.footprintBytes();
+      RegionSection section = pinned.remove(key);
+      if (section != null) {
+        pinnedBytes -= section.footprintBytes();
         // Most recently used: the owner was just near it.
-        memory.put(key, stack);
-        memoryBytes += stack.footprintBytes();
+        memory.put(key, section);
+        memoryBytes += section.footprintBytes();
       }
     }
   }
 
   /**
-   * Forgets a stack because a block in it changed.
+   * Forgets a section because a block it was read from changed: one in it, or, since a class may
+   * read the cells over and under it, one just above or below it.
    *
    * <p>Cheap, and safe to call on the server thread for every block event.
    *
-   * @param stackX the stack X
-   * @param stackZ the stack Z
+   * @param sectionX the section X
+   * @param sectionY the section Y
+   * @param sectionZ the section Z
    */
-  public synchronized void invalidate(int stackX, int stackZ) {
-    long key = RegionStack.key(stackX, stackZ);
-    RegionStack dropped = memory.remove(key);
+  public synchronized void invalidate(int sectionX, int sectionY, int sectionZ) {
+    long key = RegionSection.key(sectionX, sectionY, sectionZ);
+    RegionSection dropped = memory.remove(key);
     if (dropped != null) {
       memoryBytes -= dropped.footprintBytes();
     }
@@ -408,22 +429,23 @@ public final class RegionStore<C> {
   }
 
   /**
-   * Returns whether a stack is in memory, pinned or not. Says nothing about disk.
+   * Returns whether a section is in memory, pinned or not. Says nothing about disk.
    *
-   * @param stackX the stack X
-   * @param stackZ the stack Z
+   * @param sectionX the section X
+   * @param sectionY the section Y
+   * @param sectionZ the section Z
    * @return {@code true} if it is
    */
-  public synchronized boolean inMemory(int stackX, int stackZ) {
-    long key = RegionStack.key(stackX, stackZ);
+  public synchronized boolean inMemory(int sectionX, int sectionY, int sectionZ) {
+    long key = RegionSection.key(sectionX, sectionY, sectionZ);
     return memory.containsKey(key) || pinned.containsKey(key);
   }
 
   /**
-   * Writes every stack built since the last flush, and removes every invalidated one, on the disk
+   * Writes every section built since the last flush, and removes every invalidated one, on the disk
    * thread.
    *
-   * <p>A write that fails puts its stacks back, so the next flush tries again.
+   * <p>A write that fails puts its sections back, so the next flush tries again.
    *
    * @return a future completing when the write is done
    */
@@ -431,7 +453,7 @@ public final class RegionStore<C> {
     if (files == null) {
       return CompletableFuture.completedFuture(null);
     }
-    Map<Long, RegionStack> writing;
+    Map<Long, RegionSection> writing;
     Set<Long> removing;
     synchronized (this) {
       if (unwritten.isEmpty() && removed.isEmpty()) {
@@ -448,12 +470,12 @@ public final class RegionStore<C> {
             files.write(writing.values(), removing);
           } catch (IOException failed) {
             synchronized (this) {
-              // Not a stack invalidated while the write ran: putting it back would serve, and
+              // Not a section invalidated while the write ran: putting it back would serve, and
               // then write, the terrain before the change.
               writing.forEach(
-                  (key, stack) -> {
+                  (key, section) -> {
                     if (!removed.contains(key)) {
-                      unwritten.putIfAbsent(key, stack);
+                      unwritten.putIfAbsent(key, section);
                     }
                   });
               removed.addAll(removing);
@@ -465,8 +487,8 @@ public final class RegionStore<C> {
   }
 
   /**
-   * Releases the files the store holds open, on the disk thread. Unwritten stacks are not written:
-   * {@link #flush} first.
+   * Releases the files the store holds open, on the disk thread. Unwritten sections are not
+   * written: {@link #flush} first.
    *
    * @return a future completing once they are closed
    */
@@ -510,26 +532,26 @@ public final class RegionStore<C> {
   /**
    * What a store has done.
    *
-   * @param unpinnedColumns stacks held in memory now that are not pinned, within the budget
+   * @param unpinnedSections sections held in memory now that are not pinned, within the budget
    * @param unpinnedBytes their approximate footprint
-   * @param pinnedColumns pinned stacks held in memory now, beyond the budget
+   * @param pinnedSections pinned sections held in memory now, beyond the budget
    * @param pinnedBytes their approximate footprint
-   * @param unwrittenStacks stacks built and not yet on disk
-   * @param memoryHits stacks answered from memory
-   * @param diskLoads stacks read back from disk
+   * @param unwrittenSections sections built and not yet on disk
+   * @param memoryHits sections answered from memory
+   * @param diskLoads sections read back from disk
    * @param diskNanos time spent reading the disk, including reads that found nothing
-   * @param builds stacks built from terrain
+   * @param builds sections built from terrain
    * @param buildNanos time spent building them
-   * @param evictions stacks dropped from memory for the budget
+   * @param evictions sections dropped from memory for the budget
    * @param diskBytesRead record bytes read
    * @param diskBytesWritten bytes written
    */
   public record Stats(
-      int unpinnedColumns,
+      int unpinnedSections,
       long unpinnedBytes,
-      int pinnedColumns,
+      int pinnedSections,
       long pinnedBytes,
-      int unwrittenStacks,
+      int unwrittenSections,
       long memoryHits,
       long diskLoads,
       long diskNanos,
@@ -539,29 +561,29 @@ public final class RegionStore<C> {
       long diskBytesRead,
       long diskBytesWritten) {}
 
-  /** Puts a stack in memory as most recently used, evicting the least recent past the budget. */
-  private void remember(long key, RegionStack stack) {
+  /** Puts a section in memory as most recently used, evicting the least recent past the budget. */
+  private void remember(long key, RegionSection section) {
     if (pinCounts.containsKey(key)) {
-      RegionStack previous = pinned.put(key, stack);
+      RegionSection previous = pinned.put(key, section);
       if (previous != null) {
         pinnedBytes -= previous.footprintBytes();
       }
-      pinnedBytes += stack.footprintBytes();
+      pinnedBytes += section.footprintBytes();
       return;
     }
-    RegionStack previous = memory.put(key, stack);
+    RegionSection previous = memory.put(key, section);
     if (previous != null) {
       memoryBytes -= previous.footprintBytes();
     }
-    memoryBytes += stack.footprintBytes();
+    memoryBytes += section.footprintBytes();
     trim(key);
   }
 
-  /** Evicts the least recently used stacks past the budget, but never {@code keep}. */
+  /** Evicts the least recently used sections past the budget, but never {@code keep}. */
   private void trim(long keep) {
-    Iterator<Map.Entry<Long, RegionStack>> eldest = memory.entrySet().iterator();
+    Iterator<Map.Entry<Long, RegionSection>> eldest = memory.entrySet().iterator();
     while (memoryBytes > memoryBudget && eldest.hasNext()) {
-      Map.Entry<Long, RegionStack> entry = eldest.next();
+      Map.Entry<Long, RegionSection> entry = eldest.next();
       if (entry.getKey() == keep) {
         continue; // never the one just asked for
       }

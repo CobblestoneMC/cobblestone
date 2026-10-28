@@ -38,7 +38,7 @@ final class SpongeRegionListener {
     this.worlds = worlds;
   }
 
-  /** Every block whose change matters forgets its chunk's regions. */
+  /** Every block whose change matters forgets the regions read from it. */
   @Listener(order = Order.POST)
   public void onChange(ChangeBlockEvent.Post event) {
     MinecraftWorld world = worlds.wrap(event.world());
@@ -48,7 +48,7 @@ final class SpongeRegionListener {
         continue;
       }
       Vector3i position = receipt.originalBlock().position();
-      stores.invalidate(world, position.x() >> 4, position.z() >> 4);
+      stores.invalidate(world, position.x(), position.y(), position.z());
     }
   }
 
