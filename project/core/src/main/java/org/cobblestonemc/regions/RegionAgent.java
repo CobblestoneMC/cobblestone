@@ -8,10 +8,10 @@
 package org.cobblestonemc.regions;
 
 /**
- * One traveller, as the region layer sees it: which classes of terrain it can be in, and what
+ * One traveler, as the region layer sees it: which classes of terrain it can be in, and what
  * crossing a region of each costs it.
  *
- * <p>The only place the traveller meets the {@link RegionGraph}. The graph knows terrain and is
+ * <p>The only place the traveler meets the {@link RegionGraph}. The graph knows terrain and is
  * shared by every agent; an agent knows nothing of the graph.
  *
  * <p><b>Every crossing costs at least {@link #cheapest()} per block of straight-line distance.</b>

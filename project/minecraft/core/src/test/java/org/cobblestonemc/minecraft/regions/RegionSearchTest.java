@@ -240,7 +240,7 @@ class RegionSearchTest {
 
   @Test
   void anAreaDestinationIsReachedAtItsEdgeNotDeeperIn() {
-    // Flat ground, and a destination of everything east of x 100. The ground region the traveller
+    // Flat ground, and a destination of everything east of x 100. The ground region the traveler
     // stands in reaches across the edge; arriving is reaching x 100, not walking on into it.
     Predicate<Cell> inside = cell -> cell.x() >= 100;
     UnaryOperator<Cell> nearestInside = cell -> new Cell(Math.max(cell.x(), 100), FEET, cell.z());
@@ -258,7 +258,7 @@ class RegionSearchTest {
   @Test
   void anAreaDestinationIsReachedByItsNearestEntranceNotItsNearestEdge() {
     // A walled town, x 100..160 and z -30..30, in bedrock: its only gate is on the east side, away
-    // from a traveller coming from the west. The nearest cell of the town is just inside the west
+    // from a traveler coming from the west. The nearest cell of the town is just inside the west
     // wall, but the town is reached the moment the gate is passed.
     Terrain town =
         (x, y, z) -> {

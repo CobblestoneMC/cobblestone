@@ -33,7 +33,7 @@ import org.jetbrains.annotations.Nullable;
  * <p><b>Changes invalidate.</b> {@link #invalidate} drops a section, and the next search to need it
  * builds it again. A section being built when its terrain changes is handed to the search that
  * asked for it — it is at most a moment stale — but not kept. Only seams cross sections, and seams
- * are built per search, so a change never reaches a neighbour.
+ * are built per search, so a change never reaches a neighbor.
  *
  * <p>Thread-safe. Searches on several workers, block-change listeners on the server thread and
  * builds all use it at once; its maps are guarded by the store's own lock, and nothing slow —
@@ -239,10 +239,10 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
    * it. A section pinned by several owners stays until the last releases it.
    *
    * @param owner whoever the pin is for, such as a navigating player's id
-   * @param sectionX the centre section X
-   * @param sectionY the centre section Y
-   * @param sectionZ the centre section Z
-   * @param radius how many sections out from the centre, along every axis
+   * @param sectionX the center section X
+   * @param sectionY the center section Y
+   * @param sectionZ the center section Z
+   * @param radius how many sections out from the center, along every axis
    */
   public synchronized void pin(Object owner, int sectionX, int sectionY, int sectionZ, int radius) {
     Set<Long> wanted = new HashSet<>();

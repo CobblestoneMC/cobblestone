@@ -106,7 +106,7 @@ public final class RegionSearch<K extends Enum<K> & RegionKind> {
    * <p>A destination that is one cell passes {@code goal::equals} and {@code cell -> goal}.
    *
    * @param graph the terrain
-   * @param agent who is travelling
+   * @param agent who is traveling
    * @param origin where the fine search starts
    * @param inside whether a cell is part of the destination
    * @param nearest the destination's cell nearest another cell
@@ -224,7 +224,7 @@ public final class RegionSearch<K extends Enum<K> & RegionKind> {
     }
 
     // A ceiling, so a region the graph cannot reach does not send the search across the domain to
-    // prove it: past the price of tunnelling straight there, no answer is worth more search.
+    // prove it: past the price of tunneling straight there, no answer is worth more search.
     double answer = cell.distance(goal) * agent.fallback();
     if (arrivals.contains(region)) {
       Cell at = arrival(region, cell.x(), cell.y(), cell.z());
@@ -296,7 +296,7 @@ public final class RegionSearch<K extends Enum<K> & RegionKind> {
    * holds that connects to it.
    *
    * <p>A flood outward from the goal's region, through regions of any class, keeping each usable
-   * region whose box's bottom centre is inside the destination: where a body in it stands; resumed
+   * region whose box's bottom center is inside the destination: where a body in it stands; resumed
    * where it left off when it has to wait for terrain. For a destination that is one cell, only the
    * goal's region.
    *
@@ -372,7 +372,7 @@ public final class RegionSearch<K extends Enum<K> & RegionKind> {
       return -1;
     }
     // Resident first, then commit: a settle that discovered halfway through that it needed a
-    // section would leave half its neighbours relaxed.
+    // section would leave half its neighbors relaxed.
     CompletableFuture<Void> waiting = completingRegion(graph.portalA(portal));
     if (waiting == null) {
       waiting = completingRegion(graph.portalB(portal));
@@ -441,7 +441,7 @@ public final class RegionSearch<K extends Enum<K> & RegionKind> {
         graph.directed(portal) ? agent.fall(graph.regionClass(region), graph.fall(portal)) : 0;
     double near = base + fall + onward(region, nx, ny, nz, onward, fx, fy, fz);
 
-    // The point of the segment toward the origin closest to the portal's centre, pulled onto it.
+    // The point of the segment toward the origin closest to the portal's center, pulled onto it.
     double ox = origin.x() - fx;
     double oy = origin.y() - fy;
     double oz = origin.z() - fz;
@@ -528,21 +528,14 @@ public final class RegionSearch<K extends Enum<K> & RegionKind> {
       return region;
     }
     for (int dy = 1; dy <= 4; dy++) {
-      region = graph.regionAt(x, y - dy, z);
+      region = regionWithin(x, y, z, x, y - dy, z);
       if (usable(region)) {
         return region;
       }
     }
     int[][] around = {{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, 1, 0}};
     for (int[] offset : around) {
-      int nx = x + offset[0];
-      int nz = z + offset[2];
-      // Only within the cell's own column of sections: a neighbour's region would have to be
-      // completed, and this is a fallback, not a reason to fetch.
-      if (graph.sectionOf(nx) != graph.sectionOf(x) || graph.sectionOf(nz) != graph.sectionOf(z)) {
-        continue;
-      }
-      region = graph.regionAt(nx, y + offset[1], nz);
+      region = regionWithin(x, y, z, x + offset[0], y + offset[1], z + offset[2]);
       if (usable(region)) {
         return region;
       }
@@ -551,7 +544,20 @@ public final class RegionSearch<K extends Enum<K> & RegionKind> {
   }
 
   /**
-   * Whether the destination reaches into a region: its cell nearest the region's bottom centre,
+   * The region at a cell, if it is in the same section as another: a neighbor's region would have
+   * to be completed, and a fallback is not a reason to fetch.
+   */
+  private int regionWithin(int x, int y, int z, int nx, int ny, int nz) {
+    if (graph.sectionOf(nx) != graph.sectionOf(x)
+        || graph.sectionOf(ny) != graph.sectionOf(y)
+        || graph.sectionOf(nz) != graph.sectionOf(z)) {
+      return RegionGraph.NONE;
+    }
+    return graph.regionAt(nx, ny, nz);
+  }
+
+  /**
+   * Whether the destination reaches into a region: its cell nearest the region's bottom center,
    * where a body in it stands, lies within the region's bounds.
    */
   private boolean reaches(int region) {
@@ -566,7 +572,7 @@ public final class RegionSearch<K extends Enum<K> & RegionKind> {
 
   /**
    * Where crossing an arrival region from a point arrives: the destination's cell nearest the
-   * point, if it lies within the region, and otherwise the one nearest the region's bottom centre,
+   * point, if it lies within the region, and otherwise the one nearest the region's bottom center,
    * which does.
    */
   private Cell arrival(int region, double x, double y, double z) {

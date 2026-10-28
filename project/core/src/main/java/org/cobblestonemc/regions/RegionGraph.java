@@ -32,11 +32,11 @@ import org.jetbrains.annotations.Nullable;
  *
  * <p><b>Sections come from a {@link RegionStore}; seams are built here.</b> A section — every
  * region and portal inside one cube of terrain — is built once and shared by every search through
- * the store. This graph places each section it needs at an offset of its own, and joins
- * neighbouring sections the first time the search needs to leave one: seams need both sides, and
- * are cheap enough to compute per search. A section is <em>complete</em> once every seam and fall
- * that could reach its regions is built: its regions will never gain another portal, which is what
- * lets a search relax across a region once and trust that it saw everything.
+ * the store. This graph places each section it needs at an offset of its own, and joins neighboring
+ * sections the first time the search needs to leave one: seams need both sides, and are cheap
+ * enough to compute per search. A section is <em>complete</em> once every seam and fall that could
+ * reach its regions is built: its regions will never gain another portal, which is what lets a
+ * search relax across a region once and trust that it saw everything.
  *
  * <p><b>What a seam holds.</b> Each join is built by exactly one seam, so a pair of regions is one
  * portal however many cells it touches along:
@@ -51,7 +51,7 @@ import org.jetbrains.annotations.Nullable;
  *       its builder kept, down into the sections below.
  * </ul>
  *
- * <p><b>Agent-independent.</b> Nothing here knows who is travelling: a region says what the terrain
+ * <p><b>Agent-independent.</b> Nothing here knows who is traveling: a region says what the terrain
  * is, and a {@link RegionAgent} decides what that is worth and whether it is passable at all.
  *
  * <p>Not thread-safe. One solve owns one graph, and the search that reads it is single-flight.
@@ -359,10 +359,10 @@ public final class RegionGraph<C, K extends Enum<K> & RegionKind> {
   /**
    * Completes a section: places every section its seams and falls read, then builds them.
    *
-   * <p>The seams that can reach its regions are the side seams with its four neighbours from a
-   * level below it, whose ceiling a step crosses, to as many above as a fall can drop from; its two
-   * floor seams; and its own falls and those of the sections above it a fall can drop from. Those
-   * read one more level beyond each end, so the columns around it are placed that far up and down.
+   * <p>The seams that can reach its regions are the side seams with its four neighbors from a level
+   * below it, whose ceiling a step crosses, to as many above as a fall can drop from; its two floor
+   * seams; and its own falls and those of the sections above it a fall can drop from. Those read
+   * one more level beyond each end, so the columns around it are placed that far up and down.
    */
   private @Nullable CompletableFuture<Void> completeSection(int sx, int sy, int sz) {
     Placed section = sections.get(RegionSection.key(sx, sy, sz));
@@ -475,7 +475,7 @@ public final class RegionGraph<C, K extends Enum<K> & RegionKind> {
   // ------------------------------------------------------------------------------------------
 
   /**
-   * Joins a section to its neighbour in positive X (or positive Z), once.
+   * Joins a section to its neighbor in positive X (or positive Z), once.
    *
    * <p>The same rules a section applies inside itself — faces touching, a walking step a level up
    * or down, a fall from a ledge — across the boundary between two. A step down from a cell on

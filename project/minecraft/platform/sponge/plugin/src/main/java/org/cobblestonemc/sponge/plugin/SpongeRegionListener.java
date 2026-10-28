@@ -24,8 +24,8 @@ import org.spongepowered.math.vector.Vector3i;
  *
  * <p>Sponge reports every block change through one event, after it happened, so a single listener
  * covers what Paper needs a dozen for: each block whose change matters to the regions ({@link
- * SpongeTerrain#classifiesAlike}) forgets its chunk's, in a batch, to be built again when a search
- * next needs them.
+ * SpongeTerrain#identicalClassification}) forgets the sections read from it, in a batch, to be
+ * built again when a search next needs them.
  */
 final class SpongeRegionListener {
 
@@ -42,7 +42,7 @@ final class SpongeRegionListener {
   public void onChange(ChangeBlockEvent.Post event) {
     MinecraftWorld world = worlds.wrap(event.world());
     for (BlockTransactionReceipt receipt : event.receipts()) {
-      if (SpongeTerrain.classifiesAlike(
+      if (SpongeTerrain.identicalClassification(
           receipt.originalBlock().state(), receipt.finalBlock().state())) {
         continue;
       }

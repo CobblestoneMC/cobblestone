@@ -25,7 +25,7 @@ import org.jetbrains.annotations.Nullable;
  *       RegionSpec#detourRatio()}), because a region is priced in straight lines. A family is
  *       usually one class; the terrain gives a region filled from a larger one its class from the
  *       mix of its cells.
- *   <li><b>Contacts</b> scans for neighbouring cells in different regions — and for walking steps a
+ *   <li><b>Contacts</b> scans for neighboring cells in different regions — and for walking steps a
  *       level up or down, and ledges a body can drop from — and turns each touching pair into a
  *       portal whose box covers every cell where they meet. The rules are {@link RegionJoins}, the
  *       same a graph joins sections by. A fall that leaves through the floor is kept as an exit,
@@ -40,7 +40,7 @@ import org.jetbrains.annotations.Nullable;
 public final class RegionSectionBuilder<C, K extends Enum<K> & RegionKind> {
 
   /**
-   * Blocks of detour allowed regardless of distance, so a seed's immediate neighbours never split.
+   * Blocks of detour allowed regardless of distance, so a seed's immediate neighbors never split.
    */
   private static final double DETOUR_SLACK = 3.0;
 
@@ -156,7 +156,7 @@ public final class RegionSectionBuilder<C, K extends Enum<K> & RegionKind> {
     exitCount = 0;
     if (uniform()) {
       // Solid rock, open sky, deep water: one class edge to edge. A full cube is convex and
-      // connected, so the fill would make it one region anyway, and every neighbour inside it is
+      // connected, so the fill would make it one region anyway, and every neighbor inside it is
       // the same region, so nothing inside it joins.
       if (cls[0] < 0) {
         return section(sectionX, sectionY, sectionZ, RegionSection.NONE, null, null);

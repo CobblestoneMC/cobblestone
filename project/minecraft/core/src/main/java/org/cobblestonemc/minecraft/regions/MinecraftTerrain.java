@@ -153,32 +153,6 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk, Reg
     }
   }
 
-  /**
-   * Returns whether one block replacing another leaves every class as it was.
-   *
-   * <p>A cell's class is read from its own block and the blocks above and below it, by the
-   * properties compared here, so a change none of them sees changes no region: a crop growing, a
-   * fluid's level moving, grass turning to dirt. A listener that skips those saves the section a
-   * rebuild. Reads what {@link #classify} reads; change one, change both.
-   *
-   * @param before the block that was there
-   * @param after the block that is there now
-   * @return {@code true} if the regions need not be rebuilt for it
-   */
-  public static boolean classifiesAlike(MinecraftBlock before, MinecraftBlock after) {
-    return before.isWater() == after.isWater()
-        && before.isLava() == after.isLava()
-        && before.isClimbable() == after.isClimbable()
-        && before.isScaffolding() == after.isScaffolding()
-        && before.isPassable() == after.isPassable()
-        && before.isSolidTop() == after.isSolidTop()
-        && before.boostsSoulSpeed() == after.boostsSoulSpeed()
-        && (before.speedFactor() < 1) == (after.speedFactor() < 1)
-        && Double.isInfinite(before.breakTimeSeconds())
-            == Double.isInfinite(after.breakTimeSeconds())
-        && before.miningClass() == after.miningClass();
-  }
-
   /** The class of breakable material in a mining bucket: one each, and no block is mixed rock. */
   static RegionClass solid(MiningClass mining) {
     return switch (mining) {
@@ -257,8 +231,8 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk, Reg
   private static final double SANDSTONE_HARDNESS = 0.8;
 
   /**
-   * The classes a rock region can be labelled, softest first. Very hard rock is not one: it fills
-   * on its own; see {@link RegionClass#VERY_HARD_ROCK}.
+   * The classes a rock region can be labeled, softest first. Very hard rock is not one: it fills on
+   * its own; see {@link RegionClass#VERY_HARD_ROCK}.
    */
   private static final RegionClass[] ROCK_BANDS = {
     RegionClass.SOFT_ROCK, RegionClass.ROCK, RegionClass.MIXED_ROCK, RegionClass.HARD_ROCK

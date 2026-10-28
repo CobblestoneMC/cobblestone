@@ -154,9 +154,9 @@ public record Scenario(
   }
 
   /**
-   * A traveller's capabilities, which decide which modes the search is given.
+   * A traveler's capabilities, which decide which modes the search is given.
    *
-   * <p>Lives on {@link Loadout} rather than on a scenario: the route and the traveller vary
+   * <p>Lives on {@link Loadout} rather than on a scenario: the route and the traveler vary
    * independently, and every scenario is run under every loadout.
    */
   public record AgentSpec(
@@ -179,7 +179,7 @@ public record Scenario(
     /** Returns the production defaults. */
     public static SearchLimits defaults() {
       return new SearchLimits(
-          SearchSettings.DEFAULT_HEURISTIC_WEIGHT,
+          SearchSettings.DEFAULT_HEURISTIC.defaultWeight(),
           SearchSettings.DEFAULT_MAX_CELLS_VISITED,
           SearchSettings.DEFAULT_MAX_WALL_CLOCK_MILLIS);
     }
@@ -514,7 +514,7 @@ public record Scenario(
         box(destination, file),
         warps(root, file),
         new SearchLimits(
-            number(limits, "heuristicWeight", SearchSettings.DEFAULT_HEURISTIC_WEIGHT),
+            number(limits, "heuristicWeight", SearchSettings.DEFAULT_HEURISTIC.defaultWeight()),
             integer(limits, "maxCellsVisited", SearchSettings.DEFAULT_MAX_CELLS_VISITED),
             (long)
                 number(limits, "maxWallClockMillis", SearchSettings.DEFAULT_MAX_WALL_CLOCK_MILLIS)),

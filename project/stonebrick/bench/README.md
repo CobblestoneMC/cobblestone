@@ -69,7 +69,7 @@ only: wall time and heap.
 point overworld/ocean@player RUNNING_AVERAGE w=2.00 success cost=195.020 expanded=26461 closest=0 legs=1
 ```
 
-Every point also prints what it cost: wall time (`ms`), time parked on the modelled disk (`ioMs`),
+Every point also prints what it cost: wall time (`ms`), time parked on the modeled disk (`ioMs`),
 chunk reads (`reads`, `coldReads` for first reads) and cells opened (`opened`). Under `REGIONS` it
 adds how many chunk columns the region layer read (`columns`, `regionReads`) and where it spent its
 time and memory: reading chunks and building sections from them (`readMs`, `buildMs`), joining the
