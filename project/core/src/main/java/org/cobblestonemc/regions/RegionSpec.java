@@ -7,20 +7,23 @@
 
 package org.cobblestonemc.regions;
 
+import org.cobblestonemc.DomainBounds;
+
 /**
- * Everything that decides how one world's terrain is cut into regions: the terrain's rules, the
- * world's height, and the fill's detour ratio. Two columns built under equal specs are the same
+ * Everything that decides how one domain's terrain is cut into regions: the terrain's rules, the
+ * domain's bounds, and the fill's detour ratio. Two sections built under equal specs are the same
  * graph; under different ones they are not, and must never meet in one search.
  *
- * <p><b>The geometry is the terrain's.</b> A column is {@code width} cells along X and Z, as the
- * terrain's own unit of reading is ({@link RegionTerrain#columnShift()}), and is stacked from cubic
- * sections of that size from {@link #columnMinY()} up. Cell {@code (x, y, z)} of a section is
- * {@code (y << 2·shift) | (z << shift) | x}; of a column, {@code y} counts from {@link
- * #columnMinY()}.
+ * <p><b>The geometry is the terrain's.</b> Terrain is built in cubic sections, as wide as the
+ * terrain says ({@link RegionTerrain#sectionShift()}), on a grid from the origin. Cell {@code (x,
+ * y, z)} of a section is {@code (y << 2·shift) | (z << shift) | x}. The domain's bounds, along any
+ * axis or none, only say which cells are its: cells past them belong to no region, and a section
+ * with no cell inside them is never read.
  *
- * @param <C> the platform's column of terrain
+ * @param <C> the platform's terrain, as a {@link TerrainSource} reads it
+ * @param <K> the terrain's classes
  */
-public final class RegionSpec<C> {
+public final class RegionSpec<C, K extends Enum<K> & RegionKind> {
 
   /**
    * How much longer than a straight line the walk from a region's seed to one of its cells may be,
@@ -32,75 +35,83 @@ public final class RegionSpec<C> {
    */
   public static final double DEFAULT_DETOUR_RATIO = 1.5;
 
-  private final RegionTerrain<C> terrain;
-  private final int worldMinY;
-  private final int worldMaxY;
+  private final RegionTerrain<C, K> terrain;
+  private final K[] classes;
+  private final DomainBounds bounds;
   private final double detourRatio;
   private final int shift;
-  private final int columnMinY;
-  private final int sections;
+  private final int fallSections;
 
   /**
    * Creates a spec.
    *
-   * @param terrain what the cells are, and how they join
-   * @param worldMinY the world's lowest Y, inclusive
-   * @param worldMaxY the world's highest Y, inclusive
+   * @param terrain what the cells are
+   * @param bounds the cells the domain holds
    * @param detourRatio how much longer than a straight line a walk inside one region may be; see
    *     {@link #DEFAULT_DETOUR_RATIO}
    */
-  public RegionSpec(RegionTerrain<C> terrain, int worldMinY, int worldMaxY, double detourRatio) {
+  public RegionSpec(RegionTerrain<C, K> terrain, DomainBounds bounds, double detourRatio) {
     this.terrain = terrain;
-    this.worldMinY = worldMinY;
-    this.worldMaxY = worldMaxY;
+    this.classes = terrain.classes().getEnumConstants();
+    if (classes.length > Byte.MAX_VALUE) {
+      // A region keeps its class in a byte, and -1 is "none".
+      throw new IllegalArgumentException(classes.length + " classes is more than 127");
+    }
+    this.bounds = bounds;
     this.detourRatio = detourRatio;
-    this.shift = terrain.columnShift();
+    this.shift = terrain.sectionShift();
     if (shift < 1 || shift > 5) {
       // A section's cells are numbered in a short; 32³ is the most that leaves room for "none".
-      throw new IllegalArgumentException("column shift " + shift + " is outside 1-5");
+      throw new IllegalArgumentException("section shift " + shift + " is outside 1-5");
     }
-    // Whole sections, so a section never straddles the world's floor or ceiling; cells outside the
-    // world are classified as nothing.
-    this.columnMinY = (worldMinY >> shift) << shift;
-    this.sections = (worldMaxY >> shift) - (worldMinY >> shift) + 1;
+    this.fallSections = (terrain.deepestFall() + width() - 1) >> shift;
   }
 
   /**
    * Creates a spec with the default detour ratio.
    *
-   * @param terrain what the cells are, and how they join
-   * @param worldMinY the world's lowest Y, inclusive
-   * @param worldMaxY the world's highest Y, inclusive
+   * @param terrain what the cells are
+   * @param bounds the cells the domain holds
    */
-  public RegionSpec(RegionTerrain<C> terrain, int worldMinY, int worldMaxY) {
-    this(terrain, worldMinY, worldMaxY, DEFAULT_DETOUR_RATIO);
+  public RegionSpec(RegionTerrain<C, K> terrain, DomainBounds bounds) {
+    this(terrain, bounds, DEFAULT_DETOUR_RATIO);
   }
 
   /**
-   * Returns what the cells are, and how they join.
+   * Returns what the cells are.
    *
    * @return the terrain
    */
-  public RegionTerrain<C> terrain() {
+  public RegionTerrain<C, K> terrain() {
     return terrain;
   }
 
   /**
-   * Returns the world's lowest Y, inclusive.
+   * Returns the class a region stores as a number.
    *
-   * @return the floor
+   * @param stored the class's ordinal
+   * @return the class
    */
-  public int worldMinY() {
-    return worldMinY;
+  K classOf(int stored) {
+    return classes[stored];
   }
 
   /**
-   * Returns the world's highest Y, inclusive.
+   * Returns how many classes the terrain has.
    *
-   * @return the ceiling
+   * @return the class count
    */
-  public int worldMaxY() {
-    return worldMaxY;
+  int classCount() {
+    return classes.length;
+  }
+
+  /**
+   * Returns the cells the domain holds.
+   *
+   * @return the bounds
+   */
+  public DomainBounds bounds() {
+    return bounds;
   }
 
   /**
@@ -113,7 +124,7 @@ public final class RegionSpec<C> {
   }
 
   /**
-   * Returns the base-2 log of a column's width, and of a section's every side.
+   * Returns the base-2 log of a section's side.
    *
    * @return the shift
    */
@@ -122,7 +133,7 @@ public final class RegionSpec<C> {
   }
 
   /**
-   * Returns how many cells wide a column is along X and Z, and how tall a section is.
+   * Returns how many cells a section's side is.
    *
    * @return the width
    */
@@ -140,40 +151,60 @@ public final class RegionSpec<C> {
   }
 
   /**
-   * Returns the lowest Y a column counts its cells from: the world's floor, rounded down to a
-   * section.
+   * Returns the section holding a coordinate, along any axis.
    *
-   * @return the column floor
+   * @param coordinate the X, Y or Z
+   * @return the section's X, Y or Z
    */
-  public int columnMinY() {
-    return columnMinY;
+  public int sectionOf(int coordinate) {
+    return coordinate >> shift;
   }
 
   /**
-   * Returns how many sections tall a column is.
+   * Returns how many sections below its own a fall can land in: the terrain's deepest fall, in
+   * sections, rounded up.
    *
    * @return the section count
    */
-  public int sections() {
-    return sections;
+  int fallSections() {
+    return fallSections;
   }
 
   /**
-   * Returns how many cells tall a column is.
+   * Returns whether a section holds no cell of the domain, and so has no regions to read.
    *
-   * @return the column height
+   * @param sectionX the section X
+   * @param sectionY the section Y
+   * @param sectionZ the section Z
+   * @return {@code true} if it is wholly outside
    */
-  public int height() {
-    return sections << shift;
+  boolean outside(int sectionX, int sectionY, int sectionZ) {
+    return beyond(sectionX, bounds.minX(), bounds.maxX())
+        || beyond(sectionY, bounds.minY(), bounds.maxY())
+        || beyond(sectionZ, bounds.minZ(), bounds.maxZ());
+  }
+
+  private boolean beyond(int section, int min, int max) {
+    long low = (long) section << shift;
+    return low + width() - 1 < min || low > max;
   }
 
   /**
-   * Returns the column holding a world X or Z.
+   * Returns whether a section holds a cell outside the domain.
    *
-   * @param coordinate the world X or Z
-   * @return the column X or Z
+   * @param sectionX the section X
+   * @param sectionY the section Y
+   * @param sectionZ the section Z
+   * @return {@code true} if the domain's edge crosses it
    */
-  public int columnOf(int coordinate) {
-    return coordinate >> shift;
+  boolean straddles(int sectionX, int sectionY, int sectionZ) {
+    return crosses(sectionX, bounds.minX(), bounds.maxX())
+        || crosses(sectionY, bounds.minY(), bounds.maxY())
+        || crosses(sectionZ, bounds.minZ(), bounds.maxZ());
+  }
+
+  private boolean crosses(int section, int min, int max) {
+    long low = (long) section << shift;
+    return low < min || low + width() - 1 > max;
   }
 }

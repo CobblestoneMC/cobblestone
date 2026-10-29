@@ -30,9 +30,10 @@ import org.cobblestonemc.plugin.navigator.Vec3;
 
 /**
  * The Paper binding of {@link AbstractTrailNavigator}: the shared trail geometry with Paper's
- * native particle spawning. Each configured particle type is drawn per-particle (DUST takes a
- * random colour from the configured palette — discrete, not blended, so they sparkle), shown only
- * to the guided player, and only when the target position is owned by the current region thread
+ * native particle spawning. Each configured particle type is drawn per-particle (TRAIL and DUST
+ * take a random colour from the configured palette — discrete, not blended, so they sparkle; a
+ * TRAIL particle drifts along the trail for exactly its configured lifetime), shown only to the
+ * guided player, and only when the target position is owned by the current region thread
  * (Folia-safe). Verified on a live server; the follow geometry is unit-tested in plugin-core.
  */
 final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
@@ -43,6 +44,8 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
   private final List<Particle> particles;
   private final List<Particle> highlightParticles;
   private final List<Particle.DustOptions> dusts;
+  private final List<Color> colors;
+  private final int particleTicks;
 
   PaperTrailNavigator(
       Player player,
@@ -52,6 +55,7 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
       List<Particle> highlightParticleTypes,
       List<Color> palette,
       double density,
+      int particleTicks,
       int recalcDistance,
       Messages messages,
       TrailLabels<Location> labels,
@@ -60,7 +64,8 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
     this.player = player;
     this.particles = List.copyOf(particleTypes);
     this.highlightParticles = List.copyOf(highlightParticleTypes);
-    List<Color> colors = palette.isEmpty() ? List.of(Color.AQUA) : palette;
+    this.colors = palette.isEmpty() ? List.of(Color.fromRGB(0x4AA8FF)) : List.copyOf(palette);
+    this.particleTicks = Math.max(1, particleTicks);
     this.dusts = new ArrayList<>(colors.size());
     for (Color color : colors) {
       dusts.add(new Particle.DustOptions(color, DUST_SIZE));
@@ -134,7 +139,18 @@ final class PaperTrailNavigator extends AbstractTrailNavigator<Location> {
     }
     ThreadLocalRandom random = ThreadLocalRandom.current();
     final var particle = particles.get(random.nextInt(particles.size()));
-    if (particle == Particle.DUST) {
+    if (particle == Particle.TRAIL) {
+      // Drifts along the trail at its flow speed (at 20 TPS) and is gone after particleTicks.
+      double seconds = particleTicks / 20.0;
+      Location target = location.clone().add(vx * seconds, vy * seconds, vz * seconds);
+      Particle.TRAIL
+          .builder()
+          .location(location)
+          .receivers(player)
+          .data(
+              new Particle.Trail(target, colors.get(random.nextInt(colors.size())), particleTicks))
+          .spawn();
+    } else if (particle == Particle.DUST) {
       Particle.DUST
           .builder()
           .location(location)

@@ -92,19 +92,28 @@ public final class SpongeTrailNavigatorFactory implements NavigatorFactory {
         highlightParticles,
         colors,
         config.get(keys.trailDensity),
+        config.get(keys.trailParticleTicks),
         config.get(keys.tripsRecalculateDistance),
         messages,
         labels,
         showLabel);
   }
 
-  /** Resolves vanilla particle ids ({@code minecraft:<name>}), skipping unknown ones. */
+  /**
+   * Resolves vanilla particle ids ({@code minecraft:<name>}), skipping unknown ones. {@code trail}
+   * becomes dust where the server can't draw it, as before Minecraft 1.21.2.
+   */
   private static List<ParticleType> parseParticles(List<String> names) {
     List<ParticleType> particles = new ArrayList<>();
     for (String name : names) {
+      String key = name.trim().toLowerCase(Locale.ROOT);
+      if (key.equals("trail")) {
+        particles.add(SpongeTrailNavigator.trailOrDust());
+        continue;
+      }
       Sponge.game()
           .registry(RegistryTypes.PARTICLE_TYPE)
-          .<ParticleType>findValue(ResourceKey.minecraft(name.trim().toLowerCase(Locale.ROOT)))
+          .<ParticleType>findValue(ResourceKey.minecraft(key))
           .ifPresent(particles::add);
     }
     return particles;

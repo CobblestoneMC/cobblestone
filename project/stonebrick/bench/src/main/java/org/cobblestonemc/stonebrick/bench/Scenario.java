@@ -53,8 +53,8 @@ import org.yaml.snakeyaml.Yaml;
  * @param expectedOutcome the outcome the scenario asserts, or {@code null} to assert nothing
  * @param ungenerated chunks to present as never generated, whatever the capture holds
  * @param heuristic which estimate the fine search runs on
- * @param verify the loadouts {@code bench verify} checks this route for by default: those whose
- *     Dijkstra samples are cheap enough to run as a suite
+ * @param verifyRegions the loadouts {@code bench verify-regions} checks the region estimate on this
+ *     route for by default: the suite's, each promised to fit its limits
  */
 public record Scenario(
     String id,
@@ -74,7 +74,7 @@ public record Scenario(
     String expectedOutcome,
     Set<Long> ungenerated,
     Heuristic heuristic,
-    Set<String> verify) {
+    Set<String> verifyRegions) {
 
   /**
    * Which estimate the fine search runs on.
@@ -88,7 +88,8 @@ public record Scenario(
      * No estimate at all, turning the search into Dijkstra.
      *
      * <p>Not for production: it expands everything. It is the only way to get a route's <i>true</i>
-     * optimal cost, which is what {@code bench verify} measures the region estimates against.
+     * optimal cost, which is what {@code bench verify-regions} measures the region estimates
+     * against.
      */
     ZERO(null),
 
@@ -166,9 +167,9 @@ public record Scenario(
   }
 
   /**
-   * A traveller's capabilities, which decide which modes the search is given.
+   * A traveler's capabilities, which decide which modes the search is given.
    *
-   * <p>Lives on {@link Loadout} rather than on a scenario: the route and the traveller vary
+   * <p>Lives on {@link Loadout} rather than on a scenario: the route and the traveler vary
    * independently, and every scenario is run under every loadout.
    */
   public record AgentSpec(
@@ -354,7 +355,7 @@ public record Scenario(
         expectedOutcome,
         ungenerated,
         value,
-        verify);
+        verifyRegions);
   }
 
   /**
@@ -385,7 +386,7 @@ public record Scenario(
         expectedOutcome,
         ungenerated,
         heuristic,
-        verify);
+        verifyRegions);
   }
 
   /**
@@ -413,7 +414,7 @@ public record Scenario(
         expectedOutcome,
         ungenerated,
         heuristic,
-        verify);
+        verifyRegions);
   }
 
   /**
@@ -446,7 +447,7 @@ public record Scenario(
         expectedOutcome,
         ungenerated,
         heuristic,
-        verify);
+        verifyRegions);
   }
 
   /**
@@ -490,7 +491,7 @@ public record Scenario(
         expectedOutcome,
         ungenerated,
         heuristic,
-        verify);
+        verifyRegions);
   }
 
   private static Scenario from(Map<String, Object> root, Path file) throws IOException {
@@ -542,7 +543,7 @@ public record Scenario(
         string(root, "expect", "success"),
         ungenerated(root, file),
         heuristic,
-        new LinkedHashSet<>(stringList(root, "verify")));
+        new LinkedHashSet<>(stringList(root, "verifyRegions")));
   }
 
   /**

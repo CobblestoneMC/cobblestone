@@ -12,12 +12,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.cobblestonemc.DomainBounds;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld.Environment;
 import org.cobblestonemc.minecraft.MiningClass;
-import org.cobblestonemc.regions.RegionColumn;
-import org.cobblestonemc.regions.RegionColumnBuilder;
+import org.cobblestonemc.regions.RegionSectionBuilder;
 import org.cobblestonemc.regions.RegionSpec;
 import org.junit.jupiter.api.Test;
 
@@ -58,10 +58,10 @@ class MinecraftTerrainTest {
 
   /** Counts of rock cells, by class. */
   private static int[] counts(int soft, int rock, int hard) {
-    int[] counts = new int[RegionClass.ID_BOUND];
-    counts[RegionClass.SOFT_ROCK.id()] = soft;
-    counts[RegionClass.ROCK.id()] = rock;
-    counts[RegionClass.HARD_ROCK.id()] = hard;
+    int[] counts = new int[RegionClass.values().length];
+    counts[RegionClass.SOFT_ROCK.ordinal()] = soft;
+    counts[RegionClass.ROCK.ordinal()] = rock;
+    counts[RegionClass.HARD_ROCK.ordinal()] = hard;
     return counts;
   }
 
@@ -70,7 +70,7 @@ class MinecraftTerrainTest {
   }
 
   private static RegionClass label(MinecraftTerrain terrain, int[] counts) {
-    return RegionClass.byId(terrain.label(RegionClass.ROCK.id(), counts));
+    return terrain.label(RegionClass.ROCK, counts);
   }
 
   @Test
@@ -95,11 +95,11 @@ class MinecraftTerrainTest {
 
   @Test
   void rockOfEveryHardnessIsOneFamilyAndDirtIsItsOwn() {
-    int rock = RegionClass.ROCK.id();
-    assertEquals(rock, TERRAIN.family(RegionClass.SOFT_ROCK.id()));
-    assertEquals(rock, TERRAIN.family(RegionClass.HARD_ROCK.id()));
-    assertEquals(RegionClass.LOOSE.id(), TERRAIN.family(RegionClass.LOOSE.id()));
-    assertNotEquals(rock, TERRAIN.family(RegionClass.WOODEN.id()));
+    RegionClass rock = RegionClass.ROCK;
+    assertEquals(rock, TERRAIN.family(RegionClass.SOFT_ROCK));
+    assertEquals(rock, TERRAIN.family(RegionClass.HARD_ROCK));
+    assertEquals(RegionClass.LOOSE, TERRAIN.family(RegionClass.LOOSE));
+    assertNotEquals(rock, TERRAIN.family(RegionClass.WOODEN));
   }
 
   @Test
@@ -130,28 +130,24 @@ class MinecraftTerrainTest {
   }
 
   private static int regions(MinecraftChunk chunk) {
-    RegionColumnBuilder<MinecraftChunk> builder =
-        new RegionColumnBuilder<>(new RegionSpec<>(TERRAIN, 0, 31));
-    RegionColumn column = builder.build(0, 0, chunk);
-    return column.regions();
+    RegionSectionBuilder<MinecraftChunk, RegionClass> builder =
+        new RegionSectionBuilder<>(new RegionSpec<>(TERRAIN, DomainBounds.vertical(0, 31)));
+    return builder.build(0, 0, 0, chunk).regions() + builder.build(0, 1, 0, chunk).regions();
   }
 
   @Test
   void aChangeMattersOnlyIfItChangesWhatClassesAreReadFrom() {
     // A crop growing another stage: passable before and after, so no cell's class moves.
-    assertTrue(MinecraftTerrain.classifiesAlike(air(), air()));
-    assertFalse(MinecraftTerrain.classifiesAlike(air(), STONE), "a wall where there was none");
-    assertFalse(MinecraftTerrain.classifiesAlike(STONE, GRAVEL), "dug differently");
-    assertTrue(MinecraftTerrain.classifiesAlike(STONE, solid(MiningClass.ROCK)), "ore for stone");
+    assertTrue(air().identicalClassification(air()));
+    assertFalse(air().identicalClassification(STONE), "a wall where there was none");
+    assertFalse(STONE.identicalClassification(GRAVEL), "dug differently");
+    assertTrue(STONE.identicalClassification(solid(MiningClass.ROCK)), "ore for stone");
   }
 
   @Test
-  void everyClassReadsBackFromItsId() {
-    for (RegionClass clazz : RegionClass.values()) {
-      assertEquals(clazz, RegionClass.byId(clazz.id()));
-    }
+  void everyMiningBucketIsBreakableMaterial() {
     for (MiningClass mining : MiningClass.values()) {
-      assertEquals(mining, RegionClass.of(mining).mining());
+      assertEquals(RegionClass.Body.SOLID, MinecraftTerrain.solid(mining).body());
     }
   }
 }

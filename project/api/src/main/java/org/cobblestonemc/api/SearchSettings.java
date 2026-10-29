@@ -187,13 +187,13 @@ public final class SearchSettings {
      *
      * <p>Prices the journey from terrain it has actually looked at rather than from terrain it has
      * just crossed, and knows a wall from a tunnel. Costs chunk reads and CPU to classify the
-     * terrain -- a long route touches hundreds of columns -- once: regions are shared between
+     * terrain -- a long route touches hundreds of chunks -- once: regions are shared between
      * searches.
      *
      * <p>Weighted 1.7 by default, from a sweep: below about 1.5 the search starts running out of
      * cells, and above it every step up trades fewer nodes for slightly dearer paths. The estimate
-     * is not admissible: on {@code bench verify}'s suite it averages about 0.95 of the true cost
-     * beyond 64 blocks of the goal, and about a fifth of samples run over it.
+     * is not admissible: on {@code bench verify-regions}' suite it averages about 0.89 of the true
+     * cost on the cheapest path, and about a sixth of samples run over it.
      */
     REGIONS(1.7);
 

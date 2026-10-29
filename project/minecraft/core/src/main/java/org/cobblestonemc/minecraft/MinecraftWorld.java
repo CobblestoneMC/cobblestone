@@ -8,6 +8,7 @@
 package org.cobblestonemc.minecraft;
 
 import org.cobblestonemc.Domain;
+import org.cobblestonemc.DomainBounds;
 
 /**
  * A Minecraft world — the single concrete {@link Domain} type for the Minecraft embedder.
@@ -25,6 +26,30 @@ public interface MinecraftWorld extends Domain {
    * @return the world key
    */
   String key();
+
+  /**
+   * Returns the inclusive minimum buildable/traversable Y coordinate.
+   *
+   * @return the world floor
+   */
+  int minY();
+
+  /**
+   * Returns the inclusive maximum buildable/traversable Y coordinate.
+   *
+   * @return the world ceiling
+   */
+  int maxY();
+
+  /**
+   * Returns the world's bounds: a floor and a ceiling, and no edge along X or Z.
+   *
+   * @return the bounds
+   */
+  @Override
+  default DomainBounds bounds() {
+    return DomainBounds.vertical(minY(), maxY());
+  }
 
   /**
    * Returns the world's environment, for dimension-aware cost tuning.

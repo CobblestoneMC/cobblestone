@@ -7,7 +7,7 @@
 
 package org.cobblestonemc.sponge;
 
-import org.cobblestonemc.minecraft.regions.MinecraftTerrain;
+import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.spongepowered.api.block.BlockState;
 import org.spongepowered.api.world.server.ServerWorld;
 
@@ -34,14 +34,14 @@ public final class SpongeTerrain {
 
   /**
    * Returns whether one block replacing another leaves the region layer's terrain as it was; see
-   * {@link MinecraftTerrain#classifiesAlike}.
+   * {@link MinecraftBlock#identicalClassification}.
    *
    * @param before the block that was there
    * @param after the block that is there now
    * @return {@code true} if the change does not matter to the regions
    */
-  public static boolean classifiesAlike(BlockState before, BlockState after) {
-    return MinecraftTerrain.classifiesAlike(new SpongeBlock(before), new SpongeBlock(after));
+  public static boolean identicalClassification(BlockState before, BlockState after) {
+    return new SpongeBlock(before).identicalClassification(new SpongeBlock(after));
   }
 
   /**

@@ -186,7 +186,7 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
       // exceed the total reads it is supposed to be part of.
       regionReads.incrementAndGet();
     }
-    // Decoding happens inside the read, after its modelled delay: a live server pays its decode as
+    // Decoding happens inside the read, after its modeled delay: a live server pays its decode as
     // part of the read, and charging it up front would let a prefetch nobody waits on cost the
     // solve real work.
     return io.read(

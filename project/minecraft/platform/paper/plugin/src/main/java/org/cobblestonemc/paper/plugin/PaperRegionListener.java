@@ -41,13 +41,13 @@ import org.cobblestonemc.paper.WorldWrapper;
 /**
  * Keeps the regions honest.
  *
- * <p><b>Every way a block changes, if the change matters, forgets its chunk's regions.</b> A column
- * of regions is a fact about the blocks it was built from, and one built before a player dug a
- * tunnel would route the next search around a wall that is gone. Each event compares the block
- * before and after ({@link PaperTerrain#classifiesAlike}), so the changes that leave the terrain as
- * the regions see it — a crop growing, water finding its level, grass turning to dirt — cost
- * nothing; the rest are forgotten in batches by {@link RegionStores}. Changes no event reports,
- * from other plugins writing blocks directly, are not seen.
+ * <p><b>Every way a block changes, if the change matters, forgets the regions read from it.</b> A
+ * section of regions is a fact about the blocks it was built from, and one built before a player
+ * dug a tunnel would route the next search around a wall that is gone. Each event compares the
+ * block before and after ({@link PaperTerrain#identicalClassification}), so the changes that leave
+ * the terrain as the regions see it — a crop growing, water finding its level, grass turning to
+ * dirt — cost nothing; the rest are forgotten in batches by {@link RegionStores}. Changes no event
+ * reports, from other plugins writing blocks directly, are not seen.
  *
  * <p>Block events run at {@link EventPriority#MONITOR} and ignore cancelled events: they react to
  * what happened, never to what was attempted.
@@ -65,7 +65,7 @@ final class PaperRegionListener implements Listener {
 
   /** A block is becoming {@code after}. */
   private void changed(Block block, BlockData after) {
-    if (!PaperTerrain.classifiesAlike(block.getBlockData(), after)) {
+    if (!PaperTerrain.identicalClassification(block.getBlockData(), after)) {
       forget(block);
     }
   }
@@ -85,7 +85,7 @@ final class PaperRegionListener implements Listener {
   }
 
   private void forget(Block block) {
-    stores.invalidate(worlds.wrap(block.getWorld()), block.getX() >> 4, block.getZ() >> 4);
+    stores.invalidate(worlds.wrap(block.getWorld()), block.getX(), block.getY(), block.getZ());
   }
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -95,7 +95,7 @@ final class PaperRegionListener implements Listener {
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   public void onPlace(BlockPlaceEvent event) {
-    if (!PaperTerrain.classifiesAlike(
+    if (!PaperTerrain.identicalClassification(
         event.getBlockReplacedState().getBlockData(), event.getBlockPlaced().getBlockData())) {
       forget(event.getBlock());
     }

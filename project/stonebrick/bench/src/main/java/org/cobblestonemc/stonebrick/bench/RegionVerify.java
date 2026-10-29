@@ -14,8 +14,10 @@ import java.util.List;
 import java.util.Locale;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.CobblestoneLogger;
+import org.cobblestonemc.DomainBounds;
 import org.cobblestonemc.SearchObserver;
 import org.cobblestonemc.minecraft.regions.MinecraftTerrain;
+import org.cobblestonemc.minecraft.regions.RegionClass;
 import org.cobblestonemc.regions.RegionGraph;
 import org.cobblestonemc.regions.RegionSearch;
 import org.cobblestonemc.regions.RegionSpec;
@@ -24,12 +26,15 @@ import org.cobblestonemc.stonebrick.format.CorpusLayout;
 import org.cobblestonemc.stonebrick.platform.Capture;
 
 /**
- * Checks the region estimate against the cost it claims to estimate.
+ * Checks the region layer's estimate against the cost it claims to estimate. It verifies the
+ * estimate, not the routes: the search's paths are the benchmark's to measure.
  *
- * <p>The ground truth is measured. For each sampled cell the route is solved again from that cell
- * with no heuristic at all — Dijkstra, weight 1 — which returns the genuine optimal cost to the
- * destination. That is expensive, which is why this samples rather than sweeps, and it is the only
- * number worth comparing an estimate against.
+ * <p><b>The ground truth is one Dijkstra.</b> The route is solved once with no estimate at all,
+ * which finds the genuinely cheapest path. Every stretch of a cheapest path, from a cell on it to
+ * the destination, is itself cheapest, so what remains from each of its cells is the total less
+ * what the steps before it cost. Samples are taken along that path, which is also where a sound
+ * estimate matters: one that pushed the search off the cheapest route would show there, and would
+ * not on the route it pushed the search onto.
  *
  * <p>The estimate is the region search's own answer, before the search's heuristic weight: the
  * weight is a tuning choice made against this measurement, not part of what is measured.
@@ -40,32 +45,25 @@ import org.cobblestonemc.stonebrick.platform.Capture;
  * is wrong in that direction is trading away more than the weight says it is, invisibly. Being
  * under is safe: it costs expansions, not correctness.
  */
-final class Verify {
+final class RegionVerify {
 
-  private Verify() {}
+  private RegionVerify() {}
 
   /**
-   * How far from the destination a sample has to be to count against the band.
-   *
-   * <p>{@code Tier2Search}'s endgame radius: inside it the search decays its weight towards 1, so
-   * the floor the weight sets does not apply there, and the ratios are noisy divisions by small
-   * remaining costs besides.
+   * The property a suite sets on each route's JVM, so the route also prints its ratios on a line of
+   * their own for the suite to gather.
    */
-  static final double FAR = 64.0;
+  static final String RATIOS_PROPERTY = "bench.verifyRegions.ratios";
 
-  /** Every route's far samples' ratios, for the aggregate at the end. */
-  static final List<Double> FAR_RATIOS = new ArrayList<>();
+  /** How the line of ratios a route prints for its suite begins. */
+  static final String RATIOS_PREFIX = "ratios:";
 
   /** Dijkstra expands everything, so it needs far more room than a normal solve. */
   private static final Scenario.SearchLimits DIJKSTRA_LIMITS =
       new Scenario.SearchLimits(1.0, 4_000_000, 600_000);
 
   /** One sampled cell: what the region layer said, and what the route actually costs from there. */
-  private record Sample(Cell cell, double estimate, double optimal, String outcome) {
-
-    boolean measured() {
-      return outcome.equals("success");
-    }
+  private record Sample(Cell cell, double estimate, double optimal) {
 
     /**
      * Whether this sample says anything about the estimate's quality.
@@ -75,7 +73,7 @@ final class Verify {
      * whole average useless.
      */
     boolean informative() {
-      return measured() && optimal > 1.0;
+      return optimal > 1.0;
     }
 
     double ratio() {
@@ -88,72 +86,71 @@ final class Verify {
    *
    * @param corpusRoot the corpus
    * @param scenario the route
-   * @param loadout the traveller
+   * @param loadout the traveler
    * @param samples how many cells to check
    * @param logger where the searches log
+   * @return the ratio of estimate to true cost at every informative sample
    * @throws IOException if the capture cannot be read
    */
-  static void run(
+  static List<Double> run(
       Path corpusRoot, Scenario scenario, Loadout loadout, int samples, CobblestoneLogger logger)
       throws IOException {
-    ScenarioRunner runner = new ScenarioRunner(corpusRoot, logger);
-
-    List<Cell> path = new ArrayList<>();
-    RunResult found =
-        runner.run(
-            scenario.withHeuristic(Scenario.Heuristic.REGIONS),
-            loadout,
-            new SearchObserver() {
-              @Override
-              public void solved(List<Cell> cells) {
-                path.addAll(cells);
-              }
-            });
-    if (path.isEmpty()) {
-      // The routes the estimate is worst on are the ones the weighted search cannot finish, so
-      // sampling only where it succeeded would measure the layer everywhere except where it
-      // matters. Dijkstra's own path is as good a place to sample, and is the truth besides.
-      runner.run(
-          scenario
-              .withHeuristic(Scenario.Heuristic.ZERO)
-              .withHeuristicWeight(1.0)
-              .withLimits(DIJKSTRA_LIMITS),
-          loadout,
-          new SearchObserver() {
-            @Override
-            public void solved(List<Cell> cells) {
-              path.addAll(cells);
-            }
-          });
+    if (!scenario.warps().isEmpty()) {
+      // The region layer prices walking, not teleports: against a route that warps, every estimate
+      // before the warp reads as over, and says nothing about the layer.
+      System.out.printf(
+          Locale.ROOT, "%s@%s: warps, which regions do not price%n", scenario.id(), loadout.name());
+      return List.of();
     }
-    if (path.isEmpty()) {
+    ScenarioRunner runner = new ScenarioRunner(corpusRoot, logger);
+    RunResult truth =
+        runner.run(
+            scenario
+                .withHeuristic(Scenario.Heuristic.ZERO)
+                .withHeuristicWeight(1.0)
+                .withLimits(DIJKSTRA_LIMITS),
+            loadout,
+            SearchObserver.none());
+    var cheapest = runner.lastPath();
+    if (cheapest == null) {
       System.out.printf(
           Locale.ROOT,
-          "%s@%s: no path to sample (%s, and Dijkstra found none either)%n",
+          "%s@%s: no path to sample (Dijkstra: %s)%n",
           scenario.id(),
           loadout.name(),
-          found.outcome());
-      return;
+          truth.outcome());
+      return List.of();
+    }
+    // Each cell of the cheapest path, and what remains from it.
+    List<Cell> path = new ArrayList<>();
+    List<Double> remaining = new ArrayList<>();
+    double left = cheapest.cost();
+    path.add(cheapest.origin().cell());
+    remaining.add(left);
+    for (var step : cheapest.steps()) {
+      left -= step.cost();
+      path.add(step.position().cell());
+      remaining.add(Math.max(0, left));
     }
 
     Capture capture = Capture.load(CorpusLayout.at(corpusRoot).capture(scenario.capture()).root());
     // Focused on the route's start, as the heuristic's own search is.
-    RegionSearch regions =
-        new RegionSearch(
+    RegionSearch<RegionClass> regions =
+        new RegionSearch<>(
             new RegionGraph<>(
                 RegionStore.inMemory(
                     new RegionSpec<>(
                         MinecraftTerrain.of(capture.environment(scenario.world())),
-                        capture.minY(scenario.world()),
-                        capture.maxY(scenario.world()),
+                        DomainBounds.vertical(
+                            capture.minY(scenario.world()), capture.maxY(scenario.world())),
                         ScenarioRunner.REGION_DETOUR)),
-                new DirectChunkColumns(capture, scenario.world())),
+                new DirectCaptureChunks(capture, scenario.world())),
             loadout.regionAgent(capture.environment(scenario.world())),
-            // The destination the route was solved to, area and all: measured to its centre
-            // instead, an area's estimates read as over the cost the whole way there.
-            scenario.nearestArrival(path.get(0)),
             path.get(0),
-            scenario::arrives);
+            // The destination the route was solved to, area and all: measured to its center
+            // instead, an area's estimates read as over the cost the whole way there.
+            scenario::arrives,
+            scenario::nearestArrival);
 
     System.out.printf(Locale.ROOT, "%n%s@%s%n", scenario.id(), loadout.name());
     System.out.printf(
@@ -161,43 +158,30 @@ final class Verify {
 
     List<Sample> measured = new ArrayList<>();
     for (int i = 0; i < samples; i++) {
-      Cell cell = path.get((int) ((long) i * (path.size() - 1) / Math.max(1, samples - 1)));
-      // Dijkstra from here: no estimate, no weight, so what comes back is the real thing.
-      RunResult truth =
-          runner.run(
-              scenario
-                  .withOrigin(cell)
-                  .withHeuristic(Scenario.Heuristic.ZERO)
-                  .withHeuristicWeight(1.0)
-                  // A diagnostic run offline, not something a budget applies to.
-                  .withLimits(DIJKSTRA_LIMITS),
-              loadout,
-              SearchObserver.none());
-      Sample sample = new Sample(cell, regions.costToGoal(cell), truth.pathCost(), truth.outcome());
+      int at = (int) ((long) i * (path.size() - 1) / Math.max(1, samples - 1));
+      Cell cell = path.get(at);
+      Sample sample = new Sample(cell, regions.costToGoal(cell), remaining.get(at));
       measured.add(sample);
       System.out.printf(
           Locale.ROOT,
-          "  %-22s %10.2f %10s %8s%n",
+          "  %-22s %10.2f %10.2f %8s%n",
           cell.x() + "," + cell.y() + "," + cell.z(),
           sample.estimate(),
-          sample.measured()
-              ? String.format(Locale.ROOT, "%.2f", sample.optimal())
-              : truth.outcome(),
+          sample.optimal(),
           sample.informative() ? String.format(Locale.ROOT, "%.3f", sample.ratio()) : "-");
     }
     summarise(measured);
-    // Only the far samples count against the band: they are the ones the weight's floor is about.
-    List<Double> far = new ArrayList<>();
-    for (Sample sample : measured) {
-      if (sample.informative() && sample.cell().distance(scenario.destination()) >= FAR) {
-        far.add(sample.ratio());
-      }
+    List<Double> ratios = measured.stream().filter(Sample::informative).map(Sample::ratio).toList();
+    if (!ratios.isEmpty()) {
+      System.out.println(header(ratios.size() + " informative samples"));
+      System.out.println("  " + band(ratios));
     }
-    if (!far.isEmpty()) {
-      FAR_RATIOS.addAll(far);
-      System.out.println(header(far.size() + " samples beyond " + (int) FAR + " blocks"));
-      System.out.println("  " + band(far));
+    if (System.getProperty(RATIOS_PROPERTY) != null) {
+      StringBuilder line = new StringBuilder(RATIOS_PREFIX);
+      ratios.forEach(ratio -> line.append(' ').append(ratio));
+      System.out.println(line);
     }
+    return ratios;
   }
 
   private static String header(String note) {
@@ -237,17 +221,19 @@ final class Verify {
         100.0 * over / n);
   }
 
-  /** Prints the band across every route verified. */
-  static void aggregate() {
-    if (FAR_RATIOS.isEmpty()) {
+  /**
+   * Prints the band across every route verified.
+   *
+   * @param ratios every route's informative ratios
+   */
+  static void aggregate(List<Double> ratios) {
+    if (ratios.isEmpty()) {
       return;
     }
     System.out.printf(
-        Locale.ROOT,
-        "%nAcross every route, samples beyond %.0f blocks (the band: >= 1/weight, <= 1)%n",
-        FAR);
-    System.out.println(header("n=" + FAR_RATIOS.size()));
-    System.out.println("  " + band(FAR_RATIOS));
+        Locale.ROOT, "%nAcross every route, informative samples (the band: >= 1/weight, <= 1)%n");
+    System.out.println(header("n=" + ratios.size()));
+    System.out.println("  " + band(ratios));
   }
 
   private static void summarise(List<Sample> samples) {

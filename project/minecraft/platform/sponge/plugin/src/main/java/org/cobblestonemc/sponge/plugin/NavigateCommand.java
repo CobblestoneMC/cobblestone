@@ -14,7 +14,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -51,6 +50,7 @@ import org.cobblestonemc.plugin.search.SearchRegistry;
 import org.cobblestonemc.plugin.trip.GuideSearch;
 import org.cobblestonemc.plugin.trip.LiveSearch;
 import org.cobblestonemc.plugin.trip.TripLabel;
+import org.cobblestonemc.plugin.trip.TripTarget;
 import org.cobblestonemc.sponge.SpongeNavigationServiceImpl;
 import org.spongepowered.api.command.Command;
 import org.spongepowered.api.command.CommandCompletion;
@@ -307,7 +307,7 @@ final class NavigateCommand {
         TripLabel.address(address),
         DestinationDetails.hover(address, destination),
         destination.destination(),
-        destination::exists,
+        destination.tripTarget(),
         flags,
         live,
         new RecentDestinations.Recent(address, resolved.optionTokens()));
@@ -319,7 +319,7 @@ final class NavigateCommand {
       TripLabel tripLabel,
       Component hover,
       Destination<RegionFactory> destination,
-      BooleanSupplier targetExists,
+      TripTarget target,
       NavigationFlags flags,
       boolean live,
       RecentDestinations.Recent recent) {
@@ -375,7 +375,7 @@ final class NavigateCommand {
                         liveSearch(player, destination, flags),
                         guideSearch(player, flags),
                         live,
-                        targetExists)
+                        target)
                     .whenComplete(
                         (outcome, tripError) -> {
                           if (tripError == null && outcome instanceof TripOutcome.Started) {

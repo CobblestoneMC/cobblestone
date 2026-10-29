@@ -16,8 +16,9 @@ import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 import org.cobblestonemc.minecraft.regions.MinecraftAgent;
 import org.cobblestonemc.minecraft.regions.MinecraftTerrain;
+import org.cobblestonemc.minecraft.regions.RegionClass;
 import org.cobblestonemc.minecraft.regions.RegionStores;
-import org.cobblestonemc.minecraft.regions.WorldChunkColumns;
+import org.cobblestonemc.minecraft.regions.WorldChunks;
 import org.cobblestonemc.regions.RegionHeuristic;
 import org.cobblestonemc.regions.RegionStore;
 import org.jetbrains.annotations.Nullable;
@@ -40,8 +41,8 @@ public final class MinecraftHeuristics {
    * do, or Tier 1 prices every route as if they could fly.
    *
    * <p>The region heuristic reads terrain through the search's own chunk source, and builds its
-   * column source per solve from the target region's own world: a trip through a portal has legs in
-   * different worlds, and a source bound to the origin's world would answer every later leg from
+   * terrain source per solve from the target region's own world: a trip through a portal has legs
+   * in different worlds, and a source bound to the origin's world would answer every later leg from
    * the wrong terrain without ever failing. Nothing is read up front. The fine search parks on an
    * estimate whose chunks have not arrived, the same way it parks waiting for blocks, so the
    * terrain that gets classified is the terrain the search actually asks about.
@@ -67,10 +68,9 @@ public final class MinecraftHeuristics {
     return switch (settings.settings().heuristic()) {
       case RUNNING_AVERAGE -> Heuristics.runningAverage(behavior.cheapestCostPerBlock());
       case REGIONS ->
-          new RegionHeuristic<MinecraftChunk>(
+          new RegionHeuristic<MinecraftChunk, RegionClass>(
               target ->
-                  new WorldChunkColumns(
-                      chunks, worldOf(target), target.nearestBoundaryCell(origin)),
+                  new WorldChunks(chunks, worldOf(target), target.nearestBoundaryCell(origin)),
               target ->
                   stores == null
                       ? RegionStore.inMemory(MinecraftTerrain.spec(worldOf(target)))

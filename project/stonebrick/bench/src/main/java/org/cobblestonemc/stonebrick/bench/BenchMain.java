@@ -30,8 +30,8 @@ import org.cobblestonemc.stonebrick.platform.IoProfile;
  *   bench accept   [--scenario id] [--tier ci|local]             run and record the results as accepted
  *   bench list                                                   show the corpus
  *   bench sweep    [--heuristic h] [--weights 1.5,2.0] [--io p]   the nodes-versus-cost curve
- *   bench verify   [--scenario id] [--agent a]                    estimates against Dijkstra's cost
- *                                                                  (no selection: the verify suite)
+ *   bench verify-regions [--scenario id] [--agent a]            the region estimate against Dijkstra
+ *                                                                  (no selection: the suite)
  *   bench check    [--scenario id]                                 can the bench use a new scenario?
  *   bench path     [--scenario id] [--agent a]                    the cells of the route found
  * </pre>
@@ -65,24 +65,43 @@ public final class BenchMain {
     List<Loadout> loadouts =
         selectLoadouts(Loadout.loadAll(options.corpusRoot().resolve(Loadout.FILE_NAME)), options);
 
-    if (options.command().equals("verify")) {
-      // Unselected, the suite: the routes and loadouts each scenario names as cheap to verify.
-      // Selected, whatever was asked for, however long its Dijkstra takes.
+    if (options.command().equals("verify-regions")) {
+      // Unselected, the suite: the routes each scenario declares cheap to verify, held to the
+      // suite's limits. Selected, whatever was asked for, however long its Dijkstra takes.
       boolean suite =
           options.scenarioId() == null
               && options.tag() == null
               && options.tier() == null
               && options.agent() == null;
+      if (suite) {
+        List<RegionVerifySuite.Route> routes = new ArrayList<>();
+        for (Scenario scenario : scenarios) {
+          for (Loadout loadout : loadouts) {
+            if (loadout.appliesTo(scenario) && scenario.verifyRegions().contains(loadout.name())) {
+              routes.add(new RegionVerifySuite.Route(scenario, loadout));
+            }
+          }
+        }
+        try {
+          if (!RegionVerifySuite.run(routes, options.corpusRoot(), options.scenariosDir())) {
+            System.exit(1);
+          }
+        } catch (InterruptedException interrupted) {
+          Thread.currentThread().interrupt();
+          System.exit(1);
+        }
+        return;
+      }
+      List<Double> ratios = new ArrayList<>();
       for (Scenario scenario : scenarios) {
         for (Loadout loadout : loadouts) {
-          if (!loadout.appliesTo(scenario)
-              || (suite && !scenario.verify().contains(loadout.name()))) {
-            continue;
+          if (loadout.appliesTo(scenario)) {
+            ratios.addAll(
+                RegionVerify.run(options.corpusRoot(), scenario, loadout, 12, new QuietLogger()));
           }
-          Verify.run(options.corpusRoot(), scenario, loadout, 12, new QuietLogger());
         }
       }
-      Verify.aggregate();
+      RegionVerify.aggregate(ratios);
       return;
     }
 
@@ -156,7 +175,7 @@ public final class BenchMain {
         System.out.println(
             "Unknown command '"
                 + options.command()
-                + "'. Try run, sweep, accept, list, check, path or verify.");
+                + "'. Try run, sweep, accept, list, check, path or verify-regions.");
         System.exit(2);
       }
     }
@@ -297,7 +316,7 @@ public final class BenchMain {
         if (!loadout.appliesTo(scenario)) {
           continue;
         }
-        // The same overrides a run honours. Accepting a configuration other than the one just
+        // The same overrides a run honors. Accepting a configuration other than the one just
         // measured would make the baseline a record of something nobody looked at.
         RunResult result =
             runner.run(applyOverrides(scenario, options), loadout, SearchObserver.none());
