@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicLong;
 import org.cobblestonemc.minecraft.ChunkFetch;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
@@ -38,6 +39,9 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
   private final Set<Long> ungenerated = new HashSet<>();
   private final MissingCaptureLog missing;
   private final Map<String, StonebrickWorld> worlds = new HashMap<>();
+
+  /** Reads made to build the region layer rather than to expand the search. */
+  private final AtomicLong regionReads = new AtomicLong();
 
   /**
    * Creates a platform over a loaded capture, with no simulated IO cost.
@@ -136,7 +140,35 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
     // for a blocked caller would have the caller remember a refusal as a fact about the world.
     // Here it changes nothing at all, because there is no queue to prioritise yet; the simulated
     // IO model is what will give it meaning.
-    String key = world.key();
+    return read(world.key(), chunkX, chunkZ, missing, false);
+  }
+
+  /**
+   * Fetches a column for the region layer.
+   *
+   * <p><b>The same disk, deliberately.</b> Charging these reads against the same {@link
+   * SimulatedChunkIo} puts them in the same queue as the search's own, which is what a live server
+   * does: the region layer and the fine search contend for one set of channels, and their latency
+   * lands on the same virtual clock. Giving the region layer its own free disk would make it look
+   * cheaper than it is, which is the thing worth measuring.
+   *
+   * <p>Its <em>missing</em>-capture accounting is separate, though, because reaching past the
+   * capture is expected of the region layer -- its backward search spreads outward -- and folding
+   * that into the search's log would have every region run declare itself degenerate.
+   *
+   * @param worldKey the world
+   * @param chunkX the chunk X
+   * @param chunkZ the chunk Z
+   * @param log where to record reads outside the capture
+   * @return the column, or a future of {@code null} where there is none
+   */
+  public CompletableFuture<ChunkFetch> fetchForRegions(
+      String worldKey, int chunkX, int chunkZ, MissingCaptureLog log) {
+    return read(worldKey, chunkX, chunkZ, log, true);
+  }
+
+  private CompletableFuture<ChunkFetch> read(
+      String key, int chunkX, int chunkZ, MissingCaptureLog log, boolean forRegions) {
     if (ungenerated.contains(((long) chunkX << 32) | (chunkZ & 0xFFFF_FFFFL))) {
       return CompletableFuture.completedFuture(ChunkFetch.Failed.permanent());
     }
@@ -145,10 +177,16 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
       // Not captured. Indistinguishable from ungenerated terrain to everything above, which is
       // exactly why it is recorded here — and charged nothing, because a read that finds no file
       // is not a read.
-      missing.missingColumn(key, chunkX, chunkZ);
+      log.missingColumn(key, chunkX, chunkZ);
       return CompletableFuture.completedFuture(ChunkFetch.Failed.permanent());
     }
-    // Decoding happens inside the read, after its modelled delay: a live server pays its decode as
+    if (forRegions) {
+      // Counted here rather than on entry: a column that is ungenerated or uncaptured returns
+      // above without touching the disk, and counting those would let the region layer's share
+      // exceed the total reads it is supposed to be part of.
+      regionReads.incrementAndGet();
+    }
+    // Decoding happens inside the read, after its modeled delay: a live server pays its decode as
     // part of the read, and charging it up front would let a prefetch nobody waits on cost the
     // solve real work.
     return io.read(
@@ -159,10 +197,10 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
           try {
             ChunkColumn column = capture.column(key, chunkX, chunkZ);
             if (column == null) {
-              missing.missingColumn(key, chunkX, chunkZ);
+              log.missingColumn(key, chunkX, chunkZ);
               return ChunkFetch.Failed.permanent();
             }
-            return ChunkFetch.success(StonebrickChunk.of(column, capture.traits(), key, missing));
+            return ChunkFetch.success(StonebrickChunk.of(column, capture.traits(), key, log));
           } catch (CaptureFormatException e) {
             // Stored bytes that will not decode are a corrupt corpus, not a transient read error.
             // Saying "transient" would have the provider retry a file that can never parse.
@@ -187,6 +225,18 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
    */
   public IoStats ioStats() {
     return new IoStats(io.reads(), io.coldReads(), io.totalDelayMicros());
+  }
+
+  /**
+   * Returns how many of the reads were made to build the region layer.
+   *
+   * <p>Reported apart from {@link #ioStats()} so the region layer's share of the disk is legible
+   * rather than buried in the search's total.
+   *
+   * @return the region layer's read count
+   */
+  public long regionReads() {
+    return regionReads.get();
   }
 
   /**

@@ -95,6 +95,7 @@ name, without extension, in the plugin's data folder.
 | --- | --- | --- |
 | `search.algorithm.max_cells_visited` | `200000` | live |
 | `search.algorithm.max_wall_clock_seconds` | `60` | live |
+| `search.algorithm.heuristic` | `RUNNING_AVERAGE` | live |
 | `search.algorithm.heuristic_weight` | `1.5` | live |
 | `search.algorithm.tier1_unsolved_pessimism` | `1.5` | live |
 | `search.algorithm.running_average_width` | `5` | live |
@@ -102,8 +103,13 @@ name, without extension, in the plugin's data folder.
 - **`max_cells_visited`**: Cell limit per search. Memory use is a few hundred bytes per cell, so the
   default peaks in the tens of megabytes. Increase for longer routes; decrease on small heaps.
 - **`max_wall_clock_seconds`**: Time limit per search.
-- **`heuristic_weight`**: A* heuristic weight. `1.0` yields optimal routes; higher values search
-  faster with routes at most this factor longer than optimal.
+- **`heuristic`**: How the search estimates the rest of a route. `REGIONS` reads the connected
+  patches of terrain ahead, finding better routes and handling water, caves and boats, at the cost
+  of extra chunk reads per search. `RUNNING_AVERAGE` extrapolates from the last few steps; it is
+  cheaper but never routes a player onto the water by boat.
+- **`heuristic_weight`**: *Deprecated.* The A* heuristic weight for `RUNNING_AVERAGE` only;
+  `REGIONS` reads [`search.regions.heuristic_weight`](#searchregions). `1.0` yields optimal routes;
+  higher values search faster with routes at most this factor longer than optimal.
 - **`tier1_unsolved_pessimism`**: Cost multiplier for route legs that have not yet been solved.
   `1.0` disables it.
 - **`running_average_width`**: Window size of the running-average heuristic.
@@ -133,6 +139,28 @@ name, without extension, in the plugin's data folder.
     | `search.chunks.max_load_requests` | `256` | live |
 
     Maximum chunk tickets held at once. Values below about 64 disable read-ahead and slow searches.
+
+### `search.regions`
+
+The `REGIONS` heuristic cuts the world into regions of terrain once, a 16-block cube at a time, and
+shares them between every search until a block in that cube changes.
+
+| Setting | Default | |
+| --- | --- | --- |
+| `search.regions.memory` | `128` | restart |
+| `search.regions.heuristic_weight` | `1.7` | live |
+
+- **`memory`**: Memory each world's regions may use, in megabytes, least recently used dropped
+  first. The terrain within about 70 blocks of each navigating player is kept on top of this until
+  their trip ends, so the searches that re-plan around them stay fast.
+- **`heuristic_weight`**: A* heuristic weight under `REGIONS`. `1.0` yields optimal routes; higher
+  values search faster with routes at most this factor longer than optimal. The region estimate
+  runs close to the true cost, so it bears a higher weight than the running average.
+
+Block changes made while the server is running are tracked: a changed cube's regions are dropped
+about 10 seconds after the change, together with any further changes in that time, and built again
+when a search next needs them. Regions are kept in memory only, so a restart builds them again as
+searches need them.
 
 ### Tuning
 

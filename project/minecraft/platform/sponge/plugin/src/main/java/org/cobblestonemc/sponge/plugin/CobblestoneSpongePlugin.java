@@ -16,10 +16,13 @@ import org.bstats.sponge.Metrics;
 import org.cobblestonemc.SearchThreadPool;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
+import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.plugin.LogoutCleanup;
 import org.cobblestonemc.plugin.config.ConfigKeys;
 import org.cobblestonemc.plugin.config.ConfigManager;
 import org.cobblestonemc.plugin.config.MenuIcons;
+import org.cobblestonemc.plugin.config.RegionConfig;
+import org.cobblestonemc.plugin.config.SearchConfig;
 import org.cobblestonemc.plugin.data.DataStore;
 import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.DataStores;
@@ -77,6 +80,7 @@ public final class CobblestoneSpongePlugin {
   private final PluginContainer container;
   private final Logger logger;
   private final Path configDir;
+  private RegionStores regionStores;
   private final Metrics.Factory metricsFactory;
 
   private Log4JCobblestoneLogger cobblestoneLogger;
@@ -140,6 +144,9 @@ public final class CobblestoneSpongePlugin {
       return;
     }
 
+    // Regions are shared by every search and forgotten when a block in their chunk changes.
+    this.regionStores = RegionConfig.stores(config, keys);
+
     this.navigationService =
         new SpongeNavigationServiceImpl(
             container,
@@ -151,9 +158,13 @@ public final class CobblestoneSpongePlugin {
                 config.get(keys.chunksPolicy)),
             () -> config.get(spongeKeys.chunksMaxLoadRequests),
             new AnvilOfflineChunkSource(cobblestoneLogger),
+            regionStores,
             SearchThreadPool.size(config.get(keys.searchThreads)));
     this.navigationService.registerListeners(container);
     CobblestoneCoreApi.install(navigationService, navigationService);
+
+    Sponge.eventManager()
+        .registerListeners(container, new SpongeRegionListener(regionStores, navigationService));
 
     // Discovered vanilla portals are surfaced to searches as an internal modifier, and learned from
     // player teleports by the portal listener. (Nether entry normalization is deferred on Sponge.)
@@ -242,15 +253,7 @@ public final class CobblestoneSpongePlugin {
     this.searchRegistry = new SearchRegistry<>();
     this.searchGate = new SearchGate(config.get(keys.searchMaxConcurrentPerPlayer));
     long liveIntervalMillis = config.get(keys.tripsLiveIntervalTicks) * 50L; // 50 ms per tick
-    this.searchSettings =
-        () ->
-            SearchSettings.builder()
-                .maxCellsVisited(config.get(keys.algorithmMaxCellsVisited))
-                .maxWallClockMillis(config.get(keys.algorithmMaxWallClockSeconds) * 1000L)
-                .tier1UnsolvedPessimism(config.get(keys.algorithmTier1UnsolvedPessimism))
-                .runningAverageWidth(config.get(keys.algorithmRunningAverageWidth))
-                .heuristicWeight(config.get(keys.algorithmHeuristicWeight))
-                .build();
+    this.searchSettings = () -> SearchConfig.read(config, keys);
     this.tripService =
         new SpongeTripServiceImpl(
             navigationService,
@@ -259,7 +262,8 @@ public final class CobblestoneSpongePlugin {
             searchRegistry,
             searchGate,
             searchSettings,
-            liveIntervalMillis);
+            liveIntervalMillis,
+            regionStores);
     CobblestoneSpongeApi.install(integrationRegistry, tripService);
 
     // The menu starts trips through the command, so both remember them as recent destinations.
@@ -385,6 +389,9 @@ public final class CobblestoneSpongePlugin {
     }
     if (navigationService != null) {
       navigationService.shutdown();
+    }
+    if (regionStores != null) {
+      regionStores.close();
     }
     CobblestoneSpongeApi.uninstall();
     CobblestoneCoreApi.uninstall();

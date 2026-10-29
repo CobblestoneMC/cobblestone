@@ -116,12 +116,17 @@ public final class StonebrickSolve {
       List<? extends Restriction<MinecraftWorld>> restrictions) {
     // A chunk cache of the search's own, as in production: how it hits and misses is part of what
     // the benchmark measures.
+    ChunkProvider chunks = new ChunkProvider(platform, platform.settings());
     MinecraftMovementBehavior behavior =
-        MinecraftMovementBehavior.forPlayer(
-            new ChunkProvider(platform, platform.settings()), player, Set.<MinecraftStepType>of());
+        MinecraftMovementBehavior.forPlayer(chunks, player, Set.<MinecraftStepType>of());
     HeuristicStrategy heuristic =
         MinecraftHeuristics.forPlayer(
-            behavior, new MinecraftSearchSettings(settings, Set.of(), Set.of(), Set.of()));
+            behavior,
+            chunks,
+            player,
+            origin.cell(),
+            new MinecraftSearchSettings(settings, Set.of(), Set.of(), Set.of()),
+            null);
     return CobblestoneApi.load()
         .navigate(
             logger,

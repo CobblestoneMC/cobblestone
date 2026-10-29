@@ -23,6 +23,7 @@ import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
+import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.plugin.api.Navigator;
 import org.cobblestonemc.plugin.api.NavigatorSettings;
 import org.cobblestonemc.plugin.api.TripOutcome;
@@ -56,18 +57,28 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
   private final SearchGate gate;
   private final Supplier<SearchSettings> searchSettings;
   private final long liveIntervalMillis;
+  private final RegionStores regionStores;
 
   protected AbstractTripService(
       TripManager<E, A, L> trips,
       SearchRegistry<L> searches,
       SearchGate gate,
       Supplier<SearchSettings> searchSettings,
-      long liveIntervalMillis) {
+      long liveIntervalMillis,
+      RegionStores regionStores) {
     this.trips = trips;
     this.searches = searches;
     this.gate = gate;
     this.searchSettings = searchSettings;
     this.liveIntervalMillis = liveIntervalMillis;
+    this.regionStores = regionStores;
+    // A player who has stopped navigating no longer needs their surroundings kept built.
+    trips.onChange(
+        agent -> {
+          if (trips.trips(agent.uuid()).isEmpty()) {
+            regionStores.release(agent.uuid());
+          }
+        });
   }
 
   // --- platform hooks -------------------------------------------------------
@@ -85,6 +96,9 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
   protected abstract SearchHandle<L, MinecraftStepPayload> navigate(
       P player, L destination, MinecraftSearchSettings settings);
 
+  /** Where the player is now. */
+  protected abstract L location(P player);
+
   /** The core position for a native location, or {@code null} if its world is unresolved. */
   protected abstract Position<MinecraftWorld> position(L location);
 
@@ -96,6 +110,19 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
       P player, Path<L, MinecraftStepPayload> path, NavigatorSettings settings);
 
   // --- shared flow ----------------------------------------------------------
+
+  /**
+   * Starts a search from where the player is, pinning their surroundings so the searches that
+   * re-plan around them never build; the pin is released when their last trip ends.
+   */
+  private SearchHandle<L, MinecraftStepPayload> search(
+      P player, L destination, MinecraftSearchSettings settings) {
+    Position<MinecraftWorld> at = position(location(player));
+    if (at != null) {
+      regionStores.pin(uuid(player), at.domain(), at.cell());
+    }
+    return navigate(player, destination, settings);
+  }
 
   /**
    * Searches to {@code destination}, then starts a trip if a route is found. Non-blocking.
@@ -111,7 +138,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
     Objects.requireNonNull(label, "label");
     UUID uuid = uuid(player);
     gate.beginForced(uuid);
-    SearchHandle<L, MinecraftStepPayload> handle = navigate(player, destination, defaults());
+    SearchHandle<L, MinecraftStepPayload> handle = search(player, destination, defaults());
     searches.track(uuid, handle);
     CompletableFuture<TripOutcome> outcome = new CompletableFuture<>();
     handle
@@ -260,7 +287,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
       if (!isOnline(player) || !gate.tryBegin(uuid)) {
         return CompletableFuture.completedFuture(Optional.empty());
       }
-      SearchHandle<L, MinecraftStepPayload> handle = navigate(player, destination, defaults());
+      SearchHandle<L, MinecraftStepPayload> handle = search(player, destination, defaults());
       searches.track(uuid, handle);
       return handle
           .future()
@@ -281,7 +308,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
       }
       MinecraftSearchSettings settings =
           new MinecraftSearchSettings(GUIDE_SETTINGS, Set.of(), Set.of(), Set.of());
-      return navigate(player, target, settings).future().handle(AbstractTripService::successPath);
+      return search(player, target, settings).future().handle(AbstractTripService::successPath);
     };
   }
 

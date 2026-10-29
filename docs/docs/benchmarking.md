@@ -54,9 +54,17 @@ exactly. Captures and baselines therefore stay on your machine.
 | `sweep` | Run at several heuristic weights and print nodes against path cost |
 | `check` | Say whether a scenario can be benchmarked: each heuristic's result, and Dijkstra's optimum |
 | `path` | Print the cells of the route each loadout's search found |
+| `verify-regions` | Compare the region estimate with the true cost along each route |
 
 A first `run` has no baselines, and prints each result's outcome, expansions and path cost. That is
 the current state of the search.
+
+To check the region estimate itself, run its suite. It takes a minute or two and uses at most half
+your memory and processors:
+
+```bash
+./gradlew verifyRegions
+```
 
 To measure a change, record a baseline before it and compare after:
 
