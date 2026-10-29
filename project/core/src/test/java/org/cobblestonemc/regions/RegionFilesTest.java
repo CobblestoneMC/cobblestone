@@ -34,16 +34,25 @@ class RegionFilesTest {
     return store(root, ToyWorld.spec(), Long.MAX_VALUE);
   }
 
+  /** The toy world's fingerprint, as a seed would be a Minecraft world's. */
+  private static final long SEED = 42;
+
   private RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store(
       Path root, RegionSpec<ToyWorld.Blocks, ToyWorld.Toy> spec, long memoryBudget) {
+    return store(root, spec, memoryBudget, SEED);
+  }
+
+  private RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store(
+      Path root, RegionSpec<ToyWorld.Blocks, ToyWorld.Toy> spec, long memoryBudget, long seed) {
     RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store =
-        new RegionStore<>(spec, memoryBudget, root, Runnable::run, Runnable::run);
+        new RegionStore<>(
+            spec, memoryBudget, new RegionFiles(root, spec, seed), Runnable::run, Runnable::run);
     opened.add(store);
     return store;
   }
 
   private RegionFiles files(Path root) {
-    RegionFiles files = new RegionFiles(root, ToyWorld.spec());
+    RegionFiles files = new RegionFiles(root, ToyWorld.spec(), SEED);
     openedFiles.add(files);
     return files;
   }
@@ -221,6 +230,63 @@ class RegionFilesTest {
   }
 
   @Test
+  void filesOfOtherTerrainOrBoundsAreNotReadBack(@TempDir Path root) {
+    ToyWorld.Source source = new ToyWorld.Source();
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> first = store(root);
+    section(first, 1, 1, source);
+    first.flush().join();
+    first.close().join();
+
+    // The same world name over a new seed, and then a world whose height has changed.
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> reseeded =
+        store(root, ToyWorld.spec(), Long.MAX_VALUE, SEED + 1);
+    section(reseeded, 1, 1, source);
+    assertEquals(0, reseeded.stats().diskLoads(), "another seed is other terrain");
+    reseeded.flush().join();
+    reseeded.close().join();
+
+    RegionSpec<ToyWorld.Blocks, ToyWorld.Toy> taller =
+        new RegionSpec<>(
+            ToyWorld.TERRAIN, DomainBounds.vertical(ToyWorld.MIN_Y, ToyWorld.MAX_Y + 16));
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> heightened =
+        store(root, taller, Long.MAX_VALUE, SEED + 1);
+    section(heightened, 1, 1, source);
+    assertEquals(0, heightened.stats().diskLoads(), "other bounds blank out other cells");
+  }
+
+  @Test
+  void aDeletedStoreLeavesNothingAndWritesNothingAfter(@TempDir Path root) {
+    ToyWorld.Source source = new ToyWorld.Source();
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store = store(root);
+    section(store, 1, 1, source);
+    store.flush().join();
+    section(store, 2, 1, source);
+
+    store.delete().join();
+    assertTrue(Files.notExists(root), "the directory goes with its files");
+    store.flush().join();
+    assertTrue(Files.notExists(root), "what it had not written is not written after");
+
+    RegionStore<ToyWorld.Blocks, ToyWorld.Toy> afresh = store(root);
+    section(afresh, 1, 1, source);
+    assertEquals(0, afresh.stats().diskLoads());
+    assertEquals(1, afresh.stats().builds());
+  }
+
+  @Test
+  void aFileThatDoesNotMatchIsDeletedOnceOpened(@TempDir Path root) throws Exception {
+    RegionFiles files = files(root);
+    files.write(List.of(build(ToyWorld::hills, 0, GROUND, 0)), List.of());
+    files.close();
+    Path file = onlyFile(root);
+
+    RegionFiles reseeded = new RegionFiles(root, ToyWorld.spec(), SEED + 1);
+    openedFiles.add(reseeded);
+    assertNull(reseeded.read(0, GROUND, 0));
+    assertTrue(Files.notExists(file), "nothing in it would be read again");
+  }
+
+  @Test
   void filesWrittenUnderOtherRulesAreIgnoredAndStartedAfresh(@TempDir Path root) throws Exception {
     ToyWorld.Source source = new ToyWorld.Source();
     RegionStore<ToyWorld.Blocks, ToyWorld.Toy> first = store(root);
@@ -248,7 +314,7 @@ class RegionFilesTest {
 
     // The last write started the file afresh under its own rules: section (2, 0, 1), written under
     // the first, is gone rather than mixed in.
-    RegionFiles underLast = new RegionFiles(root, otherRules);
+    RegionFiles underLast = new RegionFiles(root, otherRules, SEED);
     openedFiles.add(underLast);
     assertNotNull(underLast.read(1, GROUND, 1));
     assertNull(underLast.read(2, GROUND, 1));

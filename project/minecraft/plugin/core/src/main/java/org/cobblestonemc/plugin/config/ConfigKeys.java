@@ -118,7 +118,7 @@ public final class ConfigKeys {
   public final ConfigKey<Integer> regionsMemory;
 
   /** How often new regions are written to disk, in seconds. Requires a restart. */
-  public final ConfigKey<Integer> regionsFlushSeconds;
+  public final ConfigKey<Integer> regionsFlushPeriod;
 
   /** A* heuristic weight for {@code REGIONS}. Mutable. See {@link #heuristicWeight}. */
   public final ConfigKey<Double> regionsHeuristicWeight;
@@ -473,9 +473,10 @@ public final class ConfigKeys {
             .key("search.regions.persist", true, Codec.ofBoolean())
             .comment(
                 """
-                Whether to keep regions on disk, under the plugin's data folder, so a restart does
+                Whether to keep regions on disk, under Cobblestone's data folder, so a restart does
                 not have to build them again. A few kilobytes per chunk, for chunks searches have
-                touched. Off keeps them in memory only.""")
+                touched. Off keeps them in memory only. "/cobblestone regions clear <world>" deletes
+                a world's, for terrain changed where Cobblestone could not see it.""")
             .requiresRestart()
             .register();
     this.regionsMemory =
@@ -489,9 +490,9 @@ public final class ConfigKeys {
                 them stay fast.""")
             .requiresRestart()
             .register();
-    this.regionsFlushSeconds =
+    this.regionsFlushPeriod =
         manager
-            .key("search.regions.flush_seconds", 60, Codec.ofInt())
+            .key("search.regions.flush_period", 60, Codec.ofInt())
             .comment(
                 """
                 How often new regions are written to disk, in seconds. They are also written when

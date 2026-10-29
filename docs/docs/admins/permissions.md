@@ -19,6 +19,7 @@ navigator.
 | `cobblestone.admin.location.global` | op | Creating and deleting global locations |
 | `cobblestone.admin.reload` | op | `/cobblestone reload` |
 | `cobblestone.admin.portals` | op | `/cobblestone portals clear` |
+| `cobblestone.admin.regions` | op | `/cobblestone regions clear` |
 | `cobblestone.admin.loglevel` | op | `/cobblestone loglevel` |
 
 === "Paper"

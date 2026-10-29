@@ -50,6 +50,11 @@ public final class TestWorld implements MinecraftWorld {
   }
 
   @Override
+  public long seed() {
+    return 0;
+  }
+
+  @Override
   public String key() {
     return key;
   }

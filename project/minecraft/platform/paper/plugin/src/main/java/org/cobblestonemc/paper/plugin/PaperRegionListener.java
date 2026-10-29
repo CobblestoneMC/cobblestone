@@ -192,10 +192,10 @@ final class PaperRegionListener implements Listener {
     }
   }
 
-  /** The world is saving: write the regions too, so a crash after it loses nothing. */
+  /** The world is saving: write its regions too, so a crash after it loses nothing. */
   @EventHandler(priority = EventPriority.MONITOR)
   public void onSave(WorldSaveEvent event) {
-    stores.flush();
+    stores.flush(worlds.wrap(event.getWorld()).key());
   }
 
   /** A world that unloads takes its regions with it, once they are written. */

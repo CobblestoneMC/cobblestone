@@ -20,14 +20,17 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.stream.Stream;
 import java.util.zip.CRC32;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
+import org.cobblestonemc.DomainBounds;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -44,6 +47,8 @@ import org.jetbrains.annotations.Nullable;
  *   int    classes               the terrain's class names, in order, hashed: what a stored class means
  *   double detour ratio          a fill setting that changes the regions
  *   int    section shift
+ *   long   fingerprint           the platform's word for which terrain this is, such as a seed
+ *   6 x int bounds               the domain's, which decide the cells past them
  *   4096 x { int first sector, int length in bytes }   0, 0 for no section
  *   ... sectors: each record is { int length, int CRC32, deflated section }, padded to a sector
  * </pre>
@@ -62,9 +67,10 @@ import org.jetbrains.annotations.Nullable;
  * checksum, and a record that does not match them is a section to build again. The files are a
  * cache, so that is all a crash can cost.
  *
- * <p><b>A file whose header does not match is empty.</b> Sections built under different rules, or
- * whose classes meant something else, are a different graph; they are ignored on read, and the file
- * is started afresh on the next write, never mixed in.
+ * <p><b>A file whose header does not match is deleted.</b> Sections built under different rules,
+ * whose classes meant something else, or of other terrain altogether are a different graph. None of
+ * them will be read again, so the file goes as soon as it is opened, and is started afresh if a
+ * section is written to it, never mixed in.
  *
  * <p>Thread-safe by being synchronized. {@link RegionStore} calls it from one disk thread, so the
  * lock is never contended; it is there so that nothing else has to know that.
@@ -84,8 +90,11 @@ public final class RegionFiles {
 
   private static final int SLOTS = SPAN * SPAN * SPAN;
 
-  /** Bytes before the slots: magic, two versions, the classes, the detour and the shift. */
-  private static final int PREAMBLE = 4 + 4 + 4 + 4 + 8 + 4;
+  /**
+   * Bytes before the slots: magic, two versions, the classes, the detour, the shift, the
+   * fingerprint and the bounds.
+   */
+  private static final int PREAMBLE = 4 + 4 + 4 + 4 + 8 + 4 + 8 + 6 * 4;
 
   /** Sectors the header takes, slots included. */
   static final int HEADER_SECTORS = (PREAMBLE + SLOTS * 8 + SECTOR - 1) / SECTOR;
@@ -97,6 +106,7 @@ public final class RegionFiles {
   private final RegionSpec<?, ?> spec;
   private final int rules;
   private final int classes;
+  private final long fingerprint;
 
   /** Open files, most recently used last. */
   private final LinkedHashMap<Long, Open> open = new LinkedHashMap<>(16, 0.75f, true);
@@ -115,10 +125,13 @@ public final class RegionFiles {
    *
    * @param directory where this domain's files go; created on the first write
    * @param spec how the domain's terrain is cut, recorded so a change of it is not read back
+   * @param fingerprint which terrain this is, in the platform's terms, such as a world's seed;
+   *     files written under another are of other terrain, and are not read back
    */
-  public RegionFiles(Path directory, RegionSpec<?, ?> spec) {
+  public RegionFiles(Path directory, RegionSpec<?, ?> spec, long fingerprint) {
     this.directory = directory;
     this.spec = spec;
+    this.fingerprint = fingerprint;
     // The fill's rules and the terrain's, in one number: a change to either is a different graph.
     this.rules = (RegionSectionBuilder.FILL_VERSION << 16) | spec.terrain().version();
     this.classes = classes(spec);
@@ -267,16 +280,40 @@ public final class RegionFiles {
   }
 
   /**
+   * Closes every file held open and deletes them all, with the directory they are in.
+   *
+   * @throws IOException if one cannot be deleted
+   */
+  public synchronized void delete() throws IOException {
+    close();
+    delete(directory);
+  }
+
+  /**
+   * Deletes a domain's files and the directory they are in, if there are any.
+   *
+   * @param directory the domain's directory
+   * @throws IOException if one cannot be deleted
+   */
+  public static void delete(Path directory) throws IOException {
+    if (!Files.exists(directory)) {
+      return;
+    }
+    try (Stream<Path> paths = Files.walk(directory)) {
+      for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+        Files.delete(path);
+      }
+    }
+  }
+
+  /**
    * Opens a file, reading its slots, or returns {@code null} if it does not exist and {@code
-   * create} is not set. A file whose header does not match is read as empty, and started afresh
-   * once something is written to it.
+   * create} is not set. A file whose header does not match is deleted, or with {@code create} set,
+   * started afresh.
    */
   private @Nullable Open open(long file, boolean create) throws IOException {
     Open known = open.get(file);
     if (known != null) {
-      if (create && !known.matches) {
-        known.reset();
-      }
       return known;
     }
     Path path = path(file);
@@ -285,7 +322,13 @@ public final class RegionFiles {
     }
     Files.createDirectories(directory);
     Open opened = new Open(new RandomAccessFile(path.toFile(), "rw"));
-    if (create && !opened.matches) {
+    if (!opened.matches) {
+      if (!create) {
+        // Nothing in it will be read again: it only takes up the disk.
+        opened.handle.close();
+        Files.deleteIfExists(path);
+        return null;
+      }
       opened.reset();
     }
     open.put(file, opened);
@@ -370,7 +413,7 @@ public final class RegionFiles {
     final int[] length = new int[SLOTS];
     final BitSet used = new BitSet();
 
-    /** Whether the header is this domain's; a file that is not reads as empty. */
+    /** Whether the header is this domain's; one that is not is never read from. */
     boolean matches;
 
     Open(RandomAccessFile handle) throws IOException {
@@ -388,7 +431,9 @@ public final class RegionFiles {
               && in.readInt() == rules
               && in.readInt() == classes
               && in.readDouble() == spec.detourRatio()
-              && in.readInt() == spec.shift();
+              && in.readInt() == spec.shift()
+              && in.readLong() == fingerprint
+              && boundsMatch(in);
       if (!matches) {
         return;
       }
@@ -415,6 +460,12 @@ public final class RegionFiles {
       out.writeInt(classes);
       out.writeDouble(spec.detourRatio());
       out.writeInt(spec.shift());
+      out.writeLong(fingerprint);
+      DomainBounds bounds = spec.bounds();
+      for (int axis = DomainBounds.X; axis <= DomainBounds.Z; axis++) {
+        out.writeInt(bounds.min(axis));
+        out.writeInt(bounds.max(axis));
+      }
       handle.setLength(0);
       handle.seek(0);
       handle.write(bytes.toByteArray());
@@ -460,14 +511,15 @@ public final class RegionFiles {
       if (padding > 0) {
         handle.write(new byte[padding]);
       }
-      // The slot last: until it points at the new record, a crash leaves the old one in reach.
+      // The slot last. A record that moved leaves the old one in reach until then; one written
+      // over its old sectors fails its checksum if torn, and is built again.
       setSlot(slot, at, record.length);
       return (long) needed * SECTOR + 8;
     }
 
     /** Removes a slot's section, giving its sectors back. */
     void clear(int slot) throws IOException {
-      if (!matches || (first[slot] == 0 && length[slot] == 0)) {
+      if (first[slot] == 0 && length[slot] == 0) {
         return;
       }
       if (first[slot] != 0) {
@@ -496,6 +548,17 @@ public final class RegionFiles {
         at = used.nextClearBit(next);
       }
     }
+  }
+
+  /** Reads bounds as {@link Open#reset} writes them, and says whether they are this domain's. */
+  private boolean boundsMatch(DataInputStream in) throws IOException {
+    DomainBounds bounds = spec.bounds();
+    for (int axis = DomainBounds.X; axis <= DomainBounds.Z; axis++) {
+      if (in.readInt() != bounds.min(axis) || in.readInt() != bounds.max(axis)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private static int sectors(int bytes) {

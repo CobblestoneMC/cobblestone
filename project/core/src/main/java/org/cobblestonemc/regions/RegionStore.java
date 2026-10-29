@@ -9,7 +9,6 @@ package org.cobblestonemc.regions;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -82,6 +81,9 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
   /** Invalidated since the last flush: to come off disk. */
   private final Set<Long> removed = new HashSet<>();
 
+  /** Set by {@link #delete}: nothing is written after it. */
+  private volatile boolean deleted;
+
   private final Map<Long, CompletableFuture<RegionSection>> loading = new HashMap<>();
   private final Set<Long> changedWhileLoading = new HashSet<>();
 
@@ -97,19 +99,19 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
    *
    * @param spec how the domain's terrain is cut into regions
    * @param memoryBudget how many bytes of sections not pinned to keep in memory
-   * @param directory where to keep sections on disk, or {@code null} to keep them only in memory
+   * @param files where to keep sections on disk, or {@code null} to keep them only in memory
    * @param disk where disk reads and writes run; one thread, so they never race
    * @param builds where a section is built when its terrain arrives later rather than at once
    */
   public RegionStore(
       RegionSpec<C, K> spec,
       long memoryBudget,
-      @Nullable Path directory,
+      @Nullable RegionFiles files,
       Executor disk,
       Executor builds) {
     this.spec = spec;
     this.memoryBudget = memoryBudget;
-    this.files = directory == null ? null : new RegionFiles(directory, spec);
+    this.files = files;
     this.disk = disk;
     this.builds = builds;
     this.builders = ThreadLocal.withInitial(() -> new RegionSectionBuilder<>(spec));
@@ -450,7 +452,7 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
    * @return a future completing when the write is done
    */
   public CompletableFuture<Void> flush() {
-    if (files == null) {
+    if (files == null || deleted) {
       return CompletableFuture.completedFuture(null);
     }
     Map<Long, RegionSection> writing;
@@ -466,6 +468,9 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
     }
     return CompletableFuture.runAsync(
         () -> {
+          if (deleted) {
+            return; // queued before the files went, and run after: what it holds went with them
+          }
           try {
             files.write(writing.values(), removing);
           } catch (IOException failed) {
@@ -480,6 +485,33 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
                   });
               removed.addAll(removing);
             }
+            throw new UncheckedIOException(failed);
+          }
+        },
+        disk);
+  }
+
+  /**
+   * Deletes every section on disk, on the disk thread, and writes nothing after: for terrain that
+   * changed where no {@link #invalidate} said so. The store is done with once it is called; a store
+   * made afresh for the domain, on the same disk thread, reads nothing that was here.
+   *
+   * @return a future completing once the files are deleted
+   */
+  public CompletableFuture<Void> delete() {
+    deleted = true;
+    synchronized (this) {
+      unwritten.clear();
+      removed.clear();
+    }
+    if (files == null) {
+      return CompletableFuture.completedFuture(null);
+    }
+    return CompletableFuture.runAsync(
+        () -> {
+          try {
+            files.delete();
+          } catch (IOException failed) {
             throw new UncheckedIOException(failed);
           }
         },

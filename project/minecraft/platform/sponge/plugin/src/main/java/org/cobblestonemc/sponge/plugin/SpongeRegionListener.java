@@ -52,10 +52,10 @@ final class SpongeRegionListener {
     }
   }
 
-  /** The world has saved: write the regions too, so a crash after it loses nothing. */
+  /** The world has saved: write its regions too, so a crash after it loses nothing. */
   @Listener(order = Order.POST)
   public void onSave(SaveWorldEvent.Post event) {
-    stores.flush();
+    stores.flush(worlds.wrap(event.world()).key());
   }
 
   /** A world that unloads takes its regions with it, once they are written. */

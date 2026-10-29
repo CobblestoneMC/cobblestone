@@ -495,15 +495,19 @@ public final class ScenarioRunner {
     lastRegionColumns = columns;
     // One store for the run, on this thread: a cold start, or a restart over a cache on disk.
     MinecraftWorld world = platform.world(scenario.world());
+    RegionSpec<MinecraftChunk, RegionClass> spec =
+        new RegionSpec<>(MinecraftTerrain.of(world.environment()), world.bounds(), REGION_DETOUR);
     RegionStore<MinecraftChunk, RegionClass> store =
         new RegionStore<>(
-            new RegionSpec<>(
-                MinecraftTerrain.of(world.environment()), world.bounds(), REGION_DETOUR),
+            spec,
             Long.MAX_VALUE,
             regionCache == null
                 ? null
-                : regionCache.resolve(
-                    RegionFiles.directoryName(scenario.capture() + "-" + scenario.world())),
+                : new RegionFiles(
+                    regionCache.resolve(
+                        RegionFiles.directoryName(scenario.capture() + "-" + scenario.world())),
+                    spec,
+                    world.seed()),
             Runnable::run,
             Runnable::run);
     lastRegionStore = store;

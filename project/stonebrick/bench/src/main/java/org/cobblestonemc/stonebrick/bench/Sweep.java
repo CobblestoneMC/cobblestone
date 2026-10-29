@@ -12,13 +12,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.stream.Stream;
 import org.cobblestonemc.SearchObserver;
+import org.cobblestonemc.regions.RegionFiles;
 
 /**
  * The nodes-versus-cost tradeoff, measured rather than argued about.
@@ -111,7 +110,7 @@ final class Sweep {
             RunResult result = runner.run(variant, loadout, SearchObserver.none());
             if (cache != null) {
               runner.regionCache(null);
-              deleteTree(cache);
+              RegionFiles.delete(cache);
             }
             Point point =
                 new Point(
@@ -159,14 +158,6 @@ final class Sweep {
     perScenario(points);
     System.out.println();
     summary(points, heuristics, weights);
-  }
-
-  private static void deleteTree(Path root) throws IOException {
-    try (Stream<Path> paths = Files.walk(root)) {
-      for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
-        Files.deleteIfExists(path);
-      }
-    }
   }
 
   private static void perScenario(List<Point> points) {

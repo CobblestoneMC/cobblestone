@@ -90,7 +90,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
 
     // Regions are shared by every search, kept on disk across restarts, and forgotten when a
     // block in their chunk changes.
-    this.regionStores = RegionConfig.stores(config, keys, getDataFolder().toPath());
+    this.regionStores = RegionConfig.stores(config, keys, getDataFolder().toPath(), logger);
 
     // The transition registry is owned by the plugin; the platform API only reads from / registers
     // into it. Both are reachable to other plugins via the registered plugin API.
@@ -107,12 +107,12 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     getServer()
         .getPluginManager()
         .registerEvents(new PaperRegionListener(regionStores, platformApi), this);
-    long flushSeconds = RegionConfig.flushSeconds(config, keys);
+    long flushPeriod = RegionConfig.flushPeriod(config, keys);
     this.regionFlush =
         getServer()
             .getAsyncScheduler()
             .runAtFixedRate(
-                this, task -> regionStores.flush(), flushSeconds, flushSeconds, TimeUnit.SECONDS);
+                this, task -> regionStores.flush(), flushPeriod, flushPeriod, TimeUnit.SECONDS);
 
     PaperIntegrationRegistry integrationRegistry =
         new PaperIntegrationRegistry(platformApi.regions());
@@ -288,6 +288,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                       messages,
                       logger,
                       dataStore.portalTransitions(),
+                      regionStores,
                       tripManager,
                       tripHud,
                       searchRegistry,

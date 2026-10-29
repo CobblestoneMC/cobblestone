@@ -149,7 +149,11 @@ public final class CobblestoneSpongePlugin {
 
     // Regions are shared by every search, kept on disk across restarts, and forgotten when a
     // block in their chunk changes.
-    this.regionStores = RegionConfig.stores(config, keys, configDir);
+    // Sponge gives a plugin a config directory and no data one: a cache is not configuration, so
+    // it is kept beside the server's own folders, as Paper keeps it in the plugin's data folder.
+    this.regionStores =
+        RegionConfig.stores(
+            config, keys, Sponge.game().gameDirectory().resolve("cobblestone"), cobblestoneLogger);
 
     this.navigationService =
         new SpongeNavigationServiceImpl(
@@ -317,15 +321,15 @@ public final class CobblestoneSpongePlugin {
       navigationService.surveyWorlds();
     }
     if (regionStores != null) {
-      long flushSeconds = RegionConfig.flushSeconds(config, keys);
+      long flushPeriod = RegionConfig.flushPeriod(config, keys);
       this.regionFlush =
           Sponge.asyncScheduler()
               .submit(
                   Task.builder()
                       .plugin(container)
-                      .delay(Duration.ofSeconds(flushSeconds))
-                      .interval(Duration.ofSeconds(flushSeconds))
-                      .execute(regionStores::flush)
+                      .delay(Duration.ofSeconds(flushPeriod))
+                      .interval(Duration.ofSeconds(flushPeriod))
+                      .execute(() -> regionStores.flush())
                       .build());
     }
   }
@@ -356,6 +360,7 @@ public final class CobblestoneSpongePlugin {
             messages,
             cobblestoneLogger,
             dataStore.portalTransitions(),
+            regionStores,
             tripManager,
             tripHud,
             searchRegistry,
