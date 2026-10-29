@@ -24,7 +24,7 @@ import org.jetbrains.annotations.Nullable;
  *
  * <p>So wall time is recorded, trended and shown in every comparison, and never fails a build. What
  * takes its place as the speed metric is {@code nodesExpanded} and {@code virtualMillis} — the
- * first is what the search actually did, the second is what it would have taken on the modelled
+ * first is what the search actually did, the second is what it would have taken on the modeled
  * disk.
  *
  * @param scenario the scenario's id
@@ -36,9 +36,10 @@ import org.jetbrains.annotations.Nullable;
  * @param nodesOpened how many times a cell was placed on the open set
  * @param nodesExpanded how many cells were settled
  * @param chunkReads how many chunk reads were charged
+ * @param regionChunkReads how many of those the region layer made, to build its sections
  * @param coldChunkReads how many of those were a chunk's first read
- * @param virtualMillis elapsed time on the modelled clock
- * @param ioDelayMicros total modelled IO delay charged
+ * @param virtualMillis elapsed time on the modeled clock
+ * @param ioDelayMicros total modeled IO delay charged
  * @param realMillis wall-clock time the run took; advisory only
  * @param peakHeapBytes peak heap during the run; advisory only
  * @param missingCaptureReport a description of reads outside the capture, or {@code null}
@@ -57,6 +58,7 @@ public record RunResult(
     long nodesOpened,
     long nodesExpanded,
     long chunkReads,
+    long regionChunkReads,
     long coldChunkReads,
     long virtualMillis,
     long ioDelayMicros,
@@ -91,6 +93,9 @@ public record RunResult(
     values.put("nodesOpened", nodesOpened);
     values.put("nodesExpanded", nodesExpanded);
     values.put("chunkReads", chunkReads);
+    // Split out rather than buried: these are the reads that build the region layer, and on a slow
+    // disk they dominate. A total that hides them makes the heuristic look free.
+    values.put("regionChunkReads", regionChunkReads);
     values.put("coldChunkReads", coldChunkReads);
     values.put("virtualMillis", virtualMillis);
     values.put("ioDelayMicros", ioDelayMicros);

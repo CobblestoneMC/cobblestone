@@ -30,6 +30,18 @@ tasks.named<JavaExec>("run") {
     workingDir = rootProject.projectDir
 }
 
+// The region verify suite: ./gradlew verifyRegions. Checks the region layer's estimate against
+// Dijkstra on the routes scenarios.yml lists under verifyRegions, using half the machine. Needs the
+// corpus captured first, and says so if it is not.
+tasks.register<JavaExec>("verifyRegions") {
+    group = "stonebrick"
+    description = "Checks the region estimate against Dijkstra on the verify suite (needs captureCorpus first)"
+    mainClass = "org.cobblestonemc.stonebrick.bench.BenchMain"
+    classpath = sourceSets["main"].runtimeClasspath
+    workingDir = rootProject.projectDir
+    args("verify-regions")
+}
+
 // Generates the benchmark corpus by running a real, seeded Minecraft server and capturing from it.
 // Captures are too large for version control, so without this every developer's terrain is whatever
 // they happened to walk to. A seed fixes the routes and landforms, so scenarios and the manifest are

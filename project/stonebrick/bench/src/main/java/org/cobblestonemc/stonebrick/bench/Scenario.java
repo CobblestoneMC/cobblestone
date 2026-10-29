@@ -53,6 +53,8 @@ import org.yaml.snakeyaml.Yaml;
  * @param expectedOutcome the outcome the scenario asserts, or {@code null} to assert nothing
  * @param ungenerated chunks to present as never generated, whatever the capture holds
  * @param heuristic which estimate the fine search runs on
+ * @param verifyRegions the loadouts {@code bench verify-regions} checks the region estimate on this
+ *     route for by default: the suite's, each promised to fit its limits
  */
 public record Scenario(
     String id,
@@ -71,7 +73,8 @@ public record Scenario(
     MissingCapturePolicy onMissingCapture,
     String expectedOutcome,
     Set<Long> ungenerated,
-    Heuristic heuristic) {
+    Heuristic heuristic,
+    Set<String> verifyRegions) {
 
   /**
    * Which estimate the fine search runs on.
@@ -85,12 +88,16 @@ public record Scenario(
      * No estimate at all, turning the search into Dijkstra.
      *
      * <p>Not for production: it expands everything. It is the only way to get a route's <i>true</i>
-     * optimal cost, which is what any other estimate's paths can be measured against.
+     * optimal cost, which is what {@code bench verify-regions} measures the region estimates
+     * against.
      */
     ZERO(null),
 
     /** Remaining distance times the recent per-block cost. */
-    RUNNING_AVERAGE(SearchSettings.Heuristic.RUNNING_AVERAGE);
+    RUNNING_AVERAGE(SearchSettings.Heuristic.RUNNING_AVERAGE),
+
+    /** A backward search over connected terrain regions, resumed as the fine search asks. */
+    REGIONS(SearchSettings.Heuristic.REGIONS);
 
     private final SearchSettings.@Nullable Heuristic production;
 
@@ -147,9 +154,9 @@ public record Scenario(
   }
 
   /**
-   * A traveller's capabilities, which decide which modes the search is given.
+   * A traveler's capabilities, which decide which modes the search is given.
    *
-   * <p>Lives on {@link Loadout} rather than on a scenario: the route and the traveller vary
+   * <p>Lives on {@link Loadout} rather than on a scenario: the route and the traveler vary
    * independently, and every scenario is run under every loadout.
    */
   public record AgentSpec(
@@ -172,7 +179,7 @@ public record Scenario(
     /** Returns the production defaults. */
     public static SearchLimits defaults() {
       return new SearchLimits(
-          SearchSettings.DEFAULT_HEURISTIC_WEIGHT,
+          SearchSettings.DEFAULT_HEURISTIC.defaultWeight(),
           SearchSettings.DEFAULT_MAX_CELLS_VISITED,
           SearchSettings.DEFAULT_MAX_WALL_CLOCK_MILLIS);
     }
@@ -254,6 +261,57 @@ public record Scenario(
   }
 
   /**
+   * Returns whether a cell counts as arriving: inside {@link #destinationBox()}, or within {@link
+   * #destinationRadius()} of {@link #destination()} along every axis, or the destination itself.
+   *
+   * @param cell the cell
+   * @return {@code true} if the route ends there
+   */
+  public boolean arrives(Cell cell) {
+    Cell[] area = arrival();
+    if (area == null) {
+      return cell.equals(destination);
+    }
+    return cell.x() >= area[0].x()
+        && cell.x() <= area[1].x()
+        && cell.y() >= area[0].y()
+        && cell.y() <= area[1].y()
+        && cell.z() >= area[0].z()
+        && cell.z() <= area[1].z();
+  }
+
+  /**
+   * Returns the cell of the destination nearest another cell.
+   *
+   * @param from the cell
+   * @return the nearest cell that {@link #arrives}
+   */
+  public Cell nearestArrival(Cell from) {
+    Cell[] area = arrival();
+    if (area == null) {
+      return destination;
+    }
+    return new Cell(
+        Math.clamp(from.x(), area[0].x(), area[1].x()),
+        Math.clamp(from.y(), area[0].y(), area[1].y()),
+        Math.clamp(from.z(), area[0].z(), area[1].z()));
+  }
+
+  /** The destination as an area, least and greatest corners, or {@code null} for a point. */
+  private Cell @Nullable [] arrival() {
+    if (destinationBox != null) {
+      return destinationBox;
+    }
+    if (destinationRadius > 0) {
+      int r = destinationRadius;
+      return new Cell[] {
+        destination.plus(-r, -r, -r), destination.plus(r, r, r),
+      };
+    }
+    return null;
+  }
+
+  /**
    * Returns this scenario run under a different heuristic.
    *
    * <p>A variant is an override rather than a second entry in {@code scenarios.yml}, so that the
@@ -283,7 +341,39 @@ public record Scenario(
             onMissingCapture,
             expectedOutcome,
             ungenerated,
-            value);
+            value,
+            verifyRegions);
+  }
+
+  /**
+   * Returns this scenario started somewhere else.
+   *
+   * <p>For asking what a route costs from partway along it, which is what verifying a cost-to-goal
+   * estimate needs.
+   *
+   * @param cell where to start
+   * @return the variant
+   */
+  public Scenario withOrigin(Cell cell) {
+    return new Scenario(
+        id,
+        description,
+        tags,
+        tier,
+        capture,
+        world,
+        cell,
+        destination,
+        destinationRadius,
+        destinationBox,
+        warps,
+        settings,
+        io,
+        onMissingCapture,
+        expectedOutcome,
+        ungenerated,
+        heuristic,
+        verifyRegions);
   }
 
   /**
@@ -310,7 +400,8 @@ public record Scenario(
         onMissingCapture,
         expectedOutcome,
         ungenerated,
-        heuristic);
+        heuristic,
+        verifyRegions);
   }
 
   /**
@@ -342,7 +433,8 @@ public record Scenario(
         onMissingCapture,
         expectedOutcome,
         ungenerated,
-        heuristic);
+        heuristic,
+        verifyRegions);
   }
 
   /**
@@ -385,7 +477,8 @@ public record Scenario(
         onMissingCapture,
         expectedOutcome,
         ungenerated,
-        heuristic);
+        heuristic,
+        verifyRegions);
   }
 
   private static Scenario from(Map<String, Object> root, Path file) throws IOException {
@@ -421,7 +514,7 @@ public record Scenario(
         box(destination, file),
         warps(root, file),
         new SearchLimits(
-            number(limits, "heuristicWeight", SearchSettings.DEFAULT_HEURISTIC_WEIGHT),
+            number(limits, "heuristicWeight", SearchSettings.DEFAULT_HEURISTIC.defaultWeight()),
             integer(limits, "maxCellsVisited", SearchSettings.DEFAULT_MAX_CELLS_VISITED),
             (long)
                 number(limits, "maxWallClockMillis", SearchSettings.DEFAULT_MAX_WALL_CLOCK_MILLIS)),
@@ -434,7 +527,8 @@ public record Scenario(
             // Whatever production ships, so the gate guards the search players actually get.
             string(root, "heuristic", SearchSettings.DEFAULT_HEURISTIC.name())
                 .toUpperCase(Locale.ROOT)
-                .replace('-', '_')));
+                .replace('-', '_')),
+        new LinkedHashSet<>(stringList(root, "verifyRegions")));
   }
 
   /**

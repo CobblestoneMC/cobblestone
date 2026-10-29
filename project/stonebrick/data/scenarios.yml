@@ -38,6 +38,7 @@ minecraft:overworld:
     capture: cave-lateral
     tier: LOCAL
     tags: [underground]
+    verifyRegions: [player]
     io: zero
     origin: { x: 96, y: -41, z: -119 }
     destination: { x: 19, y: -32, z: -92 }
@@ -62,6 +63,7 @@ minecraft:overworld:
     capture: cliff-down
     tier: LOCAL
     tags: [surface]
+    verifyRegions: [player]
     io: zero
     origin: { x: 780, y: 116, z: 100 }
     destination: { x: 780, y: 64, z: 101 }
@@ -105,6 +107,7 @@ minecraft:overworld:
     origin: { x: 2608, y: 62, z: 216 }
     destination: { x: 2808, y: 62, z: 216 }
     tags: [surface]
+    verifyRegions: [player]
 
   hilly-jungle:
     capture: jungle
@@ -191,6 +194,7 @@ minecraft:overworld:
       z: -270
       box: { from: { x: 507, y: 65, z: -285 }, to: { x: 478, y: 73, z: -255 } }
     tags: [surface, no-pickaxe]
+    verifyRegions: [player-no-pickaxe]
 
   mountain-peaks:
     capture: mountain-peaks
@@ -228,6 +232,7 @@ minecraft:overworld:
     capture: savanna-small
     tier: LOCAL
     tags: [surface]
+    verifyRegions: [player, player-with-boat]
     io: zero
     origin: { x: 1056, y: 63, z: -227 }
     destination: { x: 1208, y: 64, z: -337 }
@@ -307,6 +312,7 @@ minecraft:overworld:
       z: 816
       box: { from: { x: -224, y: 63, z: 881 }, to: { x: -350, y: 90, z: 752 } }
     tags: [surface, no-pickaxe]
+    verifyRegions: [player]
 
   village-short:
     capture: village-short
@@ -325,11 +331,13 @@ minecraft:the_end:
     origin: { x: -1830, y: 59, z: 80 }
     destination: { x: -1568, y: 62, z: 80 }
     tags: [end]
+    verifyRegions: [player]
 
   end-small:
     capture: end-small
     tier: LOCAL
     tags: [end]
+    verifyRegions: [player]
     io: zero
     origin: { x: 93, y: 57, z: -18 }
     destination: { x: -95, y: 57, z: 50 }
@@ -351,6 +359,7 @@ minecraft:the_nether:
     origin: { x: -60, y: 57, z: -50 }
     destination: { x: -150, y: 56, z: -150 }
     tags: [nether]
+    verifyRegions: [player]
 
   bastion:
     capture: bastion
@@ -359,6 +368,7 @@ minecraft:the_nether:
     origin: { x: -350, y: 46, z: 215 }
     destination: { x: -300, y: 36, z: 260 }
     tags: [nether]
+    verifyRegions: [player]
 
   distance:
     capture: distance
@@ -419,6 +429,7 @@ minecraft:the_nether:
     origin: { x: 71, y: 85, z: -42 }
     destination: { x: 120, y: 99, z: -30 }
     tags: [nether]
+    verifyRegions: [player]
 
   soul-sand-valley:
     capture: soul-sand-valley
@@ -448,6 +459,7 @@ minecraft:the_nether:
     capture: vertical-small-down
     tier: LOCAL
     tags: [nether]
+    verifyRegions: [player-soul-speed]
     io: zero
     origin: { x: -168, y: 92, z: 181 }
     destination: { x: -174, y: 34, z: 197 }

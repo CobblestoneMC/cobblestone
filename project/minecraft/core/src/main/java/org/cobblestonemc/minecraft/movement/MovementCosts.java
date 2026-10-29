@@ -47,7 +47,7 @@ final class MovementCosts {
   /**
    * How much faster Soul Speed boots of a level walk on soul sand and soul soil: the enchantment
    * adds {@code 0.03 * (1 + 0.35 * level)} to a base movement speed of 0.1, and lifts soul sand's
-   * drag. Mirrored by {@code RegionCost}.
+   * drag. Mirrored by {@code MinecraftAgent}.
    *
    * @param level the Soul Speed level, at least 1
    * @return the factor walking speed is multiplied by

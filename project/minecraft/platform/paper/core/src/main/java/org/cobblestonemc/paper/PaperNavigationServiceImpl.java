@@ -44,6 +44,7 @@ import org.cobblestonemc.minecraft.BreakChecker;
 import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.ChunkSource;
+import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -51,6 +52,7 @@ import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
+import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.minecraft.registry.OwnedRegistry;
 import org.cobblestonemc.paper.api.BoxWorldRegion;
 import org.cobblestonemc.paper.api.NavigationService;
@@ -70,6 +72,7 @@ public final class PaperNavigationServiceImpl
   private final PaperRegions regions = new PaperRegions(this);
   private final Map<String, MinecraftWorld> worldCache = new ConcurrentHashMap<>();
   private final OwnedRegistry<SearchModificationService> searchModifiers = new OwnedRegistry<>();
+  private final RegionStores regionStores;
 
   /**
    * Creates the API for a plugin.
@@ -77,10 +80,15 @@ public final class PaperNavigationServiceImpl
    * @param plugin the owning plugin
    * @param logger the logger
    * @param chunkSettings the chunk cache tunables
+   * @param regionStores the server's region stores, shared by every search
    */
   public PaperNavigationServiceImpl(
-      Plugin plugin, CobblestoneLogger logger, ChunkProviderSettings chunkSettings) {
+      Plugin plugin,
+      CobblestoneLogger logger,
+      ChunkProviderSettings chunkSettings,
+      RegionStores regionStores) {
     this.logger = logger;
+    this.regionStores = regionStores;
     int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
     this.scheduler = new PaperScheduler(plugin, workerThreads);
     this.platform = new PaperPlatformApi(plugin, scheduler, logger);
@@ -205,14 +213,13 @@ public final class PaperNavigationServiceImpl
     BreakChecker breakChecker = buildBreakChecker(modifiers, player, chunks);
     List<Restriction<MinecraftWorld>> restrictions = buildRestrictions(modifiers, player);
     // Built on the server thread: it reads the Bukkit player, which worker threads must not touch.
+    CobblestonePlayer agent = new PaperPlayer(player);
     MinecraftMovementBehavior behavior =
         MinecraftMovementBehavior.forPlayer(
-            chunks,
-            new PaperPlayer(player),
-            settings.excludedModes(),
-            breakChecker,
-            countEnderPearls(player));
-    HeuristicStrategy heuristic = MinecraftHeuristics.forPlayer(behavior, settings);
+            chunks, agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
+    HeuristicStrategy heuristic =
+        MinecraftHeuristics.forPlayer(
+            behavior, chunks, agent, originPosition.cell(), settings, regionStores);
 
     CompletableFuture<SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload>> handleFuture =
         gatherTransitions(
