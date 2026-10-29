@@ -37,6 +37,7 @@ import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.Restriction;
 import org.cobblestonemc.SearchObserver;
+import org.cobblestonemc.SearchThreadPool;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
@@ -77,12 +78,16 @@ public final class PaperNavigationServiceImpl
    * @param plugin the owning plugin
    * @param logger the logger
    * @param chunkSettings the chunk cache tunables
+   * @param searchThreads how many threads searches run on
    */
   public PaperNavigationServiceImpl(
-      Plugin plugin, CobblestoneLogger logger, ChunkProviderSettings chunkSettings) {
+      Plugin plugin,
+      CobblestoneLogger logger,
+      ChunkProviderSettings chunkSettings,
+      int searchThreads) {
     this.logger = logger;
-    int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
-    this.scheduler = new PaperScheduler(plugin, workerThreads);
+    this.scheduler =
+        new PaperScheduler(plugin, new SearchThreadPool("cobblestone-search", searchThreads));
     this.platform = new PaperPlatformApi(plugin, scheduler, logger);
     this.chunkSettings = chunkSettings;
     this.core = CobblestoneApi.load();

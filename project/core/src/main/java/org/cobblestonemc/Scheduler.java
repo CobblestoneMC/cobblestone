@@ -15,6 +15,9 @@ import java.util.concurrent.ExecutorService;
  * <p>The core search runs entirely on worker threads via this seam; platform implementations extend
  * it with location-aware scheduling for fetching world state. "Async" throughout Cobblestone means
  * "on a worker thread".
+ *
+ * <p>{@link SearchThreadPool} is the one platforms run searches on. Tests and the benchmark use
+ * their own, to run search work inline or on a virtual clock.
  */
 public interface Scheduler {
 

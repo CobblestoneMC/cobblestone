@@ -67,6 +67,12 @@ public final class ConfigKeys {
   /** The most concurrent searches (manual + live) one player may run. Requires a restart. */
   public final ConfigKey<Integer> searchMaxConcurrentPerPlayer;
 
+  /**
+   * How many threads searches run on, or 0 for half the processors and at least two. Requires a
+   * restart.
+   */
+  public final ConfigKey<Integer> searchThreads;
+
   /** Cap on cells an A* solve may visit before giving up ({@code LIMIT_EXCEEDED}). Mutable. */
   public final ConfigKey<Integer> algorithmMaxCellsVisited;
 
@@ -291,6 +297,16 @@ public final class ConfigKeys {
                 """
                 The most searches (manual and live re-searches together) one player may run at
                 once. Live re-searches yield to this budget; a manual /navigate always runs.""")
+            .requiresRestart()
+            .register();
+    this.searchThreads =
+        manager
+            .key("search.threads", 0, Codec.ofInt())
+            .comment(
+                """
+                How many threads searches run on, shared by every player's searches. 0 leaves it
+                to Cobblestone: half the server's processors, and at least two. Lower it to leave
+                more of the processors to the server itself.""")
             .requiresRestart()
             .register();
 

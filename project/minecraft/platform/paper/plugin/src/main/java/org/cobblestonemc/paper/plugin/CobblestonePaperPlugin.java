@@ -19,6 +19,7 @@ import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.cobblestonemc.SearchThreadPool;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.paper.PaperNavigationServiceImpl;
@@ -91,7 +92,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                 config.get(keys.chunksCacheSize),
                 config.get(keys.chunksPrefetchDistance),
                 config.get(keys.chunksFetchAttempts),
-                config.get(keys.chunksPolicy)));
+                config.get(keys.chunksPolicy)),
+            SearchThreadPool.size(config.get(keys.searchThreads)));
     PaperIntegrationRegistry integrationRegistry =
         new PaperIntegrationRegistry(platformApi.regions());
     getServer()

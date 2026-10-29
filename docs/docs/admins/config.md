@@ -82,9 +82,12 @@ name, without extension, in the plugin's data folder.
 | Setting | Default | |
 | --- | --- | --- |
 | `search.max_concurrent_per_player` | `1` | restart |
+| `search.threads` | `0` | restart |
 
-Maximum concurrent searches per player, including live re-searches. Live re-searches yield to this
-limit; a manual `/navigate` always runs.
+- **`max_concurrent_per_player`**: Maximum concurrent searches per player, including live
+  re-searches. Live re-searches yield to this limit; a manual `/navigate` always runs.
+- **`threads`**: How many threads searches run on, shared by every player's searches. `0` leaves it
+  to Cobblestone: half the server's processors, and at least two.
 
 ### `search.algorithm`
 
@@ -136,7 +139,7 @@ limit; a manual `/navigate` always runs.
 | Symptom | Adjustment |
 | --- | --- |
 | Long routes fail with "ran out of resources" or "took too long" | Increase `max_cells_visited` and `max_wall_clock_seconds`. Ensure `search.chunks.policy` is at least `allow_load`. |
-| High CPU usage | Increase `trips.live_interval_ticks`, keep `search.max_concurrent_per_player` at `1`, and decrease `max_cells_visited`. On Sponge, decrease `search.chunks.max_load_requests`. |
+| High CPU usage | Increase `trips.live_interval_ticks`, keep `search.max_concurrent_per_player` at `1`, decrease `max_cells_visited`, and set `search.threads` below half the processors. On Sponge, decrease `search.chunks.max_load_requests`. |
 | High memory usage | Decrease `max_cells_visited`. |
 | Searches must not load chunks | Set `search.chunks.policy` to `loaded_only`. |
 

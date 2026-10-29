@@ -27,6 +27,7 @@ import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.Restriction;
 import org.cobblestonemc.SearchObserver;
+import org.cobblestonemc.SearchThreadPool;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
@@ -91,16 +92,18 @@ public final class SpongeNavigationServiceImpl
    * @param maxChunkLoadRequests how many chunk loading tickets may be held at once
    * @param offline how to read an unloaded chunk on this Minecraft version, or {@link
    *     OfflineChunkSource#UNAVAILABLE} to always go through a chunk loading ticket
+   * @param searchThreads how many threads searches run on
    */
   public SpongeNavigationServiceImpl(
       PluginContainer plugin,
       CobblestoneLogger logger,
       ChunkProviderSettings chunkSettings,
       IntSupplier maxChunkLoadRequests,
-      OfflineChunkSource offline) {
+      OfflineChunkSource offline,
+      int searchThreads) {
     this.logger = logger;
-    int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
-    this.scheduler = new SpongeScheduler(plugin, workerThreads);
+    this.scheduler =
+        new SpongeScheduler(plugin, new SearchThreadPool("cobblestone-search", searchThreads));
     this.platform = new SpongePlatformApi(scheduler, logger, maxChunkLoadRequests, offline);
     this.chunkSettings = chunkSettings;
     this.core = CobblestoneApi.load();

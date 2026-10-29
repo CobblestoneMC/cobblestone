@@ -13,6 +13,7 @@ import java.util.Locale;
 import java.util.function.Supplier;
 import org.apache.logging.log4j.Logger;
 import org.bstats.sponge.Metrics;
+import org.cobblestonemc.SearchThreadPool;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.plugin.LogoutCleanup;
@@ -149,7 +150,8 @@ public final class CobblestoneSpongePlugin {
                 config.get(keys.chunksFetchAttempts),
                 config.get(keys.chunksPolicy)),
             () -> config.get(spongeKeys.chunksMaxLoadRequests),
-            new AnvilOfflineChunkSource(cobblestoneLogger));
+            new AnvilOfflineChunkSource(cobblestoneLogger),
+            SearchThreadPool.size(config.get(keys.searchThreads)));
     this.navigationService.registerListeners(container);
     CobblestoneCoreApi.install(navigationService, navigationService);
 
