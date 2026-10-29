@@ -7,6 +7,10 @@
 
 package org.cobblestonemc;
 
+import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
 /**
  * Where the search reads the clock, and where it asks to be woken later.
  *
@@ -45,12 +49,14 @@ public interface TimeSource {
   void schedule(Runnable task, long delayMillis);
 
   /**
-   * Returns the system clock, scheduling onto the given scheduler.
+   * Returns the system clock, waiting on {@code timer} and running delayed tasks on {@code
+   * executor}, so a delay never holds one of the executor's threads.
    *
-   * @param scheduler the scheduler to run delayed tasks on
+   * @param timer the thread delays wait on, which only hands tasks off
+   * @param executor where delayed tasks run
    * @return the system time source
    */
-  static TimeSource system(Scheduler scheduler) {
+  static TimeSource system(ScheduledExecutorService timer, Executor executor) {
     return new TimeSource() {
       @Override
       public long millis() {
@@ -59,7 +65,7 @@ public interface TimeSource {
 
       @Override
       public void schedule(Runnable task, long delayMillis) {
-        scheduler.runAsyncLater(task, delayMillis);
+        timer.schedule(() -> executor.execute(task), delayMillis, TimeUnit.MILLISECONDS);
       }
     };
   }

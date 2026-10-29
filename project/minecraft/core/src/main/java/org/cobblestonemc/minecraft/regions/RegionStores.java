@@ -12,19 +12,16 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.Executor;
 import org.cobblestonemc.Cell;
+import org.cobblestonemc.TimeSource;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.regions.RegionSpec;
 import org.cobblestonemc.regions.RegionStore;
 
 /**
- * A server's {@link RegionStore}s, one per world, and the threads they share.
+ * A server's {@link RegionStore}s, one per world.
  *
  * <p>The platform's one handle on the region layer: searches ask it for their world's store,
  * block-change listeners tell it what to forget, and trips tell it whose surroundings to keep.
@@ -41,10 +38,10 @@ import org.cobblestonemc.regions.RegionStore;
  * that passes. A search in that window reads the section as it was, which costs the estimate a
  * little and never the route, since the fine search reads the blocks themselves.
  *
- * <p>Builds and those delays run on a small pool of daemon threads, so a chunk that arrives on the
- * server thread is not built there.
+ * <p>Builds run on the executor given, and so do forgotten changes once their delay has passed, so
+ * a chunk that arrives on the server thread is not built there.
  */
-public final class RegionStores implements AutoCloseable {
+public final class RegionStores {
 
   /**
    * How many sections out from a navigating player their pin reaches, along every axis: 4 holds a
@@ -57,7 +54,8 @@ public final class RegionStores implements AutoCloseable {
 
   private final long memoryBudget;
   private final Duration invalidationDelay;
-  private final ScheduledExecutorService threads;
+  private final Executor builds;
+  private final TimeSource time;
   private final Map<String, RegionStore<MinecraftChunk, RegionClass>> stores =
       new ConcurrentHashMap<>();
 
@@ -70,21 +68,18 @@ public final class RegionStores implements AutoCloseable {
    * Creates the registry.
    *
    * @param memoryBudget how many bytes of sections not pinned each world keeps in memory
-   * @param builderThreads how many threads build sections from chunks that arrive later
+   * @param builds where sections are built from chunks that arrive later: compute threads
+   * @param time the clock changes wait on to be forgotten, running them on {@code builds}
    */
-  public RegionStores(long memoryBudget, int builderThreads) {
-    this(memoryBudget, builderThreads, INVALIDATION_DELAY);
+  public RegionStores(long memoryBudget, Executor builds, TimeSource time) {
+    this(memoryBudget, builds, time, INVALIDATION_DELAY);
   }
 
-  RegionStores(long memoryBudget, int builderThreads, Duration invalidationDelay) {
+  RegionStores(long memoryBudget, Executor builds, TimeSource time, Duration invalidationDelay) {
     this.memoryBudget = memoryBudget;
     this.invalidationDelay = invalidationDelay;
-    ScheduledThreadPoolExecutor pool =
-        new ScheduledThreadPoolExecutor(
-            Math.max(1, builderThreads), daemons("cobblestone-regions"));
-    // A change still waiting at shutdown has nothing left to be forgotten from.
-    pool.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
-    this.threads = pool;
+    this.builds = builds;
+    this.time = time;
   }
 
   /**
@@ -95,7 +90,7 @@ public final class RegionStores implements AutoCloseable {
    */
   public RegionStore<MinecraftChunk, RegionClass> of(MinecraftWorld world) {
     return stores.computeIfAbsent(
-        world.key(), key -> new RegionStore<>(MinecraftTerrain.spec(world), memoryBudget, threads));
+        world.key(), key -> new RegionStore<>(MinecraftTerrain.spec(world), memoryBudget, builds));
   }
 
   /**
@@ -122,7 +117,7 @@ public final class RegionStores implements AutoCloseable {
     if (!changed.add(section)) {
       return; // already waiting: this change is forgotten with it
     }
-    threads.schedule(() -> forget(section), invalidationDelay.toNanos(), TimeUnit.NANOSECONDS);
+    time.schedule(() -> forget(section), invalidationDelay.toMillis());
   }
 
   private void forget(Changed section) {
@@ -172,27 +167,5 @@ public final class RegionStores implements AutoCloseable {
    */
   public void worldUnloaded(String worldKey) {
     stores.remove(worldKey);
-  }
-
-  /** Stops building, letting builds still running finish for a moment; pending changes are moot. */
-  @Override
-  public void close() {
-    threads.shutdown();
-    try {
-      threads.awaitTermination(5, TimeUnit.SECONDS);
-    } catch (InterruptedException interrupted) {
-      Thread.currentThread().interrupt();
-    }
-  }
-
-  private static ThreadFactory daemons(String name) {
-    AtomicInteger count = new AtomicInteger();
-    return runnable -> {
-      Thread thread = new Thread(runnable, name + "-" + count.incrementAndGet());
-      thread.setDaemon(true);
-      // Below the server's own threads: this is work a search waits on, never on a tick.
-      thread.setPriority(Thread.NORM_PRIORITY - 1);
-      return thread;
-    };
   }
 }

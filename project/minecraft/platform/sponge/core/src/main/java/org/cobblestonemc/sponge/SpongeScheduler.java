@@ -7,9 +7,7 @@
 
 package org.cobblestonemc.sponge;
 
-import java.util.concurrent.ExecutorService;
 import org.cobblestonemc.Position;
-import org.cobblestonemc.SearchThreadPool;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.ScheduledTaskHandle;
@@ -23,39 +21,20 @@ import org.spongepowered.plugin.PluginContainer;
 /**
  * The Sponge {@link MinecraftScheduler}.
  *
- * <p>Search math runs on a {@link SearchThreadPool} (so it never blocks the server thread).
- * Location- and entity-aware work is dispatched through Sponge's synchronous server scheduler,
+ * <p>Location- and entity-aware work is dispatched through Sponge's synchronous server scheduler,
  * which ticks on the single main server thread (Sponge has no Folia-style per-region threading).
  */
 public final class SpongeScheduler implements MinecraftScheduler<Entity> {
 
   private final PluginContainer plugin;
-  private final SearchThreadPool workers;
 
   /**
    * Creates a scheduler.
    *
    * @param plugin the owning plugin container (for task dispatch)
-   * @param workers the threads search work runs on
    */
-  public SpongeScheduler(PluginContainer plugin, SearchThreadPool workers) {
+  public SpongeScheduler(PluginContainer plugin) {
     this.plugin = plugin;
-    this.workers = workers;
-  }
-
-  @Override
-  public void runAsync(Runnable task) {
-    workers.runAsync(task);
-  }
-
-  @Override
-  public void runAsyncLater(Runnable task, long delayMillis) {
-    workers.runAsyncLater(task, delayMillis);
-  }
-
-  @Override
-  public ExecutorService asyncExecutor() {
-    return workers.asyncExecutor();
   }
 
   @Override
@@ -102,10 +81,5 @@ public final class SpongeScheduler implements MinecraftScheduler<Entity> {
                     .interval(Ticks.of(Math.max(1L, periodTicks)))
                     .build());
     return scheduled::cancel;
-  }
-
-  /** Stops the worker pool; call on plugin disable. */
-  public void shutdown() {
-    workers.shutdown();
   }
 }

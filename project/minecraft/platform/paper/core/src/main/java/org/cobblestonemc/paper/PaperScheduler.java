@@ -8,14 +8,12 @@
 package org.cobblestonemc.paper;
 
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
-import java.util.concurrent.ExecutorService;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.plugin.Plugin;
 import org.cobblestonemc.Position;
-import org.cobblestonemc.SearchThreadPool;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.ScheduledTaskHandle;
@@ -23,39 +21,20 @@ import org.cobblestonemc.minecraft.ScheduledTaskHandle;
 /**
  * The Paper/Folia {@link MinecraftScheduler}.
  *
- * <p>Search math runs on a {@link SearchThreadPool} (so it never blocks a server thread), while
- * location-aware work is dispatched through Paper's region/global schedulers, which behave
+ * <p>Location-aware work is dispatched through Paper's region/global schedulers, which behave
  * correctly on both regular Paper (one main thread) and Folia (per-region threads).
  */
 public final class PaperScheduler implements MinecraftScheduler<Entity> {
 
   private final Plugin plugin;
-  private final SearchThreadPool workers;
 
   /**
    * Creates a scheduler.
    *
    * @param plugin the owning plugin (for region scheduler dispatch)
-   * @param workers the threads search work runs on
    */
-  public PaperScheduler(Plugin plugin, SearchThreadPool workers) {
+  public PaperScheduler(Plugin plugin) {
     this.plugin = plugin;
-    this.workers = workers;
-  }
-
-  @Override
-  public void runAsync(Runnable task) {
-    workers.runAsync(task);
-  }
-
-  @Override
-  public void runAsyncLater(Runnable task, long delayMillis) {
-    workers.runAsyncLater(task, delayMillis);
-  }
-
-  @Override
-  public ExecutorService asyncExecutor() {
-    return workers.asyncExecutor();
   }
 
   @Override
@@ -111,10 +90,5 @@ public final class PaperScheduler implements MinecraftScheduler<Entity> {
         scheduled.cancel();
       }
     };
-  }
-
-  /** Stops the worker pool; call on plugin disable. */
-  public void shutdown() {
-    workers.shutdown();
   }
 }

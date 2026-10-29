@@ -54,7 +54,7 @@ public interface CobblestoneApi {
    */
   <T, D extends Domain> SearchHandle<Position<D>, T> navigate(
       CobblestoneLogger logger,
-      Scheduler scheduler,
+      SearchScheduler scheduler,
       Position<D> origin,
       Destination<DomainRegion<D>> destination,
       MovementBehavior<T, D> behavior,

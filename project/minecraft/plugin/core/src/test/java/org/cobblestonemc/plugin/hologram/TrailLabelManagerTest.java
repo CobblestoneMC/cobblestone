@@ -16,13 +16,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.Position;
+import org.cobblestonemc.TimeSource;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -84,7 +84,7 @@ class TrailLabelManagerTest {
 
   @BeforeEach
   void setUp() {
-    trips = new TripManager<>(scheduler, 5);
+    trips = new TripManager<>(scheduler, scheduler, 5);
     labels =
         new TrailLabelManager<>(
             trips, scheduler, new Messages(Locale.ENGLISH, false, LOGGER), platform);
@@ -464,7 +464,7 @@ class TrailLabelManagerTest {
   }
 
   /** Runs one-shot work immediately and keeps the labels' repeating task for the test to fire. */
-  private static final class TestScheduler implements MinecraftScheduler<Object> {
+  private static final class TestScheduler implements MinecraftScheduler<Object>, TimeSource {
     Runnable ticker;
     Handle handle;
 
@@ -505,17 +505,12 @@ class TrailLabelManagerTest {
     }
 
     @Override
-    public void runAsync(Runnable task) {
-      task.run();
+    public long millis() {
+      return 0;
     }
 
     @Override
-    public void runAsyncLater(Runnable task, long delayMillis) {}
-
-    @Override
-    public ExecutorService asyncExecutor() {
-      throw new UnsupportedOperationException();
-    }
+    public void schedule(Runnable task, long delayMillis) {}
   }
 
   private static final class Handle implements ScheduledTaskHandle {

@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.plugin.config;
 
+import org.cobblestonemc.Workers;
 import org.cobblestonemc.minecraft.regions.RegionStores;
 
 /** The region layer's settings, read the same way on every platform. */
@@ -19,11 +20,13 @@ public final class RegionConfig {
    *
    * @param config the loaded configuration
    * @param keys its keys
+   * @param workers the threads the stores build on
    * @return the stores
    */
-  public static RegionStores stores(ConfigManager config, ConfigKeys keys) {
+  public static RegionStores stores(ConfigManager config, ConfigKeys keys, Workers workers) {
     return new RegionStores(
         Math.max(16, config.get(keys.regionsMemory)) * 1024L * 1024L,
-        Math.max(1, Runtime.getRuntime().availableProcessors() / 4));
+        workers.compute(),
+        workers.time());
   }
 }

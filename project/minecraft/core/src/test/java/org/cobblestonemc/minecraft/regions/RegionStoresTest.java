@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import org.cobblestonemc.FutureOr;
+import org.cobblestonemc.Workers;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.TestBlocks;
 import org.cobblestonemc.minecraft.TestWorld;
@@ -30,7 +31,9 @@ class RegionStoresTest {
   @Test
   void changesAreForgottenTogetherOnceTheDelayHasPassed() throws InterruptedException {
     TestWorld world = TestWorld.builder("w").build();
-    try (RegionStores stores = new RegionStores(Long.MAX_VALUE, 1, DELAY)) {
+    try (Workers workers = new Workers(1, 1)) {
+      RegionStores stores =
+          new RegionStores(Long.MAX_VALUE, workers.compute(), workers.time(), DELAY);
       RegionStore<MinecraftChunk, RegionClass> store = stores.of(world);
       store.section(0, 0, 0, ROCK);
 

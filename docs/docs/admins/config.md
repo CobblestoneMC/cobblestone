@@ -82,12 +82,9 @@ name, without extension, in the plugin's data folder.
 | Setting | Default | |
 | --- | --- | --- |
 | `search.max_concurrent_per_player` | `1` | restart |
-| `search.threads` | `0` | restart |
 
-- **`max_concurrent_per_player`**: Maximum concurrent searches per player, including live
-  re-searches. Live re-searches yield to this limit; a manual `/navigate` always runs.
-- **`threads`**: How many threads searches run on, shared by every player's searches. `0` leaves it
-  to Cobblestone: half the server's processors, and at least two.
+Maximum concurrent searches per player, including live re-searches. Live re-searches yield to this
+limit; a manual `/navigate` always runs.
 
 ### `search.algorithm`
 
@@ -167,7 +164,7 @@ searches need them.
 | Symptom | Adjustment |
 | --- | --- |
 | Long routes fail with "ran out of resources" or "took too long" | Increase `max_cells_visited` and `max_wall_clock_seconds`. Ensure `search.chunks.policy` is at least `allow_load`. |
-| High CPU usage | Increase `trips.live_interval_ticks`, keep `search.max_concurrent_per_player` at `1`, decrease `max_cells_visited`, and set `search.threads` below half the processors. On Sponge, decrease `search.chunks.max_load_requests`. |
+| High CPU usage | Increase `trips.live_interval_ticks`, keep `search.max_concurrent_per_player` at `1`, decrease `max_cells_visited`, and set `threads.compute` below half the processors. On Sponge, decrease `search.chunks.max_load_requests`. |
 | High memory usage | Decrease `max_cells_visited`. |
 | Searches must not load chunks | Set `search.chunks.policy` to `loaded_only`. |
 
@@ -240,6 +237,22 @@ in a dialog on Paper, and on Sponge by handing the player the command to finish 
 
 Anonymous usage data via [bStats](https://bstats.org). bStats can also be disabled globally in its
 own configuration.
+
+## `threads`
+
+The threads Cobblestone runs on besides the server's own. Searches never share a thread with disk
+or database work, so a slow write can't hold one up.
+
+| Setting | Default | |
+| --- | --- | --- |
+| `threads.compute` | `0` | restart |
+| `threads.io` | `0` | restart |
+
+- **`compute`**: How many threads searches and region builds run on, shared by every player's
+  searches. `0` leaves it to Cobblestone: half the server's processors, and at least two.
+- **`io`**: How many threads disk and database work runs on: saving deaths, mounts, portals and
+  preferences, and on Sponge, reading chunks from disk. `0` leaves it to Cobblestone: two. Writes
+  happen one at a time and in order whatever this is, and are finished before the server stops.
 
 ## `navigators.trail`
 

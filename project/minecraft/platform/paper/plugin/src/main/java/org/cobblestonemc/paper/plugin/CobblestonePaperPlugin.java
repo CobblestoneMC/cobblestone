@@ -12,6 +12,7 @@ import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import net.kyori.adventure.key.Key;
@@ -19,7 +20,7 @@ import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.cobblestonemc.SearchThreadPool;
+import org.cobblestonemc.Workers;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.regions.RegionStores;
@@ -35,6 +36,7 @@ import org.cobblestonemc.plugin.config.ConfigManager;
 import org.cobblestonemc.plugin.config.MenuIcons;
 import org.cobblestonemc.plugin.config.RegionConfig;
 import org.cobblestonemc.plugin.config.SearchConfig;
+import org.cobblestonemc.plugin.config.ThreadsConfig;
 import org.cobblestonemc.plugin.data.DataStore;
 import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.DataStores;
@@ -65,6 +67,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
   private PaperMetrics metrics;
   private PaperMountListener mountListener;
   private RegionStores regionStores;
+  private Workers workers;
   private final SearchRegistry<Location> searchRegistry = new SearchRegistry<>();
 
   @Override
@@ -86,8 +89,14 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
       return;
     }
 
+    // Every thread Cobblestone runs besides the server's own, closed last on disable. Records are
+    // written on one lane, in the order they happen, so a mount's last move never lands after its
+    // removal.
+    this.workers = ThreadsConfig.workers(config, keys);
+    Executor data = workers.lane("data");
+
     // Regions are shared by every search and forgotten when a block in their chunk changes.
-    this.regionStores = RegionConfig.stores(config, keys);
+    this.regionStores = RegionConfig.stores(config, keys, workers);
 
     // The transition registry is owned by the plugin; the platform API only reads from / registers
     // into it. Both are reachable to other plugins via the registered plugin API.
@@ -101,7 +110,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                 config.get(keys.chunksFetchAttempts),
                 config.get(keys.chunksPolicy)),
             regionStores,
-            SearchThreadPool.size(config.get(keys.searchThreads)));
+            workers.search());
     getServer()
         .getPluginManager()
         .registerEvents(new PaperRegionListener(regionStores, platformApi), this);
@@ -142,11 +151,10 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     getServer()
         .getPluginManager()
         .registerEvents(
-            new PaperDeathListener(
-                dataStore.deaths(), platformApi.scheduler(), () -> config.get(keys.deathsTrack)),
+            new PaperDeathListener(dataStore.deaths(), data, () -> config.get(keys.deathsTrack)),
             this);
     // So are their last mount, and when each of their pets was tamed (to number same-named pets).
-    mountListener = new PaperMountListener(dataStore.mounts(), platformApi.scheduler());
+    mountListener = new PaperMountListener(dataStore.mounts(), data);
     getServer().getPluginManager().registerEvents(mountListener, this);
     getServer().getPluginManager().registerEvents(new PaperPetListener(), this);
 
@@ -154,7 +162,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     // is
     // registered as a service so it is discovered like any third-party navigator.
     this.tripManager =
-        new TripManager<>(platformApi.scheduler(), config.get(keys.tripsMaxActivePerPlayer));
+        new TripManager<>(
+            platformApi.scheduler(), workers.time(), config.get(keys.tripsMaxActivePerPlayer));
     // Each trail floats its trip's name over itself while the player stands still; hitting the
     // Cancel line above it cancels the trip.
     this.holograms = new PaperHolograms(this);
@@ -176,6 +185,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
         new TripHud<>(
             tripManager,
             platformApi.scheduler(),
+            data,
             messages,
             dataStore.playerPreferences(),
             () -> !folia && config.get(keys.tripsHud),
@@ -197,7 +207,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                 dataStore.portalTransitions(),
                 dataStore.endReturnPortals(),
                 dataStore.gateways(),
-                platformApi.scheduler(),
+                data,
                 logger,
                 () -> config.get(keys.portalsCostSeconds),
                 () -> config.get(keys.portalsDiscovery)),
@@ -322,14 +332,16 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
       holograms.removeAll();
     }
     if (platformApi != null) {
-      // Cancels in-flight searches and stops the search worker pool.
+      // Cancels in-flight searches and the chunk reads they queued.
       platformApi.shutdown();
     }
-    if (regionStores != null) {
-      regionStores.close();
-    }
     getServer().getServicesManager().unregisterAll(this);
+    if (workers != null) {
+      // Stops searches and builds, and lets the writes already given finish.
+      workers.close();
+    }
     if (mountListener != null) {
+      // After the writes, which are older: where a mount is now is the last word.
       try {
         mountListener.saveLoaded();
       } catch (RuntimeException e) {

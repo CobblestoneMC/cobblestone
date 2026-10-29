@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.paper.plugin;
 
+import java.util.concurrent.Executor;
 import java.util.function.BooleanSupplier;
 import java.util.function.DoubleSupplier;
 import org.bukkit.Location;
@@ -17,7 +18,6 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.cobblestonemc.CobblestoneLogger;
-import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.plugin.data.EndReturnPortal;
 import org.cobblestonemc.plugin.data.EndReturnPortalDao;
 import org.cobblestonemc.plugin.data.GatewayDao;
@@ -50,7 +50,7 @@ final class PaperPortalListener implements Listener {
   private final PortalTransitionDao portals;
   private final EndReturnPortalDao endReturns;
   private final GatewayDao gateways;
-  private final MinecraftScheduler<?> scheduler;
+  private final Executor data;
   private final CobblestoneLogger logger;
   private final DoubleSupplier cost;
   private final BooleanSupplier enabled;
@@ -59,14 +59,14 @@ final class PaperPortalListener implements Listener {
       PortalTransitionDao portals,
       EndReturnPortalDao endReturns,
       GatewayDao gateways,
-      MinecraftScheduler<?> scheduler,
+      Executor data,
       CobblestoneLogger logger,
       DoubleSupplier cost,
       BooleanSupplier enabled) {
     this.portals = portals;
     this.endReturns = endReturns;
     this.gateways = gateways;
-    this.scheduler = scheduler;
+    this.data = data;
     this.logger = logger;
     this.cost = cost;
     this.enabled = enabled;
@@ -99,7 +99,7 @@ final class PaperPortalListener implements Listener {
     logger.debug(
         "Discovered nether portal link {} -> {}", from.getWorld().getKey(), to.getWorld().getKey());
     PortalTransition transition = transitionTo(source, dest.world(), centerPoint(dest));
-    scheduler.runAsync(() -> portals.upsert(transition));
+    data.execute(() -> portals.upsert(transition));
   }
 
   /**
@@ -111,7 +111,7 @@ final class PaperPortalListener implements Listener {
     if (from.getWorld().getEnvironment() == World.Environment.THE_END) {
       PortalRegion region = PaperPortals.scanPortal(from, Material.END_PORTAL);
       EndReturnPortal portal = new EndReturnPortal(region, cost.getAsDouble());
-      scheduler.runAsync(() -> endReturns.upsert(portal));
+      data.execute(() -> endReturns.upsert(portal));
       return;
     }
     PortalRegion source = PaperPortals.scanPortal(from, Material.END_PORTAL);
@@ -120,7 +120,7 @@ final class PaperPortalListener implements Listener {
             source,
             to.getWorld().getKey().asString(),
             new int[] {to.getBlockX(), to.getBlockY(), to.getBlockZ()});
-    scheduler.runAsync(() -> portals.upsert(transition));
+    data.execute(() -> portals.upsert(transition));
   }
 
   /**
@@ -141,7 +141,7 @@ final class PaperPortalListener implements Listener {
             to.getBlockY(),
             to.getBlockZ(),
             cost.getAsDouble());
-    scheduler.runAsync(() -> gateways.upsert(gateway));
+    data.execute(() -> gateways.upsert(gateway));
   }
 
   /** Builds a region &rarr; point transition from a source region to an arrival block. */

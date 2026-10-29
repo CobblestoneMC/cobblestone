@@ -18,7 +18,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
@@ -26,6 +26,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.Position;
+import org.cobblestonemc.TimeSource;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -75,7 +76,7 @@ class TripHudTest {
 
   @BeforeEach
   void setUp() {
-    trips = new TripManager<>(scheduler, 5);
+    trips = new TripManager<>(scheduler, scheduler, 5);
     hud = newHud();
     trips.onChange(hud::refresh);
   }
@@ -83,6 +84,7 @@ class TripHudTest {
   private TripHud<Object, TestTripAgent, Object> newHud() {
     return new TripHud<>(
         trips,
+        scheduler,
         scheduler,
         new Messages(Locale.ENGLISH, true, LOGGER),
         preferences,
@@ -309,7 +311,8 @@ class TripHudTest {
    * repeating tasks it keeps only the HUD's (period 20), so a test can fire its redraw; trip ticks
    * (period 1) are not needed here.
    */
-  private static final class TestScheduler implements MinecraftScheduler<Object> {
+  private static final class TestScheduler
+      implements MinecraftScheduler<Object>, TimeSource, Executor {
     Runnable hudTicker;
     long hudPeriod;
     Handle hudHandle;
@@ -359,7 +362,7 @@ class TripHudTest {
     }
 
     @Override
-    public void runAsync(Runnable task) {
+    public void execute(Runnable task) {
       if (deferAsync) {
         deferred.add(task);
       } else {
@@ -368,12 +371,12 @@ class TripHudTest {
     }
 
     @Override
-    public void runAsyncLater(Runnable task, long delayMillis) {}
+    public long millis() {
+      return 0;
+    }
 
     @Override
-    public ExecutorService asyncExecutor() {
-      throw new UnsupportedOperationException();
-    }
+    public void schedule(Runnable task, long delayMillis) {}
   }
 
   private static final class Handle implements ScheduledTaskHandle {

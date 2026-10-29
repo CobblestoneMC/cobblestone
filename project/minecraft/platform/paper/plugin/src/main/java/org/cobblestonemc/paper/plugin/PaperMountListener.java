@@ -8,6 +8,7 @@
 package org.cobblestonemc.paper.plugin;
 
 import java.util.UUID;
+import java.util.concurrent.Executor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -20,7 +21,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityDismountEvent;
 import org.bukkit.event.world.EntitiesUnloadEvent;
-import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.plugin.data.MountDao;
 import org.cobblestonemc.plugin.data.MountLocation;
 
@@ -37,11 +37,11 @@ import org.cobblestonemc.plugin.data.MountLocation;
 final class PaperMountListener implements Listener {
 
   private final MountDao mounts;
-  private final MinecraftScheduler<?> scheduler;
+  private final Executor data;
 
-  PaperMountListener(MountDao mounts, MinecraftScheduler<?> scheduler) {
+  PaperMountListener(MountDao mounts, Executor data) {
     this.mounts = mounts;
-    this.scheduler = scheduler;
+    this.data = data;
   }
 
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -50,7 +50,7 @@ final class PaperMountListener implements Listener {
         && event.getDismounted() instanceof AbstractHorse mount) {
       MountLocation record = ridden(player, mount);
       if (record != null) {
-        scheduler.runAsync(() -> mounts.upsert(record));
+        data.execute(() -> mounts.upsert(record));
       }
     }
   }
@@ -62,7 +62,7 @@ final class PaperMountListener implements Listener {
       if (entity instanceof AbstractHorse mount) {
         Runnable move = moved(mount);
         if (move != null) {
-          scheduler.runAsync(move);
+          data.execute(move);
         }
       }
     }
@@ -72,7 +72,7 @@ final class PaperMountListener implements Listener {
   public void onDeath(EntityDeathEvent event) {
     if (event.getEntity() instanceof AbstractHorse mount && mount.isTamed()) {
       UUID uuid = mount.getUniqueId();
-      scheduler.runAsync(() -> mounts.remove(uuid));
+      data.execute(() -> mounts.remove(uuid));
     }
   }
 

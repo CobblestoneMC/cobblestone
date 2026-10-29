@@ -17,6 +17,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.function.IntSupplier;
 import org.cobblestonemc.CellRegion;
 import org.cobblestonemc.CobblestoneApi;
@@ -27,7 +28,7 @@ import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.Restriction;
 import org.cobblestonemc.SearchObserver;
-import org.cobblestonemc.SearchThreadPool;
+import org.cobblestonemc.SearchScheduler;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
@@ -77,6 +78,7 @@ public final class SpongeNavigationServiceImpl
 
   private final CobblestoneLogger logger;
   private final SpongeScheduler scheduler;
+  private final SearchScheduler searches;
   private final SpongePlatformApi platform;
   private final ChunkProviderSettings chunkSettings;
   private final CobblestoneApi core;
@@ -96,7 +98,8 @@ public final class SpongeNavigationServiceImpl
    * @param offline how to read an unloaded chunk on this Minecraft version, or {@link
    *     OfflineChunkSource#UNAVAILABLE} to always go through a chunk loading ticket
    * @param regionStores the server's region stores, shared by every search
-   * @param searchThreads how many threads searches run on
+   * @param searches where searches run
+   * @param io the IO threads, for scanning which chunks are saved
    */
   public SpongeNavigationServiceImpl(
       PluginContainer plugin,
@@ -105,12 +108,15 @@ public final class SpongeNavigationServiceImpl
       IntSupplier maxChunkLoadRequests,
       OfflineChunkSource offline,
       RegionStores regionStores,
-      int searchThreads) {
+      SearchScheduler searches,
+      Executor io) {
     this.logger = logger;
     this.regionStores = regionStores;
-    this.scheduler =
-        new SpongeScheduler(plugin, new SearchThreadPool("cobblestone-search", searchThreads));
-    this.platform = new SpongePlatformApi(scheduler, logger, maxChunkLoadRequests, offline);
+    this.searches = searches;
+    this.scheduler = new SpongeScheduler(plugin);
+    this.platform =
+        new SpongePlatformApi(
+            scheduler, searches.time(), io, logger, maxChunkLoadRequests, offline);
     this.chunkSettings = chunkSettings;
     this.core = CobblestoneApi.load();
   }
@@ -220,13 +226,13 @@ public final class SpongeNavigationServiceImpl
   /**
    * Stops Cobblestone; call on plugin disable.
    *
-   * <p>The platform goes first: it cancels the chunk reads it has queued but not started and waits,
-   * bounded, for the ones it did, so Cobblestone owes the server no outstanding IO by the time it
-   * reports that it has stopped. Only then does the worker pool go away.
+   * <p>Cancels the chunk reads the platform has queued but not started and waits, bounded, for the
+   * ones it did, so Cobblestone owes the server no outstanding IO by the time it reports that it
+   * has stopped. The threads searches run on are the plugin's to stop, once nothing else will give
+   * them work.
    */
   public void shutdown() {
     platform.shutdown();
-    scheduler.shutdown();
   }
 
   @Override
@@ -281,7 +287,7 @@ public final class SpongeNavigationServiceImpl
                 gathered ->
                     core.navigate(
                         logger,
-                        scheduler,
+                        searches,
                         originPosition,
                         destination,
                         behavior,
