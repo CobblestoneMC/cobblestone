@@ -64,15 +64,8 @@ class SearchConfigTest {
   }
 
   @Test
-  void theRunningAverageRunsAtItsOwnWeightByDefault() throws IOException {
+  void regionsRunsAtItsOwnWeightByDefault() throws IOException {
     SearchSettings settings = read(null);
-    assertEquals(SearchSettings.Heuristic.RUNNING_AVERAGE, settings.heuristic());
-    assertEquals(1.5, settings.heuristicWeight());
-  }
-
-  @Test
-  void regionsRunsAtItsOwnWeight() throws IOException {
-    SearchSettings settings = read("search:\n  algorithm:\n    heuristic: regions\n");
     assertEquals(SearchSettings.Heuristic.REGIONS, settings.heuristic());
     assertEquals(1.7, settings.heuristicWeight());
   }
@@ -80,17 +73,17 @@ class SearchConfigTest {
   @Test
   void aWeightTunedForTheRunningAverageStaysWithIt() throws IOException {
     String tuned = "search:\n  algorithm:\n    heuristic_weight: 2.5\n";
-    assertEquals(2.5, read(tuned).heuristicWeight());
+    assertEquals(1.7, read(tuned).heuristicWeight(), "not carried over to REGIONS");
 
-    SearchSettings regions = read(tuned + "    heuristic: regions\n");
-    assertEquals(SearchSettings.Heuristic.REGIONS, regions.heuristic());
-    assertEquals(1.7, regions.heuristicWeight(), "not carried over to REGIONS");
+    SearchSettings average = read(tuned + "    heuristic: running_average\n");
+    assertEquals(SearchSettings.Heuristic.RUNNING_AVERAGE, average.heuristic());
+    assertEquals(2.5, average.heuristicWeight());
   }
 
   @Test
   void aMisspelledHeuristicFallsBackToTheDefaultWithAWarning() throws IOException {
     SearchSettings settings = read("search:\n  algorithm:\n    heuristic: regoins\n");
-    assertEquals(SearchSettings.Heuristic.RUNNING_AVERAGE, settings.heuristic());
+    assertEquals(SearchSettings.Heuristic.REGIONS, settings.heuristic());
     assertFalse(warnings.isEmpty());
   }
 }

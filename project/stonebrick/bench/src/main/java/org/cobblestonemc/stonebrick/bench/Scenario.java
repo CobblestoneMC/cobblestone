@@ -96,7 +96,10 @@ public record Scenario(
     /** Remaining distance times the recent per-block cost. */
     RUNNING_AVERAGE(SearchSettings.Heuristic.RUNNING_AVERAGE),
 
-    /** A backward search over connected terrain regions, resumed as the fine search asks. */
+    /**
+     * A backward search over connected terrain regions, resumed as the fine search asks.
+     * Production's default, and so the bench's.
+     */
     REGIONS(SearchSettings.Heuristic.REGIONS);
 
     private final SearchSettings.@Nullable Heuristic production;
@@ -112,6 +115,16 @@ public record Scenario(
      */
     public SearchSettings.@Nullable Heuristic production() {
       return production;
+    }
+
+    /**
+     * Returns the weight this runs at unless a scenario sets one: production's for its heuristic,
+     * and 1.0 for {@link #ZERO}, which has no estimate to weigh.
+     *
+     * @return the weight
+     */
+    public double defaultWeight() {
+      return production == null ? 1.0 : production.defaultWeight();
     }
   }
 
@@ -174,16 +187,8 @@ public record Scenario(
   }
 
   /** The search limits, mirroring {@code SearchSettings}. */
-  public record SearchLimits(double heuristicWeight, int maxCellsVisited, long maxWallClockMillis) {
-
-    /** Returns the production defaults. */
-    public static SearchLimits defaults() {
-      return new SearchLimits(
-          SearchSettings.DEFAULT_HEURISTIC.defaultWeight(),
-          SearchSettings.DEFAULT_MAX_CELLS_VISITED,
-          SearchSettings.DEFAULT_MAX_WALL_CLOCK_MILLIS);
-    }
-  }
+  public record SearchLimits(
+      double heuristicWeight, int maxCellsVisited, long maxWallClockMillis) {}
 
   /** The file every scenario lives in, keyed by id. */
   public static final String FILE_NAME = "scenarios.yml";
@@ -316,33 +321,41 @@ public record Scenario(
    *
    * <p>A variant is an override rather than a second entry in {@code scenarios.yml}, so that the
    * A/B compares the same route under two estimates instead of two routes that have to be kept in
-   * step by hand.
+   * step by hand. A weight the scenario left at its heuristic's default moves to the new one's.
    *
    * @param value the heuristic to run
    * @return the variant, or this scenario if nothing changed
    */
   public Scenario withHeuristic(Heuristic value) {
-    return value == heuristic
-        ? this
-        : new Scenario(
-            id,
-            description,
-            tags,
-            tier,
-            capture,
-            world,
-            origin,
-            destination,
-            destinationRadius,
-            destinationBox,
-            warps,
-            settings,
-            io,
-            onMissingCapture,
-            expectedOutcome,
-            ungenerated,
-            value,
-            verifyRegions);
+    if (value == heuristic) {
+      return this;
+    }
+    // A weight left at the old heuristic's default follows to the new one's; one set on purpose
+    // stays.
+    SearchLimits limits =
+        settings.heuristicWeight() == heuristic.defaultWeight()
+            ? new SearchLimits(
+                value.defaultWeight(), settings.maxCellsVisited(), settings.maxWallClockMillis())
+            : settings;
+    return new Scenario(
+        id,
+        description,
+        tags,
+        tier,
+        capture,
+        world,
+        origin,
+        destination,
+        destinationRadius,
+        destinationBox,
+        warps,
+        limits,
+        io,
+        onMissingCapture,
+        expectedOutcome,
+        ungenerated,
+        value,
+        verifyRegions);
   }
 
   /**
@@ -496,6 +509,12 @@ public record Scenario(
     // forcing every scenario to say VIRTUAL would be noise in fifty files.
     profile = profile.withMode(profile.mode() == IoMode.ZERO ? IoMode.ZERO : IoMode.VIRTUAL);
 
+    Heuristic heuristic =
+        Heuristic.valueOf(
+            // Whatever production ships, so the gate guards the search players actually get.
+            string(root, "heuristic", SearchSettings.DEFAULT_HEURISTIC.name())
+                .toUpperCase(Locale.ROOT)
+                .replace('-', '_'));
     return new Scenario(
         id,
         string(root, "description", ""),
@@ -514,7 +533,7 @@ public record Scenario(
         box(destination, file),
         warps(root, file),
         new SearchLimits(
-            number(limits, "heuristicWeight", SearchSettings.DEFAULT_HEURISTIC.defaultWeight()),
+            number(limits, "heuristicWeight", heuristic.defaultWeight()),
             integer(limits, "maxCellsVisited", SearchSettings.DEFAULT_MAX_CELLS_VISITED),
             (long)
                 number(limits, "maxWallClockMillis", SearchSettings.DEFAULT_MAX_WALL_CLOCK_MILLIS)),
@@ -523,11 +542,7 @@ public record Scenario(
             string(root, "onMissingCapture", "ERROR").toUpperCase(Locale.ROOT)),
         string(root, "expect", "success"),
         ungenerated(root, file),
-        Heuristic.valueOf(
-            // Whatever production ships, so the gate guards the search players actually get.
-            string(root, "heuristic", SearchSettings.DEFAULT_HEURISTIC.name())
-                .toUpperCase(Locale.ROOT)
-                .replace('-', '_')),
+        heuristic,
         new LinkedHashSet<>(stringList(root, "verifyRegions")));
   }
 

@@ -41,8 +41,17 @@ public final class SearchSettings {
   /** Default window width for the running-average heuristic. */
   public static final int DEFAULT_RUNNING_AVERAGE_WIDTH = 5;
 
-  /** The estimate a search uses unless told otherwise. */
-  public static final Heuristic DEFAULT_HEURISTIC = Heuristic.RUNNING_AVERAGE;
+  /**
+   * The estimate a search uses unless told otherwise.
+   *
+   * <p>{@link Heuristic#REGIONS} by default, from measurement: on the benchmark it solves routes
+   * the running average cannot, expands a fraction of the nodes, and finds cheaper paths.
+   *
+   * <p>⚠️ It is not free: a search reads the terrain it reasons over, and the first search over new
+   * terrain has to cut it into regions, which on a long route is hundreds of chunk reads. Regions
+   * are shared between searches, so later searches mostly reuse them.
+   */
+  public static final Heuristic DEFAULT_HEURISTIC = Heuristic.REGIONS;
 
   /**
    * The default heuristic's weight.
