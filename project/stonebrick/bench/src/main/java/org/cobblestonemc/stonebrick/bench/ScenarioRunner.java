@@ -44,6 +44,7 @@ import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 import org.cobblestonemc.minecraft.regions.MinecraftAgent;
 import org.cobblestonemc.minecraft.regions.MinecraftTerrain;
+import org.cobblestonemc.minecraft.regions.RegionClass;
 import org.cobblestonemc.regions.RegionHeuristic;
 import org.cobblestonemc.regions.RegionSearch;
 import org.cobblestonemc.regions.RegionSpec;
@@ -92,7 +93,7 @@ public final class ScenarioRunner {
    * Runs a scenario.
    *
    * @param scenario the route
-   * @param loadout what the traveller can do about it
+   * @param loadout what the traveler can do about it
    * @param observer receives what the search did; pass {@link SearchObserver#none()} when timing
    * @return what it cost
    * @throws IOException if the capture cannot be loaded
@@ -146,6 +147,12 @@ public final class ScenarioRunner {
         throw new IOException(scenario.id() + ": " + e.getMessage(), e);
       }
 
+      lastPath =
+          result
+                  instanceof
+                  NavigationResult.Success<Position<MinecraftWorld>, MinecraftStepPayload> s
+              ? s.path()
+              : null;
       String missing =
           platform.missing().isEmpty()
                   || scenario.onMissingCapture() == Scenario.MissingCapturePolicy.WALL
@@ -319,13 +326,27 @@ public final class ScenarioRunner {
     }
   }
 
+  /** The path the last run found, or {@code null} if it found none. */
+  private org.cobblestonemc.api.@Nullable Path<Position<MinecraftWorld>, MinecraftStepPayload>
+      lastPath;
+
   /**
-   * The column source the last run used, or {@code null} if it did not run on regions.
+   * Returns the path the last run found, step costs and all.
    *
-   * <p>Kept for the sweep's report of how many distinct columns the region layer read. The reads
-   * themselves are {@link RunResult#regionChunkReads()}, gated like the search's own.
+   * @return the path, or {@code null} if the last run found none
    */
-  private @Nullable CaptureChunkColumns lastRegionColumns;
+  public org.cobblestonemc.api.@Nullable Path<Position<MinecraftWorld>, MinecraftStepPayload>
+      lastPath() {
+    return lastPath;
+  }
+
+  /**
+   * The terrain source the last run used, or {@code null} if it did not run on regions.
+   *
+   * <p>Kept for the sweep's report of how many distinct chunk columns the region layer read. The
+   * reads themselves are {@link RunResult#regionChunkReads()}, gated like the search's own.
+   */
+  private @Nullable SimulatedDiskChunks lastRegionColumns;
 
   /**
    * Returns how many chunk columns the last run's region layer read.
@@ -337,7 +358,8 @@ public final class ScenarioRunner {
   }
 
   /** The solves the last run's region heuristic started, one per leg. */
-  private final List<RegionHeuristic<MinecraftChunk>.Solve> lastRegionSolves = new ArrayList<>();
+  private final List<RegionHeuristic<MinecraftChunk, RegionClass>.Solve> lastRegionSolves =
+      new ArrayList<>();
 
   /**
    * Returns where the last run's region layer spent its time and memory, or {@code null} if it did
@@ -361,8 +383,8 @@ public final class ScenarioRunner {
     long regions = 0;
     long portals = 0;
     long expansions = 0;
-    for (RegionHeuristic<MinecraftChunk>.Solve solve : lastRegionSolves) {
-      RegionSearch search = solve.search();
+    for (RegionHeuristic<MinecraftChunk, RegionClass>.Solve solve : lastRegionSolves) {
+      RegionSearch<RegionClass> search = solve.search();
       if (search == null) {
         continue; // a solve that was never asked anything
       }
@@ -396,7 +418,7 @@ public final class ScenarioRunner {
         store.unpinnedBytes() / 1024);
   }
 
-  private @Nullable RegionStore<MinecraftChunk> lastRegionStore;
+  private @Nullable RegionStore<MinecraftChunk, RegionClass> lastRegionStore;
 
   /**
    * The detour a region may hold before the fill splits it, from {@code -Dregions.detour}; a tuning
@@ -415,8 +437,8 @@ public final class ScenarioRunner {
    *
    * <p>Every production estimate but REGIONS is built by {@link MinecraftHeuristics}, the same
    * factory Paper and Sponge use. REGIONS is built here with the factory's parameters, but over the
-   * bench's own column source and store, so that a run can report what the region layer read, built
-   * and kept.
+   * bench's own terrain source and store, so that a run can report what the region layer read,
+   * built and kept.
    */
   private HeuristicStrategy heuristicFor(
       Scenario scenario,
@@ -436,19 +458,16 @@ public final class ScenarioRunner {
       return MinecraftHeuristics.forPlayer(
           behavior, chunks, player, scenario.origin(), settings, null);
     }
-    CaptureChunkColumns columns = new CaptureChunkColumns(platform, scenario.world());
+    SimulatedDiskChunks columns = new SimulatedDiskChunks(platform, scenario.world());
     lastRegionColumns = columns;
     // One store for the run, on this thread: a cold start.
     MinecraftWorld world = platform.world(scenario.world());
-    RegionStore<MinecraftChunk> store =
+    RegionStore<MinecraftChunk, RegionClass> store =
         RegionStore.inMemory(
             new RegionSpec<>(
-                MinecraftTerrain.of(world.environment()),
-                world.minY(),
-                world.maxY(),
-                REGION_DETOUR));
+                MinecraftTerrain.of(world.environment()), world.bounds(), REGION_DETOUR));
     lastRegionStore = store;
-    RegionHeuristic<MinecraftChunk> regions =
+    RegionHeuristic<MinecraftChunk, RegionClass> regions =
         new RegionHeuristic<>(
             region -> columns,
             region -> store,
@@ -464,7 +483,8 @@ public final class ScenarioRunner {
 
       @Override
       public SolveHeuristic newSolve(int windowWidth, DomainRegion<?> target) {
-        RegionHeuristic<MinecraftChunk>.Solve solve = regions.newSolve(windowWidth, target);
+        RegionHeuristic<MinecraftChunk, RegionClass>.Solve solve =
+            regions.newSolve(windowWidth, target);
         lastRegionSolves.add(solve);
         return solve;
       }

@@ -130,6 +130,7 @@ public final class Destination {
     private final Component displayName;
     private final Supplier<List<WorldRegion<World, Vector3i>>> regions;
     private boolean mobile;
+    private boolean labeled;
     private Component detail;
     private BooleanSupplier existence = () -> true;
 
@@ -146,6 +147,17 @@ public final class Destination {
      */
     public Builder mobile() {
       this.mobile = true;
+      return this;
+    }
+
+    /**
+     * Marks the destination as one that already shows its name in the world (a player, a named
+     * NPC). See {@link MinecraftDestination#hasLabel()}.
+     *
+     * @return this builder
+     */
+    public Builder labeled() {
+      this.labeled = true;
       return this;
     }
 
@@ -178,7 +190,8 @@ public final class Destination {
      * @return the destination
      */
     public MinecraftDestination<World, Vector3i> build() {
-      return new Impl(regions::get, displayName, mobile, Optional.ofNullable(detail), existence);
+      return new Impl(
+          regions::get, displayName, mobile, labeled, Optional.ofNullable(detail), existence);
     }
   }
 
@@ -186,6 +199,7 @@ public final class Destination {
       org.cobblestonemc.api.Destination<WorldRegion<World, Vector3i>> destination,
       Component displayName,
       boolean mobile,
+      boolean labeled,
       Optional<Component> detail,
       BooleanSupplier existence)
       implements MinecraftDestination<World, Vector3i> {
@@ -193,6 +207,11 @@ public final class Destination {
     @Override
     public boolean isMobile() {
       return mobile;
+    }
+
+    @Override
+    public boolean hasLabel() {
+      return labeled;
     }
 
     @Override

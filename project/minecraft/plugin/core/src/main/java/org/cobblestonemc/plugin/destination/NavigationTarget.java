@@ -11,12 +11,14 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import org.cobblestonemc.DomainRegion;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.RegionFactory;
 import org.cobblestonemc.plugin.api.MinecraftDestination;
+import org.cobblestonemc.plugin.trip.TripTarget;
 
 /**
  * What the {@code /navigate} command navigates to: Cobblestone's own form of a destination, with
@@ -33,15 +35,19 @@ import org.cobblestonemc.plugin.api.MinecraftDestination;
  *     is followed by a live trip, and each made for that search
  * @param displayName the human-facing name
  * @param mobile whether it can move (see {@link MinecraftDestination#isMobile()})
+ * @param labeled whether it shows its own name (see {@link MinecraftDestination#hasLabel()})
  * @param detail the hover detail (see {@link MinecraftDestination#detail()})
  * @param existence whether it still exists (see {@link MinecraftDestination#exists()})
+ * @param anchor where a label naming it floats right now (see {@link TripTarget#anchor()})
  */
 public record NavigationTarget(
     Destination<RegionFactory> destination,
     Component displayName,
     boolean mobile,
+    boolean labeled,
     Optional<Component> detail,
-    BooleanSupplier existence) {
+    BooleanSupplier existence,
+    Supplier<Optional<TripTarget.Point>> anchor) {
 
   /** Canonical constructor; everything is required. */
   public NavigationTarget {
@@ -49,6 +55,7 @@ public record NavigationTarget(
     Objects.requireNonNull(displayName, "displayName");
     Objects.requireNonNull(detail, "detail");
     Objects.requireNonNull(existence, "existence");
+    Objects.requireNonNull(anchor, "anchor");
   }
 
   /**
@@ -85,14 +92,25 @@ public record NavigationTarget(
     return existence.getAsBoolean();
   }
 
+  /**
+   * Returns what a trip to this target leads to.
+   *
+   * @return the trip's target
+   */
+  public TripTarget tripTarget() {
+    return new TripTarget(existence, labeled, anchor);
+  }
+
   /** Builds a {@link NavigationTarget}. */
   public static final class Builder {
 
     private final Component displayName;
     private final Destination<RegionFactory> destination;
     private boolean mobile;
+    private boolean labeled;
     private Component detail;
     private BooleanSupplier existence = () -> true;
+    private Supplier<Optional<TripTarget.Point>> anchor = Optional::empty;
 
     private Builder(Component displayName, Destination<RegionFactory> destination) {
       this.displayName = displayName;
@@ -106,6 +124,27 @@ public record NavigationTarget(
      */
     public Builder mobile() {
       this.mobile = true;
+      return this;
+    }
+
+    /**
+     * Marks the target as one that shows its own name.
+     *
+     * @return this builder
+     */
+    public Builder labeled() {
+      this.labeled = true;
+      return this;
+    }
+
+    /**
+     * Sets where a label naming the target floats, for one that moves without showing its name.
+     *
+     * @param anchor read as often as every tick, on the trip's thread
+     * @return this builder
+     */
+    public Builder anchor(Supplier<Optional<TripTarget.Point>> anchor) {
+      this.anchor = anchor;
       return this;
     }
 
@@ -138,7 +177,13 @@ public record NavigationTarget(
      */
     public NavigationTarget build() {
       return new NavigationTarget(
-          destination, displayName, mobile, Optional.ofNullable(detail), existence);
+          destination,
+          displayName,
+          mobile,
+          labeled,
+          Optional.ofNullable(detail),
+          existence,
+          anchor);
     }
   }
 }

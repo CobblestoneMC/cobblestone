@@ -7,7 +7,7 @@
 
 package org.cobblestonemc.plugin.trip;
 
-import java.util.function.BooleanSupplier;
+import java.util.Objects;
 import java.util.function.Consumer;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
@@ -39,7 +39,7 @@ public final class Trip<E, P extends TripAgent<E>, L> {
   private final GuideSearch<L> guideSearch;
   private final boolean live;
   private final long liveIntervalMillis;
-  private final BooleanSupplier targetExists;
+  private final TripTarget target;
   private final long existenceCheckEvery;
 
   private ScheduledTaskHandle handle;
@@ -58,7 +58,7 @@ public final class Trip<E, P extends TripAgent<E>, L> {
       GuideSearch<L> guideSearch,
       boolean live,
       long liveIntervalMillis,
-      BooleanSupplier targetExists) {
+      TripTarget target) {
     this.player = player;
     this.id = id;
     this.label = label;
@@ -70,7 +70,7 @@ public final class Trip<E, P extends TripAgent<E>, L> {
     this.guideSearch = guideSearch;
     this.live = live;
     this.liveIntervalMillis = liveIntervalMillis;
-    this.targetExists = targetExists;
+    this.target = Objects.requireNonNull(target, "target");
     this.existenceCheckEvery = Math.max(1L, EXISTENCE_CHECK_TICKS / Math.max(1L, periodTicks));
   }
 
@@ -143,11 +143,11 @@ public final class Trip<E, P extends TripAgent<E>, L> {
    * so, since the check may look the target up.
    */
   private boolean targetVanished() {
-    if (targetExists == null || ++ticksSinceExistenceCheck < existenceCheckEvery) {
+    if (++ticksSinceExistenceCheck < existenceCheckEvery) {
       return false;
     }
     ticksSinceExistenceCheck = 0;
-    return !targetExists.getAsBoolean();
+    return !target.exists();
   }
 
   private void runGuideSearch(L target) {
@@ -228,6 +228,15 @@ public final class Trip<E, P extends TripAgent<E>, L> {
    */
   public double remainingSeconds() {
     return navigator.remainingSeconds();
+  }
+
+  /**
+   * Returns what this trip leads to.
+   *
+   * @return the target
+   */
+  public TripTarget target() {
+    return target;
   }
 
   /**

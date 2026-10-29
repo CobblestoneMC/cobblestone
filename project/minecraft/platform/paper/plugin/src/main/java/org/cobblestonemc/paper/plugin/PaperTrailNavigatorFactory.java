@@ -85,6 +85,7 @@ public final class PaperTrailNavigatorFactory implements NavigatorFactory {
         highlightParticles,
         colors,
         config.get(keys.trailDensity),
+        config.get(keys.trailParticleTicks),
         config.get(keys.tripsRecalculateDistance),
         messages,
         labels,

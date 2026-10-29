@@ -22,26 +22,22 @@ package org.cobblestonemc;
 public interface Domain {
 
   /**
-   * Returns the inclusive minimum buildable/traversable Y coordinate.
+   * Returns the cells this domain holds, along each axis it bounds.
    *
-   * @return the world floor
+   * <p>Core assumes no shape: a Minecraft world bounds Y and leaves X and Z open, and another
+   * domain may bound any axis, or none.
+   *
+   * @return the bounds
    */
-  int minY();
+  DomainBounds bounds();
 
   /**
-   * Returns the inclusive maximum buildable/traversable Y coordinate.
-   *
-   * @return the world ceiling
-   */
-  int maxY();
-
-  /**
-   * Returns whether the given cell lies within this domain's vertical bounds.
+   * Returns whether the given cell lies within this domain.
    *
    * @param cell the cell to test
-   * @return {@code true} if {@code cell.y()} is within {@code [minY, maxY]}
+   * @return {@code true} if it is within {@link #bounds()}
    */
   default boolean contains(Cell cell) {
-    return cell.y() >= minY() && cell.y() <= maxY();
+    return bounds().contains(cell);
   }
 }

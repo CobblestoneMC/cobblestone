@@ -9,12 +9,11 @@ package org.cobblestonemc.regions;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 import org.cobblestonemc.Cell;
 import org.jetbrains.annotations.Nullable;
 
@@ -26,7 +25,7 @@ import org.jetbrains.annotations.Nullable;
  * origin, A* style, with straight-line distance to the origin at the agent's cheapest rate as its
  * heuristic. A portal it settles knows its true cost to the destination over the graph, and that
  * stays true however much further the search runs, so every answer is final the moment it is given.
- * Focusing on the origin is what keeps it from flooding the whole world around the destination —
+ * Focusing on the origin is what keeps it from flooding the whole domain around the destination —
  * the fine search starts at the origin and works outward, so that is where the questions come from.
  *
  * <p><b>Portals carry a point, not just a cost.</b> A portal is a box (a whole section face, for a
@@ -41,15 +40,17 @@ import org.jetbrains.annotations.Nullable;
  * until nothing still on its frontier could beat that, which with an origin-focused heuristic is
  * when {@code fMin - cheapest · |cell - origin| >= answer}. Usually that is already true and the
  * query costs a scan of {@code R}'s portals and nothing else.
+ *
+ * @param <K> the terrain's classes
  */
-public final class RegionSearch {
+public final class RegionSearch<K extends Enum<K> & RegionKind> {
 
   private static final byte UNSEEN = 0;
   private static final byte OPEN = 1;
   private static final byte SETTLED = 2;
 
-  private final RegionGraph<?> graph;
-  private final RegionAgent agent;
+  private final RegionGraph<?, K> graph;
+  private final RegionAgent<K> agent;
   private final Cell goal;
   private final Cell origin;
   private final double cheapest;
@@ -75,8 +76,11 @@ public final class RegionSearch {
   /** Whether a cell is part of the destination. */
   private final Predicate<Cell> inside;
 
-  /** Every region seeded as arrived, with the point inside the destination it is priced to. */
-  private final Map<Integer, double[]> arrivals = new HashMap<>();
+  /** The destination's cell nearest another cell. */
+  private final UnaryOperator<Cell> nearest;
+
+  /** Every region seeded as arrived: one the destination reaches into. */
+  private final Set<Integer> arrivals = new HashSet<>();
 
   private final ArrayDeque<Integer> flood = new ArrayDeque<>();
   private int goalSeed = RegionGraph.NONE;
@@ -91,27 +95,35 @@ public final class RegionSearch {
   /**
    * Creates a search seeded at a destination that may be an area, and focused on the origin.
    *
-   * <p>The search starts from every region inside the destination that connects to {@code goal},
-   * the destination's nearest cell to the origin: a town a river enters from the far side is
-   * reached by the river, and an estimate measured to the nearest edge alone would steer the fine
-   * search away from it.
+   * <p>The search starts from every region the destination reaches into that connects to its cell
+   * nearest the origin: a town a river enters from the far side is reached by the river, and an
+   * estimate measured to the nearest edge alone would steer the fine search away from it. A region
+   * reaches into the destination when the destination's cell nearest it lies within its bounds, and
+   * crossing it to arrive is priced to the destination's cell nearest wherever the crossing starts:
+   * priced to a point deeper inside, a route would pay for walking into the destination it had
+   * already reached.
    *
-   * <p>A destination that is one cell passes {@code goal::equals}.
+   * <p>A destination that is one cell passes {@code goal::equals} and {@code cell -> goal}.
    *
    * @param graph the terrain
-   * @param agent who is travelling
-   * @param goal the destination's cell nearest the origin
+   * @param agent who is traveling
    * @param origin where the fine search starts
    * @param inside whether a cell is part of the destination
+   * @param nearest the destination's cell nearest another cell
    */
   public RegionSearch(
-      RegionGraph<?> graph, RegionAgent agent, Cell goal, Cell origin, Predicate<Cell> inside) {
+      RegionGraph<?, K> graph,
+      RegionAgent<K> agent,
+      Cell origin,
+      Predicate<Cell> inside,
+      UnaryOperator<Cell> nearest) {
     this.graph = graph;
     this.agent = agent;
-    this.goal = goal;
+    this.goal = nearest.apply(origin);
     this.origin = origin;
     this.cheapest = agent.cheapest();
     this.inside = inside;
+    this.nearest = nearest;
   }
 
   /**
@@ -154,7 +166,7 @@ public final class RegionSearch {
 
   /**
    * Returns the time spent searching: answering, less whatever the answers spent waiting on the
-   * graph for terrain — placing columns, joining seams, and any read or build that ran inside.
+   * graph for terrain — placing sections, joining seams, and any read or build that ran inside.
    *
    * @return nanoseconds
    */
@@ -162,10 +174,10 @@ public final class RegionSearch {
     return queryNanos - terrainNanos;
   }
 
-  private @Nullable CompletableFuture<Void> completing(int x, int z) {
+  private @Nullable CompletableFuture<Void> completing(Cell cell) {
     long started = System.nanoTime();
     try {
-      return graph.complete(x, z);
+      return graph.complete(cell.x(), cell.y(), cell.z());
     } finally {
       terrainNanos += System.nanoTime() - started;
     }
@@ -181,8 +193,11 @@ public final class RegionSearch {
   }
 
   private double answer(Cell cell) {
+    if (inside.test(cell)) {
+      return 0; // arrived
+    }
     double backstop = cell.distance(goal) * cheapest;
-    CompletableFuture<Void> waiting = completing(cell.x(), cell.z());
+    CompletableFuture<Void> waiting = completing(cell);
     if (waiting != null) {
       pending = waiting;
       return backstop;
@@ -208,17 +223,13 @@ public final class RegionSearch {
       return backstop;
     }
 
-    // A ceiling, so a region the graph cannot reach does not send the search across the world to
-    // prove it: past the price of tunnelling straight there, no answer is worth more search.
+    // A ceiling, so a region the graph cannot reach does not send the search across the domain to
+    // prove it: past the price of tunneling straight there, no answer is worth more search.
     double answer = cell.distance(goal) * agent.fallback();
-    double[] arrival = arrivals.get(region);
-    if (arrival != null) {
+    if (arrivals.contains(region)) {
+      Cell at = arrival(region, cell.x(), cell.y(), cell.z());
       answer =
-          inside.test(cell)
-              ? 0
-              : Math.min(
-                  answer,
-                  cross(region, cell.x(), cell.y(), cell.z(), arrival[0], arrival[1], arrival[2]));
+          Math.min(answer, cross(region, cell.x(), cell.y(), cell.z(), at.x(), at.y(), at.z()));
     }
     int portals = graph.portalCount(region);
     for (int i = 0; i < portals; i++) {
@@ -285,7 +296,7 @@ public final class RegionSearch {
    * holds that connects to it.
    *
    * <p>A flood outward from the goal's region, through regions of any class, keeping each usable
-   * region whose box's bottom centre is inside the destination: where a body in it stands; resumed
+   * region whose box's bottom center is inside the destination: where a body in it stands; resumed
    * where it left off when it has to wait for terrain. For a destination that is one cell, only the
    * goal's region.
    *
@@ -293,7 +304,7 @@ public final class RegionSearch {
    */
   private @Nullable CompletableFuture<Void> seed() {
     if (flooded.isEmpty()) {
-      CompletableFuture<Void> waiting = completing(goal.x(), goal.z());
+      CompletableFuture<Void> waiting = completing(goal);
       if (waiting != null) {
         return waiting;
       }
@@ -304,7 +315,7 @@ public final class RegionSearch {
       }
       flooded.add(region);
       flood.add(region);
-      arrivals.put(region, new double[] {goal.x(), goal.y(), goal.z()});
+      arrivals.add(region);
       goalSeed = region;
     }
     while (!flood.isEmpty() && flooded.size() < MAX_DESTINATION_REGIONS) {
@@ -321,27 +332,25 @@ public final class RegionSearch {
         if (!flooded.add(other)) {
           continue;
         }
-        double mx = (graph.regionBound(other, 0) + graph.regionBound(other, 3)) / 2.0;
-        double my = graph.regionBound(other, 1);
-        double mz = (graph.regionBound(other, 2) + graph.regionBound(other, 5)) / 2.0;
-        if (!inside.test(new Cell((int) Math.floor(mx), (int) my, (int) Math.floor(mz)))) {
+        if (!reaches(other)) {
           continue; // outside: the flood stops at the destination's edge
         }
         flood.add(other);
         if (usable(other)) {
-          arrivals.put(other, new double[] {mx, my, mz});
+          arrivals.add(other);
         }
       }
     }
     grow();
-    for (Map.Entry<Integer, double[]> arrival : arrivals.entrySet()) {
-      int region = arrival.getKey();
-      double[] at = arrival.getValue();
+    for (int region : arrivals) {
       int portals = graph.portalCount(region);
       for (int i = 0; i < portals; i++) {
         int portal = graph.portal(region, i);
         if (enters(portal, region)) {
-          reach(portal, region, 0, -1, at[0], at[1], at[2]);
+          // Aimed at the destination as seen from the origin, where the questions come from; the
+          // crossing is then priced to the destination's cell nearest wherever it lands.
+          Cell at = arrival(region, origin.x(), origin.y(), origin.z());
+          reach(portal, region, 0, -1, at.x(), at.y(), at.z());
         }
       }
     }
@@ -363,7 +372,7 @@ public final class RegionSearch {
       return -1;
     }
     // Resident first, then commit: a settle that discovered halfway through that it needed a
-    // column would leave half its neighbours relaxed.
+    // section would leave half its neighbors relaxed.
     CompletableFuture<Void> waiting = completingRegion(graph.portalA(portal));
     if (waiting == null) {
       waiting = completingRegion(graph.portalB(portal));
@@ -428,9 +437,11 @@ public final class RegionSearch {
     double nx = clamp(fx, portal, 0);
     double ny = clamp(fy, portal, 1);
     double nz = clamp(fz, portal, 2);
-    double near = base + toward(region, nx, ny, nz, onward, fx, fy, fz);
+    double fall =
+        graph.directed(portal) ? agent.fall(graph.regionClass(region), graph.fall(portal)) : 0;
+    double near = base + fall + onward(region, nx, ny, nz, onward, fx, fy, fz);
 
-    // The point of the segment toward the origin closest to the portal's centre, pulled onto it.
+    // The point of the segment toward the origin closest to the portal's center, pulled onto it.
     double ox = origin.x() - fx;
     double oy = origin.y() - fy;
     double oz = origin.z() - fz;
@@ -445,7 +456,7 @@ public final class RegionSearch {
     double ax = clamp(fx + t * ox, portal, 0);
     double ay = clamp(fy + t * oy, portal, 1);
     double az = clamp(fz + t * oz, portal, 2);
-    double aimed = base + toward(region, ax, ay, az, onward, fx, fy, fz);
+    double aimed = base + fall + onward(region, ax, ay, az, onward, fx, fy, fz);
 
     if (aimed + focus(ax, ay, az) < near + focus(nx, ny, nz)) {
       label(portal, aimed, ax, ay, az);
@@ -455,12 +466,27 @@ public final class RegionSearch {
   }
 
   /**
+   * What crossing {@code region} from a point costs onward: to {@code onward}'s label point, or,
+   * arriving, to the destination's cell nearest that point.
+   */
+  private double onward(
+      int region, double x, double y, double z, int onward, double fx, double fy, double fz) {
+    if (onward >= 0) {
+      return toward(region, x, y, z, onward, fx, fy, fz);
+    }
+    Cell at = arrival(region, x, y, z);
+    return cross(region, x, y, z, at.x(), at.y(), at.z());
+  }
+
+  /**
    * Whether an agent can arrive in {@code region} through {@code portal}: the other side must be
-   * somewhere it can be, and a fall must land here rather than start here.
+   * somewhere it can be, and a fall must land here rather than start here, and be one it can take.
    */
   private boolean enters(int portal, int region) {
     int other = graph.portalA(portal) == region ? graph.portalB(portal) : graph.portalA(portal);
-    if (graph.directed(portal) && graph.portalB(portal) != region) {
+    if (graph.directed(portal)
+        && (graph.portalB(portal) != region
+            || Double.isInfinite(agent.fall(graph.regionClass(region), graph.fall(portal))))) {
       return false;
     }
     return agent.usable(graph.regionClass(other));
@@ -502,26 +528,73 @@ public final class RegionSearch {
       return region;
     }
     for (int dy = 1; dy <= 4; dy++) {
-      region = graph.regionAt(x, y - dy, z);
+      region = regionWithin(x, y, z, x, y - dy, z);
       if (usable(region)) {
         return region;
       }
     }
     int[][] around = {{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, 1, 0}};
     for (int[] offset : around) {
-      int nx = x + offset[0];
-      int nz = z + offset[2];
-      // Only within the cell's own column: a neighbour's region would have to be completed, and
-      // this is a fallback, not a reason to fetch.
-      if (graph.columnOf(nx) != graph.columnOf(x) || graph.columnOf(nz) != graph.columnOf(z)) {
-        continue;
-      }
-      region = graph.regionAt(nx, y + offset[1], nz);
+      region = regionWithin(x, y, z, x + offset[0], y + offset[1], z + offset[2]);
       if (usable(region)) {
         return region;
       }
     }
     return RegionGraph.NONE;
+  }
+
+  /**
+   * The region at a cell, if it is in the same section as another: a neighbor's region would have
+   * to be completed, and a fallback is not a reason to fetch.
+   */
+  private int regionWithin(int x, int y, int z, int nx, int ny, int nz) {
+    if (graph.sectionOf(nx) != graph.sectionOf(x)
+        || graph.sectionOf(ny) != graph.sectionOf(y)
+        || graph.sectionOf(nz) != graph.sectionOf(z)) {
+      return RegionGraph.NONE;
+    }
+    return graph.regionAt(nx, ny, nz);
+  }
+
+  /**
+   * Whether the destination reaches into a region: its cell nearest the region's bottom center,
+   * where a body in it stands, lies within the region's bounds.
+   */
+  private boolean reaches(int region) {
+    Cell at =
+        nearest.apply(
+            new Cell(
+                Math.floorDiv(graph.regionBound(region, 0) + graph.regionBound(region, 3), 2),
+                graph.regionBound(region, 1),
+                Math.floorDiv(graph.regionBound(region, 2) + graph.regionBound(region, 5), 2)));
+    return within(region, at.x(), at.y(), at.z());
+  }
+
+  /**
+   * Where crossing an arrival region from a point arrives: the destination's cell nearest the
+   * point, if it lies within the region, and otherwise the one nearest the region's bottom center,
+   * which does.
+   */
+  private Cell arrival(int region, double x, double y, double z) {
+    Cell at =
+        nearest.apply(new Cell((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z)));
+    if (within(region, at.x(), at.y(), at.z())) {
+      return at;
+    }
+    return nearest.apply(
+        new Cell(
+            Math.floorDiv(graph.regionBound(region, 0) + graph.regionBound(region, 3), 2),
+            graph.regionBound(region, 1),
+            Math.floorDiv(graph.regionBound(region, 2) + graph.regionBound(region, 5), 2)));
+  }
+
+  private boolean within(int region, int x, int y, int z) {
+    return x >= graph.regionBound(region, 0)
+        && x <= graph.regionBound(region, 3)
+        && y >= graph.regionBound(region, 1)
+        && y <= graph.regionBound(region, 4)
+        && z >= graph.regionBound(region, 2)
+        && z <= graph.regionBound(region, 5);
   }
 
   private boolean usable(int region) {
@@ -581,7 +654,7 @@ public final class RegionSearch {
    *
    * @return the graph
    */
-  public RegionGraph<?> graph() {
+  public RegionGraph<?, K> graph() {
     return graph;
   }
 

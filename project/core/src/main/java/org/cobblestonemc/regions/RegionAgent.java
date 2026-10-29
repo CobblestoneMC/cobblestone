@@ -8,17 +8,19 @@
 package org.cobblestonemc.regions;
 
 /**
- * One traveller, as the region layer sees it: which classes of terrain it can be in, and what
+ * One traveler, as the region layer sees it: which classes of terrain it can be in, and what
  * crossing a region of each costs it.
  *
- * <p>The only place the traveller meets the {@link RegionGraph}. The graph knows terrain and is
+ * <p>The only place the traveler meets the {@link RegionGraph}. The graph knows terrain and is
  * shared by every agent; an agent knows nothing of the graph.
  *
  * <p><b>Every crossing costs at least {@link #cheapest()} per block of straight-line distance.</b>
  * The backward search focuses itself with that bound, and a crossing priced below it would let the
  * search settle a portal before a cheaper route to it had been seen.
+ *
+ * @param <K> the terrain's classes
  */
-public interface RegionAgent {
+public interface RegionAgent<K extends Enum<K> & RegionKind> {
 
   /**
    * Returns whether the agent can be inside a region of this class.
@@ -26,7 +28,7 @@ public interface RegionAgent {
    * @param clazz the class
    * @return {@code true} if usable
    */
-  boolean usable(int clazz);
+  boolean usable(K clazz);
 
   /**
    * Returns the seconds to cross a region of this class in a straight line from one point to
@@ -41,7 +43,7 @@ public interface RegionAgent {
    * @param tz where it ends, Z
    * @return the cost in seconds
    */
-  double traverse(int clazz, double fx, double fy, double fz, double tx, double ty, double tz);
+  double traverse(K clazz, double fx, double fy, double fz, double tx, double ty, double tz);
 
   /**
    * Returns the least any crossing can cost per block.
@@ -57,4 +59,17 @@ public interface RegionAgent {
    * @return the fallback rate, in seconds per block
    */
   double fallback();
+
+  /**
+   * Returns what a fall adds to crossing the region it lands in, or {@link
+   * Double#POSITIVE_INFINITY} if this agent cannot take it.
+   *
+   * <p>The terrain says where a body lands; whether it survives, and at what cost, is the agent's:
+   * a player in Feather Falling boots takes falls another would not.
+   *
+   * @param clazz the class of the region landed in
+   * @param depth how far the body falls, in blocks
+   * @return the cost the fall adds, at least 0
+   */
+  double fall(K clazz, int depth);
 }

@@ -92,6 +92,7 @@ limit; a manual `/navigate` always runs.
 | --- | --- | --- |
 | `search.algorithm.max_cells_visited` | `200000` | live |
 | `search.algorithm.max_wall_clock_seconds` | `60` | live |
+| `search.algorithm.heuristic` | `RUNNING_AVERAGE` | live |
 | `search.algorithm.heuristic_weight` | `1.5` | live |
 | `search.algorithm.tier1_unsolved_pessimism` | `1.5` | live |
 | `search.algorithm.running_average_width` | `5` | live |
@@ -99,8 +100,13 @@ limit; a manual `/navigate` always runs.
 - **`max_cells_visited`**: Cell limit per search. Memory use is a few hundred bytes per cell, so the
   default peaks in the tens of megabytes. Increase for longer routes; decrease on small heaps.
 - **`max_wall_clock_seconds`**: Time limit per search.
-- **`heuristic_weight`**: A* heuristic weight. `1.0` yields optimal routes; higher values search
-  faster with routes at most this factor longer than optimal.
+- **`heuristic`**: How the search estimates the rest of a route. `REGIONS` reads the connected
+  patches of terrain ahead, finding better routes and handling water, caves and boats, at the cost
+  of extra chunk reads per search. `RUNNING_AVERAGE` extrapolates from the last few steps; it is
+  cheaper but never routes a player onto the water by boat.
+- **`heuristic_weight`**: *Deprecated.* The A* heuristic weight for `RUNNING_AVERAGE` only;
+  `REGIONS` reads [`search.regions.heuristic_weight`](#searchregions). `1.0` yields optimal routes;
+  higher values search faster with routes at most this factor longer than optimal.
 - **`tier1_unsolved_pessimism`**: Cost multiplier for route legs that have not yet been solved.
   `1.0` disables it.
 - **`running_average_width`**: Window size of the running-average heuristic.
@@ -133,18 +139,22 @@ limit; a manual `/navigate` always runs.
 
 ### `search.regions`
 
-The `REGIONS` heuristic cuts each chunk into regions of terrain once and shares them between every
-search until a block in the chunk changes.
+The `REGIONS` heuristic cuts the world into regions of terrain once, a 16-block cube at a time, and
+shares them between every search until a block in that cube changes.
 
 | Setting | Default | |
 | --- | --- | --- |
-| `search.regions.memory_megabytes` | `128` | restart |
+| `search.regions.memory` | `128` | restart |
+| `search.regions.heuristic_weight` | `1.7` | live |
 
-- **`memory_megabytes`**: Memory each world's regions may use, least recently used dropped first.
-  The chunks around each navigating player are kept on top of this, about 3 MB a player, until their
-  trip ends, so the searches that re-plan around them stay fast.
+- **`memory`**: Memory each world's regions may use, in megabytes, least recently used dropped
+  first. The terrain within about 70 blocks of each navigating player is kept on top of this until
+  their trip ends, so the searches that re-plan around them stay fast.
+- **`heuristic_weight`**: A* heuristic weight under `REGIONS`. `1.0` yields optimal routes; higher
+  values search faster with routes at most this factor longer than optimal. The region estimate
+  runs close to the true cost, so it bears a higher weight than the running average.
 
-Block changes made while the server is running are tracked: a changed chunk's regions are dropped
+Block changes made while the server is running are tracked: a changed cube's regions are dropped
 about 10 seconds after the change, together with any further changes in that time, and built again
 when a search next needs them. Regions are kept in memory only, so a restart builds them again as
 searches need them.
@@ -233,17 +243,24 @@ own configuration.
 | Setting | Default | |
 | --- | --- | --- |
 | `navigators.trail.buffer_cells` | `256` | live |
-| `navigators.trail.particles` | `[SCRAPE, WAX_OFF]` | live |
+| `navigators.trail.particles` | `[TRAIL]` | live |
 | `navigators.trail.highlight_particles` | `[END_ROD]` | live |
-| `navigators.trail.colors` | `[55FFFF, FFAA00, FFFFFF]` | live |
+| `navigators.trail.colors` | `[FFFFFF, 4AA8FF]` | live |
 | `navigators.trail.density` | `0.2` | live |
+| `navigators.trail.particle_ticks` | `10` | live |
 
 - **`buffer_cells`**: Length of the rendered path segment ahead of the player.
-- **`particles`**: Particle types, chosen at random per particle. `DUST` uses `colors`; other types
-  render as-is. Particles requiring data other than a color are not supported.
+- **`particles`**: Particle types, chosen at random per particle. `TRAIL` and `DUST` use `colors`;
+  other types render as-is. A `TRAIL` particle drifts along the trail and lasts exactly
+  `particle_ticks`, so the trail stays crisp ahead of a moving player. On a server too old to
+  have `TRAIL` (before 1.21.2, such as Sponge for 1.21.1), `DUST` is drawn in its place. Particles
+  requiring other data are not supported.
 - **`highlight_particles`**: Particles at highlighted points, such as action steps.
-- **`colors`**: `DUST` colors as `RRGGBB`, chosen at random per particle.
+- **`colors`**: `TRAIL` and `DUST` colors as `RRGGBB`, chosen at random per particle.
 - **`density`**: Mean particles per cell per tick. Fractional values are probabilities: `0.7` means
   a 70% chance of one particle per cell per tick.
+- **`particle_ticks`**: How long each `TRAIL` particle lasts. Shorter is crisper on the move;
+  longer is fuller. Each particle drifts in a straight line at about a block a second, so beyond
+  about 40 ticks it visibly strays off a curving trail.
 
 Particle names follow the server's particle registry.

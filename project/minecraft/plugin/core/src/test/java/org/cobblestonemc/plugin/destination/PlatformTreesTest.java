@@ -243,6 +243,31 @@ class PlatformTreesTest {
   }
 
   @Test
+  void aTargetShowsItsNameOnlyIfTheDestinationSaysSo() {
+    MinecraftDestination<String, Integer> plain = destination("market", List::of);
+    MinecraftDestination<String, Integer> npc =
+        new MinecraftDestination<>() {
+          @Override
+          public Destination<WorldRegion<String, Integer>> destination() {
+            return List::of;
+          }
+
+          @Override
+          public Component displayName() {
+            return Component.text("npc");
+          }
+
+          @Override
+          public boolean hasLabel() {
+            return true;
+          }
+        };
+
+    assertFalse(PlatformTrees.target(plain, regions).tripTarget().labeled());
+    assertTrue(PlatformTrees.target(npc, regions).tripTarget().labeled());
+  }
+
+  @Test
   void requiredOptionsMustComeFirst() {
     DestinationOption<Integer> x = DestinationOption.integer("x", () -> 0);
     DestinationOption<String> world =

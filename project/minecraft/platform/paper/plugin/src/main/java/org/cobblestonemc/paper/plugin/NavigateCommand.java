@@ -404,7 +404,7 @@ final class NavigateCommand {
                           liveSearch(player, destination, flags),
                           guideSearch(player, flags),
                           live,
-                          destination::exists)
+                          destination.tripTarget())
                       .whenComplete(
                           (outcome, tripError) -> {
                             TripOutcome tripOutcome =

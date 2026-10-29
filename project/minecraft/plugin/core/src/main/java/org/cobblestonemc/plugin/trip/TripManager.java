@@ -14,7 +14,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.plugin.api.Navigator;
@@ -85,7 +84,15 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
       GuideSearch<L> guideSearch,
       boolean live,
       long liveIntervalMillis) {
-    return start(player, navigator, label, liveSearch, guideSearch, live, liveIntervalMillis, null);
+    return start(
+        player,
+        navigator,
+        label,
+        liveSearch,
+        guideSearch,
+        live,
+        liveIntervalMillis,
+        TripTarget.FIXED);
   }
 
   /**
@@ -99,8 +106,7 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
    * @param guideSearch the short-range guide search for off-trail drift; may be {@code null}
    * @param live whether to also re-search periodically (a "live" trip)
    * @param liveIntervalMillis the delay between periodic re-searches, in milliseconds
-   * @param targetExists polled about once a second; the trip ends once it returns {@code false}.
-   *     May be {@code null} for a target that cannot vanish
+   * @param target what the trip leads to; {@link TripTarget#FIXED} for a place that never moves
    * @return the started trip, or empty if the player is at their limit
    */
   public synchronized Optional<Trip<E, P, L>> start(
@@ -111,7 +117,7 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
       GuideSearch<L> guideSearch,
       boolean live,
       long liveIntervalMillis,
-      BooleanSupplier targetExists) {
+      TripTarget target) {
     List<Trip<E, P, L>> active = byPlayer.computeIfAbsent(player.uuid(), key -> new ArrayList<>());
     if (active.size() >= maxActivePerPlayer) {
       return Optional.empty();
@@ -129,7 +135,7 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
             guideSearch,
             live,
             liveIntervalMillis,
-            targetExists);
+            target);
     active.add(trip);
     trip.start();
     changed(player);

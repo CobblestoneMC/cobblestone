@@ -30,9 +30,10 @@ import org.jetbrains.annotations.Nullable;
  * its frontier could undercut the answer, so a cell asked about twice gets the same number, and the
  * answers are cached by cell for the fine search's many repeat questions.
  *
- * @param <C> the platform's column of terrain
+ * @param <C> the platform's terrain
+ * @param <K> the terrain's classes
  */
-public final class RegionHeuristic<C> implements HeuristicStrategy {
+public final class RegionHeuristic<C, K extends Enum<K> & RegionKind> implements HeuristicStrategy {
 
   /**
    * Cached answers a solve keeps before starting over.
@@ -43,37 +44,37 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
   private static final int CACHE_LIMIT = 1 << 20;
 
   private final Function<DomainRegion<?>, TerrainSource<C>> sourceFor;
-  private final Function<DomainRegion<?>, RegionStore<C>> storeFor;
-  private final Function<DomainRegion<?>, RegionAgent> agentFor;
+  private final Function<DomainRegion<?>, RegionStore<C, K>> storeFor;
+  private final Function<DomainRegion<?>, RegionAgent<K>> agentFor;
   private final double tierOneRate;
 
   /**
    * Creates a heuristic that reads a terrain source, a store and an agent per solve.
    *
    * <p>Per solve, not per strategy: one strategy is built per navigate, but a trip may have legs in
-   * several worlds, and a source bound to the first would answer every later leg from the wrong
-   * terrain without ever failing. The target region knows which world its leg is in. The agent too,
-   * since what it pays for a kind of terrain can depend on the world.
+   * several domains, and a source bound to the first would answer every later leg from the wrong
+   * terrain without ever failing. The target region knows which domain its leg is in. The agent
+   * too, since what it pays for a kind of terrain can depend on the domain.
    *
-   * <p>A server's store is its world's, shared by every search, so a column built by any search is
-   * read back instead of built again. A store of each solve's own ({@link RegionStore#inMemory})
-   * builds every column it needs and forgets them.
+   * <p>A server's store is its domain's, shared by every search, so a section built by any search
+   * is read back instead of built again. A store of each solve's own ({@link RegionStore#inMemory})
+   * builds every section it needs and forgets them.
    *
    * <p>Estimates are the region search's own answers, unscaled. How far the fine search trusts them
    * is the search's heuristic weight, and nothing else.
    *
-   * @param sourceFor the terrain source for a solve's target region, for the columns the store has
+   * @param sourceFor the terrain source for a solve's target region, for the sections the store has
    *     to build
-   * @param storeFor the store for a solve's target region's world
-   * @param agentFor who is travelling, as priced in a solve's target region's world
+   * @param storeFor the store for a solve's target region's domain
+   * @param agentFor who is traveling, as priced in a solve's target region's domain
    * @param tierOneRate the least the agent can pay per block by any movement at all, which Tier 1
    *     prices unsolved legs with: lower than {@link RegionAgent#cheapest()} for an agent who can
    *     move in ways the region layer does not price, such as riding
    */
   public RegionHeuristic(
       Function<DomainRegion<?>, TerrainSource<C>> sourceFor,
-      Function<DomainRegion<?>, RegionStore<C>> storeFor,
-      Function<DomainRegion<?>, RegionAgent> agentFor,
+      Function<DomainRegion<?>, RegionStore<C, K>> storeFor,
+      Function<DomainRegion<?>, RegionAgent<K>> agentFor,
       double tierOneRate) {
     this.sourceFor = sourceFor;
     this.storeFor = storeFor;
@@ -99,12 +100,12 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
   public final class Solve implements SolveHeuristic {
 
     private final DomainRegion<?> target;
-    private final RegionGraph<C> graph;
-    private final RegionAgent agent;
+    private final RegionGraph<C, K> graph;
+    private final RegionAgent<K> agent;
     private final Map<Cell, Double> answered = new HashMap<>();
-    private @Nullable RegionSearch search;
+    private @Nullable RegionSearch<K> search;
 
-    Solve(DomainRegion<?> target, RegionGraph<C> graph, RegionAgent agent) {
+    Solve(DomainRegion<?> target, RegionGraph<C, K> graph, RegionAgent<K> agent) {
       this.target = target;
       this.graph = graph;
       this.agent = agent;
@@ -116,7 +117,7 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
      *
      * @return the search
      */
-    public @Nullable RegionSearch search() {
+    public @Nullable RegionSearch<K> search() {
       return search;
     }
 
@@ -135,7 +136,7 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
       if (answered.containsKey(from)) {
         return null;
       }
-      RegionSearch running = searchFrom(from);
+      RegionSearch<K> running = searchFrom(from);
       double estimate = running.costToGoal(from);
       CompletableFuture<Void> waiting = running.takePending();
       if (waiting != null) {
@@ -153,7 +154,7 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
       }
       // Reached only when something estimates without preparing; answer, but cache only a real
       // answer.
-      RegionSearch running = searchFrom(from);
+      RegionSearch<K> running = searchFrom(from);
       double estimate = running.costToGoal(from);
       if (running.takePending() == null) {
         remember(from, estimate);
@@ -161,13 +162,12 @@ public final class RegionHeuristic<C> implements HeuristicStrategy {
       return estimate;
     }
 
-    private RegionSearch searchFrom(Cell from) {
+    private RegionSearch<K> searchFrom(Cell from) {
       if (search == null) {
         // Seeded at the first cell asked about, which is the solve's start: the search focuses on
         // it, and the goal cell worth aiming at depends on where the route begins.
         search =
-            new RegionSearch(
-                graph, agent, target.nearestBoundaryCell(from), from, target::contains);
+            new RegionSearch<>(graph, agent, from, target::contains, target::nearestBoundaryCell);
       }
       return search;
     }

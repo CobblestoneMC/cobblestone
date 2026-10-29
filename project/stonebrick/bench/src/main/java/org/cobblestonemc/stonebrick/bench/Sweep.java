@@ -108,14 +108,14 @@ final class Sweep {
                     runner.lastRegionColumns());
             points.add(point);
             // Each point as it lands, not only in the tables at the end: a full sweep runs for
-            // hours, and one stopped partway through should leave its measurements behind.
-            // The region layer's wall-clock breakdown trails everything else, so a parser reading
-            // fixed fields finds them where they are without it.
+            // hours, and one stopped partway through should leave its measurements behind. What it
+            // cost trails what it found, and the region layer's wall-clock breakdown trails that,
+            // so a parser reading the first fields still finds them.
             String breakdown = runner.lastRegionBreakdown();
             System.out.printf(
                 Locale.ROOT,
                 "point %s %s w=%.2f %s cost=%.3f expanded=%d columns=%d regionReads=%d"
-                    + " closest=%.0f legs=%d%s%n",
+                    + " closest=%.0f legs=%d ms=%d ioMs=%d reads=%d coldReads=%d opened=%d%s%n",
                 point.scenario(),
                 heuristic,
                 weight,
@@ -126,6 +126,12 @@ final class Sweep {
                 result.regionChunkReads(),
                 result.closestBlocks(),
                 runner.lastLegs(),
+                result.realMillis(),
+                // Time parked on the modeled disk: the virtual clock only moves for that.
+                result.virtualMillis(),
+                result.chunkReads(),
+                result.coldChunkReads(),
+                result.nodesOpened(),
                 breakdown == null ? "" : " " + breakdown);
           }
         }
