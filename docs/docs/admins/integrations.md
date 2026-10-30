@@ -61,10 +61,14 @@ of emote ids under `emotes` in `plugins/CobblestoneGeyser/config.yml`.
 
 Geyser must run on this server: Geyser on a proxy cannot report emotes to it.
 
+On Paper, Cobblestone itself shows Bedrock players the menu as a Bedrock form rather than a chest
+whenever Geyser or Floodgate is on the server, with or without this integration; see
+[`menu.bedrock_forms`](config.md#menu).
+
 !!! note
 
-    Bedrock players see textured heads in the menu as plain heads unless the texture is also listed
-    in Geyser's `custom-skulls.yml`.
+    In the chest menu (with `menu.bedrock_forms` off), Bedrock players see textured heads as plain
+    heads unless the texture is also listed in Geyser's `custom-skulls.yml`.
 
 ## Citizens
 

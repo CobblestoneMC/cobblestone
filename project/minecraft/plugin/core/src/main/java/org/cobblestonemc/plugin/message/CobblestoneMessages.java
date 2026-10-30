@@ -268,6 +268,15 @@ public final class CobblestoneMessages {
   /** Stands in for the entries of a menu level that has none. */
   public static final Message0 MENU_EMPTY = Message0.info("menu.empty");
 
+  /** The Bedrock menu's button that stops a running trip ({@code {0}} = the trip's label). */
+  public static final Message1 MENU_STOP = Message1.info("menu.stop");
+
+  /** The Bedrock menu's button that lists every running trip to stop one. */
+  public static final Message0 MENU_STOP_ANY = Message0.info("menu.stop_any");
+
+  /** The Bedrock menu's button, and heading, for the recent destinations. */
+  public static final Message0 MENU_RECENTS = Message0.info("menu.recents");
+
   /** The button that submits a destination's options in its dialog. */
   public static final Message0 MENU_DIALOG_NAVIGATE = Message0.info("menu.dialog.navigate");
 

@@ -153,12 +153,21 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     // registered as a service so it is discovered like any third-party navigator.
     this.tripManager =
         new TripManager<>(platformApi.scheduler(), config.get(keys.tripsMaxActivePerPlayer));
+    // Bedrock players, through Geyser, get forms rather than chests and labels they need not aim
+    // at; Geyser and Floodgate are both optional.
+    PaperBedrock bedrock = PaperBedrock.find(this);
+    if (bedrock.present()) {
+      getLogger().info("Bedrock players are told apart by " + bedrock.getClass().getSimpleName());
+    }
     // Each trail floats its trip's name over itself while the player stands still; hitting the
     // Cancel line above it cancels the trip.
     this.holograms = new PaperHolograms(this);
     TrailLabelManager<Entity, PaperTripAgent, Location> trailLabels =
         new TrailLabelManager<>(
-            tripManager, platformApi.scheduler(), messages, new PaperHologramPlatform(holograms));
+            tripManager,
+            platformApi.scheduler(),
+            messages,
+            new PaperHologramPlatform(holograms, bedrock));
     getServer().getPluginManager().registerEvents(new PaperLabelClickListener(trailLabels), this);
     integrationRegistry.registerNavigator(
         this,
@@ -259,6 +268,9 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             recents,
             messages,
             () -> MenuSettings.from(config, keys),
+            bedrock,
+            () -> config.get(keys.menuBedrockForms),
+            tripManager,
             logger);
     getServer().getPluginManager().registerEvents(menus, this);
 

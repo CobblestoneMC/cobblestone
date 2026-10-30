@@ -29,7 +29,7 @@ dependencies {
     // The server API (Bukkit/Paper) and Geyser's API, both provided at runtime. Geyser only publishes
     // snapshots.
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
-    compileOnly("org.geysermc.geyser:api:2.9.5-SNAPSHOT")
+    compileOnly(libs.geyser.api)
 }
 
 tasks.jar {

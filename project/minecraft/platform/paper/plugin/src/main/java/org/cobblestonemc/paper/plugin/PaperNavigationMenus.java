@@ -14,10 +14,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -44,12 +47,14 @@ import org.cobblestonemc.plugin.menu.NavigationMenu;
 import org.cobblestonemc.plugin.menu.NavigationMenus;
 import org.cobblestonemc.plugin.menu.RecentDestinations;
 import org.cobblestonemc.plugin.message.Messages;
+import org.cobblestonemc.plugin.trip.TripManager;
 import org.jetbrains.annotations.NotNull;
 
 /**
  * The navigation menu on Paper: a double chest drawn from a {@link NavigationMenu}, whose clicks it
  * hands back to it. Nothing can be taken out of or put into the chest; every click is cancelled and
- * only read.
+ * only read. A Bedrock player gets a {@linkplain PaperMenuForms form} instead, where the admin
+ * allows it and Geyser or Floodgate is here to send one.
  */
 final class PaperNavigationMenus implements MenuPlatform<Player>, Listener {
 
@@ -57,6 +62,11 @@ final class PaperNavigationMenus implements MenuPlatform<Player>, Listener {
   private final NavigateCommand navigate;
   private final Messages messages;
   private final NavigationMenus<Player> menus;
+  private final PaperBedrock bedrock;
+  private final BooleanSupplier bedrockForms;
+
+  /** The Bedrock menu, or {@code null} without Geyser or Floodgate to send it. */
+  private final PaperMenuForms forms;
 
   PaperNavigationMenus(
       Plugin plugin,
@@ -65,6 +75,9 @@ final class PaperNavigationMenus implements MenuPlatform<Player>, Listener {
       RecentDestinations recents,
       Messages messages,
       Supplier<MenuSettings> settings,
+      PaperBedrock bedrock,
+      BooleanSupplier bedrockForms,
+      TripManager<Entity, PaperTripAgent, Location> trips,
       CobblestoneLogger log) {
     this.plugin = plugin;
     this.navigate = navigate;
@@ -72,6 +85,12 @@ final class PaperNavigationMenus implements MenuPlatform<Player>, Listener {
     this.menus =
         new NavigationMenus<>(
             this, integrations::destinationProviders, recents, messages, settings, log);
+    this.bedrock = bedrock;
+    this.bedrockForms = bedrockForms;
+    this.forms =
+        bedrock.present()
+            ? new PaperMenuForms(plugin, bedrock, menus, trips, messages, settings)
+            : null;
   }
 
   /**
@@ -81,6 +100,10 @@ final class PaperNavigationMenus implements MenuPlatform<Player>, Listener {
    */
   void open(Player player) {
     NavigationMenu menu = menus.menu(player);
+    if (forms != null && bedrockForms.getAsBoolean() && bedrock.isBedrock(player.getUniqueId())) {
+      forms.show(player, menu);
+      return;
+    }
     Holder holder = new Holder(menu);
     holder.inventory = Bukkit.createInventory(holder, MenuLayout.SIZE, menu.title());
     holder.draw();

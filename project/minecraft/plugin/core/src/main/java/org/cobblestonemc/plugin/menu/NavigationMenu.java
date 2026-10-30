@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
@@ -55,8 +56,13 @@ import org.cobblestonemc.plugin.message.Messages;
  * have not died, stays in the menu as a barrier that says why, until the next click.
  *
  * <p>Destinations the player may not navigate to are left out, by the same permissions {@code
- * /navigate} checks, and so is a level with nothing in it the player could pick. Levels are built
- * only when they or the level above them are opened, and destinations only once they are picked.
+ * /navigate} checks, and so is a level with nothing in it the player could pick, however deep. A
+ * level is built only once it is looked into, which stops at the first thing in it the player could
+ * pick, and a destination only once it is picked, or to be listed.
+ *
+ * <p>A platform draws it either as a chest of slots, {@linkplain #render paged} to fit, or as a
+ * scrolling {@linkplain #list list} of buttons, such as a Bedrock form, which shows only what would
+ * work to press.
  *
  * <p>Not thread-safe: a menu belongs to one player and is driven from their thread.
  */
@@ -73,6 +79,9 @@ public final class NavigationMenu {
   /** The first page of the top level: two rows of entries beneath the recents and a gap. */
   private static final int RECENTS_PAGE = 2 * MenuLayout.CONTENT_COLUMNS;
 
+  /** Treats every destination as usable: the chest's test, which refuses one only once picked. */
+  private static final Predicate<DestinationResolver.Resolved<NavigationTarget>> ANY = pick -> true;
+
   private final Locale locale;
   private final Messages messages;
   private final MenuSettings settings;
@@ -82,6 +91,16 @@ public final class NavigationMenu {
   private final List<Entry> recents;
   private final Deque<Level> levels = new ArrayDeque<>();
   private final Map<Integer, Runnable> clicks = new HashMap<>();
+  private final List<Runnable> choices = new ArrayList<>();
+  private final Map<List<String>, Supplier<DestinationTree<NavigationTarget>>> subtrees =
+      new HashMap<>();
+
+  /** Whether the list shows the recent destinations rather than a level. */
+  private boolean recentsOpen;
+
+  /** How many buttons the last list had, besides back. */
+  private int listed;
+
   private MenuAction pending = new MenuAction.None();
 
   /** The destination last picked, until the next click. */
@@ -122,7 +141,7 @@ public final class NavigationMenu {
     List<Entry> top = new ArrayList<>();
     roots.forEach(
         (key, root) -> {
-          if (leadsAnywhere(List.of(key), root)) {
+          if (leadsAnywhere(List.of(key), root, ANY)) {
             top.add(
                 new Entry(
                     key,
@@ -165,19 +184,17 @@ public final class NavigationMenu {
     }
 
     Level level = levels.peek();
-    if (!level.trail.isEmpty()) {
-      items.put(
-          MenuLayout.BREADCRUMB,
-          new MenuItem(
-              icon(MenuIcons.BREADCRUMB),
-              name(Component.text(String.join(SEPARATOR, level.trail), CobblestoneColors.PRIMARY)),
-              List.of()));
-    }
+    breadcrumb()
+        .ifPresent(
+            trail ->
+                items.put(
+                    MenuLayout.BREADCRUMB,
+                    new MenuItem(icon(MenuIcons.BREADCRUMB), name(trail), List.of())));
 
     int firstRow = 0;
     if (showsRecents()) {
       for (int i = 0; i < recents.size(); i++) {
-        put(items, MenuLayout.content(0, i), recents.get(i), true);
+        put(items, MenuLayout.content(0, i), choice(recents.get(i), true, true));
       }
       for (int column = 1; column < MenuLayout.COLUMNS - 1; column++) {
         items.put(MenuLayout.slot(2, column), filler);
@@ -187,7 +204,7 @@ public final class NavigationMenu {
 
     List<Entry> page = page(level);
     for (int i = 0; i < page.size(); i++) {
-      put(items, MenuLayout.content(firstRow, i), page.get(i), false);
+      put(items, MenuLayout.content(firstRow, i), choice(page.get(i), false, true));
     }
     if (level.entries.isEmpty()) {
       items.put(
@@ -227,13 +244,125 @@ public final class NavigationMenu {
   }
 
   /**
+   * What the menu shows right now as a list of buttons, for a platform that scrolls rather than
+   * pages, such as a Bedrock form. Unlike the chest, it shows only what would work to press: a
+   * destination the player can't go to right now (the surface, while they are already under the
+   * sky) is left out rather than refused once pressed, and so is a level with nothing usable in it.
+   *
+   * <p>Below the top level, it starts with a back button, which has no picture. The top level
+   * starts with a button that opens the player's recent destinations, if any are usable; the rest
+   * is the whole level, unpaged. Nothing closes the menu; the platform's own list has a way to.
+   *
+   * @param usable whether a destination, with its options parsed, could be gone to right now; it
+   *     may build the destination to find out
+   * @return the buttons, in order
+   */
+  public List<MenuButton> list(Predicate<DestinationResolver.Resolved<NavigationTarget>> usable) {
+    choices.clear();
+    List<MenuButton> buttons = new ArrayList<>();
+    if (recentsOpen) {
+      back(buttons, () -> recentsOpen = false);
+      for (Entry entry : recents) {
+        if (usable(entry.address, entry.destination, entry.optionTokens, usable)) {
+          // What sets a recent apart is the options it was given, if any.
+          Optional<Component> options =
+              entry.optionTokens.isEmpty()
+                  ? Optional.empty()
+                  : Optional.of(line(Component.text(String.join(" ", entry.optionTokens))));
+          Choice choice = choice(entry, false, false);
+          add(buttons, button(choice, options), choice.click);
+        }
+      }
+      listed = buttons.size() - 1;
+      return buttons;
+    }
+    int backs = 0;
+    if (levels.size() > 1) {
+      back(buttons, levels::pop);
+      backs = 1;
+    } else if (recents.stream()
+        .anyMatch(entry -> usable(entry.address, entry.destination, entry.optionTokens, usable))) {
+      Component label =
+          messages
+              .renderBare(locale, CobblestoneMessages.MENU_RECENTS)
+              .append(Component.text(OPENS, CobblestoneColors.PRIMARY));
+      add(
+          buttons,
+          new MenuButton(name(label), Optional.empty(), List.of(icon(MenuIcons.RECENTS))),
+          () -> {
+            recentsOpen = true;
+            pending = new MenuAction.Redraw();
+          });
+    }
+    for (Entry entry : levels.peek().entries) {
+      Entry shown = shown(entry, usable);
+      if (shown != null) {
+        Choice choice = choice(shown, false, false);
+        add(buttons, button(choice, choice.item.lore().stream().findFirst()), choice.click);
+      }
+    }
+    listed = buttons.size() - backs;
+    return buttons;
+  }
+
+  /**
+   * Where in the menu the player is, as the chest's breadcrumb says it, or empty at the very top.
+   *
+   * @return the levels walked into, joined, or what the list is showing instead
+   */
+  public Optional<Component> breadcrumb() {
+    if (recentsOpen) {
+      return Optional.of(
+          messages
+              .renderBare(locale, CobblestoneMessages.MENU_RECENTS)
+              .colorIfAbsent(CobblestoneColors.PRIMARY));
+    }
+    List<String> trail = levels.peek().trail;
+    return trail.isEmpty()
+        ? Optional.empty()
+        : Optional.of(Component.text(String.join(SEPARATOR, trail), CobblestoneColors.PRIMARY));
+  }
+
+  /**
+   * Whether the player is on the level the menu opened on, rather than further in or among their
+   * recent destinations.
+   *
+   * @return {@code true} if they are at the very top
+   */
+  public boolean atTop() {
+    return levels.size() == 1 && !recentsOpen;
+  }
+
+  /**
+   * Whether the menu as last {@linkplain #list listed} had nothing to press but back.
+   *
+   * @return {@code true} if there was nothing on it to pick
+   */
+  public boolean empty() {
+    return listed == 0;
+  }
+
+  /**
    * Handles a click on a slot of the menu as it was last {@linkplain #render rendered}.
    *
    * @param slot the slot clicked
    * @return what the platform should do next
    */
   public MenuAction click(int slot) {
-    Runnable click = clicks.get(slot);
+    return run(clicks.get(slot));
+  }
+
+  /**
+   * Handles a press of a button of the menu as it was last {@linkplain #list listed}.
+   *
+   * @param index the button's position in the list
+   * @return what the platform should do next
+   */
+  public MenuAction choose(int index) {
+    return run(index >= 0 && index < choices.size() ? choices.get(index) : null);
+  }
+
+  private MenuAction run(Runnable click) {
     if (click == null) {
       return new MenuAction.None();
     }
@@ -301,8 +430,8 @@ public final class NavigationMenu {
     DestinationLeaf<NavigationTarget> destination =
         child.destination().filter(leaf -> allowed(address, leaf)).orElse(null);
     Supplier<DestinationTree<NavigationTarget>> subtree =
-        child.subtree().map(NavigationMenu::once).orElse(null);
-    if (subtree != null && !leadsAnywhere(address, subtree.get())) {
+        child.subtree().isPresent() ? subtree(address, child) : null;
+    if (subtree != null && !leadsAnywhere(address, subtree.get(), ANY)) {
       subtree = null;
     }
     if (destination == null && subtree == null) {
@@ -312,21 +441,80 @@ public final class NavigationMenu {
   }
 
   /**
-   * Whether a level has anything in it the player could pick: a destination they may navigate to,
-   * or a further level. That further level is not looked into, so only the one level is built.
+   * An entry as a list shows it: without its destination if that would not work to press, without
+   * its level if nothing in it would, and not at all if that leaves nothing.
    */
-  private boolean leadsAnywhere(List<String> address, DestinationTree<NavigationTarget> level) {
+  private Entry shown(
+      Entry entry, Predicate<DestinationResolver.Resolved<NavigationTarget>> usable) {
+    DestinationLeaf<NavigationTarget> destination =
+        entry.destination != null
+                && usable(entry.address, entry.destination, entry.optionTokens, usable)
+            ? entry.destination
+            : null;
+    Supplier<? extends DestinationTree<NavigationTarget>> subtree =
+        entry.subtree != null && leadsAnywhere(entry.address, entry.subtree.get(), usable)
+            ? entry.subtree
+            : null;
+    if (destination == null && subtree == null) {
+      return null;
+    }
+    return destination == entry.destination && subtree == entry.subtree
+        ? entry
+        : new Entry(
+            entry.key, entry.address, entry.display, destination, subtree, entry.optionTokens);
+  }
+
+  /**
+   * Whether a level holds anything the player could pick, however deep: a usable destination they
+   * may navigate to, or a further level that does. A level's own destinations are looked at before
+   * any level beneath it is built, and the search stops at the first found.
+   */
+  private boolean leadsAnywhere(
+      List<String> address,
+      DestinationTree<NavigationTarget> level,
+      Predicate<DestinationResolver.Resolved<NavigationTarget>> usable) {
     for (var child : level.entries().entrySet()) {
+      List<String> at = append(address, child.getKey());
+      if (child
+          .getValue()
+          .destination()
+          .filter(leaf -> allowed(at, leaf) && usable(at, leaf, List.of(), usable))
+          .isPresent()) {
+        return true;
+      }
+    }
+    for (var child : level.entries().entrySet()) {
+      List<String> at = append(address, child.getKey());
       if (child.getValue().subtree().isPresent()
-          || child
-              .getValue()
-              .destination()
-              .filter(leaf -> allowed(append(address, child.getKey()), leaf))
-              .isPresent()) {
+          && leadsAnywhere(at, subtree(at, child.getValue()).get(), usable)) {
         return true;
       }
     }
     return false;
+  }
+
+  /**
+   * Whether a destination would work to press. One that asks for its options first always does,
+   * since it can't be tried until they are given; any other, if it is usable with the options it
+   * would be gone to with.
+   */
+  private static boolean usable(
+      List<String> address,
+      DestinationLeaf<NavigationTarget> destination,
+      List<String> optionTokens,
+      Predicate<DestinationResolver.Resolved<NavigationTarget>> usable) {
+    if (usable == ANY || (optionTokens.isEmpty() && OptionForm.asks(destination))) {
+      return true;
+    }
+    return !(DestinationResolver.options(address, destination, optionTokens)
+            instanceof DestinationResolver.Resolved<NavigationTarget> resolved)
+        || usable.test(resolved);
+  }
+
+  /** The level beneath an entry, built at most once however often it is asked for. */
+  private Supplier<DestinationTree<NavigationTarget>> subtree(
+      List<String> address, DestinationEntry<NavigationTarget> entry) {
+    return subtrees.computeIfAbsent(address, at -> once(entry.subtree().orElseThrow()));
   }
 
   /** Builds a level at most once, however often it is asked for. */
@@ -399,20 +587,54 @@ public final class NavigationMenu {
   // Items
   // -----------------------------------------------------------------------------------------
 
-  private void put(Map<Integer, MenuItem> items, int slot, Entry entry, boolean recent) {
+  private void put(Map<Integer, MenuItem> items, int slot, Choice choice) {
+    items.put(slot, choice.item);
+    clicks.put(slot, choice.click);
+  }
+
+  private void add(List<MenuButton> buttons, MenuButton button, Runnable press) {
+    buttons.add(button);
+    choices.add(press);
+  }
+
+  /** An entry's button: its item's name and picture, falling back to the menu's own item. */
+  private static MenuButton button(Choice choice, Optional<Component> detail) {
+    return new MenuButton(choice.item.name(), detail, List.of(choice.item.icon(), choice.fallback));
+  }
+
+  /** The back button: no picture, so it stands apart from the entries. */
+  private void back(List<MenuButton> buttons, Runnable back) {
+    Component label =
+        Component.text("« ").append(messages.renderBare(locale, CobblestoneMessages.MENU_BACK));
+    add(
+        buttons,
+        new MenuButton(name(label), Optional.empty(), List.of()),
+        () -> {
+          back.run();
+          pending = new MenuAction.Redraw();
+        });
+  }
+
+  /**
+   * An entry's item, and what clicking it does.
+   *
+   * @param recent whether its lore says it is a recent destination, and how it was typed
+   * @param hints whether it is drawn in the chest: its lore says what clicking it does, and it
+   *     shows why it was refused
+   */
+  private Choice choice(Entry entry, boolean recent, boolean hints) {
     boolean opens = entry.subtree != null;
     Component label = entry.display.label().orElseGet(() -> Component.text(entry.key));
-    if (refusal != null && entry.equals(picked)) {
+    if (hints && refusal != null && entry.equals(picked)) {
       // Clicking it again tries again.
-      items.put(slot, new MenuItem(icon(MenuIcons.CLOSE), name(label), List.of(line(refusal))));
-      clicks.put(slot, () -> pick(entry, label));
-      return;
+      Icon refused = icon(MenuIcons.CLOSE);
+      return new Choice(
+          new MenuItem(refused, name(label), List.of(line(refusal))),
+          refused,
+          () -> pick(entry, label));
     }
-    Icon icon =
-        entry
-            .display
-            .icon()
-            .orElseGet(() -> icon(opens ? MenuIcons.FOLDER : MenuIcons.DESTINATION));
+    Icon fallback = icon(opens ? MenuIcons.FOLDER : MenuIcons.DESTINATION);
+    Icon icon = entry.display.icon().orElse(fallback);
     Component name =
         opens ? name(label.append(Component.text(OPENS, CobblestoneColors.PRIMARY))) : name(label);
 
@@ -426,24 +648,29 @@ public final class NavigationMenu {
               messages.renderBare(
                   locale, CobblestoneMessages.MENU_RECENT, String.join(" ", typed))));
     }
+    Runnable click;
     if (opens) {
-      lore.add(line(messages.renderBare(locale, CobblestoneMessages.MENU_OPEN)));
-      clicks.put(
-          slot,
+      if (hints) {
+        lore.add(line(messages.renderBare(locale, CobblestoneMessages.MENU_OPEN)));
+      }
+      click =
           () -> {
             levels.push(open(entry));
             pending = new MenuAction.Redraw();
-          });
+          };
     } else if (entry.optionTokens.isEmpty() && OptionForm.asks(entry.destination)) {
-      String usage = DestinationResolver.usage(List.of(), entry.destination.options()).trim();
-      lore.add(line(messages.renderBare(locale, CobblestoneMessages.MENU_FILL_IN, usage)));
-      clicks.put(
-          slot, () -> pending = new MenuAction.FillIn(entry.address, entry.destination, label));
+      if (hints) {
+        String usage = DestinationResolver.usage(List.of(), entry.destination.options()).trim();
+        lore.add(line(messages.renderBare(locale, CobblestoneMessages.MENU_FILL_IN, usage)));
+      }
+      click = () -> pending = new MenuAction.FillIn(entry.address, entry.destination, label);
     } else {
-      lore.add(line(messages.renderBare(locale, CobblestoneMessages.MENU_NAVIGATE)));
-      clicks.put(slot, () -> pick(entry, label));
+      if (hints) {
+        lore.add(line(messages.renderBare(locale, CobblestoneMessages.MENU_NAVIGATE)));
+      }
+      click = () -> pick(entry, label);
     }
-    items.put(slot, new MenuItem(icon, name, lore));
+    return new Choice(new MenuItem(icon, name, lore), fallback, click);
   }
 
   private void pick(Entry entry, Component label) {
@@ -515,6 +742,9 @@ public final class NavigationMenu {
 
     static final Comparator<Entry> ORDER = Comparator.comparing(Entry::key, NaturalOrder.INSTANCE);
   }
+
+  /** An entry's item, the menu's own item for its kind, and what pressing it does. */
+  private record Choice(MenuItem item, Icon fallback, Runnable click) {}
 
   /** One level of the tree, as the player walked into it, and the page of it they are on. */
   private static final class Level {

@@ -54,4 +54,16 @@ public interface HologramPlatform<A, L> {
    * @return the label, or empty if it can't be placed there from this thread
    */
   Optional<Hologram> spawn(A agent, Vec3 at, Component text);
+
+  /**
+   * Whether the player's swings land where they look, so they can hit a label's {@code Cancel}. A
+   * Bedrock player on a touch screen hits wherever they tap, which the server never hears of, so
+   * their labels go without one.
+   *
+   * @param agent the player
+   * @return {@code true} if their labels should offer {@code Cancel}
+   */
+  default boolean aims(A agent) {
+    return true;
+  }
 }

@@ -8,6 +8,19 @@ loader: org.cobblestonemc.paper.plugin.CobblestonePaperLoader
 api-version: '1.21'
 folia-supported: true
 
+# Both optional: with either, Bedrock players get the menu as a form. Joining their classpath lets
+# Cobblestone build their forms.
+dependencies:
+  server:
+    floodgate:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    Geyser-Spigot:
+      load: BEFORE
+      required: false
+      join-classpath: true
+
 permissions:
   cobblestone.navigate:
     description: "Use of /navigate and the trip commands that manage its results"

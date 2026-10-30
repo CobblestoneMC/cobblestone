@@ -154,6 +154,9 @@ public final class ConfigKeys {
   /** Whether the navigation menu opens with the player's recently used destinations. Mutable. */
   public final ConfigKey<Boolean> menuRecents;
 
+  /** Whether Bedrock players get the navigation menu as a form rather than a chest. Mutable. */
+  public final ConfigKey<Boolean> menuBedrockForms;
+
   /**
    * The navigation menu's items for Cobblestone's own entries and its fallbacks, keyed by the names
    * in {@link MenuIcons}. Mutable.
@@ -580,6 +583,17 @@ public final class ConfigKeys {
                 """
                 Whether the menu opens with a row of the player's recently used destinations, so a
                 favorite is one click away. They are remembered until the server restarts.""")
+            .mutable()
+            .register();
+    this.menuBedrockForms =
+        manager
+            .key("menu.bedrock_forms", true, Codec.ofBoolean())
+            .comment(
+                """
+                Whether players on Bedrock Edition, through Geyser, get the menu as a scrolling
+                list of buttons, Bedrock's own kind of menu, rather than as a chest, which phones
+                and consoles draw poorly. Needs Geyser or Floodgate on this server; without either,
+                everyone gets the chest.""")
             .mutable()
             .register();
     manager.section(

@@ -19,6 +19,10 @@ repositories {
         name = "papermc"
         url = uri("https://repo.papermc.io/repository/maven-public/")
     }
+    maven {
+        name = "opencollab"
+        url = uri("https://repo.opencollab.dev/main/")
+    }
 }
 
 dependencies {
@@ -31,6 +35,10 @@ dependencies {
     // Paper's Maven-resolver types, which live in paper-api.
     compileOnly(libs.paper.api)
     compileOnly(libs.adventure.api)
+    // Optional at runtime: Bedrock players get forms when either is installed (see PaperBedrock).
+    // Each brings the Cumulus forms library.
+    compileOnly(libs.geyser.api)
+    compileOnly(libs.floodgate.api)
 }
 
 // The shaded jar is named for the platform rather than the module: `Cobblestone-Paper-<version>.jar`.
