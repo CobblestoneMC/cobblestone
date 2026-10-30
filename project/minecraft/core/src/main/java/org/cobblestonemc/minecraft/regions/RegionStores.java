@@ -217,7 +217,10 @@ public final class RegionStores implements AutoCloseable {
   public void worldUnloaded(String worldKey) {
     RegionStore<MinecraftChunk, RegionClass> store = stores.remove(worldKey);
     if (store != null) {
-      written(worldKey, store.flush()).whenComplete((written, failed) -> store.close());
+      written(worldKey, store.flush());
+      // Queued right behind the write on the one disk thread, not once it completes: anything
+      // queued after, such as a clear or a store made for the world afresh, finds the files closed.
+      store.close();
     }
   }
 
