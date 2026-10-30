@@ -19,8 +19,9 @@ package org.cobblestonemc.minecraft.api;
  * <p>Time itself carries no weight: it is the unit. Doubling every weight is how to make hazards
  * matter twice as much.
  *
- * <p>The weights for harm — {@link #damagePerHalfHeart} and {@link #dangerousTerrain} — are only
- * charged to a player who can be hurt; see {@link #harmless()}. The rest apply to everyone.
+ * <p>The weights for harm — {@link #damagePerHalfHeart}, {@link #dangerousTerrain}, {@link
+ * #dangerousEntity} and {@link #sculk} — are only charged to a player who can be hurt; see {@link
+ * #harmless()}. The rest apply to everyone.
  *
  * @param damagePerHalfHeart seconds of travel worth avoiding a half-heart of damage, such as from a
  *     long fall, an ender pearl's landing or drowning
@@ -34,6 +35,13 @@ package org.cobblestonemc.minecraft.api;
  *     close to a wall, where it is hard to steer; open sky is free
  * @param coast seconds added for each second spent boating right beside the shore, where a boat
  *     catches on the land
+ * @param dangerousEntity seconds added for each second spent beside a hostile mob, such as a zombie
+ *     or a creeper, where it stood when the search began, at full strength
+ * @param dangerousEntityRadius how many blocks away a hostile mob is noticed; its weight falls off
+ *     linearly to nothing past this distance
+ * @param sculk seconds added for each second spent beside a sculk shrieker that can summon a
+ *     warden, or a sculk sensor that can set one off, at full strength; noticed up to {@link
+ *     #SCULK_RADIUS} blocks away
  */
 public record CostWeights(
     double damagePerHalfHeart,
@@ -41,7 +49,16 @@ public record CostWeights(
     int dangerousTerrainRadius,
     double builtBlock,
     double crampedGliding,
-    double coast) {
+    double coast,
+    double dangerousEntity,
+    int dangerousEntityRadius,
+    double sculk) {
+
+  /**
+   * How many blocks away sculk is noticed: a sensor hears a step eight blocks off, and a shrieker
+   * it sets off summons a warden.
+   */
+  public static final int SCULK_RADIUS = 8;
 
   /**
    * Rejects a negative weight: a penalty below zero would make a step cost less than it takes, and
@@ -54,6 +71,9 @@ public record CostWeights(
     requireNonNegative("builtBlock", builtBlock);
     requireNonNegative("crampedGliding", crampedGliding);
     requireNonNegative("coast", coast);
+    requireNonNegative("dangerousEntity", dangerousEntity);
+    requireNonNegative("dangerousEntityRadius", dangerousEntityRadius);
+    requireNonNegative("sculk", sculk);
   }
 
   /**
@@ -67,21 +87,34 @@ public record CostWeights(
    *   <li>A second of cramped gliding costs ten more: covering ground slower than walking, so a
    *       glider climbs into open sky rather than threading through trees.
    *   <li>A second boating beside the shore costs one more, which keeps a boat a block or two out.
+   *   <li>A second beside a hostile mob costs five more, noticed up to sixteen blocks away: a mob
+   *       moves, so its reach is wide and its weight gentle.
+   *   <li>A second beside sculk costs fifty more: a warden is worth a long way round.
    * </ul>
    *
    * @return the default weights
    */
   public static CostWeights defaults() {
-    return new CostWeights(8.0, 2.0, 2, 10.0, 10.0, 1.0);
+    return new CostWeights(8.0, 2.0, 2, 10.0, 10.0, 1.0, 5.0, 16, 50.0);
   }
 
   /**
-   * Returns these weights for a player who cannot be hurt: damage and danger cost nothing.
+   * Returns these weights for a player who cannot be hurt: damage, danger, mobs and sculk cost
+   * nothing.
    *
    * @return the weights without harm
    */
   public CostWeights harmless() {
-    return new CostWeights(0.0, 0.0, dangerousTerrainRadius, builtBlock, crampedGliding, coast);
+    return new CostWeights(
+        0.0,
+        0.0,
+        dangerousTerrainRadius,
+        builtBlock,
+        crampedGliding,
+        coast,
+        0.0,
+        dangerousEntityRadius,
+        0.0);
   }
 
   /**
