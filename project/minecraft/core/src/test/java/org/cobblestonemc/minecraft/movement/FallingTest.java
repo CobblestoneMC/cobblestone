@@ -18,6 +18,7 @@ import org.cobblestonemc.minecraft.TestMovements;
 import org.cobblestonemc.minecraft.TestMovements.Moves;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.TestWorld;
+import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.junit.jupiter.api.Test;
@@ -29,7 +30,7 @@ class FallingTest {
       MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of());
 
   @Test
-  void fallsOffAnEdgeAndCostsHealTimeForDamage() {
+  void fallsOffAnEdgeAndCostsItsDamageButDoesNotTimeIt() {
     // Player stands at (0,5,0) on a block at (0,4,0); to the east is an open shaft down to (1,0,0).
     TestWorld world =
         TestWorld.builder("w")
@@ -41,13 +42,40 @@ class FallingTest {
 
     assertEquals(MinecraftStepType.FALL, landing.payload().stepType());
     double distance = 4;
-    double expected =
-        MovementCosts.WALK
-            + MovementCosts.FALL_PER_BLOCK * distance
-            + MovementCosts.DAMAGE_COST_MULTIPLIER
-                * MovementCosts.HEAL_SECONDS_PER_HALF_HEART
-                * (distance - MovementCosts.SAFE_FALL_BLOCKS);
-    assertEquals(expected, landing.cost(), 1e-9);
+    double time = MovementCosts.WALK + MovementCosts.FALL_PER_BLOCK * distance;
+    double halfHearts = distance - MovementCosts.SAFE_FALL_BLOCKS;
+    assertEquals(time, landing.time(), 1e-9);
+    assertEquals(time + CostWeights.defaults().damage(halfHearts), landing.cost(), 1e-9);
+  }
+
+  @Test
+  void theDamageWeightPricesAFallsDamage() {
+    TestWorld world =
+        TestWorld.builder("w")
+            .set(0, 4, 0, TestBlocks.solid())
+            .set(1, 0, 0, TestBlocks.solid())
+            .build();
+    MinecraftMovementBehavior careless =
+        MinecraftMovementBehavior.forPlayer(
+            TestWorld.CHUNKS, player, Set.of(), null, 0, new CostWeights(0.0));
+    Movement<MinecraftStepPayload> landing =
+        TestMovements.from(careless, world, new Cell(0, 5, 0)).to(new Cell(1, 1, 0));
+
+    assertEquals(landing.time(), landing.cost(), 1e-9);
+  }
+
+  @Test
+  void aFallIntoWaterDoesNoDamage() {
+    TestWorld world =
+        TestWorld.builder("w")
+            .set(0, 4, 0, TestBlocks.solid())
+            .set(1, 0, 0, TestBlocks.water())
+            .build();
+    Movement<MinecraftStepPayload> splash =
+        TestMovements.from(walker, world, new Cell(0, 5, 0)).to(new Cell(1, 0, 0));
+
+    assertEquals(MinecraftStepType.FALL, splash.payload().stepType());
+    assertEquals(splash.time(), splash.cost(), 1e-9);
   }
 
   @Test

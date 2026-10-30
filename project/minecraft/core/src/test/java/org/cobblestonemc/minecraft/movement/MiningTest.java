@@ -23,6 +23,7 @@ import org.cobblestonemc.minecraft.TestBlocks;
 import org.cobblestonemc.minecraft.TestMovements;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.TestWorld;
+import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.junit.jupiter.api.Test;
@@ -118,7 +119,8 @@ class MiningTest {
         (cell, breakWorld, block) ->
             CompletableFuture.completedFuture(!cell.equals(new Cell(1, 1, 0)));
     MinecraftMovementBehavior checked =
-        MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of(), forbidWall, 0);
+        MinecraftMovementBehavior.forPlayer(
+            TestWorld.CHUNKS, player, Set.of(), forbidWall, 0, CostWeights.defaults());
 
     Movement<MinecraftStepPayload> tunnel =
         TestMovements.from(checked, world, new Cell(0, 1, 0)).to(new Cell(1, 1, 0));

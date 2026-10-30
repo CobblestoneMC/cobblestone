@@ -26,6 +26,7 @@ import org.cobblestonemc.minecraft.TestMovements;
 import org.cobblestonemc.minecraft.TestMovements.Moves;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.TestWorld;
+import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.junit.jupiter.api.Test;
@@ -138,7 +139,8 @@ class MinecraftMovementBehaviorTest {
     TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
     Cell goal = new Cell(10, 8, 0);
     Collection<Movement<MinecraftStepPayload>> movements =
-        MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of(), null, 1)
+        MinecraftMovementBehavior.forPlayer(
+                TestWorld.CHUNKS, player, Set.of(), null, 1, CostWeights.defaults())
             .movements(new Cell(0, 1, 0), world, TraversalState.DEFAULT, goal)
             .value();
 
@@ -149,6 +151,9 @@ class MinecraftMovementBehaviorTest {
     assertEquals(MinecraftStepType.TELEPORT, pearl.payload().stepType());
     assertEquals(1, pearl.state().get(MinecraftKeys.PEARLS_USED));
     assertNotNull(pearl.restricted(), "the throw's path is checked lazily");
+    // A short throw, but a last resort: the pearl's value and its landing's damage are costed.
+    assertTrue(pearl.time() < 5, "the throw itself is quick");
+    assertEquals(pearl.time() + 300 + CostWeights.defaults().damage(5), pearl.cost(), 1e-9);
   }
 
   @Test

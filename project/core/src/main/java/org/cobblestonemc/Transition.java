@@ -46,8 +46,8 @@ public interface Transition<T, D extends Domain> {
   double cost();
 
   /**
-   * Returns the real traversal time in seconds (player-facing). Defaults to {@link #cost()} until a
-   * transition distinguishes its danger/penalty weighting from its actual duration.
+   * Returns the real traversal time in seconds (player-facing). Defaults to {@link #cost()}, for a
+   * transition that carries no penalty on top of its duration.
    *
    * @return the traversal time
    */

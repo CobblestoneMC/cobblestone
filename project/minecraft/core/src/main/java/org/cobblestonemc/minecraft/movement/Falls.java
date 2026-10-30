@@ -21,8 +21,8 @@ import org.cobblestonemc.minecraft.api.MinecraftStepType;
 
 /**
  * Dropping two or more blocks — off a cardinal ledge or straight down — to the first supported cell
- * or water below. Fall damage is costed; hazards are never landed on. The columns below are fetched
- * only for ledges actually found.
+ * or water below. Fall damage is costed, not timed; hazards are never landed on. The columns below
+ * are fetched only for ledges actually found.
  */
 final class Falls {
 
@@ -116,14 +116,8 @@ final class Falls {
     if (view.at(landing).isDangerous()) {
       return; // don't fall onto lava/fire
     }
-    double cost = stepOff + MovementCosts.FALL_PER_BLOCK * distance;
-    if (onSolid) {
-      double damageHalfHearts = Math.max(0, distance - MovementCosts.SAFE_FALL_BLOCKS);
-      cost +=
-          MovementCosts.DAMAGE_COST_MULTIPLIER
-              * MovementCosts.HEAL_SECONDS_PER_HALF_HEART
-              * damageHalfHearts;
-    }
-    edges.add(landing, cost, MinecraftStepType.FALL, state);
+    double time = stepOff + MovementCosts.FALL_PER_BLOCK * distance;
+    double halfHearts = onSolid ? Math.max(0, distance - MovementCosts.SAFE_FALL_BLOCKS) : 0;
+    edges.addHurting(landing, time, halfHearts, MinecraftStepType.FALL, state);
   }
 }
