@@ -150,7 +150,7 @@ public final class CobblestoneSpongePlugin {
     // Every thread Cobblestone runs besides the server's own, closed last on stopping. Records are
     // written on one lane, in the order they happen, so a mount's last move never lands after its
     // removal.
-    this.workers = ThreadsConfig.workers(config, keys);
+    this.workers = ThreadsConfig.workers(config, keys, cobblestoneLogger);
     Executor data = workers.lane("data");
 
     // Regions are shared by every search and forgotten when a block in their chunk changes.

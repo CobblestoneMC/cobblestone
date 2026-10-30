@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
+import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.Workers;
 import org.cobblestonemc.minecraft.MinecraftChunk;
@@ -31,7 +32,7 @@ class RegionStoresTest {
   @Test
   void changesAreForgottenTogetherOnceTheDelayHasPassed() throws InterruptedException {
     TestWorld world = TestWorld.builder("w").build();
-    try (Workers workers = new Workers(1, 1)) {
+    try (Workers workers = new Workers(new QuietLogger(), 1, 1)) {
       RegionStores stores =
           new RegionStores(Long.MAX_VALUE, workers.compute(), workers.time(), DELAY);
       RegionStore<MinecraftChunk, RegionClass> store = stores.of(world);
@@ -53,5 +54,22 @@ class RegionStoresTest {
       Thread.sleep(DELAY.multipliedBy(3).toMillis());
       assertFalse(store.inMemory(0, 0, 0), "a later change starts a batch of its own");
     }
+  }
+
+  private static final class QuietLogger extends CobblestoneLogger {
+    @Override
+    public void trace(String message, Object... args) {}
+
+    @Override
+    public void debug(String message, Object... args) {}
+
+    @Override
+    public void info(String message, Object... args) {}
+
+    @Override
+    public void warn(String message, Object... args) {}
+
+    @Override
+    public void error(String message, Throwable throwable, Object... args) {}
   }
 }

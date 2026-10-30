@@ -35,7 +35,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * </ul>
  *
  * <p>Nothing here is tied to a game or a server. A platform starts one when it enables, hands out
- * what each part needs, and closes it last, once nothing will submit work again.
+ * what each part needs, and closes it last. Work given once it has closed is dropped and logged
+ * rather than refused: a server's events do not all stop the moment a plugin disables, and the
+ * thread that handles one is no place for an exception about Cobblestone shutting down.
  */
 public final class Workers implements AutoCloseable {
 
@@ -45,10 +47,14 @@ public final class Workers implements AutoCloseable {
   /** How long {@link #close} waits for IO work, writes most of all, to finish. */
   private static final Duration DRAIN = Duration.ofSeconds(10);
 
+  private final CobblestoneLogger logger;
   private final ExecutorService compute;
   private final ExecutorService io;
   private final ScheduledThreadPoolExecutor timer;
   private final Duration drain;
+  private final Executor computeAfterClose;
+  private final Executor ioAfterClose;
+  private volatile boolean closed;
   private final Map<String, Lane> lanes = new ConcurrentHashMap<>();
   private final TimeSource time;
   private final SearchScheduler search;
@@ -56,14 +62,16 @@ public final class Workers implements AutoCloseable {
   /**
    * Starts the threads, each pool as its work arrives.
    *
+   * @param logger where work dropped after closing is reported
    * @param computeThreads how many compute threads, or 0 for {@link #defaultComputeThreads()}
    * @param ioThreads how many IO threads, or 0 for {@link #DEFAULT_IO_THREADS}
    */
-  public Workers(int computeThreads, int ioThreads) {
-    this(computeThreads, ioThreads, DRAIN);
+  public Workers(CobblestoneLogger logger, int computeThreads, int ioThreads) {
+    this(logger, computeThreads, ioThreads, DRAIN);
   }
 
-  Workers(int computeThreads, int ioThreads, Duration drain) {
+  Workers(CobblestoneLogger logger, int computeThreads, int ioThreads, Duration drain) {
+    this.logger = new ScopedCobblestoneLogger(logger, "Workers");
     this.drain = drain;
     // Below the server's own threads: this is work a search waits on, never on a tick.
     this.compute =
@@ -76,12 +84,27 @@ public final class Workers implements AutoCloseable {
     this.timer =
         new ScheduledThreadPoolExecutor(1, daemons("cobblestone-timer", Thread.NORM_PRIORITY));
     this.timer.setRemoveOnCancelPolicy(true);
-    this.time = TimeSource.system(timer, compute);
+    this.computeAfterClose = droppingAfterClose(compute, "compute", false);
+    this.ioAfterClose = droppingAfterClose(io, "the IO threads", true);
+    TimeSource system = TimeSource.system(timer, computeAfterClose);
+    this.time =
+        new TimeSource() {
+          @Override
+          public long millis() {
+            return system.millis();
+          }
+
+          @Override
+          public void schedule(Runnable task, long delayMillis) {
+            droppingAfterClose(delayed -> system.schedule(delayed, delayMillis), "delayed", false)
+                .execute(task);
+          }
+        };
     this.search =
         new SearchScheduler() {
           @Override
           public Executor executor() {
-            return compute;
+            return computeAfterClose;
           }
 
           @Override
@@ -129,7 +152,7 @@ public final class Workers implements AutoCloseable {
    * @return the executor
    */
   public Executor compute() {
-    return compute;
+    return computeAfterClose;
   }
 
   /**
@@ -138,7 +161,7 @@ public final class Workers implements AutoCloseable {
    * @return the executor
    */
   public Executor io() {
-    return io;
+    return ioAfterClose;
   }
 
   /**
@@ -149,7 +172,8 @@ public final class Workers implements AutoCloseable {
    * @return the lane
    */
   public Executor lane(String name) {
-    return lanes.computeIfAbsent(name, key -> new Lane(io));
+    Lane lane = lanes.computeIfAbsent(name, key -> new Lane(io));
+    return droppingAfterClose(lane, "the " + name + " lane", true);
   }
 
   /**
@@ -174,7 +198,7 @@ public final class Workers implements AutoCloseable {
   /**
    * Stops every thread: the timer and the compute threads at once, interrupting work in progress,
    * then the IO threads once the work already given to them, every lane's included, has finished or
-   * ten seconds have passed. Work given after this is refused.
+   * ten seconds have passed. Work given after this is dropped, and logged.
    *
    * <p>If the wait runs out, the IO threads are interrupted and every lane drops what it has not
    * started: whoever closes this is about to close what that work writes to, so it must not run
@@ -182,6 +206,8 @@ public final class Workers implements AutoCloseable {
    */
   @Override
   public void close() {
+    // First, so that every refusal from here on is known to be this and not a fault.
+    closed = true;
     timer.shutdownNow();
     compute.shutdownNow();
     io.shutdown();
@@ -198,6 +224,31 @@ public final class Workers implements AutoCloseable {
   private void abandon() {
     lanes.values().forEach(Lane::abandon);
     io.shutdownNow();
+  }
+
+  /**
+   * Wraps an executor so that, once this is closed, what it refuses is dropped and logged instead.
+   * Work a closing executor still accepts, such as a busy lane's, runs as usual.
+   *
+   * @param kind what the work is, for the log
+   * @param lost whether dropping it loses something, such as a write, rather than work moot once
+   *     nothing will use its result
+   */
+  private Executor droppingAfterClose(Executor target, String kind, boolean lost) {
+    return task -> {
+      try {
+        target.execute(task);
+      } catch (RejectedExecutionException refused) {
+        if (!closed) {
+          throw refused;
+        }
+        if (lost) {
+          logger.warn("Dropped work for {} given after shutting down", kind);
+        } else {
+          logger.debug("Dropped {} work given after shutting down", kind);
+        }
+      }
+    };
   }
 
   private static ThreadFactory daemons(String name, int priority) {
