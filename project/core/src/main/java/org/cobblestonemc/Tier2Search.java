@@ -105,6 +105,12 @@ final class Tier2Search<T, D extends Domain> {
   private final PriorityQueue<Entry> open = new PriorityQueue<>(BY_ESTIMATE);
 
   /**
+   * How close, relative to the cost, two routes into a cell count as a tie. Sums of the same steps
+   * in a different order can differ in the last bits, and a tie lost to rounding is a zig-zag kept.
+   */
+  private static final double TIE_TOLERANCE = 1e-9;
+
+  /**
    * Insertion counter, the final tie-break.
    *
    * <p>Entries equal on both {@code f} and {@code g} would otherwise come out in whatever order the
@@ -594,13 +600,48 @@ final class Tier2Search<T, D extends Domain> {
       // when this node is popped, not here — so its supplier fires only for edges we commit to.
       // Use the parent's current g: a repair may have raised it while these were pending.
       double tentative = parent.cost + movement.cost();
-      if (tentative < neighbor.cost) {
+      // A tie needs a route to tie with; one that has it is at a finite cost.
+      boolean tie =
+          neighbor.bestParent != null
+              && Math.abs(tentative - neighbor.cost)
+                  <= TIE_TOLERANCE * Math.max(1.0, neighbor.cost);
+      if (tie) {
+        if (!neighbor.closed && movement.cost() > 0 && turnsVia(parentKey, cell) < neighbor.turns) {
+          // An equal-cost route that turns less: take it, at the cost already queued, so the entry
+          // on the open set stays current.
+          setBestParent(neighbor, parentKey, movement, neighbor.cost);
+        }
+      } else if (tentative < neighbor.cost) {
         // setBestParent first: it folds this edge into the neighbor's trail average, which is what
         // prices the neighbor's remaining journey.
         setBestParent(neighbor, parentKey, movement, tentative);
         offer(key, tentative, neighbor.trailAverage);
       }
     }
+  }
+
+  /**
+   * The turns the route to {@code to} through {@code via} makes: those of the route to {@code via},
+   * plus one if the step out of it does not carry on in the direction of the step into it.
+   *
+   * <p>Only ever a tie-break between routes of equal cost. A lattice has a great many of those —
+   * every ordering of the same straight and diagonal steps — and the first one found is otherwise
+   * kept, which zig-zags. Counting turns along the whole route, rather than asking only whether
+   * this step turns, keeps the preference from buying a straight step here with a turn behind it.
+   * Like the trail average it is inherited at re-parenting and not pushed down to descendants.
+   */
+  private int turnsVia(CellState via, Cell to) {
+    Node<T> node = nodes.get(via);
+    if (node == null || node.bestParent == null) {
+      return 0;
+    }
+    Cell from = node.bestParent.cell();
+    Cell at = via.cell();
+    boolean straightOn =
+        Integer.signum(at.x() - from.x()) == Integer.signum(to.x() - at.x())
+            && Integer.signum(at.y() - from.y()) == Integer.signum(to.y() - at.y())
+            && Integer.signum(at.z() - from.z()) == Integer.signum(to.z() - at.z());
+    return node.turns + (straightOn ? 0 : 1);
   }
 
   private void setBestParent(Node<T> node, CellState parentKey, Movement<T> edge, double g) {
@@ -613,6 +654,7 @@ final class Tier2Search<T, D extends Domain> {
     node.cost = g;
     node.bestParent = parentKey;
     node.bestEdge = edge;
+    node.turns = turnsVia(parentKey, node.key.cell());
     Node<T> parent = nodes.get(parentKey);
     if (parent != null) {
       parent.addChild(node.key);
@@ -1019,6 +1061,9 @@ final class Tier2Search<T, D extends Domain> {
      * the slightly stale estimate does.
      */
     double trailAverage;
+
+    /** The turns the route to this cell makes; see {@link #turnsVia}. */
+    int turns;
 
     CellState bestParent;
     Movement<T> bestEdge;

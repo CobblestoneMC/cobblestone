@@ -434,6 +434,66 @@ class Tier2SearchTest {
         ((Tier2Result.Failed<TestStep, TestDomain>) result).outcome());
   }
 
+  /**
+   * An open plane, eight ways, costs the same along every ordering of the same straight and
+   * diagonal steps. Of all those equal routes the search should hand back the one that turns least:
+   * three diagonals then six straights (or the reverse) turn once, and a zig-zag through the same
+   * steps turns at every corner.
+   */
+  @Test
+  void ofRoutesThatCostTheSameTheStraightestIsKept() {
+    double diagonal = Math.sqrt(2);
+    MovementBehavior<TestStep, TestDomain> plane =
+        (from, domain, state, goal) -> {
+          List<Movement<TestStep>> movements = new ArrayList<>();
+          for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+              if (dx != 0 || dz != 0) {
+                double cost = dx != 0 && dz != 0 ? diagonal : 1.0;
+                movements.add(
+                    new Movement<>(from.plus(dx, 0, dz), cost, cost, TestStep.MOVE, state));
+              }
+            }
+          }
+          return FutureOr.of(movements);
+        };
+    Tier2Search<TestStep, TestDomain> search =
+        new Tier2Search<>(
+            new TestCobblestoneLogger(),
+            virtualPath(new Cell(0, 0, 0), new Cell(9, 0, 3)),
+            plane,
+            List.of(),
+            Heuristics.zero(),
+            10000,
+            5,
+            1.0,
+            () -> false,
+            Runnable::run,
+            REAL_TIME,
+            SearchObserver.none(),
+            0);
+
+    Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
+
+    assertInstanceOf(Tier2Result.Solved.class, result);
+    Tier2Result.Solved<TestStep, TestDomain> solved =
+        (Tier2Result.Solved<TestStep, TestDomain>) result;
+    assertEquals(6 + 3 * diagonal, solved.cost(), 1e-9);
+    Cell previous = new Cell(0, 0, 0);
+    Cell heading = null;
+    int turns = 0;
+    for (RawStep<TestStep, TestDomain> step : solved.steps()) {
+      Cell cell = step.position().cell();
+      Cell direction = new Cell(cell.x() - previous.x(), 0, cell.z() - previous.z());
+      if (heading != null && !heading.equals(direction)) {
+        turns++;
+      }
+      heading = direction;
+      previous = cell;
+    }
+    assertEquals(1, turns, "the route " + solved.steps());
+  }
+
   @Test
   void immediateBehaviorSolvesWithoutParking() {
     CorridorBehavior behavior = new CorridorBehavior(false);

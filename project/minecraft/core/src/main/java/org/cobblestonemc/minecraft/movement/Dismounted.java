@@ -90,9 +90,13 @@ final class Dismounted {
           edges.add(level, can.walk(view.at(level, 0, -1, 0)), MinecraftStepType.WALK, state);
         } else if (stepUp) {
           MinecraftBlock floor = view.at(level);
-          MinecraftStepType type =
-              floor.isHalfHeight() ? MinecraftStepType.WALK : MinecraftStepType.JUMP;
-          edges.add(above, can.walk(floor) * MovementCosts.DIAGONAL, type, state);
+          boolean jump = !floor.isHalfHeight();
+          double time = can.walk(floor) * MovementCosts.DIAGONAL;
+          edges.add(
+              above,
+              jump ? time + MovementCosts.JUMP_UP : time,
+              jump ? MinecraftStepType.JUMP : MinecraftStepType.WALK,
+              state);
         } else {
           Cell below = from.plus(dx, -1, dz);
           if (Geometry.standable(view, below)) {

@@ -74,7 +74,9 @@ class WalkingTest {
     Movement<MinecraftStepPayload> jump =
         TestMovements.from(walker, full, new Cell(0, 1, 0)).to(new Cell(1, 2, 0));
     assertEquals(MinecraftStepType.JUMP, jump.payload().stepType());
-    assertEquals(MovementCosts.WALK * MovementCosts.DIAGONAL, jump.cost(), 1e-9);
+    assertEquals(
+        MovementCosts.WALK * MovementCosts.DIAGONAL + MovementCosts.JUMP_UP, jump.time(), 1e-9);
+    assertEquals(jump.time(), jump.cost(), 1e-9);
 
     TestWorld slab =
         TestWorld.builder("w")
