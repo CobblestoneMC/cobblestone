@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -18,6 +19,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
@@ -49,10 +51,11 @@ class WorkersTest {
   void aDelayWaitsOnTheTimerAndRunsOnCompute() throws Exception {
     try (Workers workers = new Workers(1, 1)) {
       CompletableFuture<Thread> later = new CompletableFuture<>();
-      long start = workers.time().millis();
+      // Timed on the clock the timer waits on: the wall clock rounds differently, and can read 49.
+      long start = System.nanoTime();
       workers.time().schedule(() -> later.complete(Thread.currentThread()), 50);
       assertEquals("cobblestone-compute-1", later.get(5, TimeUnit.SECONDS).getName());
-      assertTrue(workers.time().millis() - start >= 50);
+      assertTrue(System.nanoTime() - start >= TimeUnit.MILLISECONDS.toNanos(50));
     }
   }
 
@@ -78,6 +81,10 @@ class WorkersTest {
       lane.execute(
           () -> {
             throw new IllegalStateException("expected");
+          });
+      lane.execute(
+          () -> {
+            throw new AssertionError("expected: an Error, not an Exception");
           });
       CompletableFuture<Void> after = new CompletableFuture<>();
       lane.execute(() -> after.complete(null));
@@ -106,10 +113,48 @@ class WorkersTest {
     assertThrows(RejectedExecutionException.class, () -> lane.execute(() -> written.add(2)));
   }
 
+  @Test
+  void aCloseThatRunsOutOfTimeDropsWhatALaneHasNotStarted() throws Exception {
+    Workers workers = new Workers(1, 1, Duration.ofMillis(50));
+    Executor lane = workers.lane("data");
+    CountDownLatch started = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    CompletableFuture<Void> behind = new CompletableFuture<>();
+    lane.execute(
+        () -> {
+          started.countDown();
+          awaitUninterruptibly(release);
+        });
+    lane.execute(() -> behind.complete(null));
+    assertTrue(started.await(5, TimeUnit.SECONDS));
+
+    workers.close();
+    release.countDown();
+
+    assertThrows(TimeoutException.class, () -> behind.get(300, TimeUnit.MILLISECONDS));
+    assertThrows(RejectedExecutionException.class, () -> lane.execute(() -> {}));
+  }
+
   private static Thread threadOf(Executor executor) throws Exception {
     CompletableFuture<Thread> thread = new CompletableFuture<>();
     executor.execute(() -> thread.complete(Thread.currentThread()));
     return thread.get(5, TimeUnit.SECONDS);
+  }
+
+  /** A task stuck on a disk that is not answering: an interrupt does not free it. */
+  private static void awaitUninterruptibly(CountDownLatch latch) {
+    boolean interrupted = false;
+    while (true) {
+      try {
+        latch.await();
+        break;
+      } catch (InterruptedException e) {
+        interrupted = true;
+      }
+    }
+    if (interrupted) {
+      Thread.currentThread().interrupt();
+    }
   }
 
   private static void sleep(long millis) {

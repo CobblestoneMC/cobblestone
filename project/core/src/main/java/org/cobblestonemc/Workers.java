@@ -7,6 +7,7 @@
 
 package org.cobblestonemc;
 
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,11 +43,12 @@ public final class Workers implements AutoCloseable {
   public static final int DEFAULT_IO_THREADS = 2;
 
   /** How long {@link #close} waits for IO work, writes most of all, to finish. */
-  private static final long DRAIN_SECONDS = 10;
+  private static final Duration DRAIN = Duration.ofSeconds(10);
 
   private final ExecutorService compute;
   private final ExecutorService io;
   private final ScheduledThreadPoolExecutor timer;
+  private final Duration drain;
   private final Map<String, Lane> lanes = new ConcurrentHashMap<>();
   private final TimeSource time;
   private final SearchScheduler search;
@@ -58,6 +60,11 @@ public final class Workers implements AutoCloseable {
    * @param ioThreads how many IO threads, or 0 for {@link #DEFAULT_IO_THREADS}
    */
   public Workers(int computeThreads, int ioThreads) {
+    this(computeThreads, ioThreads, DRAIN);
+  }
+
+  Workers(int computeThreads, int ioThreads, Duration drain) {
+    this.drain = drain;
     // Below the server's own threads: this is work a search waits on, never on a tick.
     this.compute =
         Executors.newFixedThreadPool(
@@ -167,7 +174,11 @@ public final class Workers implements AutoCloseable {
   /**
    * Stops every thread: the timer and the compute threads at once, interrupting work in progress,
    * then the IO threads once the work already given to them, every lane's included, has finished or
-   * {@value #DRAIN_SECONDS} seconds have passed. Work given after this is refused.
+   * ten seconds have passed. Work given after this is refused.
+   *
+   * <p>If the wait runs out, the IO threads are interrupted and every lane drops what it has not
+   * started: whoever closes this is about to close what that work writes to, so it must not run
+   * after this returns. A task already underway cannot be stopped, only interrupted.
    */
   @Override
   public void close() {
@@ -175,13 +186,18 @@ public final class Workers implements AutoCloseable {
     compute.shutdownNow();
     io.shutdown();
     try {
-      if (!io.awaitTermination(DRAIN_SECONDS, TimeUnit.SECONDS)) {
-        io.shutdownNow();
+      if (!io.awaitTermination(drain.toNanos(), TimeUnit.NANOSECONDS)) {
+        abandon();
       }
     } catch (InterruptedException interrupted) {
-      io.shutdownNow();
+      abandon();
       Thread.currentThread().interrupt();
     }
+  }
+
+  private void abandon() {
+    lanes.values().forEach(Lane::abandon);
+    io.shutdownNow();
   }
 
   private static ThreadFactory daemons(String name, int priority) {
@@ -206,6 +222,7 @@ public final class Workers implements AutoCloseable {
     private final Executor pool;
     private final ArrayDeque<Runnable> queue = new ArrayDeque<>();
     private boolean running;
+    private boolean abandoned;
 
     Lane(Executor pool) {
       this.pool = pool;
@@ -214,6 +231,9 @@ public final class Workers implements AutoCloseable {
     @Override
     public void execute(Runnable task) {
       synchronized (this) {
+        if (abandoned) {
+          throw new RejectedExecutionException("Lane abandoned on close");
+        }
         queue.addLast(task);
         if (running) {
           return;
@@ -231,11 +251,17 @@ public final class Workers implements AutoCloseable {
       }
     }
 
+    /** Drops the work not yet started, and runs none given later. */
+    synchronized void abandon() {
+      abandoned = true;
+      queue.clear();
+    }
+
     private void drain() {
       while (true) {
         Runnable next;
         synchronized (this) {
-          next = queue.pollFirst();
+          next = abandoned ? null : queue.pollFirst();
           if (next == null) {
             running = false;
             return;
@@ -243,8 +269,9 @@ public final class Workers implements AutoCloseable {
         }
         try {
           next.run();
-        } catch (RuntimeException failure) {
-          // One task failing must not stall the ones behind it.
+        } catch (Throwable failure) {
+          // One task failing must not stall the ones behind it. An Error is caught too: let out, it
+          // would leave the lane marked running with no thread draining it, and its work stuck.
           Thread thread = Thread.currentThread();
           thread.getUncaughtExceptionHandler().uncaughtException(thread, failure);
         }
