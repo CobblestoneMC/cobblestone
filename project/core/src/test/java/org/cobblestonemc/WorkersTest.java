@@ -17,13 +17,14 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 class WorkersTest {
+
+  private static final CobblestoneLogger LOGGER = new TestCobblestoneLogger();
 
   @Test
   void zeroLeavesTheCountsToCobblestone() {
@@ -37,7 +38,7 @@ class WorkersTest {
 
   @Test
   void eachKindOfWorkRunsOnItsOwnNamedDaemonThreads() throws Exception {
-    try (Workers workers = new Workers(1, 1)) {
+    try (Workers workers = new Workers(LOGGER, 1, 1)) {
       Thread compute = threadOf(workers.compute());
       assertEquals("cobblestone-compute-1", compute.getName());
       assertTrue(compute.isDaemon());
@@ -49,7 +50,7 @@ class WorkersTest {
 
   @Test
   void aDelayWaitsOnTheTimerAndRunsOnCompute() throws Exception {
-    try (Workers workers = new Workers(1, 1)) {
+    try (Workers workers = new Workers(LOGGER, 1, 1)) {
       CompletableFuture<Thread> later = new CompletableFuture<>();
       // Timed on the clock the timer waits on: the wall clock rounds differently, and can read 49.
       long start = System.nanoTime();
@@ -63,7 +64,7 @@ class WorkersTest {
   void aLaneKeepsItsOrderAcrossManyIoThreads() throws Exception {
     List<Integer> ran = new CopyOnWriteArrayList<>();
     CountDownLatch done = new CountDownLatch(1);
-    try (Workers workers = new Workers(1, 4)) {
+    try (Workers workers = new Workers(LOGGER, 1, 4)) {
       Executor lane = workers.lane("data");
       IntStream.range(0, 500).forEach(i -> lane.execute(() -> ran.add(i)));
       lane.execute(done::countDown);
@@ -74,7 +75,7 @@ class WorkersTest {
 
   @Test
   void aFailedTaskDoesNotStallItsLane() throws Exception {
-    try (Workers workers = new Workers(1, 1)) {
+    try (Workers workers = new Workers(LOGGER, 1, 1)) {
       Executor lane = workers.lane("data");
       Thread.UncaughtExceptionHandler quiet = (thread, error) -> {};
       lane.execute(() -> Thread.currentThread().setUncaughtExceptionHandler(quiet));
@@ -95,7 +96,7 @@ class WorkersTest {
   @Test
   void closingFinishesIoWorkAlreadyGiven() throws Exception {
     List<Integer> written = new CopyOnWriteArrayList<>();
-    Workers workers = new Workers(1, 1);
+    Workers workers = new Workers(LOGGER, 1, 1);
     Executor lane = workers.lane("data");
     CountDownLatch started = new CountDownLatch(1);
     lane.execute(
@@ -110,12 +111,50 @@ class WorkersTest {
     workers.close();
 
     assertEquals(List.of(0, 1), written);
-    assertThrows(RejectedExecutionException.class, () -> lane.execute(() -> written.add(2)));
+    lane.execute(() -> written.add(2));
+    assertEquals(List.of(0, 1), written);
+  }
+
+  @Test
+  void workGivenAfterClosingIsDroppedRatherThanRefused() {
+    List<String> dropped = new CopyOnWriteArrayList<>();
+    CobblestoneLogger recording =
+        new TestCobblestoneLogger() {
+          @Override
+          public void warn(String message, Object... args) {
+            dropped.add("warn " + args[0]);
+          }
+
+          @Override
+          public void debug(String message, Object... args) {
+            dropped.add("debug " + args[0]);
+          }
+        };
+    Workers workers = new Workers(recording, 1, 1);
+    Executor lane = workers.lane("data");
+    workers.close();
+
+    List<String> ran = new CopyOnWriteArrayList<>();
+    workers.compute().execute(() -> ran.add("compute"));
+    workers.search().executor().execute(() -> ran.add("search"));
+    workers.time().schedule(() -> ran.add("delayed"), 0);
+    workers.io().execute(() -> ran.add("io"));
+    lane.execute(() -> ran.add("lane"));
+
+    assertEquals(List.of(), ran);
+    assertEquals(
+        List.of(
+            "debug compute",
+            "debug compute",
+            "debug delayed",
+            "warn the IO threads",
+            "warn the data lane"),
+        dropped);
   }
 
   @Test
   void aCloseThatRunsOutOfTimeDropsWhatALaneHasNotStarted() throws Exception {
-    Workers workers = new Workers(1, 1, Duration.ofMillis(50));
+    Workers workers = new Workers(LOGGER, 1, 1, Duration.ofMillis(50));
     Executor lane = workers.lane("data");
     CountDownLatch started = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);
@@ -132,7 +171,6 @@ class WorkersTest {
     release.countDown();
 
     assertThrows(TimeoutException.class, () -> behind.get(300, TimeUnit.MILLISECONDS));
-    assertThrows(RejectedExecutionException.class, () -> lane.execute(() -> {}));
   }
 
   private static Thread threadOf(Executor executor) throws Exception {
