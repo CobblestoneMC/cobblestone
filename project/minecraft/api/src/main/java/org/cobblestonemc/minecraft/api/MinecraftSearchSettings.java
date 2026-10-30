@@ -52,6 +52,34 @@ public record MinecraftSearchSettings(
   }
 
   /**
+   * Returns these settings with other platform-independent settings, keeping the exclusions and the
+   * cost weights.
+   *
+   * @param settings the platform-independent search settings
+   * @return the settings
+   */
+  public MinecraftSearchSettings withSettings(SearchSettings settings) {
+    return new MinecraftSearchSettings(
+        settings, excludedModes, excludedWorlds, excludedDimensions, costWeights);
+  }
+
+  /**
+   * Returns these settings with other exclusions, keeping the rest.
+   *
+   * @param excludedModes step types the route may not use
+   * @param excludedWorlds keys of worlds the route may not pass through
+   * @param excludedDimensions lower-case dimension types the route may not pass through
+   * @return the settings
+   */
+  public MinecraftSearchSettings excluding(
+      Set<MinecraftStepType> excludedModes,
+      Set<String> excludedWorlds,
+      Set<String> excludedDimensions) {
+    return new MinecraftSearchSettings(
+        settings, excludedModes, excludedWorlds, excludedDimensions, costWeights);
+  }
+
+  /**
    * The default settings, with nothing excluded.
    *
    * @return the default settings

@@ -88,6 +88,9 @@ public record BlockTraits(
   /** Bit index: Soul Speed boots work on this block, as on soul sand and soul soil. */
   public static final int SOUL_SPEED = 14;
 
+  /** Bit index: this block is most likely part of a player's build. */
+  public static final int BUILT = 15;
+
   /** Bit index of the first of six {@code enterable} bits, one per {@link #DIRECTIONS} entry. */
   public static final int ENTERABLE = 16;
 

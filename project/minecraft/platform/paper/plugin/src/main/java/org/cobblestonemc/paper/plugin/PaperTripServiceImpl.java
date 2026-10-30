@@ -15,7 +15,6 @@ import org.bukkit.entity.Player;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.api.SearchHandle;
-import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
@@ -50,7 +49,7 @@ public final class PaperTripServiceImpl
       TripManager<Entity, PaperTripAgent, Location> trips,
       SearchRegistry<Location> searches,
       SearchGate gate,
-      Supplier<SearchSettings> searchSettings,
+      Supplier<MinecraftSearchSettings> searchSettings,
       long liveIntervalMillis,
       RegionStores regionStores) {
     super(trips, searches, gate, searchSettings, liveIntervalMillis, regionStores);

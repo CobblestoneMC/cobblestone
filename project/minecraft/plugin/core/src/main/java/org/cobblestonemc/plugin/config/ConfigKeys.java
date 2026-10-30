@@ -14,6 +14,7 @@ import java.util.Map;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
+import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.plugin.data.DataBackend;
 
 /**
@@ -122,6 +123,24 @@ public final class ConfigKeys {
 
   /** A* heuristic weight for {@code REGIONS}. Mutable. See {@link #heuristicWeight}. */
   public final ConfigKey<Double> regionsHeuristicWeight;
+
+  /** Seconds a half-heart of damage is worth avoiding. Mutable. See {@code CostWeights}. */
+  public final ConfigKey<Double> costsDamagePerHalfHeart;
+
+  /** Seconds added per second spent beside dangerous terrain. Mutable. */
+  public final ConfigKey<Double> costsDangerousTerrain;
+
+  /** How many blocks away dangerous terrain is noticed. Mutable. */
+  public final ConfigKey<Integer> costsDangerousTerrainRadius;
+
+  /** Seconds added per block broken that is most likely someone's build. Mutable. */
+  public final ConfigKey<Double> costsBuiltBlock;
+
+  /** Seconds added per second gliding under cover or beside a wall. Mutable. */
+  public final ConfigKey<Double> costsCrampedGliding;
+
+  /** Seconds added per second boating right beside the shore. Mutable. */
+  public final ConfigKey<Double> costsCoast;
 
   /** Whether Cobblestone discovers vanilla portal links by watching players teleport. Mutable. */
   public final ConfigKey<Boolean> portalsDiscovery;
@@ -521,6 +540,74 @@ public final class ConfigKeys {
                 higher is much faster and slightly suboptimal (bounded by this factor). The
                 default is measured: the region estimate runs close to the true cost, so it bears
                 a higher weight than the running average did.""")
+            .mutable()
+            .register();
+
+    manager.section(
+        "search.costs",
+        """
+        What a route's hazards cost on top of the time it takes. A search picks the route with the
+        least cost, and tells the player its time, which these never change. Each value is in
+        seconds of travel: how much longer a route Cobblestone will take to avoid the hazard. 0
+        turns one off. Damage and dangerous terrain are charged only to a player who can be hurt,
+        in survival or adventure mode.""");
+    CostWeights costs = CostWeights.defaults();
+    this.costsDamagePerHalfHeart =
+        manager
+            .key("search.costs.damage_per_half_heart", costs.damagePerHalfHeart(), Codec.ofDouble())
+            .comment(
+                """
+                Seconds a half-heart of damage is worth: from a long fall, an ender pearl's landing
+                or drowning.""")
+            .mutable()
+            .register();
+    this.costsDangerousTerrain =
+        manager
+            .key("search.costs.dangerous_terrain", costs.dangerousTerrain(), Codec.ofDouble())
+            .comment(
+                """
+                Seconds added for each second spent right beside lava, fire, magma, cactus, or a
+                drop deep enough to hurt; less the further away it is.""")
+            .mutable()
+            .register();
+    this.costsDangerousTerrainRadius =
+        manager
+            .key(
+                "search.costs.dangerous_terrain_radius",
+                costs.dangerousTerrainRadius(),
+                Codec.ofInt())
+            .comment(
+                """
+                How many blocks away dangerous terrain is noticed. Wider reads more blocks on every
+                step of a search.""")
+            .mutable()
+            .register();
+    this.costsBuiltBlock =
+        manager
+            .key("search.costs.built_block", costs.builtBlock(), Codec.ofDouble())
+            .comment(
+                """
+                Seconds added for each block a route breaks that is most likely someone's build:
+                planks, glass, bricks, cobblestone and the like. Charged in creative mode too.""")
+            .mutable()
+            .register();
+    this.costsCrampedGliding =
+        manager
+            .key("search.costs.cramped_gliding", costs.crampedGliding(), Codec.ofDouble())
+            .comment(
+                """
+                Seconds added for each second spent gliding on an elytra under trees, roofs or a
+                cave's ceiling, or close to a wall, where a glider is hard to steer. Enough by
+                default that a glider climbs into open sky instead.""")
+            .mutable()
+            .register();
+    this.costsCoast =
+        manager
+            .key("search.costs.coast", costs.coast(), Codec.ofDouble())
+            .comment(
+                """
+                Seconds added for each second spent boating right beside the shore, which keeps a
+                boat a block or two out.""")
             .mutable()
             .register();
 

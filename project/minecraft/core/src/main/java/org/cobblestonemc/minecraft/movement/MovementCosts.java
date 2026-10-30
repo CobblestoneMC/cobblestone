@@ -67,5 +67,22 @@ final class MovementCosts {
   /** Blocks you can fall without taking damage. */
   static final int SAFE_FALL_BLOCKS = 3;
 
+  /** Seconds one breath lasts underwater, before Respiration stretches it. */
+  static final double BREATH_SECONDS = 15.0;
+
+  /** Half-hearts of damage a second of drowning deals, once the breath runs out. */
+  static final double DROWNING_HALF_HEARTS_PER_SECOND = 2.0;
+
+  /**
+   * Seconds to swim one block across in Depth Strider boots of a level: each level, up to three,
+   * takes a third of the gap between swimming and walking away. Mirrored by {@code MinecraftAgent}.
+   *
+   * @param level the Depth Strider level, 0 without it
+   * @return the seconds to swim a block
+   */
+  static double swimAcross(int level) {
+    return SWIM - (SWIM - WALK) * Math.min(level, 3) / 3.0;
+  }
+
   private MovementCosts() {}
 }

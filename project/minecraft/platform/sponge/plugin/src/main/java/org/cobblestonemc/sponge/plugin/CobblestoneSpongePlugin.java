@@ -16,8 +16,8 @@ import java.util.function.Supplier;
 import org.apache.logging.log4j.Logger;
 import org.bstats.sponge.Metrics;
 import org.cobblestonemc.Workers;
-import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
+import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.plugin.LogoutCleanup;
 import org.cobblestonemc.plugin.config.ConfigKeys;
@@ -104,7 +104,7 @@ public final class CobblestoneSpongePlugin {
   private SpongeTripServiceImpl tripService;
   private SearchRegistry<ServerLocation> searchRegistry;
   private SearchGate searchGate;
-  private Supplier<SearchSettings> searchSettings;
+  private Supplier<MinecraftSearchSettings> searchSettings;
   private SpongeMetrics metrics;
   private SpongePetListener petListener;
   private SpongeMountListener mountListener;
@@ -277,7 +277,7 @@ public final class CobblestoneSpongePlugin {
     this.searchRegistry = new SearchRegistry<>();
     this.searchGate = new SearchGate(config.get(keys.searchMaxConcurrentPerPlayer));
     long liveIntervalMillis = config.get(keys.tripsLiveIntervalTicks) * 50L; // 50 ms per tick
-    this.searchSettings = () -> SearchConfig.read(config, keys);
+    this.searchSettings = () -> SearchConfig.readMinecraft(config, keys);
     this.tripService =
         new SpongeTripServiceImpl(
             navigationService,

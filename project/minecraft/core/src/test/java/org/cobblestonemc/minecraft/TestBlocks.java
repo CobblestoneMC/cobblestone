@@ -34,6 +34,31 @@ public final class TestBlocks {
     return solid(breakTime, 1.0);
   }
 
+  /** A solid block as quick to break as {@link #solid()}, but most likely someone's build. */
+  public static MinecraftBlock planks() {
+    return new MinecraftBlock() {
+      @Override
+      public boolean isPassable() {
+        return false;
+      }
+
+      @Override
+      public boolean isSolidTop() {
+        return true;
+      }
+
+      @Override
+      public double breakTimeSeconds() {
+        return 1.0;
+      }
+
+      @Override
+      public boolean isBuilt() {
+        return true;
+      }
+    };
+  }
+
   /** A full solid block with a given break time and top-surface speed factor. */
   static MinecraftBlock solid(double breakTime, double speedFactor) {
     return solid(breakTime, speedFactor, false);

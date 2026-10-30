@@ -23,8 +23,8 @@ import org.bukkit.entity.Entity;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.cobblestonemc.Workers;
-import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
+import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.paper.PaperNavigationServiceImpl;
 import org.cobblestonemc.paper.api.NavigationService;
@@ -243,7 +243,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
 
     SearchGate searchGate = new SearchGate(config.get(keys.searchMaxConcurrentPerPlayer));
     long liveIntervalMillis = config.get(keys.tripsLiveIntervalTicks) * 50L; // 50 ms per tick
-    Supplier<SearchSettings> searchSettings = () -> SearchConfig.read(config, keys);
+    Supplier<MinecraftSearchSettings> searchSettings =
+        () -> SearchConfig.readMinecraft(config, keys);
 
     // The trip service is the shared "search-then-guide" code path: the /navigate command and
     // integration plugins both start trips through it. Registered as a service like the rest.

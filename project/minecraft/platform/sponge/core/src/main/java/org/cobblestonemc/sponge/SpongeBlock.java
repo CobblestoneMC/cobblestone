@@ -10,6 +10,7 @@ package org.cobblestonemc.sponge;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import org.cobblestonemc.minecraft.BuiltBlocks;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MiningClass;
 import org.spongepowered.api.block.BlockState;
@@ -82,6 +83,7 @@ final class SpongeBlock implements MinecraftBlock {
   private final boolean isOpen;
   private final boolean opensByHand;
   private final boolean isPressurePlate;
+  private final boolean isBuilt;
 
   /**
    * Works out everything a block state says of itself, once.
@@ -111,6 +113,7 @@ final class SpongeBlock implements MinecraftBlock {
     this.isOpen = isOpen(state, type);
     this.opensByHand = opensByHand(state, type);
     this.isPressurePlate = isPressurePlate(state, type);
+    this.isBuilt = BuiltBlocks.isBuilt(type.key(RegistryTypes.BLOCK_TYPE).value());
   }
 
   /**
@@ -152,6 +155,11 @@ final class SpongeBlock implements MinecraftBlock {
   @Override
   public boolean isLava() {
     return isLava;
+  }
+
+  @Override
+  public boolean isBuilt() {
+    return isBuilt;
   }
 
   @Override

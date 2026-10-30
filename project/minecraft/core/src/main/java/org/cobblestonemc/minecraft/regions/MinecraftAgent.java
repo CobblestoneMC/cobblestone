@@ -54,7 +54,7 @@ public final class MinecraftAgent implements RegionAgent<RegionClass> {
   /** Walking, from {@code MovementCosts.WALK}; see the class comment on why it is a copy. */
   private static final double WALK = 0.20;
 
-  /** {@code MovementCosts.SWIM}. */
+  /** {@code MovementCosts.SWIM}; Depth Strider closes the gap to walking, as {@code swimAcross}. */
   private static final double SWIM = 0.30;
 
   /** {@code MovementCosts.BOAT}. */
@@ -157,7 +157,9 @@ public final class MinecraftAgent implements RegionAgent<RegionClass> {
     return new MinecraftAgent(
         walks ? WALK : Double.NaN,
         soulSpeed > 0 ? WALK / soulSpeedFactor(soulSpeed) : Double.NaN,
-        excluded.contains(MinecraftStepType.SWIM) ? Double.NaN : SWIM,
+        excluded.contains(MinecraftStepType.SWIM)
+            ? Double.NaN
+            : SWIM - (SWIM - WALK) * Math.min(player.depthStriderLevel(), 3) / 3.0,
         boats ? BOAT : Double.NaN,
         excluded.contains(MinecraftStepType.CLIMB) ? Double.NaN : CLIMB,
         flies ? FLY : Double.NaN,

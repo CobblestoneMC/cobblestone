@@ -7,7 +7,10 @@
 
 package org.cobblestonemc.plugin.config;
 
+import java.util.Set;
 import org.cobblestonemc.api.SearchSettings;
+import org.cobblestonemc.minecraft.api.CostWeights;
+import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 
 /** The search settings, read the same way on every platform. */
 public final class SearchConfig {
@@ -31,5 +34,35 @@ public final class SearchConfig {
         .heuristic(heuristic)
         .heuristicWeight(config.get(keys.heuristicWeight(heuristic)))
         .build();
+  }
+
+  /**
+   * Reads the search settings and what hazards cost, as they stand now, with nothing excluded.
+   *
+   * @param config the loaded configuration
+   * @param keys its keys
+   * @return the settings
+   */
+  public static MinecraftSearchSettings readMinecraft(ConfigManager config, ConfigKeys keys) {
+    return new MinecraftSearchSettings(
+        read(config, keys), Set.of(), Set.of(), Set.of(), costs(config, keys));
+  }
+
+  /**
+   * Reads what hazards cost. A negative weight, which would make a hazard cheaper than its time, is
+   * read as 0.
+   *
+   * @param config the loaded configuration
+   * @param keys its keys
+   * @return the weights
+   */
+  public static CostWeights costs(ConfigManager config, ConfigKeys keys) {
+    return new CostWeights(
+        Math.max(0, config.get(keys.costsDamagePerHalfHeart)),
+        Math.max(0, config.get(keys.costsDangerousTerrain)),
+        Math.max(0, config.get(keys.costsDangerousTerrainRadius)),
+        Math.max(0, config.get(keys.costsBuiltBlock)),
+        Math.max(0, config.get(keys.costsCrampedGliding)),
+        Math.max(0, config.get(keys.costsCoast)));
   }
 }

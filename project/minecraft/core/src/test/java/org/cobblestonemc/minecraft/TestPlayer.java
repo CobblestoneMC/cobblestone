@@ -12,7 +12,13 @@ import java.util.Optional;
 import java.util.UUID;
 import org.cobblestonemc.Position;
 
-/** A configurable {@link CobblestonePlayer} for movement tests. */
+/**
+ * A configurable {@link CobblestonePlayer} for movement tests.
+ *
+ * <p>One that cannot be hurt unless a test asks for {@link #vulnerable()}: a test world is a few
+ * blocks floating in the void, so every step in it runs along a drop, and a test of how a step
+ * moves would otherwise be measuring the danger of the drop.
+ */
 public final class TestPlayer implements CobblestonePlayer {
 
   private final boolean canFly;
@@ -20,14 +26,44 @@ public final class TestPlayer implements CobblestonePlayer {
   private final boolean hasBoat;
   private final boolean inBoat;
   private final int soulSpeed;
+  private final boolean takesDamage;
+  private final int respiration;
+  private final int depthStrider;
 
   private TestPlayer(
       boolean canFly, boolean canGlide, boolean hasBoat, boolean inBoat, int soulSpeed) {
+    this(canFly, canGlide, hasBoat, inBoat, soulSpeed, false, 0, 0);
+  }
+
+  private TestPlayer(
+      boolean canFly,
+      boolean canGlide,
+      boolean hasBoat,
+      boolean inBoat,
+      int soulSpeed,
+      boolean takesDamage,
+      int respiration,
+      int depthStrider) {
     this.canFly = canFly;
     this.canGlide = canGlide;
     this.hasBoat = hasBoat;
     this.inBoat = inBoat;
     this.soulSpeed = soulSpeed;
+    this.takesDamage = takesDamage;
+    this.respiration = respiration;
+    this.depthStrider = depthStrider;
+  }
+
+  /** This player, but one that can be hurt, as in survival. */
+  public TestPlayer vulnerable() {
+    return new TestPlayer(
+        canFly, canGlide, hasBoat, inBoat, soulSpeed, true, respiration, depthStrider);
+  }
+
+  /** This player, in a helmet with Respiration and boots with Depth Strider of the given levels. */
+  public TestPlayer enchanted(int respiration, int depthStrider) {
+    return new TestPlayer(
+        canFly, canGlide, hasBoat, inBoat, soulSpeed, takesDamage, respiration, depthStrider);
   }
 
   public static TestPlayer walker() {
@@ -81,6 +117,21 @@ public final class TestPlayer implements CobblestonePlayer {
   @Override
   public int soulSpeedLevel() {
     return soulSpeed;
+  }
+
+  @Override
+  public boolean takesDamage() {
+    return takesDamage;
+  }
+
+  @Override
+  public int respirationLevel() {
+    return respiration;
+  }
+
+  @Override
+  public int depthStriderLevel() {
+    return depthStrider;
   }
 
   @Override
