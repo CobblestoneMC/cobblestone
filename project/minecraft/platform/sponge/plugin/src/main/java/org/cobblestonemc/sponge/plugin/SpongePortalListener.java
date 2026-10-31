@@ -8,10 +8,10 @@
 package org.cobblestonemc.sponge.plugin;
 
 import java.util.Optional;
+import java.util.concurrent.Executor;
 import java.util.function.BooleanSupplier;
 import java.util.function.DoubleSupplier;
 import org.cobblestonemc.CobblestoneLogger;
-import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.plugin.data.EndReturnPortal;
 import org.cobblestonemc.plugin.data.EndReturnPortalDao;
 import org.cobblestonemc.plugin.data.GatewayDao;
@@ -53,7 +53,7 @@ final class SpongePortalListener {
   private final PortalTransitionDao portals;
   private final EndReturnPortalDao endReturns;
   private final GatewayDao gateways;
-  private final MinecraftScheduler<?> scheduler;
+  private final Executor data;
   private final CobblestoneLogger logger;
   private final DoubleSupplier cost;
   private final BooleanSupplier enabled;
@@ -62,14 +62,14 @@ final class SpongePortalListener {
       PortalTransitionDao portals,
       EndReturnPortalDao endReturns,
       GatewayDao gateways,
-      MinecraftScheduler<?> scheduler,
+      Executor data,
       CobblestoneLogger logger,
       DoubleSupplier cost,
       BooleanSupplier enabled) {
     this.portals = portals;
     this.endReturns = endReturns;
     this.gateways = gateways;
-    this.scheduler = scheduler;
+    this.data = data;
     this.logger = logger;
     this.cost = cost;
     this.enabled = enabled;
@@ -119,7 +119,7 @@ final class SpongePortalListener {
     PortalRegion dest = scan(toWorld, to, BlockTypes.NETHER_PORTAL.get());
     logger.debug("Discovered nether portal link {} -> {}", fromWorld.key(), toWorld.key());
     PortalTransition transition = transitionTo(source, dest.world(), centerPoint(dest));
-    scheduler.runAsync(() -> portals.upsert(transition));
+    data.execute(() -> portals.upsert(transition));
   }
 
   /** Records the overworld &rarr; End portal as a region &rarr; point link. */
@@ -131,7 +131,7 @@ final class SpongePortalListener {
             source,
             toWorld.key().asString(),
             new int[] {floor(to.x()), floor(to.y()), floor(to.z())});
-    scheduler.runAsync(() -> portals.upsert(transition));
+    data.execute(() -> portals.upsert(transition));
   }
 
   /**
@@ -140,7 +140,7 @@ final class SpongePortalListener {
   private void recordEndReturn(ServerWorld fromWorld, Vector3d from) {
     PortalRegion region = scan(fromWorld, from, BlockTypes.END_PORTAL.get());
     EndReturnPortal portal = new EndReturnPortal(region, cost.getAsDouble());
-    scheduler.runAsync(() -> endReturns.upsert(portal));
+    data.execute(() -> endReturns.upsert(portal));
   }
 
   /** Caches an end-gateway's resolved exit, keyed by the gateway block. */
@@ -157,7 +157,7 @@ final class SpongePortalListener {
             floor(to.y()),
             floor(to.z()),
             cost.getAsDouble());
-    scheduler.runAsync(() -> gateways.upsert(gateway));
+    data.execute(() -> gateways.upsert(gateway));
   }
 
   private static PortalRegion scan(ServerWorld world, Vector3d position, BlockType material) {

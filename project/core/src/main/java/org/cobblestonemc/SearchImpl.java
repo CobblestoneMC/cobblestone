@@ -26,7 +26,7 @@ import org.cobblestonemc.api.Step;
  * Orchestrates one search: runs Tier-1 Dijkstra, solves each chosen {@link VirtualPath} with a
  * cooperative {@link Tier2Search}, and re-plans after every solve so alternative routes are
  * reconsidered as true edge costs become known (the anytime recalc loop). Everything runs on the
- * {@link Scheduler}; the search never blocks a thread.
+ * {@link SearchScheduler}; the search never blocks a thread.
  *
  * <p>Phase-2 note: this re-plans after <i>every</i> edge solve rather than only on a threshold
  * overshoot, and solves each edge to completion rather than pausing mid-solve — a simpler, still
@@ -42,7 +42,6 @@ final class SearchImpl<T, D extends Domain> implements SearchHandle<Position<D>,
   private final int searchId = SEARCH_ID_COUNTER.incrementAndGet();
 
   private final CobblestoneLogger logger;
-  private final Scheduler scheduler;
   private final Executor executor;
   private final HeuristicStrategy heuristic;
   private final Position<D> origin;
@@ -68,7 +67,7 @@ final class SearchImpl<T, D extends Domain> implements SearchHandle<Position<D>,
 
   SearchImpl(
       CobblestoneLogger logger,
-      Scheduler scheduler,
+      SearchScheduler scheduler,
       HeuristicStrategy heuristic,
       Position<D> origin,
       Destination<DomainRegion<D>> destination,
@@ -78,8 +77,7 @@ final class SearchImpl<T, D extends Domain> implements SearchHandle<Position<D>,
       SearchSettings settings,
       SearchObserver observer) {
     this.logger = new ScopedCobblestoneLogger(logger, "search[" + searchId + "]");
-    this.scheduler = scheduler;
-    this.executor = scheduler.asyncExecutor();
+    this.executor = scheduler.executor();
     this.heuristic = heuristic;
     this.origin = origin;
     this.behavior = behavior;
@@ -99,7 +97,7 @@ final class SearchImpl<T, D extends Domain> implements SearchHandle<Position<D>,
 
   void start() {
     logger.trace("Executing async start");
-    scheduler.runAsync(this::step);
+    executor.execute(this::step);
   }
 
   @Override

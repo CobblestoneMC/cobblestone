@@ -101,7 +101,8 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
    * @param memoryBudget how many bytes of sections not pinned to keep in memory
    * @param storage where to keep sections beyond memory: {@link RegionFiles}, or {@link
    *     RegionStorage#NONE} to keep them only in memory
-   * @param disk where disk reads and writes run; one thread, so they never race
+   * @param disk where disk reads and writes run, one task at a time and in order, so they never
+   *     race
    * @param builds where a section is built when its terrain arrives later rather than at once
    */
   public RegionStore(
@@ -229,8 +230,8 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
           if (stored != null) {
             settle(key, stored, true, false, to);
           } else {
-            // Built on the build pool: the disk thread is one thread, shared by every domain's
-            // reads and writes, and a build is far slower than a read.
+            // Built on the build pool: the disk runs one task at a time, every read and write of
+            // the domain's, and a build is far slower than a read.
             builds.execute(() -> build(sx, sy, sz, key, source, to));
           }
         });
@@ -494,9 +495,9 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
   }
 
   /**
-   * Deletes every section on disk, on the disk thread, and writes nothing after: for terrain that
+   * Deletes every section on disk, on the disk executor, and writes nothing after: for terrain that
    * changed where no {@link #invalidate} said so. The store is done with once it is called; a store
-   * made afresh for the domain, on the same disk thread, reads nothing that was here.
+   * made afresh for the domain, on the same disk executor, reads nothing that was here.
    *
    * @return a future completing once the files are deleted
    */
@@ -518,7 +519,7 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
   }
 
   /**
-   * Releases the files the store holds open, on the disk thread. Unwritten sections are not
+   * Releases the files the store holds open, on the disk executor. Unwritten sections are not
    * written: {@link #flush} first.
    *
    * @return a future completing once they are closed

@@ -9,8 +9,10 @@ package org.cobblestonemc.sponge;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.function.IntSupplier;
 import org.cobblestonemc.CobblestoneLogger;
+import org.cobblestonemc.TimeSource;
 import org.cobblestonemc.minecraft.ChunkFetch;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
@@ -43,13 +45,16 @@ final class SpongePlatformApi implements PlatformApi<Entity> {
 
   SpongePlatformApi(
       SpongeScheduler scheduler,
+      TimeSource time,
+      Executor io,
       CobblestoneLogger logger,
       IntSupplier maxLoadRequests,
       OfflineChunkSource offline) {
     this.scheduler = scheduler;
     this.offline = offline;
     this.loaded = new LoadedChunkIndex(logger);
-    this.chunks = new SpongeChunkLoader(scheduler, logger, maxLoadRequests, offline, loaded);
+    this.chunks =
+        new SpongeChunkLoader(scheduler, time, io, logger, maxLoadRequests, offline, loaded);
   }
 
   @Override

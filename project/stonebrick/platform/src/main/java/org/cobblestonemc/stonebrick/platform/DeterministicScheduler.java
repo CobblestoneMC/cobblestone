@@ -10,13 +10,11 @@ package org.cobblestonemc.stonebrick.platform;
 import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.Deque;
-import java.util.List;
 import java.util.PriorityQueue;
-import java.util.concurrent.AbstractExecutorService;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Executor;
 import java.util.function.BooleanSupplier;
 import org.cobblestonemc.Position;
+import org.cobblestonemc.SearchScheduler;
 import org.cobblestonemc.TimeSource;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -43,7 +41,7 @@ import org.cobblestonemc.minecraft.ScheduledTaskHandle;
  * is single-threaded from end to end.
  */
 public final class DeterministicScheduler
-    implements MinecraftScheduler<Object>, TimeSource, AutoCloseable {
+    implements MinecraftScheduler<Object>, SearchScheduler, TimeSource, AutoCloseable {
 
   /** Immediate work, in submission order. */
   private final Deque<Runnable> ready = new ArrayDeque<>();
@@ -56,7 +54,7 @@ public final class DeterministicScheduler
   private long nowMillis;
   private long sequence;
   private long tasksRun;
-  private boolean shutdown;
+  private final Executor executor = this::runAsync;
 
   private record Delayed(long dueMillis, long sequence, Runnable task) {}
 
@@ -77,13 +75,8 @@ public final class DeterministicScheduler
   }
 
   @Override
-  public void runAsync(Runnable task) {
-    ready.addLast(task);
-  }
-
-  @Override
-  public void runAsyncLater(Runnable task, long delayMillis) {
-    schedule(task, delayMillis);
+  public Executor executor() {
+    return executor;
   }
 
   @Override
@@ -91,43 +84,8 @@ public final class DeterministicScheduler
     return this;
   }
 
-  @Override
-  public ExecutorService asyncExecutor() {
-    return new AbstractExecutorService() {
-      @Override
-      public void execute(Runnable command) {
-        runAsync(command);
-      }
-
-      @Override
-      public void shutdown() {
-        shutdown = true;
-      }
-
-      @Override
-      public List<Runnable> shutdownNow() {
-        shutdown = true;
-        List<Runnable> pending = List.copyOf(ready);
-        ready.clear();
-        timers.clear();
-        return pending;
-      }
-
-      @Override
-      public boolean isShutdown() {
-        return shutdown;
-      }
-
-      @Override
-      public boolean isTerminated() {
-        return shutdown && ready.isEmpty() && timers.isEmpty();
-      }
-
-      @Override
-      public boolean awaitTermination(long timeout, TimeUnit unit) {
-        return isTerminated();
-      }
-    };
+  private void runAsync(Runnable task) {
+    ready.addLast(task);
   }
 
   @Override

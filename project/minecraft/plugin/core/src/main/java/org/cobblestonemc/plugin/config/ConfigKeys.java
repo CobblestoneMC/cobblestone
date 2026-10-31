@@ -169,6 +169,15 @@ public final class ConfigKeys {
   /** Whether anonymous bStats metrics are reported. Requires a restart. */
   public final ConfigKey<Boolean> metricsEnabled;
 
+  /**
+   * How many threads searches and region builds run on, or 0 for half the processors and at least
+   * two. Requires a restart.
+   */
+  public final ConfigKey<Integer> threadsCompute;
+
+  /** How many threads disk and database work runs on, or 0 for two. Requires a restart. */
+  public final ConfigKey<Integer> threadsIo;
+
   /** How many cells of the trail ahead the {@code trail} navigator renders. Mutable. */
   public final ConfigKey<Integer> trailBufferCells;
 
@@ -635,6 +644,31 @@ public final class ConfigKeys {
         manager
             .key("metrics.enabled", true, Codec.ofBoolean())
             .comment("Whether to report anonymous usage metrics.")
+            .requiresRestart()
+            .register();
+
+    manager.section(
+        "threads",
+        """
+        The threads Cobblestone runs on besides the server's own. Searches never share a thread
+        with disk or database work, so a slow write cannot hold one up.""");
+    this.threadsCompute =
+        manager
+            .key("threads.compute", 0, Codec.ofInt())
+            .comment(
+                """
+                How many threads searches and region builds run on, shared by every player's
+                searches. 0 leaves it to Cobblestone: half the server's processors, and at least
+                two. Lower it to leave more of the processors to the server itself.""")
+            .requiresRestart()
+            .register();
+    this.threadsIo =
+        manager
+            .key("threads.io", 0, Codec.ofInt())
+            .comment(
+                """
+                How many threads disk and database work runs on: saving what players and portals
+                leave behind, and reading chunks from disk. 0 leaves it to Cobblestone: two.""")
             .requiresRestart()
             .register();
 

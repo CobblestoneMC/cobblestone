@@ -10,6 +10,7 @@ package org.cobblestonemc.sponge;
 import java.util.BitSet;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.stream.Stream;
 import org.cobblestonemc.CobblestoneLogger;
 import org.spongepowered.api.ResourceKey;
@@ -52,12 +53,12 @@ final class ChunkExistenceIndex {
     UNKNOWN
   }
 
-  private final SpongeScheduler scheduler;
+  private final Executor io;
   private final CobblestoneLogger logger;
   private final Map<ResourceKey, WorldIndex> worlds = new ConcurrentHashMap<>();
 
-  ChunkExistenceIndex(SpongeScheduler scheduler, CobblestoneLogger logger) {
-    this.scheduler = scheduler;
+  ChunkExistenceIndex(Executor io, CobblestoneLogger logger) {
+    this.io = io;
     this.logger = logger;
   }
 
@@ -75,7 +76,7 @@ final class ChunkExistenceIndex {
             world.key(),
             key -> {
               WorldIndex created = new WorldIndex();
-              scheduler.runAsync(() -> scan(key, world, created));
+              io.execute(() -> scan(key, world, created));
               return created;
             });
     return index.presence(chunkX, chunkZ);

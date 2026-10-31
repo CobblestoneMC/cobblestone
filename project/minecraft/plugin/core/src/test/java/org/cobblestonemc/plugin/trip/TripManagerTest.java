@@ -16,10 +16,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.cobblestonemc.Position;
+import org.cobblestonemc.TimeSource;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -34,7 +34,7 @@ class TripManagerTest {
   @Test
   void enforcesMaxActivePerPlayer() {
     RecordingScheduler scheduler = new RecordingScheduler();
-    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 2);
+    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, scheduler, 2);
     TestTripAgent player = new TestTripAgent(UUID.randomUUID());
 
     assertTrue(
@@ -56,7 +56,7 @@ class TripManagerTest {
   @Test
   void completedTripStopsTicksAndIsUntracked() {
     RecordingScheduler scheduler = new RecordingScheduler();
-    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 3);
+    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, scheduler, 3);
     TestTripAgent player = new TestTripAgent(UUID.randomUUID());
     FakeNavigator navigator = new FakeNavigator();
     navigator.completeAfter = 2;
@@ -81,7 +81,7 @@ class TripManagerTest {
   @Test
   void liveTripReSearchesAndHotSwapsUntilStopped() {
     RecordingScheduler scheduler = new RecordingScheduler();
-    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 3);
+    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, scheduler, 3);
     TestTripAgent player = new TestTripAgent(UUID.randomUUID());
     FakeNavigator navigator = new FakeNavigator();
     FakeLiveSearch live = new FakeLiveSearch();
@@ -104,7 +104,7 @@ class TripManagerTest {
   @Test
   void assignsRecyclableIdsAndCancelsByIdOrDestination() {
     RecordingScheduler scheduler = new RecordingScheduler();
-    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 3);
+    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, scheduler, 3);
     TestTripAgent player = new TestTripAgent(UUID.randomUUID());
     Trip<Object, TestTripAgent, Object> first =
         manager
@@ -137,7 +137,7 @@ class TripManagerTest {
   @Test
   void stopAllStopsEveryTripForPlayer() {
     RecordingScheduler scheduler = new RecordingScheduler();
-    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 3);
+    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, scheduler, 3);
     TestTripAgent player = new TestTripAgent(UUID.randomUUID());
     FakeNavigator first = new FakeNavigator();
     FakeNavigator second = new FakeNavigator();
@@ -154,7 +154,7 @@ class TripManagerTest {
   @Test
   void reportsEveryChangeToAPlayersTrips() {
     RecordingScheduler scheduler = new RecordingScheduler();
-    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 3);
+    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, scheduler, 3);
     TestTripAgent player = new TestTripAgent(UUID.randomUUID());
     List<TestTripAgent> changes = new ArrayList<>();
     manager.onChange(changes::add);
@@ -182,7 +182,7 @@ class TripManagerTest {
   @Test
   void tripEndsOnceItsTargetStopsExisting() {
     RecordingScheduler scheduler = new RecordingScheduler();
-    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, 3);
+    TripManager<Object, TestTripAgent, Object> manager = new TripManager<>(scheduler, scheduler, 3);
     TestTripAgent player = new TestTripAgent(UUID.randomUUID());
     FakeNavigator navigator = new FakeNavigator();
     AtomicBoolean exists = new AtomicBoolean(true);
@@ -271,7 +271,7 @@ class TripManagerTest {
   }
 
   /** A scheduler that captures repeating tasks so the test can drive ticks deterministically. */
-  private static final class RecordingScheduler implements MinecraftScheduler<Object> {
+  private static final class RecordingScheduler implements MinecraftScheduler<Object>, TimeSource {
     private final List<Runnable> repeating = new ArrayList<>();
     private final List<Runnable> delayed = new ArrayList<>();
     FakeHandle handle;
@@ -322,18 +322,13 @@ class TripManagerTest {
     }
 
     @Override
-    public void runAsync(Runnable task) {
-      task.run();
+    public long millis() {
+      return 0;
     }
 
     @Override
-    public void runAsyncLater(Runnable task, long delayMillis) {
+    public void schedule(Runnable task, long delayMillis) {
       delayed.add(task);
-    }
-
-    @Override
-    public ExecutorService asyncExecutor() {
-      throw new UnsupportedOperationException();
     }
   }
 

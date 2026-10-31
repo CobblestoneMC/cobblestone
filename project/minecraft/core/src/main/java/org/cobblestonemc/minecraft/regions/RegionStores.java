@@ -18,16 +18,13 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.CobblestoneLogger;
+import org.cobblestonemc.TimeSource;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.regions.RegionFiles;
@@ -37,7 +34,7 @@ import org.cobblestonemc.regions.RegionStore;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * A server's {@link RegionStore}s, one per world, and the threads they share.
+ * A server's {@link RegionStore}s, one per world.
  *
  * <p>The platform's one handle on the region layer: searches ask it for their world's store,
  * block-change listeners tell it what to forget, trips tell it whose surroundings to keep, and a
@@ -55,9 +52,9 @@ import org.jetbrains.annotations.Nullable;
  * that passes. A search in that window reads the section as it was, which costs the estimate a
  * little and never the route, since the fine search reads the blocks themselves.
  *
- * <p><b>Two kinds of thread of its own.</b> One for the disk, so reads and writes of the same files
- * never race; and a small pool for building and those delays, so a chunk that arrives on the server
- * thread is not built there. Both are daemons, and {@link #close} drains them.
+ * <p><b>No threads of its own.</b> Each world's reads and writes run on a disk lane of its own, one
+ * task at a time, so they never race; builds, and changes forgotten once their delay has passed,
+ * run on the executor given, so a chunk that arrives on the server thread is not built there.
  */
 public final class RegionStores implements AutoCloseable {
 
@@ -77,8 +74,9 @@ public final class RegionStores implements AutoCloseable {
   private final CobblestoneLogger log;
   private final long memoryBudget;
   private final Duration invalidationDelay;
-  private final ExecutorService disk;
-  private final ScheduledExecutorService threads;
+  private final Function<String, Executor> disks;
+  private final Executor builds;
+  private final TimeSource time;
   private final Map<String, RegionStore<MinecraftChunk, RegionClass>> stores =
       new ConcurrentHashMap<>();
 
@@ -97,31 +95,37 @@ public final class RegionStores implements AutoCloseable {
    *     world}; {@code null} to keep sections in memory only, shared between searches but lost on
    *     restart
    * @param memoryBudget how many bytes of sections not pinned each world keeps in memory
-   * @param builderThreads how many threads build sections from chunks that arrive later
+   * @param disks each world's disk lane by its key: the same key, the same lane, which runs one
+   *     task at a time in order, so its reads and writes never race
+   * @param builds where sections are built from chunks that arrive later: compute threads
+   * @param time the clock changes wait on to be forgotten, running them on {@code builds}
    * @param log where a write that fails is told
    */
   public RegionStores(
-      @Nullable Path root, long memoryBudget, int builderThreads, CobblestoneLogger log) {
-    this(root, memoryBudget, builderThreads, log, INVALIDATION_DELAY);
+      @Nullable Path root,
+      long memoryBudget,
+      Function<String, Executor> disks,
+      Executor builds,
+      TimeSource time,
+      CobblestoneLogger log) {
+    this(root, memoryBudget, disks, builds, time, log, INVALIDATION_DELAY);
   }
 
   RegionStores(
       @Nullable Path root,
       long memoryBudget,
-      int builderThreads,
+      Function<String, Executor> disks,
+      Executor builds,
+      TimeSource time,
       CobblestoneLogger log,
       Duration invalidationDelay) {
     this.root = root;
     this.log = log;
     this.memoryBudget = memoryBudget;
     this.invalidationDelay = invalidationDelay;
-    this.disk = Executors.newSingleThreadExecutor(daemons("cobblestone-regions-disk"));
-    ScheduledThreadPoolExecutor pool =
-        new ScheduledThreadPoolExecutor(
-            Math.max(1, builderThreads), daemons("cobblestone-regions"));
-    // A change still waiting at shutdown has nothing left to be forgotten from.
-    pool.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
-    this.threads = pool;
+    this.disks = disks;
+    this.builds = builds;
+    this.time = time;
   }
 
   /**
@@ -145,8 +149,8 @@ public final class RegionStores implements AutoCloseable {
               directory == null
                   ? RegionStorage.NONE
                   : new RegionFiles(directory, spec, world.seed()),
-              disk,
-              threads);
+              disks.apply(key),
+              builds);
         });
   }
 
@@ -205,7 +209,7 @@ public final class RegionStores implements AutoCloseable {
     if (!changed.add(section)) {
       return; // already waiting: this change is forgotten with it
     }
-    threads.schedule(() -> forget(section), invalidationDelay.toNanos(), TimeUnit.NANOSECONDS);
+    time.schedule(() -> forget(section), invalidationDelay.toMillis());
   }
 
   private void forget(Changed section) {
@@ -257,7 +261,7 @@ public final class RegionStores implements AutoCloseable {
     RegionStore<MinecraftChunk, RegionClass> store = stores.remove(worldKey);
     if (store != null) {
       written(worldKey, store.flush());
-      // Queued right behind the write on the one disk thread, not once it completes: anything
+      // Queued right behind the write on the world's disk lane, not once it completes: anything
       // queued after, such as a clear or a store made for the world afresh, finds the files closed.
       store.close();
     }
@@ -300,7 +304,7 @@ public final class RegionStores implements AutoCloseable {
   public CompletableFuture<Void> clear(String worldKey) {
     List<CompletableFuture<Void>> deleting = new ArrayList<>(1);
     // Under the map's lock for the world, so a store made for it afresh is made after the delete
-    // is queued, and reads on the disk thread only once the files are gone.
+    // is queued, and reads on the world's disk lane only once the files are gone.
     stores.compute(
         worldKey,
         (key, store) -> {
@@ -317,7 +321,7 @@ public final class RegionStores implements AutoCloseable {
                         throw new UncheckedIOException(failed);
                       }
                     },
-                    disk));
+                    disks.apply(key)));
           }
           return null;
         });
@@ -343,20 +347,15 @@ public final class RegionStores implements AutoCloseable {
   }
 
   /**
-   * Stops building, writes what is unwritten, and stops the disk thread. Changes still waiting to
-   * be forgotten are moot.
+   * Writes what is unwritten, waiting for it, and queues the files' release behind it. Changes
+   * still waiting to be forgotten are moot.
    *
-   * <p>Builds still running are let finish for a moment, so their sections are written too. Call it
-   * after the searches have stopped, so nothing builds a section behind the final write.
+   * <p>Call it after the searches have stopped, and before the disk lanes do, so the writes have
+   * somewhere to run. A build still running when it is called is not written, and is built again
+   * after the restart.
    */
   @Override
   public void close() {
-    threads.shutdown();
-    try {
-      threads.awaitTermination(5, TimeUnit.SECONDS);
-    } catch (InterruptedException interrupted) {
-      Thread.currentThread().interrupt();
-    }
     try {
       flush().get(30, TimeUnit.SECONDS);
     } catch (Exception failed) {
@@ -365,22 +364,5 @@ public final class RegionStores implements AutoCloseable {
     for (RegionStore<MinecraftChunk, RegionClass> store : stores.values()) {
       store.close();
     }
-    disk.shutdown();
-    try {
-      disk.awaitTermination(5, TimeUnit.SECONDS);
-    } catch (InterruptedException interrupted) {
-      Thread.currentThread().interrupt();
-    }
-  }
-
-  private static ThreadFactory daemons(String name) {
-    AtomicInteger count = new AtomicInteger();
-    return runnable -> {
-      Thread thread = new Thread(runnable, name + "-" + count.incrementAndGet());
-      thread.setDaemon(true);
-      // Below the server's own threads: this is work a search waits on, never on a tick.
-      thread.setPriority(Thread.NORM_PRIORITY - 1);
-      return thread;
-    };
   }
 }

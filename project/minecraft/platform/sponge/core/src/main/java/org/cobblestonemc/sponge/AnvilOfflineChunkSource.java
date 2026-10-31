@@ -13,12 +13,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.ScopedCobblestoneLogger;
@@ -46,19 +46,10 @@ import org.spongepowered.api.world.server.ServerWorld;
  * answered by loading the chunk the ordinary way, which is what the rest of {@link
  * SpongeChunkLoader} was already for.
  *
- * <p>Reads run on a small pool of their own rather than the search workers: they are blocking file
- * IO, and a search thread parked on a disk read is a search thread not searching.
+ * <p>Reads run on the IO threads rather than the search threads: they are blocking file IO, and a
+ * search thread parked on a disk read is a search thread not searching.
  */
 public final class AnvilOfflineChunkSource implements OfflineChunkSource {
-
-  /**
-   * How many reads may be in flight.
-   *
-   * <p>Deliberately small. This is disk-bound work, and a chunk read is milliseconds of seek and
-   * inflate, so more threads buy queueing rather than throughput — and every one of them is
-   * competing with the server for the same disk.
-   */
-  private static final int READ_THREADS = 2;
 
   /** How long shutdown waits for reads already underway before answering them itself. */
   private static final long SHUTDOWN_DRAIN_MILLIS = 5_000L;
@@ -68,7 +59,7 @@ public final class AnvilOfflineChunkSource implements OfflineChunkSource {
 
   private final CobblestoneLogger logger;
   private final SpongeBlocks blocks = new SpongeBlocks();
-  private final ExecutorService readers;
+  private final Executor readers;
 
   /** Region directories by world, so a read does not re-resolve a path it already knows. */
   private final Map<ResourceKey, Path> regionFolders = new ConcurrentHashMap<>();
@@ -86,20 +77,16 @@ public final class AnvilOfflineChunkSource implements OfflineChunkSource {
   /**
    * Creates a source.
    *
+   * <p>The IO threads are kept few on purpose. This is disk-bound work, and a chunk read is
+   * milliseconds of seek and inflate, so more threads buy queueing rather than throughput — and
+   * every one of them is competing with the server for the same disk.
+   *
    * @param logger the logger to report read failures to
+   * @param readers the IO threads reads run on
    */
-  public AnvilOfflineChunkSource(CobblestoneLogger logger) {
+  public AnvilOfflineChunkSource(CobblestoneLogger logger, Executor readers) {
     this.logger = new ScopedCobblestoneLogger(logger, "AnvilOfflineChunkSource");
-    AtomicInteger counter = new AtomicInteger();
-    this.readers =
-        Executors.newFixedThreadPool(
-            READ_THREADS,
-            runnable -> {
-              Thread thread =
-                  new Thread(runnable, "cobblestone-chunk-io-" + counter.incrementAndGet());
-              thread.setDaemon(true);
-              return thread;
-            });
+    this.readers = readers;
   }
 
   @Override
@@ -216,25 +203,28 @@ public final class AnvilOfflineChunkSource implements OfflineChunkSource {
   }
 
   /**
-   * Stops issuing reads, waits briefly for the one or two underway, and answers the rest.
+   * Stops issuing reads, waits briefly for the ones underway, and answers the rest.
    *
    * <p>Reads still queued see {@link #stopped} and answer "nothing there" without touching the
    * disk, and reads already underway are left to finish rather than interrupted — an interrupted
-   * file read fails, and a failure is not what shutting down should look like. Only if the wait
-   * runs out is the pool interrupted: a read stuck on a disk that is not answering must not hold
-   * the server open. Whatever has not settled by then is answered as "nothing there" rather than
-   * left hanging.
+   * file read fails, and a failure is not what shutting down should look like. The wait is bounded:
+   * a read stuck on a disk that is not answering must not hold the server open, and the IO threads
+   * it holds are interrupted when they are closed. Whatever has not settled by then is answered as
+   * "nothing there" rather than left hanging.
    */
   @Override
   public void shutdown() {
     stopped = true;
-    readers.shutdown();
+    long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(SHUTDOWN_DRAIN_MILLIS);
     try {
-      if (!readers.awaitTermination(SHUTDOWN_DRAIN_MILLIS, TimeUnit.MILLISECONDS)) {
-        readers.shutdownNow();
+      for (CompletableFuture<MinecraftChunk> pending : outstanding) {
+        pending
+            .handle((chunk, error) -> null)
+            .get(deadline - System.nanoTime(), TimeUnit.NANOSECONDS);
       }
+    } catch (TimeoutException | ExecutionException late) {
+      // Answered below.
     } catch (InterruptedException interrupted) {
-      readers.shutdownNow();
       Thread.currentThread().interrupt();
     }
     for (CompletableFuture<MinecraftChunk> pending : outstanding) {

@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import net.kyori.adventure.text.Component;
@@ -48,6 +49,7 @@ public final class TripHud<E, A extends TripAgent<E>, L> {
 
   private final TripManager<E, A, L> trips;
   private final MinecraftScheduler<E> scheduler;
+  private final Executor data;
   private final Messages messages;
   private final PlayerPreferencesDao preferences;
   private final BooleanSupplier enabled;
@@ -63,6 +65,7 @@ public final class TripHud<E, A extends TripAgent<E>, L> {
    *
    * @param trips the trips to show
    * @param scheduler the entity scheduler
+   * @param data where preferences are read and written, in order
    * @param messages the message renderer
    * @param preferences each player's stored choice
    * @param enabled whether the server has the HUD turned on
@@ -72,6 +75,7 @@ public final class TripHud<E, A extends TripAgent<E>, L> {
   public TripHud(
       TripManager<E, A, L> trips,
       MinecraftScheduler<E> scheduler,
+      Executor data,
       Messages messages,
       PlayerPreferencesDao preferences,
       BooleanSupplier enabled,
@@ -79,6 +83,7 @@ public final class TripHud<E, A extends TripAgent<E>, L> {
       CobblestoneLogger logger) {
     this.trips = trips;
     this.scheduler = scheduler;
+    this.data = data;
     this.messages = messages;
     this.preferences = preferences;
     this.enabled = enabled;
@@ -102,7 +107,7 @@ public final class TripHud<E, A extends TripAgent<E>, L> {
    */
   public void load(UUID player) {
     loading.add(player);
-    scheduler.runAsync(
+    data.execute(
         () -> {
           boolean show = read(player);
           // Dropped if the player has since left or made a new choice.
@@ -132,7 +137,7 @@ public final class TripHud<E, A extends TripAgent<E>, L> {
     UUID uuid = agent.uuid();
     loading.remove(uuid);
     shown.put(uuid, show);
-    scheduler.runAsync(
+    data.execute(
         () -> {
           try {
             preferences.upsert(new PlayerPreferences(uuid, show));

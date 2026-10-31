@@ -9,6 +9,7 @@ package org.cobblestonemc.plugin.config;
 
 import java.nio.file.Path;
 import org.cobblestonemc.CobblestoneLogger;
+import org.cobblestonemc.Workers;
 import org.cobblestonemc.minecraft.regions.RegionStores;
 
 /** The region layer's settings, read the same way on every platform. */
@@ -22,15 +23,24 @@ public final class RegionConfig {
    * @param config the loaded configuration
    * @param keys its keys
    * @param dataFolder Cobblestone's data folder, under which regions are kept if they persist
+   * @param workers the threads the stores read, write and build on
    * @param log where a write that fails is told
    * @return the stores
    */
   public static RegionStores stores(
-      ConfigManager config, ConfigKeys keys, Path dataFolder, CobblestoneLogger log) {
+      ConfigManager config,
+      ConfigKeys keys,
+      Path dataFolder,
+      Workers workers,
+      CobblestoneLogger log) {
     return new RegionStores(
         config.get(keys.regionsPersist) ? dataFolder.resolve("regions") : null,
         Math.max(16, config.get(keys.regionsMemory)) * 1024L * 1024L,
-        Math.max(1, Runtime.getRuntime().availableProcessors() / 4),
+        // A disk lane per world: one world's reads and writes stay in order, and two worlds' run
+        // side by side.
+        worldKey -> workers.lane("regions:" + worldKey),
+        workers.compute(),
+        workers.time(),
         log);
   }
 

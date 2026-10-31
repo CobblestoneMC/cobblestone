@@ -8,14 +8,16 @@
 package org.cobblestonemc.minecraft;
 
 import org.cobblestonemc.Position;
-import org.cobblestonemc.Scheduler;
 
 /**
- * The Minecraft {@link Scheduler}, adding location-aware scheduling so world state can be read on
- * the thread that owns a location (Paper: main thread; Folia: the owning region; Sponge: server
+ * Runs work on the server's own threads: the one that owns a location or an entity, so world state
+ * can be read and changed there (Paper: main thread; Folia: the owning region; Sponge: server
  * thread).
+ *
+ * <p>Work off the server's threads is not this: searches run on a {@link
+ * org.cobblestonemc.SearchScheduler}, and everything else on {@link org.cobblestonemc.Workers}.
  */
-public interface MinecraftScheduler<E> extends Scheduler {
+public interface MinecraftScheduler<E> {
 
   /**
    * Runs a task on the thread that owns the given location.

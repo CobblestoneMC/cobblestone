@@ -8,11 +8,6 @@
 package org.cobblestonemc.paper;
 
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
@@ -26,48 +21,20 @@ import org.cobblestonemc.minecraft.ScheduledTaskHandle;
 /**
  * The Paper/Folia {@link MinecraftScheduler}.
  *
- * <p>Search math runs on a dedicated daemon worker pool (so it never blocks a server thread), while
- * location-aware work is dispatched through Paper's region/global schedulers, which behave
+ * <p>Location-aware work is dispatched through Paper's region/global schedulers, which behave
  * correctly on both regular Paper (one main thread) and Folia (per-region threads).
  */
 public final class PaperScheduler implements MinecraftScheduler<Entity> {
 
   private final Plugin plugin;
-  private final ScheduledExecutorService workers;
 
   /**
    * Creates a scheduler.
    *
    * @param plugin the owning plugin (for region scheduler dispatch)
-   * @param workerThreads the number of search worker threads
    */
-  public PaperScheduler(Plugin plugin, int workerThreads) {
+  public PaperScheduler(Plugin plugin) {
     this.plugin = plugin;
-    AtomicInteger counter = new AtomicInteger();
-    this.workers =
-        Executors.newScheduledThreadPool(
-            workerThreads,
-            runnable -> {
-              Thread thread =
-                  new Thread(runnable, "cobblestone-search-" + counter.incrementAndGet());
-              thread.setDaemon(true);
-              return thread;
-            });
-  }
-
-  @Override
-  public void runAsync(Runnable task) {
-    workers.execute(task);
-  }
-
-  @Override
-  public void runAsyncLater(Runnable task, long delayMillis) {
-    workers.schedule(task, delayMillis, TimeUnit.MILLISECONDS);
-  }
-
-  @Override
-  public ExecutorService asyncExecutor() {
-    return workers;
   }
 
   @Override
@@ -123,10 +90,5 @@ public final class PaperScheduler implements MinecraftScheduler<Entity> {
         scheduled.cancel();
       }
     };
-  }
-
-  /** Stops the worker pool; call on plugin disable. */
-  public void shutdown() {
-    workers.shutdownNow();
   }
 }

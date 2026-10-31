@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
+import org.cobblestonemc.SearchScheduler;
 import org.cobblestonemc.minecraft.ChunkFetch;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
@@ -47,11 +48,12 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
    * Creates a platform over a loaded capture, with no simulated IO cost.
    *
    * @param capture the capture
-   * @param scheduler the scheduler
+   * @param scheduler the scheduler, which also runs the searches and keeps their clock
    * @param settings the chunk provider tunables each world will use
+   * @param <S> the scheduler's type
    */
-  public StonebrickPlatformApi(
-      Capture capture, MinecraftScheduler<Object> scheduler, ChunkProviderSettings settings) {
+  public <S extends MinecraftScheduler<Object> & SearchScheduler> StonebrickPlatformApi(
+      Capture capture, S scheduler, ChunkProviderSettings settings) {
     this(capture, scheduler, settings, IoProfile.zero());
   }
 
@@ -59,15 +61,14 @@ public final class StonebrickPlatformApi implements PlatformApi<Object> {
    * Creates a platform over a loaded capture, charging the given cost for each chunk read.
    *
    * @param capture the capture
-   * @param scheduler the scheduler
+   * @param scheduler the scheduler, which also runs the searches and keeps the clock reads are
+   *     charged against
    * @param settings the chunk provider tunables each world will use
    * @param profile what a chunk read costs
+   * @param <S> the scheduler's type
    */
-  public StonebrickPlatformApi(
-      Capture capture,
-      MinecraftScheduler<Object> scheduler,
-      ChunkProviderSettings settings,
-      IoProfile profile) {
+  public <S extends MinecraftScheduler<Object> & SearchScheduler> StonebrickPlatformApi(
+      Capture capture, S scheduler, ChunkProviderSettings settings, IoProfile profile) {
     this.capture = capture;
     this.scheduler = scheduler;
     this.settings = settings;
