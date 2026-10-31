@@ -52,7 +52,7 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
 
   private final RegionSpec<C, K> spec;
   private final long memoryBudget;
-  private final @Nullable RegionFiles files;
+  private final RegionStorage storage;
   private final Executor disk;
   private final Executor builds;
   private final ThreadLocal<RegionSectionBuilder<C, K>> builders;
@@ -99,19 +99,20 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
    *
    * @param spec how the domain's terrain is cut into regions
    * @param memoryBudget how many bytes of sections not pinned to keep in memory
-   * @param files where to keep sections on disk, or {@code null} to keep them only in memory
+   * @param storage where to keep sections beyond memory: {@link RegionFiles}, or {@link
+   *     RegionStorage#NONE} to keep them only in memory
    * @param disk where disk reads and writes run; one thread, so they never race
    * @param builds where a section is built when its terrain arrives later rather than at once
    */
   public RegionStore(
       RegionSpec<C, K> spec,
       long memoryBudget,
-      @Nullable RegionFiles files,
+      RegionStorage storage,
       Executor disk,
       Executor builds) {
     this.spec = spec;
     this.memoryBudget = memoryBudget;
-    this.files = files;
+    this.storage = storage;
     this.disk = disk;
     this.builds = builds;
     this.builders = ThreadLocal.withInitial(() -> new RegionSectionBuilder<>(spec));
@@ -128,7 +129,8 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
    */
   public static <C, K extends Enum<K> & RegionKind> RegionStore<C, K> inMemory(
       RegionSpec<C, K> spec) {
-    return new RegionStore<>(spec, Long.MAX_VALUE, null, Runnable::run, Runnable::run);
+    return new RegionStore<>(
+        spec, Long.MAX_VALUE, RegionStorage.NONE, Runnable::run, Runnable::run);
   }
 
   /**
@@ -202,7 +204,7 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
       // Invalidated and not yet removed from disk: what is there is the terrain before the change.
       stale = removed.contains(key);
     }
-    if (files == null || stale) {
+    if (!storage.keeps() || stale) {
       build(sx, sy, sz, key, source, to);
       return;
     }
@@ -211,7 +213,7 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
           RegionSection stored;
           long started = System.nanoTime();
           try {
-            stored = files.read(sx, sy, sz);
+            stored = storage.read(sx, sy, sz);
           } catch (IOException | RuntimeException unreadable) {
             // A file that cannot be read is a section that has to be built again; the next write
             // of that section replaces it.
@@ -306,7 +308,7 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
       boolean changed = changedWhileLoading.remove(key);
       if (!changed && keep) {
         remember(key, section);
-        if (fresh && files != null) {
+        if (fresh && storage.keeps()) {
           unwritten.put(key, section);
           removed.remove(key);
         }
@@ -425,7 +427,7 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
     if (loading.containsKey(key)) {
       changedWhileLoading.add(key);
     }
-    if (files != null) {
+    if (storage.keeps()) {
       removed.add(key);
     }
   }
@@ -452,7 +454,7 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
    * @return a future completing when the write is done
    */
   public CompletableFuture<Void> flush() {
-    if (files == null || deleted) {
+    if (deleted) {
       return CompletableFuture.completedFuture(null);
     }
     Map<Long, RegionSection> writing;
@@ -472,7 +474,7 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
             return; // queued before the files went, and run after: what it holds went with them
           }
           try {
-            files.write(writing.values(), removing);
+            storage.write(writing.values(), removing);
           } catch (IOException failed) {
             synchronized (this) {
               // Not a section invalidated while the write ran: putting it back would serve, and
@@ -504,13 +506,10 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
       unwritten.clear();
       removed.clear();
     }
-    if (files == null) {
-      return CompletableFuture.completedFuture(null);
-    }
     return CompletableFuture.runAsync(
         () -> {
           try {
-            files.delete();
+            storage.delete();
           } catch (IOException failed) {
             throw new UncheckedIOException(failed);
           }
@@ -525,13 +524,10 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
    * @return a future completing once they are closed
    */
   public CompletableFuture<Void> close() {
-    if (files == null) {
-      return CompletableFuture.completedFuture(null);
-    }
     return CompletableFuture.runAsync(
         () -> {
           try {
-            files.close();
+            storage.close();
           } catch (IOException ignored) {
             // A handle that will not close is released when the process ends.
           }
@@ -557,8 +553,8 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
         built,
         buildNanos,
         evictions,
-        files == null ? 0 : files.bytesRead(),
-        files == null ? 0 : files.bytesWritten());
+        storage.bytesRead(),
+        storage.bytesWritten());
   }
 
   /**

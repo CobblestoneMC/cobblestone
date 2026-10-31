@@ -45,10 +45,12 @@ import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
 import org.cobblestonemc.minecraft.regions.MinecraftAgent;
 import org.cobblestonemc.minecraft.regions.MinecraftTerrain;
 import org.cobblestonemc.minecraft.regions.RegionClass;
+import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.regions.RegionFiles;
 import org.cobblestonemc.regions.RegionHeuristic;
 import org.cobblestonemc.regions.RegionSearch;
 import org.cobblestonemc.regions.RegionSpec;
+import org.cobblestonemc.regions.RegionStorage;
 import org.cobblestonemc.regions.RegionStore;
 import org.cobblestonemc.stonebrick.format.CaptureDirectory;
 import org.cobblestonemc.stonebrick.format.CorpusLayout;
@@ -502,10 +504,9 @@ public final class ScenarioRunner {
             spec,
             Long.MAX_VALUE,
             regionCache == null
-                ? null
+                ? RegionStorage.NONE
                 : new RegionFiles(
-                    regionCache.resolve(
-                        RegionFiles.directoryName(scenario.capture() + "-" + scenario.world())),
+                    RegionStores.directory(regionCache.resolve(scenario.capture()), world.key()),
                     spec,
                     world.seed()),
             Runnable::run,

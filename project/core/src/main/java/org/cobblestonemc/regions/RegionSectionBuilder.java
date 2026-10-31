@@ -45,7 +45,7 @@ public final class RegionSectionBuilder<C, K extends Enum<K> & RegionKind> {
   /**
    * The version of how this fills regions and finds contacts, apart from the terrain's own rules.
    */
-  public static final int FILL_VERSION = 6;
+  public static final int FILL_VERSION = 1;
 
   /**
    * Blocks of detour allowed regardless of distance, so a seed's immediate neighbors never split.

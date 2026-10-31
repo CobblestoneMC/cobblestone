@@ -9,7 +9,9 @@ package org.cobblestonemc.minecraft.regions;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -92,10 +94,10 @@ class RegionStoresTest {
       RegionStore<MinecraftChunk, RegionClass> store = stores.of(world);
       built(store, 0);
       stores.flush("minecraft:w").join();
-      assertTrue(Files.exists(root.resolve("minecraft_w")));
+      assertTrue(Files.exists(root.resolve("minecraft").resolve("w")));
 
       stores.clear("minecraft:w").join();
-      assertFalse(Files.exists(root.resolve("minecraft_w")));
+      assertFalse(Files.exists(root.resolve("minecraft").resolve("w")));
       RegionStore<MinecraftChunk, RegionClass> afresh = stores.of(world);
       assertNotSame(store, afresh);
       assertFalse(afresh.inMemory(0, 0, 0));
@@ -105,8 +107,8 @@ class RegionStoresTest {
   @Test
   void aWriteThatFailsIsLoggedOnceUntilItRecovers(@TempDir Path root) throws Exception {
     TestWorld world = TestWorld.builder("w").build();
-    // A file where the world's directory has to go: nothing can be written under it.
-    Path blocked = Files.createFile(root.resolve("w"));
+    // A file where the world's namespace's directory has to go: nothing can be written under it.
+    Path blocked = Files.createFile(root.resolve("minecraft"));
     try (RegionStores stores = new RegionStores(root, Long.MAX_VALUE, 1, log, DELAY)) {
       RegionStore<MinecraftChunk, RegionClass> store = stores.of(world);
       built(store, 0);
@@ -120,6 +122,29 @@ class RegionStoresTest {
       stores.flush().handle((done, failed) -> null).join();
       assertEquals(1, errors.size());
     }
+  }
+
+  @Test
+  void aWorldsFilesAreUnderItsNamespaceThenItsPath(@TempDir Path root) {
+    assertEquals(
+        root.resolve("minecraft").resolve("the_nether"),
+        RegionStores.directory(root, "minecraft:the_nether"));
+    assertEquals(
+        root.resolve("towny").resolve("mines").resolve("deep"),
+        RegionStores.directory(root, "towny:mines/deep"));
+    assertEquals(root.resolve("minecraft").resolve("w"), RegionStores.directory(root, "w"));
+    assertNotEquals(
+        RegionStores.directory(root, "a_b:c"),
+        RegionStores.directory(root, "a:b_c"),
+        "an underscore is not a separator");
+  }
+
+  @Test
+  void aKeyThatWouldLeaveItsFolderNamesNone(@TempDir Path root) {
+    assertNull(RegionStores.directory(root, "minecraft:../outside"));
+    assertNull(RegionStores.directory(root, "..:w"));
+    assertNull(RegionStores.directory(root, "minecraft:a//b"));
+    assertNull(RegionStores.directory(root, "Minecraft:W"));
   }
 
   /** Builds a section of rock, waiting for it: with files, it is read for on the disk thread. */

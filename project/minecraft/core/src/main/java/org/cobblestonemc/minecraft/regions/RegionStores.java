@@ -25,12 +25,14 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.regions.RegionFiles;
 import org.cobblestonemc.regions.RegionSpec;
+import org.cobblestonemc.regions.RegionStorage;
 import org.cobblestonemc.regions.RegionStore;
 import org.jetbrains.annotations.Nullable;
 
@@ -68,6 +70,9 @@ public final class RegionStores implements AutoCloseable {
   /** How long after a block changes its sections are forgotten, with every change meanwhile. */
   public static final Duration INVALIDATION_DELAY = Duration.ofSeconds(10);
 
+  /** A namespace, or one part of a key's path: what the game allows in either. */
+  private static final Pattern KEY_PART = Pattern.compile("[a-z0-9_.-]+");
+
   private final @Nullable Path root;
   private final CobblestoneLogger log;
   private final long memoryBudget;
@@ -88,8 +93,9 @@ public final class RegionStores implements AutoCloseable {
   /**
    * Creates the registry.
    *
-   * @param root where to keep each world's files, under a directory per world; {@code null} to keep
-   *     sections in memory only, shared between searches but lost on restart
+   * @param root where to keep each world's files, under a {@linkplain #directory directory per
+   *     world}; {@code null} to keep sections in memory only, shared between searches but lost on
+   *     restart
    * @param memoryBudget how many bytes of sections not pinned each world keeps in memory
    * @param builderThreads how many threads build sections from chunks that arrive later
    * @param log where a write that fails is told
@@ -129,17 +135,50 @@ public final class RegionStores implements AutoCloseable {
         world.key(),
         key -> {
           RegionSpec<MinecraftChunk, RegionClass> spec = MinecraftTerrain.spec(world);
+          Path directory = root == null ? null : directory(root, key);
+          if (root != null && directory == null) {
+            log.warn("The regions of {} are kept in memory only: its key names no folder", key);
+          }
           return new RegionStore<>(
               spec,
               memoryBudget,
-              root == null ? null : new RegionFiles(directory(key), spec, world.seed()),
+              directory == null
+                  ? RegionStorage.NONE
+                  : new RegionFiles(directory, spec, world.seed()),
               disk,
               threads);
         });
   }
 
-  private Path directory(String worldKey) {
-    return root.resolve(RegionFiles.directoryName(worldKey));
+  /**
+   * Returns where a world's files go: its key's namespace, then its path, as the game keeps a
+   * dimension's own data. {@code minecraft:the_nether} is {@code minecraft/the_nether}, so no two
+   * keys share a folder. A key without a namespace is in {@code minecraft}'s, as the game reads it.
+   *
+   * @param root the directory every world's folder is in
+   * @param worldKey the world's key
+   * @return the world's directory, or {@code null} if its key is not one the game allows, such as
+   *     one with a {@code ..} in its path, which would name a folder outside its own
+   */
+  public static @Nullable Path directory(Path root, String worldKey) {
+    int colon = worldKey.indexOf(':');
+    String namespace = colon < 0 ? "minecraft" : worldKey.substring(0, colon);
+    String[] path = worldKey.substring(colon + 1).split("/", -1);
+    if (!part(namespace)) {
+      return null;
+    }
+    Path directory = root.resolve(namespace);
+    for (String part : path) {
+      if (!part(part)) {
+        return null;
+      }
+      directory = directory.resolve(part);
+    }
+    return directory;
+  }
+
+  private static boolean part(String part) {
+    return KEY_PART.matcher(part).matches() && !part.equals(".") && !part.equals("..");
   }
 
   /**
@@ -265,14 +304,15 @@ public final class RegionStores implements AutoCloseable {
     stores.compute(
         worldKey,
         (key, store) -> {
+          Path directory = root == null ? null : directory(root, key);
           if (store != null) {
             deleting.add(store.delete());
-          } else if (root != null) {
+          } else if (directory != null) {
             deleting.add(
                 CompletableFuture.runAsync(
                     () -> {
                       try {
-                        RegionFiles.delete(directory(key));
+                        RegionFiles.delete(directory);
                       } catch (IOException failed) {
                         throw new UncheckedIOException(failed);
                       }

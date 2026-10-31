@@ -15,12 +15,12 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -75,12 +75,12 @@ import org.jetbrains.annotations.Nullable;
  * <p>Thread-safe by being synchronized. {@link RegionStore} calls it from one disk thread, so the
  * lock is never contended; it is there so that nothing else has to know that.
  */
-public final class RegionFiles {
+public final class RegionFiles implements RegionStorage {
 
   private static final int MAGIC = 0x43524733; // "CRG3"
 
   /** The layout of a file and of a section record. Bump it with any change to either. */
-  static final int FORMAT_VERSION = 5;
+  static final int FORMAT_VERSION = 1;
 
   /** Sections a file holds along each axis. */
   static final int SPAN = 16;
@@ -90,14 +90,28 @@ public final class RegionFiles {
 
   private static final int SLOTS = SPAN * SPAN * SPAN;
 
-  /**
-   * Bytes before the slots: magic, two versions, the classes, the detour, the shift, the
-   * fingerprint and the bounds.
-   */
-  private static final int PREAMBLE = 4 + 4 + 4 + 4 + 8 + 4 + 8 + 6 * 4;
+  /** Bytes in the header before the slots, as {@link Open#reset} writes them. */
+  private static final int PREAMBLE =
+      Integer.BYTES // magic
+          + Integer.BYTES // format version
+          + Integer.BYTES // rules version
+          + Integer.BYTES // classes
+          + Double.BYTES // detour ratio
+          + Integer.BYTES // section shift
+          + Long.BYTES // fingerprint
+          + DomainBounds.AXES * 2 * Integer.BYTES; // bounds, a min and a max per axis
+
+  /** Bytes a slot takes: its first sector and its length. */
+  private static final int SLOT_BYTES = 2 * Integer.BYTES;
+
+  /** Bytes before a record's deflated section: its length and its checksum. */
+  private static final int RECORD_HEADER = 2 * Integer.BYTES;
+
+  /** Bytes the deflater is buffered by, either way. */
+  private static final int BUFFER = 4096;
 
   /** Sectors the header takes, slots included. */
-  static final int HEADER_SECTORS = (PREAMBLE + SLOTS * 8 + SECTOR - 1) / SECTOR;
+  static final int HEADER_SECTORS = (PREAMBLE + SLOTS * SLOT_BYTES + SECTOR - 1) / SECTOR;
 
   /** Files kept open: a search reads the sections of a few files one after another. */
   private static final int OPEN_FILES = 8;
@@ -150,13 +164,13 @@ public final class RegionFiles {
   }
 
   /**
-   * Returns a directory name for a domain key, safe on any file system.
+   * Returns {@code true}: what is written here is read back.
    *
-   * @param domainKey the domain's key, such as a namespaced domain key
-   * @return the directory name
+   * @return {@code true}
    */
-  public static String directoryName(String domainKey) {
-    return domainKey.replaceAll("[^A-Za-z0-9._-]", "_");
+  @Override
+  public boolean keeps() {
+    return true;
   }
 
   /**
@@ -168,6 +182,7 @@ public final class RegionFiles {
    * @return the section, or {@code null}
    * @throws IOException if the file cannot be read at all
    */
+  @Override
   public synchronized @Nullable RegionSection read(int sectionX, int sectionY, int sectionZ)
       throws IOException {
     Open file = open(fileKey(sectionX, sectionY, sectionZ), false);
@@ -180,7 +195,9 @@ public final class RegionFiles {
     if (first == 0 && length < 0) {
       return RegionSection.whole(spec, sectionX, sectionY, sectionZ, length);
     }
-    if (first == 0 || length <= 8 || (long) first * SECTOR + length > file.handle.length()) {
+    if (first == 0
+        || length <= RECORD_HEADER
+        || (long) first * SECTOR + length > file.handle.length()) {
       return null;
     }
     byte[] record = new byte[length];
@@ -192,8 +209,8 @@ public final class RegionFiles {
     int stored = in.readInt();
     int checksum = in.readInt();
     CRC32 crc = new CRC32();
-    crc.update(record, 8, length - 8);
-    if (stored != length - 8 || (int) crc.getValue() != checksum) {
+    crc.update(record, RECORD_HEADER, length - RECORD_HEADER);
+    if (stored != length - RECORD_HEADER || (int) crc.getValue() != checksum) {
       return null; // torn by a crash: build it again
     }
     try {
@@ -216,6 +233,7 @@ public final class RegionFiles {
    * @param removed the sections to remove, by {@link RegionSection#key}
    * @throws IOException if a file cannot be written; sections already written stay written
    */
+  @Override
   public synchronized void write(Collection<RegionSection> sections, Collection<Long> removed)
       throws IOException {
     for (long key : removed) {
@@ -254,6 +272,7 @@ public final class RegionFiles {
    *
    * @return the byte count
    */
+  @Override
   public synchronized long bytesRead() {
     return bytesRead;
   }
@@ -263,6 +282,7 @@ public final class RegionFiles {
    *
    * @return the byte count
    */
+  @Override
   public synchronized long bytesWritten() {
     return bytesWritten;
   }
@@ -272,6 +292,7 @@ public final class RegionFiles {
    *
    * @throws IOException if one cannot be closed
    */
+  @Override
   public synchronized void close() throws IOException {
     for (Open file : open.values()) {
       file.handle.close();
@@ -284,26 +305,36 @@ public final class RegionFiles {
    *
    * @throws IOException if one cannot be deleted
    */
+  @Override
   public synchronized void delete() throws IOException {
     close();
     delete(directory);
   }
 
   /**
-   * Deletes a domain's files and the directory they are in, if there are any.
+   * Deletes a domain's files, and the directory they are in if that leaves it empty.
+   *
+   * <p>Only its own files: a directory can hold another's, as {@code minecraft/overworld} holds
+   * {@code minecraft/overworld/mine}, and clearing one domain must not clear the other.
    *
    * @param directory the domain's directory
    * @throws IOException if one cannot be deleted
    */
   public static void delete(Path directory) throws IOException {
-    if (!Files.exists(directory)) {
+    if (!Files.isDirectory(directory)) {
       return;
     }
-    try (Stream<Path> paths = Files.walk(directory)) {
-      for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
-        Files.delete(path);
+    try (DirectoryStream<Path> files = Files.newDirectoryStream(directory, "r.*.crg")) {
+      for (Path file : files) {
+        Files.delete(file);
       }
     }
+    try (Stream<Path> left = Files.list(directory)) {
+      if (left.findAny().isPresent()) {
+        return;
+      }
+    }
+    Files.delete(directory);
   }
 
   /**
@@ -342,22 +373,22 @@ public final class RegionFiles {
   }
 
   private byte[] encode(RegionSection section) throws IOException {
-    ByteArrayOutputStream bytes = new ByteArrayOutputStream(1024);
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream(SECTOR);
     // Room for the length and checksum, filled in once the body is known.
-    bytes.write(new byte[8]);
+    bytes.write(new byte[RECORD_HEADER]);
     deflater.reset();
     // Buffered: a record is written a byte or a short at a time, and the deflater, unbuffered,
     // would be called for each.
     try (DataOutputStream out =
         new DataOutputStream(
-            new BufferedOutputStream(new DeflaterOutputStream(bytes, deflater, 4096), 4096))) {
+            new BufferedOutputStream(new DeflaterOutputStream(bytes, deflater, BUFFER), BUFFER))) {
       section.write(out);
     }
     byte[] record = bytes.toByteArray();
     CRC32 crc = new CRC32();
-    crc.update(record, 8, record.length - 8);
-    writeInt(record, 0, record.length - 8);
-    writeInt(record, 4, (int) crc.getValue());
+    crc.update(record, RECORD_HEADER, record.length - RECORD_HEADER);
+    writeInt(record, 0, record.length - RECORD_HEADER);
+    writeInt(record, Integer.BYTES, (int) crc.getValue());
     return record;
   }
 
@@ -368,8 +399,10 @@ public final class RegionFiles {
         new DataInputStream(
             new BufferedInputStream(
                 new InflaterInputStream(
-                    new ByteArrayInputStream(record, 8, record.length - 8), inflater, 4096),
-                4096))) {
+                    new ByteArrayInputStream(record, RECORD_HEADER, record.length - RECORD_HEADER),
+                    inflater,
+                    BUFFER),
+                BUFFER))) {
       return RegionSection.read(in, spec);
     }
   }
@@ -487,7 +520,7 @@ public final class RegionFiles {
         used.clear(first[slot], first[slot] + sectors(length[slot]));
       }
       setSlot(slot, 0, code);
-      return 8;
+      return SLOT_BYTES;
     }
 
     /** Stores a record in a slot, returning how many bytes were written. */
@@ -514,7 +547,7 @@ public final class RegionFiles {
       // The slot last. A record that moved leaves the old one in reach until then; one written
       // over its old sectors fails its checksum if torn, and is built again.
       setSlot(slot, at, record.length);
-      return (long) needed * SECTOR + 8;
+      return (long) needed * SECTOR + SLOT_BYTES;
     }
 
     /** Removes a slot's section, giving its sectors back. */
@@ -526,13 +559,13 @@ public final class RegionFiles {
         used.clear(first[slot], first[slot] + sectors(length[slot]));
       }
       setSlot(slot, 0, 0);
-      bytesWritten += 8;
+      bytesWritten += SLOT_BYTES;
     }
 
     private void setSlot(int slot, int at, int bytes) throws IOException {
       first[slot] = at;
       length[slot] = bytes;
-      handle.seek(PREAMBLE + slot * 8L);
+      handle.seek(PREAMBLE + (long) slot * SLOT_BYTES);
       handle.writeInt(at);
       handle.writeInt(bytes);
     }

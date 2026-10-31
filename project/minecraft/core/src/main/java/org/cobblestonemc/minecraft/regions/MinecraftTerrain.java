@@ -50,7 +50,7 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk, Reg
   }
 
   /** The version of these rules; see {@link RegionTerrain#version()}. */
-  public static final int VERSION = 8;
+  public static final int VERSION = 1;
 
   /** A chunk section is 16 blocks a side: {@code 1 << 4}. */
   private static final int SECTION_SHIFT = 4;

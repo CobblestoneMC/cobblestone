@@ -274,6 +274,19 @@ class RegionFilesTest {
   }
 
   @Test
+  void deletingADomainsFilesLeavesADomainInsideItsDirectory(@TempDir Path root) throws Exception {
+    RegionFiles outer = files(root);
+    RegionFiles inner = files(root.resolve("mine"));
+    outer.write(List.of(build(ToyWorld::hills, 0, GROUND, 0)), List.of());
+    inner.write(List.of(build(ToyWorld::hills, 0, GROUND, 0)), List.of());
+    inner.close();
+
+    outer.delete();
+    assertNull(files(root).read(0, GROUND, 0));
+    assertNotNull(files(root.resolve("mine")).read(0, GROUND, 0), "another domain's");
+  }
+
+  @Test
   void aFileThatDoesNotMatchIsDeletedOnceOpened(@TempDir Path root) throws Exception {
     RegionFiles files = files(root);
     files.write(List.of(build(ToyWorld::hills, 0, GROUND, 0)), List.of());

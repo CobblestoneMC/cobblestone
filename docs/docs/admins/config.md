@@ -150,8 +150,9 @@ shares them between every search until a block in that cube changes.
 | `search.regions.heuristic_weight` | `1.7` | live |
 
 - **`persist`**: Keep regions on disk, so a restart does not start from nothing: under
-  `plugins/Cobblestone/regions/` on Paper and `cobblestone/regions/` in the server folder on Sponge.
-  A few kilobytes per chunk's worth of terrain, only where searches went. A world's regions are
+  `plugins/Cobblestone/regions/` on Paper and `cobblestone/regions/` in the server folder on Sponge,
+  a folder per world by its key, as the world's own data is kept: `minecraft:the_nether` in
+  `regions/minecraft/the_nether/`. A few kilobytes per chunk's worth of terrain, only where searches went. A world's regions are
   built again from scratch if its seed or height changes.
 - **`memory`**: Memory each world's regions may use, in megabytes, least recently used dropped
   first and read back from disk when needed. The terrain within about 70 blocks of each navigating
