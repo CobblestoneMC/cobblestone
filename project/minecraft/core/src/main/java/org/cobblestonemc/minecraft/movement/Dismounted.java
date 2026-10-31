@@ -104,6 +104,15 @@ final class Dismounted {
           }
         }
       }
+      if (can.swim() && !standable && !stepUp) {
+        // Off the edge and one block down into water, as off an ice floe or a dock: a fall of one
+        // block is a step, and the step down onto ground needs ground under it.
+        Cell below = from.plus(dx, -1, dz);
+        if (view.at(below).isWater() && Geometry.bodyFits(view, level)) {
+          edges.add(
+              below, MovementCosts.SWIM * MovementCosts.DIAGONAL, MinecraftStepType.SWIM, state);
+        }
+      }
       if (can.climb()) {
         if (view.at(level).isClimbable()) {
           edges.add(level, MovementCosts.CLIMB, MinecraftStepType.CLIMB, state);

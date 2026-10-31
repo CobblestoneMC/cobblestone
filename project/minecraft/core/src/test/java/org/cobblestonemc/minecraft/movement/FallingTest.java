@@ -63,6 +63,35 @@ class FallingTest {
   }
 
   @Test
+  void aOneBlockDropIntoWaterIsSwum() {
+    // Player stands on ice at (0,4,0); to the east the water's surface is a block lower.
+    TestWorld world = iceBesideWater();
+    Movement<MinecraftStepPayload> entering =
+        TestMovements.from(walker, world, new Cell(0, 5, 0)).to(new Cell(1, 4, 0));
+
+    assertEquals(MinecraftStepType.SWIM, entering.payload().stepType());
+    assertEquals(MovementCosts.SWIM * MovementCosts.DIAGONAL, entering.cost(), 1e-9);
+  }
+
+  @Test
+  void excludingSwimmingKeepsAPlayerOutOfTheWaterBelow() {
+    MinecraftMovementBehavior noSwim =
+        MinecraftMovementBehavior.forPlayer(
+            TestWorld.CHUNKS, player, Set.of(MinecraftStepType.SWIM));
+    assertFalse(
+        TestMovements.from(noSwim, iceBesideWater(), new Cell(0, 5, 0)).reaches(new Cell(1, 4, 0)));
+  }
+
+  private static TestWorld iceBesideWater() {
+    return TestWorld.builder("w")
+        .set(0, 4, 0, TestBlocks.ice())
+        .set(1, 4, 0, TestBlocks.water())
+        .set(1, 3, 0, TestBlocks.water())
+        .set(1, 2, 0, TestBlocks.solid())
+        .build();
+  }
+
+  @Test
   void excludingFallsLeavesTheShaftUnused() {
     TestWorld world =
         TestWorld.builder("w")
