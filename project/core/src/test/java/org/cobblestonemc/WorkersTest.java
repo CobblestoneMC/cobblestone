@@ -73,6 +73,26 @@ class WorkersTest {
   }
 
   @Test
+  void aBusyLaneLetsAnotherLaneHaveItsThread() throws Exception {
+    List<String> ran = new CopyOnWriteArrayList<>();
+    CountDownLatch queued = new CountDownLatch(1);
+    CountDownLatch done = new CountDownLatch(1);
+    try (Workers workers = new Workers(1, 1)) {
+      Executor busy = workers.lane("regions:w");
+      Executor data = workers.lane("data");
+      // Held until every task is given, so the one IO thread sees the whole queue at once.
+      busy.execute(() -> awaitUninterruptibly(queued));
+      IntStream.range(0, 200).forEach(i -> busy.execute(() -> ran.add("busy")));
+      busy.execute(done::countDown);
+      data.execute(() -> ran.add("data"));
+      queued.countDown();
+      assertTrue(done.await(5, TimeUnit.SECONDS));
+    }
+    assertTrue(ran.indexOf("data") < 200, "the write waited for the whole lane: " + ran);
+    assertEquals(200, ran.stream().filter("busy"::equals).count());
+  }
+
+  @Test
   void aFailedTaskDoesNotStallItsLane() throws Exception {
     try (Workers workers = new Workers(1, 1)) {
       Executor lane = workers.lane("data");

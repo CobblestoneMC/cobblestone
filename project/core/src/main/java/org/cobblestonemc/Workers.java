@@ -213,11 +213,15 @@ public final class Workers implements AutoCloseable {
   /**
    * Work run one task at a time on a shared pool, in the order it was given.
    *
-   * <p>A lane holds a pool thread only while it has work, and keeps it until the work runs out, so
-   * a task given to a lane that is running never needs the pool again: once {@link #close} has
-   * begun, a busy lane still finishes.
+   * <p>A lane holds a pool thread only while it has work, and lets it go after every {@link #BATCH}
+   * tasks, going to the back of the pool's queue: a world's disk lane in the middle of a long
+   * search does not keep a write on another lane waiting for all of it. Once {@link #close} has
+   * begun, the pool takes nothing new, so a busy lane keeps its thread and still finishes.
    */
   private static final class Lane implements Executor {
+
+    /** How many tasks a lane runs before letting the other lanes have its thread. */
+    static final int BATCH = 16;
 
     private final Executor pool;
     private final ArrayDeque<Runnable> queue = new ArrayDeque<>();
@@ -258,7 +262,10 @@ public final class Workers implements AutoCloseable {
     }
 
     private void drain() {
-      while (true) {
+      for (int ran = 0; ; ran++) {
+        if (ran == BATCH && yielded()) {
+          return;
+        }
         Runnable next;
         synchronized (this) {
           next = abandoned ? null : queue.pollFirst();
@@ -275,6 +282,22 @@ public final class Workers implements AutoCloseable {
           Thread thread = Thread.currentThread();
           thread.getUncaughtExceptionHandler().uncaughtException(thread, failure);
         }
+      }
+    }
+
+    /** Whether this drain handed its work on to a fresh one behind the pool's other work. */
+    private boolean yielded() {
+      synchronized (this) {
+        if (abandoned || queue.isEmpty()) {
+          return false; // ends at the top of the loop, as it would have anyway
+        }
+      }
+      try {
+        // Still running: nothing given meanwhile starts a drain of its own.
+        pool.execute(this::drain);
+        return true;
+      } catch (RejectedExecutionException closing) {
+        return false;
       }
     }
   }
