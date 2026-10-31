@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
@@ -53,8 +52,8 @@ import org.jetbrains.annotations.NotNull;
 /**
  * The navigation menu on Paper: a double chest drawn from a {@link NavigationMenu}, whose clicks it
  * hands back to it. Nothing can be taken out of or put into the chest; every click is cancelled and
- * only read. A Bedrock player gets a {@linkplain PaperMenuForms form} instead, where the admin
- * allows it and Geyser or Floodgate is here to send one.
+ * only read. A Bedrock player gets a {@linkplain PaperMenuForms form} instead, where Floodgate is
+ * here to send one.
  */
 final class PaperNavigationMenus implements MenuPlatform<Player>, Listener {
 
@@ -63,9 +62,8 @@ final class PaperNavigationMenus implements MenuPlatform<Player>, Listener {
   private final Messages messages;
   private final NavigationMenus<Player> menus;
   private final PaperBedrock bedrock;
-  private final BooleanSupplier bedrockForms;
 
-  /** The Bedrock menu, or {@code null} without Geyser or Floodgate to send it. */
+  /** The Bedrock menu, or {@code null} without Floodgate to send it. */
   private final PaperMenuForms forms;
 
   PaperNavigationMenus(
@@ -76,7 +74,6 @@ final class PaperNavigationMenus implements MenuPlatform<Player>, Listener {
       Messages messages,
       Supplier<MenuSettings> settings,
       PaperBedrock bedrock,
-      BooleanSupplier bedrockForms,
       TripManager<Entity, PaperTripAgent, Location> trips,
       CobblestoneLogger log) {
     this.plugin = plugin;
@@ -86,10 +83,9 @@ final class PaperNavigationMenus implements MenuPlatform<Player>, Listener {
         new NavigationMenus<>(
             this, integrations::destinationProviders, recents, messages, settings, log);
     this.bedrock = bedrock;
-    this.bedrockForms = bedrockForms;
     this.forms =
-        bedrock.present()
-            ? new PaperMenuForms(plugin, bedrock, menus, trips, messages, settings)
+        bedrock instanceof PaperBedrock.Floodgate
+            ? new PaperMenuForms(plugin, bedrock, menus, trips, messages)
             : null;
   }
 
@@ -100,7 +96,7 @@ final class PaperNavigationMenus implements MenuPlatform<Player>, Listener {
    */
   void open(Player player) {
     NavigationMenu menu = menus.menu(player);
-    if (forms != null && bedrockForms.getAsBoolean() && bedrock.isBedrock(player.getUniqueId())) {
+    if (forms != null && bedrock.isBedrock(player.getUniqueId())) {
       forms.show(player, menu);
       return;
     }

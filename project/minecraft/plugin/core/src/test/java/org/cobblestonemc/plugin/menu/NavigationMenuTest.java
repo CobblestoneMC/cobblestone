@@ -340,32 +340,22 @@ class NavigationMenuTest {
             permission -> true,
             address -> true);
 
-    List<MenuButton> top = menu.list(USABLE);
+    List<Component> top = menu.list(USABLE);
     assertTrue(menu.atTop());
     assertEquals(42, top.size(), "recents, then the block and all 40 places");
-    assertEquals("Recents »", plain(top.getFirst().name()));
-    assertEquals(List.of(Icon.item("minecraft:clock")), top.getFirst().pictures());
-    assertEquals("block", plain(top.get(1).name()));
-    assertEquals("place-0", plain(top.get(2).name()));
-    assertTrue(top.get(2).detail().isEmpty(), "no hint to click a button");
     assertEquals(
-        List.of(Icon.item("minecraft:ender_eye"), Icon.item("minecraft:ender_eye")),
-        top.get(2).pictures(),
-        "its own item, then the fallback");
-    assertEquals("place-39", plain(top.getLast().name()), "past where a chest would page");
+        List.of("Recents »", "block", "place-0"), names(top.subList(0, 3)), "no hints to click");
+    assertEquals("place-39", plain(top.getLast()), "past where a chest would page");
     assertInstanceOf(MenuAction.Navigate.class, menu.choose(41));
     assertInstanceOf(MenuAction.None.class, menu.choose(42));
 
     assertInstanceOf(MenuAction.Redraw.class, menu.choose(0));
-    List<MenuButton> recents = menu.list(USABLE);
     assertFalse(menu.atTop());
-    assertEquals("Recents", plain(menu.breadcrumb().orElseThrow()));
     assertEquals(
-        List.of("« Back", "place-7", "block"),
-        recents.stream().map(button -> plain(button.name())).toList());
-    assertTrue(recents.get(0).pictures().isEmpty(), "back has no picture");
-    assertTrue(recents.get(1).detail().isEmpty());
-    assertEquals("12", plain(recents.get(2).detail().orElseThrow()), "the options it was given");
+        List.of("« Back", "place-7", "block 12"),
+        names(menu.list(USABLE)),
+        "a recent is named with the options it was given");
+    assertEquals("Recents", plain(menu.breadcrumb().orElseThrow()));
     MenuAction.Navigate again = assertInstanceOf(MenuAction.Navigate.class, menu.choose(2));
     assertEquals(List.of("12"), again.destination().optionTokens());
 
@@ -375,27 +365,26 @@ class NavigationMenuTest {
   }
 
   @Test
-  void aListBelowTheTopStartsWithBack() {
+  void aListSpreadsCobblestonesOwnEntriesOverTheTopLevel() {
     NavigationMenu menu =
         menu(
             roots(
                 Map.of(
-                    "towny", level().destination("spawn", destination()),
-                    "essentials", level().destination("warp", destination()))));
-    List<MenuButton> top = menu.list(USABLE);
-    assertTrue(menu.breadcrumb().isEmpty());
-    assertEquals("essentials »", plain(top.getFirst().name()));
-    assertEquals(Icon.item("minecraft:chest"), top.getFirst().pictures().getLast());
+                    "towny",
+                    level().destination("spawn", destination()),
+                    "cobblestone",
+                    level()
+                        .destination("death", destination())
+                        .subtree(
+                            "player", () -> level().destination("Steve", destination()).build()))));
+    assertEquals(List.of("death", "player »", "towny »"), names(menu.list(USABLE)));
 
     assertInstanceOf(MenuAction.Redraw.class, menu.choose(1));
-    List<MenuButton> towny = menu.list(USABLE);
     assertFalse(menu.atTop());
-    assertEquals("towny", plain(menu.breadcrumb().orElseThrow()));
-    assertEquals(
-        List.of("« Back", "spawn"), towny.stream().map(button -> plain(button.name())).toList());
-    assertTrue(towny.getFirst().pictures().isEmpty());
+    assertEquals("cobblestone › player", plain(menu.breadcrumb().orElseThrow()));
+    assertEquals(List.of("« Back", "Steve"), names(menu.list(USABLE)));
     assertInstanceOf(MenuAction.Redraw.class, menu.choose(0));
-    assertEquals(2, menu.list(USABLE).size(), "back on top");
+    assertEquals(List.of("death", "player »", "towny »"), names(menu.list(USABLE)), "back on top");
   }
 
   @Test
@@ -425,16 +414,10 @@ class NavigationMenuTest {
     Predicate<DestinationResolver.Resolved<NavigationTarget>> notSurface =
         pick -> !pick.address().getLast().equals("surface");
 
-    List<MenuButton> top = menu.list(notSurface);
     assertEquals(
-        List.of("cobblestone »"),
-        top.stream().map(button -> plain(button.name())).toList(),
-        "no recents button, and no towny, with nothing usable in either");
-    menu.choose(0);
-    assertEquals(
-        List.of("« Back", "block", "spawn"),
-        menu.list(notSurface).stream().map(button -> plain(button.name())).toList(),
-        "a destination that asks first stays; caves holds only the surface");
+        List.of("block", "spawn"),
+        names(menu.list(notSurface)),
+        "no recents, caves or towny, with nothing usable in them; one that asks first stays");
     assertFalse(menu.empty());
   }
 
@@ -490,6 +473,10 @@ class NavigationMenuTest {
         () -> {
           throw new AssertionError("built a destination nobody picked");
         });
+  }
+
+  private static List<String> names(List<Component> names) {
+    return names.stream().map(NavigationMenuTest::plain).toList();
   }
 
   private static String name(MenuItem item) {

@@ -104,9 +104,9 @@ public final class NavigationMenus<P> {
    *
    * @param player the player
    * @param menu their menu
-   * @return the buttons, in order
+   * @return the buttons' names, in order
    */
-  public List<MenuButton> list(P player, NavigationMenu menu) {
+  public List<Component> list(P player, NavigationMenu menu) {
     return menu.list(pick -> build(player, pick) instanceof Validity.Valid<NavigationTarget>);
   }
 

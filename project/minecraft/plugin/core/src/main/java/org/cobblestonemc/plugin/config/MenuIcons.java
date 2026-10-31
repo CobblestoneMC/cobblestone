@@ -38,9 +38,6 @@ public final class MenuIcons {
   /** The button that closes the menu. */
   public static final String CLOSE = "close";
 
-  /** The button on Bedrock that opens the player's recent destinations. */
-  public static final String RECENTS = "recents";
-
   /** The item at the top that says where in the tree the player is. */
   public static final String BREADCRUMB = "breadcrumb";
 
@@ -119,10 +116,6 @@ public final class MenuIcons {
     defaults.put(BACK, new Default("minecraft:arrow", "The button that goes back a level."));
     defaults.put(PAGE, new Default("minecraft:paper", "The buttons that turn the page."));
     defaults.put(CLOSE, new Default("minecraft:barrier", "The button that closes the menu."));
-    defaults.put(
-        RECENTS,
-        new Default(
-            "minecraft:clock", "The button that opens your recent destinations, on Bedrock."));
     defaults.put(
         BREADCRUMB,
         new Default(

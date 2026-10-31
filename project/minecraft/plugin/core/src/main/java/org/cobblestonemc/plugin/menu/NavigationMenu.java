@@ -79,6 +79,9 @@ public final class NavigationMenu {
   /** The first page of the top level: two rows of entries beneath the recents and a gap. */
   private static final int RECENTS_PAGE = 2 * MenuLayout.CONTENT_COLUMNS;
 
+  /** Cobblestone's own key on the top level, whose entries a list spreads out. */
+  private static final String OWN = "cobblestone";
+
   /** Treats every destination as usable: the chest's test, which refuses one only once picked. */
   private static final Predicate<DestinationResolver.Resolved<NavigationTarget>> ANY = pick -> true;
 
@@ -245,60 +248,69 @@ public final class NavigationMenu {
 
   /**
    * What the menu shows right now as a list of buttons, for a platform that scrolls rather than
-   * pages, such as a Bedrock form. Unlike the chest, it shows only what would work to press: a
-   * destination the player can't go to right now (the surface, while they are already under the
-   * sky) is left out rather than refused once pressed, and so is a level with nothing usable in it.
+   * pages, such as a Bedrock form: each button only a name. Unlike the chest, it shows only what
+   * would work to press: a destination the player can't go to right now (the surface, while they
+   * are already under the sky) is left out rather than refused once pressed, and so is a level with
+   * nothing usable in it.
    *
-   * <p>Below the top level, it starts with a back button, which has no picture. The top level
-   * starts with a button that opens the player's recent destinations, if any are usable; the rest
-   * is the whole level, unpaged. Nothing closes the menu; the platform's own list has a way to.
+   * <p>Below the top level, it starts with a back button. The top level starts with a button that
+   * opens the player's recent destinations, if any are usable; the rest is the whole level,
+   * unpaged, with Cobblestone's own entries spread out among the other owners rather than behind
+   * its own button. Nothing closes the menu; the platform's own list has a way to.
    *
    * @param usable whether a destination, with its options parsed, could be gone to right now; it
    *     may build the destination to find out
-   * @return the buttons, in order
+   * @return the buttons' names, in order
    */
-  public List<MenuButton> list(Predicate<DestinationResolver.Resolved<NavigationTarget>> usable) {
+  public List<Component> list(Predicate<DestinationResolver.Resolved<NavigationTarget>> usable) {
     choices.clear();
-    List<MenuButton> buttons = new ArrayList<>();
+    List<Component> buttons = new ArrayList<>();
     if (recentsOpen) {
       back(buttons, () -> recentsOpen = false);
       for (Entry entry : recents) {
         if (usable(entry.address, entry.destination, entry.optionTokens, usable)) {
           // What sets a recent apart is the options it was given, if any.
-          Optional<Component> options =
-              entry.optionTokens.isEmpty()
-                  ? Optional.empty()
-                  : Optional.of(line(Component.text(String.join(" ", entry.optionTokens))));
           Choice choice = choice(entry, false, false);
-          add(buttons, button(choice, options), choice.click);
+          Component name =
+              entry.optionTokens.isEmpty()
+                  ? choice.item.name()
+                  : choice
+                      .item
+                      .name()
+                      .append(line(Component.text(" " + String.join(" ", entry.optionTokens))));
+          add(buttons, name, choice.click);
         }
       }
       listed = buttons.size() - 1;
       return buttons;
     }
     int backs = 0;
+    List<Entry> entries = levels.peek().entries;
     if (levels.size() > 1) {
       back(buttons, levels::pop);
       backs = 1;
-    } else if (recents.stream()
-        .anyMatch(entry -> usable(entry.address, entry.destination, entry.optionTokens, usable))) {
-      Component label =
-          messages
-              .renderBare(locale, CobblestoneMessages.MENU_RECENTS)
-              .append(Component.text(OPENS, CobblestoneColors.PRIMARY));
-      add(
-          buttons,
-          new MenuButton(name(label), Optional.empty(), List.of(icon(MenuIcons.RECENTS))),
-          () -> {
-            recentsOpen = true;
-            pending = new MenuAction.Redraw();
-          });
+    } else {
+      if (recents.stream()
+          .anyMatch(
+              entry -> usable(entry.address, entry.destination, entry.optionTokens, usable))) {
+        add(
+            buttons,
+            name(
+                messages
+                    .renderBare(locale, CobblestoneMessages.MENU_RECENTS)
+                    .append(Component.text(OPENS, CobblestoneColors.PRIMARY))),
+            () -> {
+              recentsOpen = true;
+              pending = new MenuAction.Redraw();
+            });
+      }
+      entries = spread(entries);
     }
-    for (Entry entry : levels.peek().entries) {
+    for (Entry entry : entries) {
       Entry shown = shown(entry, usable);
       if (shown != null) {
         Choice choice = choice(shown, false, false);
-        add(buttons, button(choice, choice.item.lore().stream().findFirst()), choice.click);
+        add(buttons, choice.item.name(), choice.click);
       }
     }
     listed = buttons.size() - backs;
@@ -592,23 +604,35 @@ public final class NavigationMenu {
     clicks.put(slot, choice.click);
   }
 
-  private void add(List<MenuButton> buttons, MenuButton button, Runnable press) {
-    buttons.add(button);
+  private void add(List<Component> buttons, Component name, Runnable press) {
+    buttons.add(name);
     choices.add(press);
   }
 
-  /** An entry's button: its item's name and picture, falling back to the menu's own item. */
-  private static MenuButton button(Choice choice, Optional<Component> detail) {
-    return new MenuButton(choice.item.name(), detail, List.of(choice.item.icon(), choice.fallback));
+  /**
+   * The top level as a list shows it: Cobblestone's own entries spread out among the other owners,
+   * all in order, since on a list one more button to press is one more screen to wait for.
+   */
+  private List<Entry> spread(List<Entry> top) {
+    List<Entry> spread = new ArrayList<>();
+    for (Entry entry : top) {
+      if (entry.key.equals(OWN) && entry.destination == null && entry.subtree != null) {
+        spread.addAll(open(entry).entries);
+      } else {
+        spread.add(entry);
+      }
+    }
+    spread.sort(Entry.ORDER);
+    return spread;
   }
 
-  /** The back button: no picture, so it stands apart from the entries. */
-  private void back(List<MenuButton> buttons, Runnable back) {
-    Component label =
-        Component.text("« ").append(messages.renderBare(locale, CobblestoneMessages.MENU_BACK));
+  /** The back button. */
+  private void back(List<Component> buttons, Runnable back) {
     add(
         buttons,
-        new MenuButton(name(label), Optional.empty(), List.of()),
+        name(
+            Component.text("« ")
+                .append(messages.renderBare(locale, CobblestoneMessages.MENU_BACK))),
         () -> {
           back.run();
           pending = new MenuAction.Redraw();
@@ -627,14 +651,15 @@ public final class NavigationMenu {
     Component label = entry.display.label().orElseGet(() -> Component.text(entry.key));
     if (hints && refusal != null && entry.equals(picked)) {
       // Clicking it again tries again.
-      Icon refused = icon(MenuIcons.CLOSE);
       return new Choice(
-          new MenuItem(refused, name(label), List.of(line(refusal))),
-          refused,
+          new MenuItem(icon(MenuIcons.CLOSE), name(label), List.of(line(refusal))),
           () -> pick(entry, label));
     }
-    Icon fallback = icon(opens ? MenuIcons.FOLDER : MenuIcons.DESTINATION);
-    Icon icon = entry.display.icon().orElse(fallback);
+    Icon icon =
+        entry
+            .display
+            .icon()
+            .orElseGet(() -> icon(opens ? MenuIcons.FOLDER : MenuIcons.DESTINATION));
     Component name =
         opens ? name(label.append(Component.text(OPENS, CobblestoneColors.PRIMARY))) : name(label);
 
@@ -670,7 +695,7 @@ public final class NavigationMenu {
       }
       click = () -> pick(entry, label);
     }
-    return new Choice(new MenuItem(icon, name, lore), fallback, click);
+    return new Choice(new MenuItem(icon, name, lore), click);
   }
 
   private void pick(Entry entry, Component label) {
@@ -743,8 +768,8 @@ public final class NavigationMenu {
     static final Comparator<Entry> ORDER = Comparator.comparing(Entry::key, NaturalOrder.INSTANCE);
   }
 
-  /** An entry's item, the menu's own item for its kind, and what pressing it does. */
-  private record Choice(MenuItem item, Icon fallback, Runnable click) {}
+  /** An entry's item, and what pressing it does. */
+  private record Choice(MenuItem item, Runnable click) {}
 
   /** One level of the tree, as the player walked into it, and the page of it they are on. */
   private static final class Level {

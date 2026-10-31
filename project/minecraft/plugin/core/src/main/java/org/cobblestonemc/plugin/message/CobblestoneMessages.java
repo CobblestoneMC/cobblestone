@@ -271,9 +271,6 @@ public final class CobblestoneMessages {
   /** The Bedrock menu's button that stops a running trip ({@code {0}} = the trip's label). */
   public static final Message1 MENU_STOP = Message1.info("menu.stop");
 
-  /** The Bedrock menu's button that lists every running trip to stop one. */
-  public static final Message0 MENU_STOP_ANY = Message0.info("menu.stop_any");
-
   /** The Bedrock menu's button, and heading, for the recent destinations. */
   public static final Message0 MENU_RECENTS = Message0.info("menu.recents");
 
