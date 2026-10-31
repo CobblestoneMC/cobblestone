@@ -52,8 +52,8 @@ import org.jetbrains.annotations.NotNull;
 /**
  * The navigation menu on Paper: a double chest drawn from a {@link NavigationMenu}, whose clicks it
  * hands back to it. Nothing can be taken out of or put into the chest; every click is cancelled and
- * only read. A Bedrock player gets a {@linkplain PaperMenuForms form} instead, where Floodgate is
- * here to send one.
+ * only read. A Bedrock player gets a {@linkplain PaperMenuForms form} instead, where Geyser or
+ * Floodgate is here to send one.
  */
 final class PaperNavigationMenus implements MenuPlatform<Player>, Listener {
 
@@ -63,7 +63,7 @@ final class PaperNavigationMenus implements MenuPlatform<Player>, Listener {
   private final NavigationMenus<Player> menus;
   private final PaperBedrock bedrock;
 
-  /** The Bedrock menu, or {@code null} without Floodgate to send it. */
+  /** The Bedrock menu, or {@code null} without Geyser or Floodgate to send it. */
   private final PaperMenuForms forms;
 
   PaperNavigationMenus(
@@ -84,9 +84,9 @@ final class PaperNavigationMenus implements MenuPlatform<Player>, Listener {
             this, integrations::destinationProviders, recents, messages, settings, log);
     this.bedrock = bedrock;
     this.forms =
-        bedrock instanceof PaperBedrock.Floodgate
-            ? new PaperMenuForms(plugin, bedrock, menus, trips, messages)
-            : null;
+        bedrock instanceof PaperBedrock.None
+            ? null
+            : new PaperMenuForms(plugin, bedrock, menus, trips, messages);
   }
 
   /**

@@ -154,6 +154,9 @@ public final class ConfigKeys {
   /** Whether the navigation menu opens with the player's recently used destinations. Mutable. */
   public final ConfigKey<Boolean> menuRecents;
 
+  /** The emotes that open the navigation menu for a Bedrock player, by id. Mutable. */
+  public final ConfigKey<List<String>> menuBedrockEmotes;
+
   /**
    * The navigation menu's items for Cobblestone's own entries and its fallbacks, keyed by the names
    * in {@link MenuIcons}. Mutable.
@@ -580,6 +583,21 @@ public final class ConfigKeys {
                 """
                 Whether the menu opens with a row of the player's recently used destinations, so a
                 favorite is one click away. They are remembered until the server restarts.""")
+            .mutable()
+            .register();
+    this.menuBedrockEmotes =
+        manager
+            .key(
+                "menu.bedrock_emotes",
+                List.of("9a469a61-c83b-4ba9-b507-bdbe64430582"),
+                Codec.ofStringList())
+            .comment(
+                """
+                Emotes that open the menu for a player on Bedrock Edition, as though they had typed
+                /navigate on its own (so they need the same permission), since typing is a chore on
+                a phone or a console. Each is an emote's id; the default is "Simple Clap", one of
+                the four every Bedrock player starts with. Leave it empty to open the menu only by
+                command. Needs Geyser on this server: Geyser on a proxy cannot report emotes.""")
             .mutable()
             .register();
     manager.section(

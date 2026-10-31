@@ -35,8 +35,9 @@ dependencies {
     // Paper's Maven-resolver types, which live in paper-api.
     compileOnly(libs.paper.api)
     compileOnly(libs.adventure.api)
-    // Optional at runtime: with it, Bedrock players get the menu as a form (see PaperBedrock). It
-    // brings the Cumulus forms library.
+    // Optional at runtime: with either, Bedrock players get the menu as a form (see PaperBedrock),
+    // and with Geyser, an emote opens it. Each brings the Cumulus forms library.
+    compileOnly(libs.geyser.api)
     compileOnly(libs.floodgate.api)
 }
 

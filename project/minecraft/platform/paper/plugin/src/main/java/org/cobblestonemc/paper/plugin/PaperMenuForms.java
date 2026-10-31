@@ -37,7 +37,7 @@ import org.geysermc.cumulus.util.FormImage;
  * <p>While the player has trips running, the top level opens with a button to stop each, since a
  * Bedrock player has no label {@code Cancel} to hit.
  *
- * <p>Only loaded when Floodgate is here, since it builds Floodgate's forms.
+ * <p>Only loaded when Geyser or Floodgate is here, since it builds their forms.
  */
 final class PaperMenuForms {
 

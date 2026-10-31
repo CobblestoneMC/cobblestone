@@ -72,8 +72,8 @@ name, without extension, in the plugin's data folder.
 - **`holograms`**: Floats a label naming each trip over its trail (or the guide back to it), a
   few blocks ahead of the player, once they have stood still for a second; the labels go away as
   soon as they move. Hitting the red `Cancel` above a label cancels its trip, from any distance.
-  Bedrock players, who tap rather than aim, get no `Cancel`; on Paper with Floodgate, their
-  [menu](#menu) has a button to stop each trip instead.
+  Bedrock players, who tap rather than aim, get no `Cancel`; on Paper with Geyser or Floodgate,
+  their [menu](#menu) has a button to stop each trip instead.
   This is the default; a plugin starting a trip can turn its label on or off. Labels are entities.
   On Paper they are seen only by their player and never saved. On Sponge, whose API can't hide an
   entity from other players, **everyone nearby sees them** (only the owner's hit does anything);
@@ -209,6 +209,7 @@ group instead, use `cobblestone.navigate.cobblestone.death`.
 | `menu.title` | `<#4AA8FF>Navigation Menu` | live |
 | `menu.filler` | `minecraft:gray_stained_glass_pane` | live |
 | `menu.recents` | `true` | live |
+| `menu.bedrock_emotes` | Simple Clap | live |
 | `menu.icons.<name>` | see below | live |
 
 The navigation menu opens when a player types `/navigate` with no destination. It is a double chest
@@ -220,9 +221,14 @@ with nothing in it the player may pick, however deep, is left out.
 - **`title`**: The menu's title, in [MiniMessage](https://docs.advntr.dev/minimessage/format.html).
 - **`filler`**: The item in the border and the gap.
 - **`recents`**: Whether to show recent destinations. They are kept in memory until restart.
+- **`bedrock_emotes`**: Emotes, by id, that open the menu for a Bedrock player, as if they had typed
+  `/navigate` (so they need the same permission). The default is **Simple Clap**, one of the four
+  every Bedrock player starts with; leave it empty to open the menu only by command. Needs Geyser
+  on this server (Paper only): Geyser on a proxy cannot report emotes.
 
-On Paper with [Floodgate](https://geysermc.org/wiki/floodgate/), Bedrock players get the menu as a
-Bedrock form instead of a chest: a scrolling list of buttons, each just a name. It lists only what
+On Paper with [Geyser](https://geysermc.org) on the server, or
+[Floodgate](https://geysermc.org/wiki/floodgate/) for a Geyser on the proxy, Bedrock players get the
+menu as a Bedrock form instead of a chest: a scrolling list of buttons, each just a name. It lists only what
 would work to press: a destination the player can't use right now, such as `surface` while they
 are already under the sky, is left out, and so is a level with nothing usable in it. The top
 level starts with a button to stop each running trip, then a `Recents` button that opens their

@@ -54,8 +54,9 @@ The trail renders only the next segment of the route, brightest at the point to 
 ## The navigation menu
 
 Type `/nav` on its own to open a menu of everywhere you can go. `/nav -help` lists the flags
-`/nav` takes. On Bedrock (on a Paper server with Floodgate), the menu is a scrolling list of
-buttons rather than a chest, showing only what you can use right now. It starts with a button to
+`/nav` takes. On a Paper server with Geyser, Bedrock players can also open it without typing by
+doing the **Simple Clap** emote. On Bedrock, the menu is a scrolling list of buttons rather than a
+chest, showing only what you can use right now. It starts with a button to
 stop each trip you have running, and a **Recents** button for your recent destinations.
 
 - Items marked **»** open a further list. Others start navigating as soon as you click them.

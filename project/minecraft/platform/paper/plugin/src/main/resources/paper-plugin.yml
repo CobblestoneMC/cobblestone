@@ -8,10 +8,14 @@ loader: org.cobblestonemc.paper.plugin.CobblestonePaperLoader
 api-version: '1.21'
 folia-supported: true
 
-# Optional: with it, Bedrock players get the menu as a form. Joining its classpath lets Cobblestone
-# build Floodgate's forms.
+# Both optional: with either, Bedrock players get the menu as a form, and with Geyser, an emote
+# opens it. Joining their classpath lets Cobblestone use their APIs.
 dependencies:
   server:
+    Geyser-Spigot:
+      load: BEFORE
+      required: false
+      join-classpath: true
     floodgate:
       load: BEFORE
       required: false
