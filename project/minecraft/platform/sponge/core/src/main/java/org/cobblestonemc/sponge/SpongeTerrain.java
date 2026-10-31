@@ -29,7 +29,7 @@ public final class SpongeTerrain {
    * @return {@code true} if it is passable
    */
   public static boolean isPassable(BlockState state) {
-    return new SpongeBlock(state).isPassable();
+    return SpongeBlock.of(state).isPassable();
   }
 
   /**
@@ -41,7 +41,7 @@ public final class SpongeTerrain {
    * @return {@code true} if the change does not matter to the regions
    */
   public static boolean identicalClassification(BlockState before, BlockState after) {
-    return new SpongeBlock(before).identicalClassification(new SpongeBlock(after));
+    return SpongeBlock.of(before).identicalClassification(SpongeBlock.of(after));
   }
 
   /**
