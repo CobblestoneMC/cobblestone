@@ -203,6 +203,18 @@ Deletes all learned portal links. Links are relearned as players use portals.
 Cleared 42 discovered portal transitions.
 ```
 
+### `/cobblestone regions clear <world>`
+
+**Permission:** `cobblestone.admin.regions`
+
+Deletes a world's [region cache](config.md#searchregions), in memory and on disk. Searches build
+the regions again as they need them. Use it after changing the world's terrain in a way Cobblestone
+cannot see: editing it offline, with WorldEdit or `/fill`, or trimming chunks to be generated again.
+
+```
+Cleared the regions of minecraft:overworld; they are built again as searches need them.
+```
+
 ### `/cobblestone loglevel <level>`
 
 **Permission:** `cobblestone.admin.loglevel`

@@ -7,20 +7,33 @@
 
 package org.cobblestonemc.minecraft.regions;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.Workers;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.TestBlocks;
 import org.cobblestonemc.minecraft.TestWorld;
+import org.cobblestonemc.regions.RegionSection;
 import org.cobblestonemc.regions.RegionStore;
 import org.cobblestonemc.regions.TerrainSource;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
-/** Block changes are forgotten in batches, a delay after the first. */
+/** Block changes are forgotten in batches, a delay after the first; a world can be started over. */
 class RegionStoresTest {
 
   private static final Duration DELAY = Duration.ofMillis(200);
@@ -28,12 +41,51 @@ class RegionStoresTest {
   private static final TerrainSource<MinecraftChunk> ROCK =
       (chunkX, sectionY, chunkZ) -> FutureOr.of((x, y, z) -> TestBlocks.solid());
 
+  /** Every error logged. */
+  private final List<String> errors = new CopyOnWriteArrayList<>();
+
+  private final CobblestoneLogger log =
+      new CobblestoneLogger() {
+        @Override
+        public void trace(String message, Object... args) {}
+
+        @Override
+        public void debug(String message, Object... args) {}
+
+        @Override
+        public void info(String message, Object... args) {}
+
+        @Override
+        public void warn(String message, Object... args) {}
+
+        @Override
+        public void error(String message, Throwable throwable, Object... args) {
+          errors.add(message);
+        }
+      };
+
+  private final Workers workers = new Workers(1, 1);
+
+  @AfterEach
+  void closeWorkers() {
+    workers.close();
+  }
+
+  private RegionStores stores(Path root) {
+    return new RegionStores(
+        root,
+        Long.MAX_VALUE,
+        key -> workers.lane("regions:" + key),
+        workers.compute(),
+        workers.time(),
+        log,
+        DELAY);
+  }
+
   @Test
   void changesAreForgottenTogetherOnceTheDelayHasPassed() throws InterruptedException {
     TestWorld world = TestWorld.builder("w").build();
-    try (Workers workers = new Workers(1, 1)) {
-      RegionStores stores =
-          new RegionStores(Long.MAX_VALUE, workers.compute(), workers.time(), DELAY);
+    try (RegionStores stores = stores(null)) {
       RegionStore<MinecraftChunk, RegionClass> store = stores.of(world);
       store.section(0, 0, 0, ROCK);
 
@@ -53,5 +105,72 @@ class RegionStoresTest {
       Thread.sleep(DELAY.multipliedBy(3).toMillis());
       assertFalse(store.inMemory(0, 0, 0), "a later change starts a batch of its own");
     }
+  }
+
+  @Test
+  void clearingAWorldDeletesItsFilesAndStartsItAfresh(@TempDir Path root) {
+    TestWorld world = TestWorld.builder("minecraft:w").build();
+    try (RegionStores stores = stores(root)) {
+      RegionStore<MinecraftChunk, RegionClass> store = stores.of(world);
+      built(store, 0);
+      stores.flush("minecraft:w").join();
+      assertTrue(Files.exists(root.resolve("minecraft").resolve("w")));
+
+      stores.clear("minecraft:w").join();
+      assertFalse(Files.exists(root.resolve("minecraft").resolve("w")));
+      RegionStore<MinecraftChunk, RegionClass> afresh = stores.of(world);
+      assertNotSame(store, afresh);
+      assertFalse(afresh.inMemory(0, 0, 0));
+    }
+  }
+
+  @Test
+  void aWriteThatFailsIsLoggedOnceUntilItRecovers(@TempDir Path root) throws Exception {
+    TestWorld world = TestWorld.builder("w").build();
+    // A file where the world's namespace's directory has to go: nothing can be written under it.
+    Path blocked = Files.createFile(root.resolve("minecraft"));
+    try (RegionStores stores = stores(root)) {
+      RegionStore<MinecraftChunk, RegionClass> store = stores.of(world);
+      built(store, 0);
+      stores.flush().handle((done, failed) -> null).join();
+      stores.flush().handle((done, failed) -> null).join();
+      assertEquals(1, errors.size(), "once, not at every flush: " + errors);
+
+      Files.delete(blocked);
+      stores.flush().join();
+      built(store, 1);
+      stores.flush().handle((done, failed) -> null).join();
+      assertEquals(1, errors.size());
+    }
+  }
+
+  @Test
+  void aWorldsFilesAreUnderItsNamespaceThenItsPath(@TempDir Path root) {
+    assertEquals(
+        root.resolve("minecraft").resolve("the_nether"),
+        RegionStores.directory(root, "minecraft:the_nether"));
+    assertEquals(
+        root.resolve("towny").resolve("mines").resolve("deep"),
+        RegionStores.directory(root, "towny:mines/deep"));
+    assertEquals(root.resolve("minecraft").resolve("w"), RegionStores.directory(root, "w"));
+    assertNotEquals(
+        RegionStores.directory(root, "a_b:c"),
+        RegionStores.directory(root, "a:b_c"),
+        "an underscore is not a separator");
+  }
+
+  @Test
+  void aKeyThatWouldLeaveItsFolderNamesNone(@TempDir Path root) {
+    assertNull(RegionStores.directory(root, "minecraft:../outside"));
+    assertNull(RegionStores.directory(root, "..:w"));
+    assertNull(RegionStores.directory(root, "minecraft:a//b"));
+    assertNull(RegionStores.directory(root, "Minecraft:W"));
+  }
+
+  /** Builds a section of rock, waiting for it: with files, it is read for on the disk lane. */
+  private static void built(RegionStore<MinecraftChunk, RegionClass> store, int sectionX) {
+    CompletableFuture<RegionSection> done = new CompletableFuture<>();
+    store.section(sectionX, 0, 0, ROCK).whenReady(done::complete, Runnable::run);
+    done.join();
   }
 }

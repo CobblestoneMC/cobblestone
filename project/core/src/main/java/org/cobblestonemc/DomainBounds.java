@@ -32,6 +32,9 @@ public record DomainBounds(int minX, int maxX, int minY, int maxY, int minZ, int
   /** The Z axis. */
   public static final int Z = 2;
 
+  /** How many axes there are: {@link #X}, {@link #Y} and {@link #Z}. */
+  public static final int AXES = 3;
+
   /** Every cell there is: no axis bounded. */
   public static final DomainBounds UNBOUNDED =
       new DomainBounds(
