@@ -187,7 +187,8 @@ final class TownySearchModificationService implements SearchModificationService 
                   // from the player's own movement cache, which is built for wherever the player
                   // is standing, not for a house a thousand blocks away. canDestroy runs Towny's
                   // whole decision, event and all.
-                  future.complete(TownyActionEventExecutor.canDestroy(breaker, location, material, true));
+                  future.complete(
+                      TownyActionEventExecutor.canDestroy(breaker, location, material, true));
                 } catch (Throwable throwable) {
                   plugin
                       .getLogger()
