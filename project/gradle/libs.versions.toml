@@ -12,6 +12,9 @@ snakeyaml = "2.3"
 shadow = "9.0.0"
 h2 = "2.2.224"
 bstats = "3.2.1"
+# Geyser and Floodgate only publish snapshots.
+geyser = "2.9.5-SNAPSHOT"
+floodgate = "2.2.5-SNAPSHOT"
 
 [libraries]
 adventure-api = { module = "net.kyori:adventure-api", version.ref = "adventure" }
@@ -24,6 +27,8 @@ h2 = { module = "com.h2database:h2", version.ref = "h2" }
 bstats-base = { module = "org.bstats:bstats-base", version.ref = "bstats" }
 bstats-bukkit = { module = "org.bstats:bstats-bukkit", version.ref = "bstats" }
 bstats-sponge = { module = "org.bstats:bstats-sponge", version.ref = "bstats" }
+geyser-api = { module = "org.geysermc.geyser:api", version.ref = "geyser" }
+floodgate-api = { module = "org.geysermc.floodgate:api", version.ref = "floodgate" }
 
 [plugins]
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }

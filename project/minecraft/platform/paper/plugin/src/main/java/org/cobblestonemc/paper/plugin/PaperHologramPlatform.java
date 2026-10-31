@@ -25,9 +25,11 @@ import org.cobblestonemc.plugin.navigator.Vec3;
 final class PaperHologramPlatform implements HologramPlatform<PaperTripAgent, Location> {
 
   private final PaperHolograms holograms;
+  private final PaperBedrock bedrock;
 
-  PaperHologramPlatform(PaperHolograms holograms) {
+  PaperHologramPlatform(PaperHolograms holograms, PaperBedrock bedrock) {
     this.holograms = holograms;
+    this.bedrock = bedrock;
   }
 
   @Override
@@ -57,6 +59,12 @@ final class PaperHologramPlatform implements HologramPlatform<PaperTripAgent, Lo
     Player player = agent.player();
     World world = player.getWorld();
     return holograms.spawn(player, location(world, at), text).map(PaperHologramPlatform::wrap);
+  }
+
+  /** A Bedrock player may be tapping the screen anywhere, so only Java players aim. */
+  @Override
+  public boolean aims(PaperTripAgent agent) {
+    return !bedrock.isBedrock(agent.uuid());
   }
 
   private static Vec3 vector(Vector vector) {

@@ -18,6 +18,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.function.Predicate;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import org.cobblestonemc.CobblestoneLogger;
@@ -28,6 +29,7 @@ import org.cobblestonemc.plugin.api.DestinationTree;
 import org.cobblestonemc.plugin.api.Display;
 import org.cobblestonemc.plugin.api.Icon;
 import org.cobblestonemc.plugin.config.MenuIcons;
+import org.cobblestonemc.plugin.destination.DestinationResolver;
 import org.cobblestonemc.plugin.destination.NavigationTarget;
 import org.cobblestonemc.plugin.message.Messages;
 import org.junit.jupiter.api.Test;
@@ -42,6 +44,10 @@ class NavigationMenuTest {
           Icon.item(MenuIcons.FILLER_DEFAULT),
           true,
           name -> Icon.item(MenuIcons.DEFAULTS.get(name).item()));
+
+  /** Every destination usable, as a list tests them. */
+  private static final Predicate<DestinationResolver.Resolved<NavigationTarget>> USABLE =
+      pick -> true;
 
   /** Where the first entry inside the border sits. */
   private static final int FIRST = MenuLayout.slot(1, 1);
@@ -199,9 +205,8 @@ class NavigationMenuTest {
     // "bank" has nothing to offer, so the top level has one way on and is skipped.
     assertEquals("cobblestone", name(items.get(MenuLayout.BREADCRUMB)));
     assertEquals("death", name(items.get(FIRST)));
-    // Only one level down is looked into: "deeper" leads to another level, so it stays.
-    assertEquals("deeper »", name(items.get(FIRST + 1)));
-    assertNull(items.get(FIRST + 2), "vaults holds only what the player may not use");
+    // However deep: "deeper" leads only to another level of what the player may not use.
+    assertNull(items.get(FIRST + 1), "vaults and deeper hold nothing the player may use");
   }
 
   @Test
@@ -315,6 +320,115 @@ class NavigationMenuTest {
   }
 
   @Test
+  void aListOpensRecentsFromAButtonThenListsTheWholeLevelUnpaged() {
+    DestinationOption<Integer> x = DestinationOption.integer("x", () -> 0);
+    DestinationTree.Builder<NavigationTarget> cobblestone = level();
+    cobblestone.destination("block", DestinationLeaf.withOptions(List.of(x), values -> null));
+    for (int i = 0; i < 40; i++) {
+      cobblestone.destination("place-" + i, destination());
+    }
+    NavigationMenu menu =
+        new NavigationMenu(
+            Locale.ENGLISH,
+            MESSAGES,
+            SETTINGS,
+            roots(Map.of("cobblestone", cobblestone)),
+            Map.of(),
+            List.of(
+                new RecentDestinations.Recent(List.of("cobblestone", "place-7"), List.of()),
+                new RecentDestinations.Recent(List.of("cobblestone", "block"), List.of("12"))),
+            permission -> true,
+            address -> true);
+
+    List<Component> top = menu.list(USABLE);
+    assertTrue(menu.atTop());
+    assertEquals(42, top.size(), "recents, then the block and all 40 places");
+    assertEquals(
+        List.of("Recents »", "block", "place-0"), names(top.subList(0, 3)), "no hints to click");
+    assertEquals("place-39", plain(top.getLast()), "past where a chest would page");
+    assertInstanceOf(MenuAction.Navigate.class, menu.choose(41));
+    assertInstanceOf(MenuAction.None.class, menu.choose(42));
+
+    assertInstanceOf(MenuAction.Redraw.class, menu.choose(0));
+    assertFalse(menu.atTop());
+    assertEquals(
+        List.of("« Back", "place-7", "block 12"),
+        names(menu.list(USABLE)),
+        "a recent is named with the options it was given");
+    assertEquals("Recents", plain(menu.breadcrumb().orElseThrow()));
+    MenuAction.Navigate again = assertInstanceOf(MenuAction.Navigate.class, menu.choose(2));
+    assertEquals(List.of("12"), again.destination().optionTokens());
+
+    assertInstanceOf(MenuAction.Redraw.class, menu.choose(0));
+    assertTrue(menu.atTop());
+    assertEquals(42, menu.list(USABLE).size());
+  }
+
+  @Test
+  void aListSpreadsCobblestonesOwnEntriesOverTheTopLevel() {
+    NavigationMenu menu =
+        menu(
+            roots(
+                Map.of(
+                    "towny",
+                    level().destination("spawn", destination()),
+                    "cobblestone",
+                    level()
+                        .destination("death", destination())
+                        .subtree(
+                            "player", () -> level().destination("Steve", destination()).build()))));
+    assertEquals(List.of("death", "player »", "towny »"), names(menu.list(USABLE)));
+
+    assertInstanceOf(MenuAction.Redraw.class, menu.choose(1));
+    assertFalse(menu.atTop());
+    assertEquals("cobblestone › player", plain(menu.breadcrumb().orElseThrow()));
+    assertEquals(List.of("« Back", "Steve"), names(menu.list(USABLE)));
+    assertInstanceOf(MenuAction.Redraw.class, menu.choose(0));
+    assertEquals(List.of("death", "player »", "towny »"), names(menu.list(USABLE)), "back on top");
+  }
+
+  @Test
+  void aListLeavesOutWhatWouldNotWorkToPress() {
+    DestinationOption<Integer> x = DestinationOption.integer("x", () -> 0);
+    NavigationMenu menu =
+        new NavigationMenu(
+            Locale.ENGLISH,
+            MESSAGES,
+            SETTINGS,
+            roots(
+                Map.of(
+                    "cobblestone",
+                    level()
+                        .destination("surface", destination())
+                        .destination("spawn", destination())
+                        .destination(
+                            "block", DestinationLeaf.withOptions(List.of(x), values -> null))
+                        .subtree(
+                            "caves", () -> level().destination("surface", destination()).build()),
+                    "towny",
+                    level().destination("surface", destination()))),
+            Map.of(),
+            List.of(new RecentDestinations.Recent(List.of("cobblestone", "surface"), List.of())),
+            permission -> true,
+            address -> true);
+    Predicate<DestinationResolver.Resolved<NavigationTarget>> notSurface =
+        pick -> !pick.address().getLast().equals("surface");
+
+    assertEquals(
+        List.of("block", "spawn"),
+        names(menu.list(notSurface)),
+        "no recents, caves or towny, with nothing usable in them; one that asks first stays");
+    assertFalse(menu.empty());
+  }
+
+  @Test
+  void anEmptyLevelSaysSo() {
+    NavigationMenu menu = menu(roots(Map.of()));
+    assertTrue(menu.list(USABLE).isEmpty());
+    assertTrue(menu.empty());
+  }
+
+  @Test
   void recentDestinationsAreNewestFirstAndDistinct() {
     RecentDestinations recents = new RecentDestinations();
     UUID player = UUID.randomUUID();
@@ -359,6 +473,10 @@ class NavigationMenuTest {
         () -> {
           throw new AssertionError("built a destination nobody picked");
         });
+  }
+
+  private static List<String> names(List<Component> names) {
+    return names.stream().map(NavigationMenuTest::plain).toList();
   }
 
   private static String name(MenuItem item) {

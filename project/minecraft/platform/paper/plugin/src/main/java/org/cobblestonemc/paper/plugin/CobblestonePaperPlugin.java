@@ -63,6 +63,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
   private TripManager<Entity, PaperTripAgent, Location> tripManager;
   private TripHud<Entity, PaperTripAgent, Location> tripHud;
   private PaperHolograms holograms;
+  private PaperBedrockEmotes bedrockEmotes;
   private PaperMetrics metrics;
   private PaperMountListener mountListener;
   private RegionStores regionStores;
@@ -163,12 +164,18 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     // registered as a service so it is discovered like any third-party navigator.
     this.tripManager =
         new TripManager<>(platformApi.scheduler(), config.get(keys.tripsMaxActivePerPlayer));
+    // Bedrock players, told apart by Geyser or Floodgate if either is here, get a form rather than
+    // a chest and labels without a Cancel they would have to aim at.
+    PaperBedrock bedrock = PaperBedrock.find(this);
     // Each trail floats its trip's name over itself while the player stands still; hitting the
     // Cancel line above it cancels the trip.
     this.holograms = new PaperHolograms(this);
     TrailLabelManager<Entity, PaperTripAgent, Location> trailLabels =
         new TrailLabelManager<>(
-            tripManager, platformApi.scheduler(), messages, new PaperHologramPlatform(holograms));
+            tripManager,
+            platformApi.scheduler(),
+            messages,
+            new PaperHologramPlatform(holograms, bedrock));
     getServer().getPluginManager().registerEvents(new PaperLabelClickListener(trailLabels), this);
     integrationRegistry.registerNavigator(
         this,
@@ -269,8 +276,15 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
             recents,
             messages,
             () -> MenuSettings.from(config, keys),
+            bedrock,
+            tripManager,
             logger);
     getServer().getPluginManager().registerEvents(menus, this);
+    // With Geyser on this server, an emote opens the menu, since typing is a chore on a phone.
+    if (getServer().getPluginManager().getPlugin(PaperBedrock.GEYSER) != null) {
+      this.bedrockEmotes =
+          new PaperBedrockEmotes(this, () -> config.get(keys.menuBedrockEmotes), menus::open);
+    }
 
     getLifecycleManager()
         .registerEventHandler(
@@ -329,6 +343,9 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     }
     if (holograms != null) {
       holograms.removeAll();
+    }
+    if (bedrockEmotes != null) {
+      bedrockEmotes.close();
     }
     if (platformApi != null) {
       // Cancels in-flight searches and stops the search worker pool.
