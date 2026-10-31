@@ -83,6 +83,7 @@ Player nodes default to allow; admin nodes default to op.
 | `cobblestone.admin.location.global` | op | Global locations |
 | `cobblestone.admin.reload` | op | `/cobblestone reload` |
 | `cobblestone.admin.portals` | op | `/cobblestone portals clear` |
+| `cobblestone.admin.regions` | op | `/cobblestone regions clear` |
 | `cobblestone.admin.loglevel` | op | `/cobblestone loglevel` |
 
 Each destination also has its own node, derived from its address. For example, to prevent a group
@@ -113,3 +114,7 @@ enlarges world files. See [Configuration](config.md#searchchunks).
 Saved locations, the most recent death location of each player, and learned portal links are
 stored in an embedded H2 database. Learned portal links can be cleared with
 `/cobblestone portals clear`.
+
+The terrain regions behind the `REGIONS` heuristic are kept on disk, a few kilobytes per chunk that
+searches have touched. A world's can be cleared with `/cobblestone regions clear <world>`. See
+[Configuration](config.md#searchregions).

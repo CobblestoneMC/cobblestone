@@ -7,27 +7,41 @@
 
 package org.cobblestonemc.minecraft.regions;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 import org.cobblestonemc.Cell;
+import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.regions.RegionFiles;
 import org.cobblestonemc.regions.RegionSpec;
+import org.cobblestonemc.regions.RegionStorage;
 import org.cobblestonemc.regions.RegionStore;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * A server's {@link RegionStore}s, one per world, and the threads they share.
  *
  * <p>The platform's one handle on the region layer: searches ask it for their world's store,
- * block-change listeners tell it what to forget, and trips tell it whose surroundings to keep.
+ * block-change listeners tell it what to forget, trips tell it whose surroundings to keep, and a
+ * timer, world saves and shutdown tell it to write, and an admin tells it to start a world over.
  *
  * <p><b>Navigating players' surroundings stay in memory.</b> A trip's searches pin the sections
  * within {@link #PIN_RADIUS} of where they start, under the player's id, so the short searches that
@@ -41,8 +55,9 @@ import org.cobblestonemc.regions.RegionStore;
  * that passes. A search in that window reads the section as it was, which costs the estimate a
  * little and never the route, since the fine search reads the blocks themselves.
  *
- * <p>Builds and those delays run on a small pool of daemon threads, so a chunk that arrives on the
- * server thread is not built there.
+ * <p><b>Two kinds of thread of its own.</b> One for the disk, so reads and writes of the same files
+ * never race; and a small pool for building and those delays, so a chunk that arrives on the server
+ * thread is not built there. Both are daemons, and {@link #close} drains them.
  */
 public final class RegionStores implements AutoCloseable {
 
@@ -55,8 +70,14 @@ public final class RegionStores implements AutoCloseable {
   /** How long after a block changes its sections are forgotten, with every change meanwhile. */
   public static final Duration INVALIDATION_DELAY = Duration.ofSeconds(10);
 
+  /** A namespace, or one part of a key's path: what the game allows in either. */
+  private static final Pattern KEY_PART = Pattern.compile("[a-z0-9_.-]+");
+
+  private final @Nullable Path root;
+  private final CobblestoneLogger log;
   private final long memoryBudget;
   private final Duration invalidationDelay;
+  private final ExecutorService disk;
   private final ScheduledExecutorService threads;
   private final Map<String, RegionStore<MinecraftChunk, RegionClass>> stores =
       new ConcurrentHashMap<>();
@@ -66,19 +87,35 @@ public final class RegionStores implements AutoCloseable {
 
   private record Changed(String world, int sectionX, int sectionY, int sectionZ) {}
 
+  /** Worlds whose last write failed: said once, and again once they write. */
+  private final Set<String> failing = ConcurrentHashMap.newKeySet();
+
   /**
    * Creates the registry.
    *
+   * @param root where to keep each world's files, under a {@linkplain #directory directory per
+   *     world}; {@code null} to keep sections in memory only, shared between searches but lost on
+   *     restart
    * @param memoryBudget how many bytes of sections not pinned each world keeps in memory
    * @param builderThreads how many threads build sections from chunks that arrive later
+   * @param log where a write that fails is told
    */
-  public RegionStores(long memoryBudget, int builderThreads) {
-    this(memoryBudget, builderThreads, INVALIDATION_DELAY);
+  public RegionStores(
+      @Nullable Path root, long memoryBudget, int builderThreads, CobblestoneLogger log) {
+    this(root, memoryBudget, builderThreads, log, INVALIDATION_DELAY);
   }
 
-  RegionStores(long memoryBudget, int builderThreads, Duration invalidationDelay) {
+  RegionStores(
+      @Nullable Path root,
+      long memoryBudget,
+      int builderThreads,
+      CobblestoneLogger log,
+      Duration invalidationDelay) {
+    this.root = root;
+    this.log = log;
     this.memoryBudget = memoryBudget;
     this.invalidationDelay = invalidationDelay;
+    this.disk = Executors.newSingleThreadExecutor(daemons("cobblestone-regions-disk"));
     ScheduledThreadPoolExecutor pool =
         new ScheduledThreadPoolExecutor(
             Math.max(1, builderThreads), daemons("cobblestone-regions"));
@@ -95,7 +132,53 @@ public final class RegionStores implements AutoCloseable {
    */
   public RegionStore<MinecraftChunk, RegionClass> of(MinecraftWorld world) {
     return stores.computeIfAbsent(
-        world.key(), key -> new RegionStore<>(MinecraftTerrain.spec(world), memoryBudget, threads));
+        world.key(),
+        key -> {
+          RegionSpec<MinecraftChunk, RegionClass> spec = MinecraftTerrain.spec(world);
+          Path directory = root == null ? null : directory(root, key);
+          if (root != null && directory == null) {
+            log.warn("The regions of {} are kept in memory only: its key names no folder", key);
+          }
+          return new RegionStore<>(
+              spec,
+              memoryBudget,
+              directory == null
+                  ? RegionStorage.NONE
+                  : new RegionFiles(directory, spec, world.seed()),
+              disk,
+              threads);
+        });
+  }
+
+  /**
+   * Returns where a world's files go: its key's namespace, then its path, as the game keeps a
+   * dimension's own data. {@code minecraft:the_nether} is {@code minecraft/the_nether}, so no two
+   * keys share a folder. A key without a namespace is in {@code minecraft}'s, as the game reads it.
+   *
+   * @param root the directory every world's folder is in
+   * @param worldKey the world's key
+   * @return the world's directory, or {@code null} if its key is not one the game allows, such as
+   *     one with a {@code ..} in its path, which would name a folder outside its own
+   */
+  public static @Nullable Path directory(Path root, String worldKey) {
+    int colon = worldKey.indexOf(':');
+    String namespace = colon < 0 ? "minecraft" : worldKey.substring(0, colon);
+    String[] path = worldKey.substring(colon + 1).split("/", -1);
+    if (!part(namespace)) {
+      return null;
+    }
+    Path directory = root.resolve(namespace);
+    for (String part : path) {
+      if (!part(part)) {
+        return null;
+      }
+      directory = directory.resolve(part);
+    }
+    return directory;
+  }
+
+  private static boolean part(String part) {
+    return KEY_PART.matcher(part).matches() && !part.equals(".") && !part.equals("..");
   }
 
   /**
@@ -166,20 +249,125 @@ public final class RegionStores implements AutoCloseable {
   }
 
   /**
-   * Drops a world's store, once the world has unloaded.
+   * Drops a world's store, once the world has unloaded, writing what it has not written.
    *
    * @param worldKey the world's key
    */
   public void worldUnloaded(String worldKey) {
-    stores.remove(worldKey);
+    RegionStore<MinecraftChunk, RegionClass> store = stores.remove(worldKey);
+    if (store != null) {
+      written(worldKey, store.flush());
+      // Queued right behind the write on the one disk thread, not once it completes: anything
+      // queued after, such as a clear or a store made for the world afresh, finds the files closed.
+      store.close();
+    }
   }
 
-  /** Stops building, letting builds still running finish for a moment; pending changes are moot. */
+  /**
+   * Writes every world's unwritten sections.
+   *
+   * @return a future completing when every write is done
+   */
+  public CompletableFuture<Void> flush() {
+    List<CompletableFuture<Void>> writes = new ArrayList<>();
+    for (Map.Entry<String, RegionStore<MinecraftChunk, RegionClass>> entry : stores.entrySet()) {
+      writes.add(written(entry.getKey(), entry.getValue().flush()));
+    }
+    return CompletableFuture.allOf(writes.toArray(new CompletableFuture<?>[0]));
+  }
+
+  /**
+   * Writes one world's unwritten sections, as when it saves.
+   *
+   * @param worldKey the world's key
+   * @return a future completing when the write is done
+   */
+  public CompletableFuture<Void> flush(String worldKey) {
+    RegionStore<MinecraftChunk, RegionClass> store = stores.get(worldKey);
+    return store == null
+        ? CompletableFuture.completedFuture(null)
+        : written(worldKey, store.flush());
+  }
+
+  /**
+   * Forgets every section of a world, in memory and on disk, so each is built again from the
+   * terrain: for terrain that changed where no event said so, such as by an external editor or a
+   * world trimmed or made again from its seed. Searches already running keep what they hold.
+   *
+   * @param worldKey the world's key, loaded or not
+   * @return a future completing once its files are deleted
+   */
+  public CompletableFuture<Void> clear(String worldKey) {
+    List<CompletableFuture<Void>> deleting = new ArrayList<>(1);
+    // Under the map's lock for the world, so a store made for it afresh is made after the delete
+    // is queued, and reads on the disk thread only once the files are gone.
+    stores.compute(
+        worldKey,
+        (key, store) -> {
+          Path directory = root == null ? null : directory(root, key);
+          if (store != null) {
+            deleting.add(store.delete());
+          } else if (directory != null) {
+            deleting.add(
+                CompletableFuture.runAsync(
+                    () -> {
+                      try {
+                        RegionFiles.delete(directory);
+                      } catch (IOException failed) {
+                        throw new UncheckedIOException(failed);
+                      }
+                    },
+                    disk));
+          }
+          return null;
+        });
+    return deleting.isEmpty() ? CompletableFuture.completedFuture(null) : deleting.get(0);
+  }
+
+  /** Says when a world's writes start failing, and when they recover. */
+  private CompletableFuture<Void> written(String worldKey, CompletableFuture<Void> write) {
+    return write.whenComplete(
+        (done, failed) -> {
+          if (failed != null) {
+            if (failing.add(worldKey)) {
+              log.error(
+                  "Could not write the regions of {}; they are built again when needed, and"
+                      + " writing is tried again at each flush",
+                  failed,
+                  worldKey);
+            }
+          } else if (failing.remove(worldKey)) {
+            log.info("Writing the regions of {} again", worldKey);
+          }
+        });
+  }
+
+  /**
+   * Stops building, writes what is unwritten, and stops the disk thread. Changes still waiting to
+   * be forgotten are moot.
+   *
+   * <p>Builds still running are let finish for a moment, so their sections are written too. Call it
+   * after the searches have stopped, so nothing builds a section behind the final write.
+   */
   @Override
   public void close() {
     threads.shutdown();
     try {
       threads.awaitTermination(5, TimeUnit.SECONDS);
+    } catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt();
+    }
+    try {
+      flush().get(30, TimeUnit.SECONDS);
+    } catch (Exception failed) {
+      // Unwritten sections are built again after the restart; nothing is lost but time.
+    }
+    for (RegionStore<MinecraftChunk, RegionClass> store : stores.values()) {
+      store.close();
+    }
+    disk.shutdown();
+    try {
+      disk.awaitTermination(5, TimeUnit.SECONDS);
     } catch (InterruptedException interrupted) {
       Thread.currentThread().interrupt();
     }

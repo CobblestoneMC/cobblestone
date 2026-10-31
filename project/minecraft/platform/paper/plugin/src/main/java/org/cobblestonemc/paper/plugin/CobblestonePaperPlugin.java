@@ -9,9 +9,11 @@ package org.cobblestonemc.paper.plugin;
 
 import io.papermc.paper.ServerBuildInfo;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import net.kyori.adventure.key.Key;
@@ -64,6 +66,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
   private PaperMetrics metrics;
   private PaperMountListener mountListener;
   private RegionStores regionStores;
+  private ScheduledTask regionFlush;
   private final SearchRegistry<Location> searchRegistry = new SearchRegistry<>();
 
   @Override
@@ -85,8 +88,9 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
       return;
     }
 
-    // Regions are shared by every search and forgotten when a block in their chunk changes.
-    this.regionStores = RegionConfig.stores(config, keys);
+    // Regions are shared by every search, kept on disk across restarts, and forgotten when a
+    // block in their chunk changes.
+    this.regionStores = RegionConfig.stores(config, keys, getDataFolder().toPath(), logger);
 
     // The transition registry is owned by the plugin; the platform API only reads from / registers
     // into it. Both are reachable to other plugins via the registered plugin API.
@@ -103,6 +107,12 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     getServer()
         .getPluginManager()
         .registerEvents(new PaperRegionListener(regionStores, platformApi), this);
+    long flushPeriod = RegionConfig.flushPeriod(config, keys);
+    this.regionFlush =
+        getServer()
+            .getAsyncScheduler()
+            .runAtFixedRate(
+                this, task -> regionStores.flush(), flushPeriod, flushPeriod, TimeUnit.SECONDS);
 
     PaperIntegrationRegistry integrationRegistry =
         new PaperIntegrationRegistry(platformApi.regions());
@@ -278,6 +288,7 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
                       messages,
                       logger,
                       dataStore.portalTransitions(),
+                      regionStores,
                       tripManager,
                       tripHud,
                       searchRegistry,
@@ -323,7 +334,11 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
       // Cancels in-flight searches and stops the search worker pool.
       platformApi.shutdown();
     }
+    if (regionFlush != null) {
+      regionFlush.cancel();
+    }
     if (regionStores != null) {
+      // After the searches stop, so nothing builds a section behind the final write.
       regionStores.close();
     }
     getServer().getServicesManager().unregisterAll(this);

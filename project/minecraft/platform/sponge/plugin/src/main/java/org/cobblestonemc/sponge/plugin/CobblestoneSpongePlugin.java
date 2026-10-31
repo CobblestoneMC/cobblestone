@@ -9,6 +9,7 @@ package org.cobblestonemc.sponge.plugin;
 
 import com.google.inject.Inject;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Locale;
 import java.util.function.Supplier;
 import org.apache.logging.log4j.Logger;
@@ -52,6 +53,8 @@ import org.spongepowered.api.event.lifecycle.StartedEngineEvent;
 import org.spongepowered.api.event.lifecycle.StoppingEngineEvent;
 import org.spongepowered.api.event.network.ServerSideConnectionEvent;
 import org.spongepowered.api.profile.GameProfile;
+import org.spongepowered.api.scheduler.ScheduledTask;
+import org.spongepowered.api.scheduler.Task;
 import org.spongepowered.api.world.server.ServerLocation;
 import org.spongepowered.plugin.PluginContainer;
 import org.spongepowered.plugin.builtin.jvm.Plugin;
@@ -80,6 +83,7 @@ public final class CobblestoneSpongePlugin {
   private final Logger logger;
   private final Path configDir;
   private RegionStores regionStores;
+  private ScheduledTask regionFlush;
   private final Metrics.Factory metricsFactory;
 
   private Log4JCobblestoneLogger cobblestoneLogger;
@@ -143,8 +147,13 @@ public final class CobblestoneSpongePlugin {
       return;
     }
 
-    // Regions are shared by every search and forgotten when a block in their chunk changes.
-    this.regionStores = RegionConfig.stores(config, keys);
+    // Regions are shared by every search, kept on disk across restarts, and forgotten when a
+    // block in their chunk changes.
+    // Sponge gives a plugin a config directory and no data one: a cache is not configuration, so
+    // it is kept beside the server's own folders, as Paper keeps it in the plugin's data folder.
+    this.regionStores =
+        RegionConfig.stores(
+            config, keys, Sponge.game().gameDirectory().resolve("cobblestone"), cobblestoneLogger);
 
     this.navigationService =
         new SpongeNavigationServiceImpl(
@@ -311,6 +320,18 @@ public final class CobblestoneSpongePlugin {
     if (navigationService != null) {
       navigationService.surveyWorlds();
     }
+    if (regionStores != null) {
+      long flushPeriod = RegionConfig.flushPeriod(config, keys);
+      this.regionFlush =
+          Sponge.asyncScheduler()
+              .submit(
+                  Task.builder()
+                      .plugin(container)
+                      .delay(Duration.ofSeconds(flushPeriod))
+                      .interval(Duration.ofSeconds(flushPeriod))
+                      .execute(() -> regionStores.flush())
+                      .build());
+    }
   }
 
   /** Registers the custom data Cobblestone keeps on entities (when each pet was tamed). */
@@ -339,6 +360,7 @@ public final class CobblestoneSpongePlugin {
             messages,
             cobblestoneLogger,
             dataStore.portalTransitions(),
+            regionStores,
             tripManager,
             tripHud,
             searchRegistry,
@@ -388,7 +410,11 @@ public final class CobblestoneSpongePlugin {
     if (navigationService != null) {
       navigationService.shutdown();
     }
+    if (regionFlush != null) {
+      regionFlush.cancel();
+    }
     if (regionStores != null) {
+      // After the searches stop, so nothing builds a section behind the final write.
       regionStores.close();
     }
     CobblestoneSpongeApi.uninstall();
