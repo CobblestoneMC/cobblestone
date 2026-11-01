@@ -7,12 +7,14 @@
 
 package org.cobblestonemc.stonebrick.platform;
 
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import org.cobblestonemc.Position;
+import org.cobblestonemc.SearchScheduler;
+import org.cobblestonemc.TimeSource;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.ScheduledTaskHandle;
@@ -29,9 +31,11 @@ import org.cobblestonemc.minecraft.ScheduledTaskHandle;
  * possible is a separate implementation; a benchmark should be run under both, the first to compare
  * algorithms and the second to check they still behave when threads are real.
  */
-public final class StonebrickScheduler implements MinecraftScheduler<Object>, AutoCloseable {
+public final class StonebrickScheduler
+    implements MinecraftScheduler<Object>, SearchScheduler, AutoCloseable {
 
   private final ScheduledExecutorService executor;
+  private final TimeSource time;
 
   /**
    * Creates a scheduler with the given worker count.
@@ -47,21 +51,17 @@ public final class StonebrickScheduler implements MinecraftScheduler<Object>, Au
               thread.setDaemon(true);
               return thread;
             });
+    this.time = TimeSource.system(executor, executor);
   }
 
   @Override
-  public void runAsync(Runnable task) {
-    executor.execute(task);
-  }
-
-  @Override
-  public void runAsyncLater(Runnable task, long delayMillis) {
-    executor.schedule(task, delayMillis, TimeUnit.MILLISECONDS);
-  }
-
-  @Override
-  public ExecutorService asyncExecutor() {
+  public Executor executor() {
     return executor;
+  }
+
+  @Override
+  public TimeSource time() {
+    return time;
   }
 
   @Override

@@ -7,8 +7,8 @@
 
 package org.cobblestonemc.sponge.plugin;
 
+import java.util.concurrent.Executor;
 import java.util.function.BooleanSupplier;
-import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.plugin.data.DeathLocation;
 import org.cobblestonemc.plugin.data.DeathLocationDao;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
@@ -27,13 +27,12 @@ import org.spongepowered.api.world.server.ServerLocation;
 final class SpongeDeathListener {
 
   private final DeathLocationDao deaths;
-  private final MinecraftScheduler<?> scheduler;
+  private final Executor data;
   private final BooleanSupplier enabled;
 
-  SpongeDeathListener(
-      DeathLocationDao deaths, MinecraftScheduler<?> scheduler, BooleanSupplier enabled) {
+  SpongeDeathListener(DeathLocationDao deaths, Executor data, BooleanSupplier enabled) {
     this.deaths = deaths;
-    this.scheduler = scheduler;
+    this.data = data;
     this.enabled = enabled;
   }
 
@@ -51,6 +50,6 @@ final class SpongeDeathListener {
             location.blockX(),
             location.blockY(),
             location.blockZ());
-    scheduler.runAsync(() -> deaths.upsert(death));
+    data.execute(() -> deaths.upsert(death));
   }
 }

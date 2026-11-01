@@ -22,12 +22,14 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.FutureOr;
+import org.cobblestonemc.Workers;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.TestBlocks;
 import org.cobblestonemc.minecraft.TestWorld;
 import org.cobblestonemc.regions.RegionSection;
 import org.cobblestonemc.regions.RegionStore;
 import org.cobblestonemc.regions.TerrainSource;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -62,10 +64,28 @@ class RegionStoresTest {
         }
       };
 
+  private final Workers workers = new Workers(1, 1);
+
+  @AfterEach
+  void closeWorkers() {
+    workers.close();
+  }
+
+  private RegionStores stores(Path root) {
+    return new RegionStores(
+        root,
+        Long.MAX_VALUE,
+        key -> workers.lane("regions:" + key),
+        workers.compute(),
+        workers.time(),
+        log,
+        DELAY);
+  }
+
   @Test
   void changesAreForgottenTogetherOnceTheDelayHasPassed() throws InterruptedException {
     TestWorld world = TestWorld.builder("w").build();
-    try (RegionStores stores = new RegionStores(null, Long.MAX_VALUE, 1, log, DELAY)) {
+    try (RegionStores stores = stores(null)) {
       RegionStore<MinecraftChunk, RegionClass> store = stores.of(world);
       store.section(0, 0, 0, ROCK);
 
@@ -90,7 +110,7 @@ class RegionStoresTest {
   @Test
   void clearingAWorldDeletesItsFilesAndStartsItAfresh(@TempDir Path root) {
     TestWorld world = TestWorld.builder("minecraft:w").build();
-    try (RegionStores stores = new RegionStores(root, Long.MAX_VALUE, 1, log, DELAY)) {
+    try (RegionStores stores = stores(root)) {
       RegionStore<MinecraftChunk, RegionClass> store = stores.of(world);
       built(store, 0);
       stores.flush("minecraft:w").join();
@@ -109,7 +129,7 @@ class RegionStoresTest {
     TestWorld world = TestWorld.builder("w").build();
     // A file where the world's namespace's directory has to go: nothing can be written under it.
     Path blocked = Files.createFile(root.resolve("minecraft"));
-    try (RegionStores stores = new RegionStores(root, Long.MAX_VALUE, 1, log, DELAY)) {
+    try (RegionStores stores = stores(root)) {
       RegionStore<MinecraftChunk, RegionClass> store = stores.of(world);
       built(store, 0);
       stores.flush().handle((done, failed) -> null).join();
@@ -147,7 +167,7 @@ class RegionStoresTest {
     assertNull(RegionStores.directory(root, "Minecraft:W"));
   }
 
-  /** Builds a section of rock, waiting for it: with files, it is read for on the disk thread. */
+  /** Builds a section of rock, waiting for it: with files, it is read for on the disk lane. */
   private static void built(RegionStore<MinecraftChunk, RegionClass> store, int sectionX) {
     CompletableFuture<RegionSection> done = new CompletableFuture<>();
     store.section(sectionX, 0, 0, ROCK).whenReady(done::complete, Runnable::run);

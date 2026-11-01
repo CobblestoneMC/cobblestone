@@ -15,7 +15,7 @@ import org.jetbrains.annotations.Nullable;
  * Where a {@link RegionStore} keeps its sections beyond memory: {@link RegionFiles} on disk, or
  * {@link #NONE}, nowhere.
  *
- * <p>A store calls it from its one disk thread only.
+ * <p>A store calls it from its disk executor only, one task at a time.
  */
 public sealed interface RegionStorage permits RegionFiles, RegionStorage.None {
 

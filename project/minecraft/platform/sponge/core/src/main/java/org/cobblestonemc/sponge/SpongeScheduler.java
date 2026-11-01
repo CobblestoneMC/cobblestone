@@ -7,11 +7,6 @@
 
 package org.cobblestonemc.sponge;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -26,48 +21,20 @@ import org.spongepowered.plugin.PluginContainer;
 /**
  * The Sponge {@link MinecraftScheduler}.
  *
- * <p>Search math runs on a dedicated daemon worker pool (so it never blocks the server thread).
- * Location- and entity-aware work is dispatched through Sponge's synchronous server scheduler,
+ * <p>Location- and entity-aware work is dispatched through Sponge's synchronous server scheduler,
  * which ticks on the single main server thread (Sponge has no Folia-style per-region threading).
  */
 public final class SpongeScheduler implements MinecraftScheduler<Entity> {
 
   private final PluginContainer plugin;
-  private final ScheduledExecutorService workers;
 
   /**
    * Creates a scheduler.
    *
    * @param plugin the owning plugin container (for task dispatch)
-   * @param workerThreads the number of search worker threads
    */
-  public SpongeScheduler(PluginContainer plugin, int workerThreads) {
+  public SpongeScheduler(PluginContainer plugin) {
     this.plugin = plugin;
-    AtomicInteger counter = new AtomicInteger();
-    this.workers =
-        Executors.newScheduledThreadPool(
-            workerThreads,
-            runnable -> {
-              Thread thread =
-                  new Thread(runnable, "cobblestone-search-" + counter.incrementAndGet());
-              thread.setDaemon(true);
-              return thread;
-            });
-  }
-
-  @Override
-  public void runAsync(Runnable task) {
-    workers.execute(task);
-  }
-
-  @Override
-  public void runAsyncLater(Runnable task, long delayMillis) {
-    workers.schedule(task, delayMillis, TimeUnit.MILLISECONDS);
-  }
-
-  @Override
-  public ExecutorService asyncExecutor() {
-    return workers;
   }
 
   @Override
@@ -114,10 +81,5 @@ public final class SpongeScheduler implements MinecraftScheduler<Entity> {
                     .interval(Ticks.of(Math.max(1L, periodTicks)))
                     .build());
     return scheduled::cancel;
-  }
-
-  /** Stops the worker pool; call on plugin disable. */
-  public void shutdown() {
-    workers.shutdownNow();
   }
 }

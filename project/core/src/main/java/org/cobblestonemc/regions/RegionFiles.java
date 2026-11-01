@@ -72,7 +72,7 @@ import org.jetbrains.annotations.Nullable;
  * them will be read again, so the file goes as soon as it is opened, and is started afresh if a
  * section is written to it, never mixed in.
  *
- * <p>Thread-safe by being synchronized. {@link RegionStore} calls it from one disk thread, so the
+ * <p>Thread-safe by being synchronized. {@link RegionStore} calls it one task at a time, so the
  * lock is never contended; it is there so that nothing else has to know that.
  */
 public final class RegionFiles implements RegionStorage {

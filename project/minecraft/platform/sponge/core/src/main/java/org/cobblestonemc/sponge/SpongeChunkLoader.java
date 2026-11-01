@@ -15,9 +15,11 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
 import java.util.function.IntSupplier;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.ScopedCobblestoneLogger;
+import org.cobblestonemc.TimeSource;
 import org.cobblestonemc.minecraft.ChunkFetch;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.MinecraftChunk;
@@ -84,6 +86,7 @@ final class SpongeChunkLoader {
   private static final long TICKET_LIFETIME_TICKS = 200L;
 
   private final SpongeScheduler scheduler;
+  private final TimeSource time;
   private final CobblestoneLogger logger;
   private final IntSupplier maxLoadRequests;
   private final OfflineChunkSource offline;
@@ -105,16 +108,19 @@ final class SpongeChunkLoader {
 
   SpongeChunkLoader(
       SpongeScheduler scheduler,
+      TimeSource time,
+      Executor io,
       CobblestoneLogger logger,
       IntSupplier maxLoadRequests,
       OfflineChunkSource offline,
       LoadedChunkIndex loaded) {
     this.loaded = loaded;
     this.scheduler = scheduler;
+    this.time = time;
     this.logger = new ScopedCobblestoneLogger(logger, "SpongeChunkLoader");
     this.maxLoadRequests = maxLoadRequests;
     this.offline = offline;
-    this.index = new ChunkExistenceIndex(scheduler, logger);
+    this.index = new ChunkExistenceIndex(io, logger);
   }
 
   /**
@@ -320,7 +326,7 @@ final class SpongeChunkLoader {
       deliver(key, copy(world, cx, cz));
       return;
     }
-    scheduler.runAsyncLater(
+    time.schedule(
         () -> {
           if (pending.get(key) == parked) {
             logger.debug("Timed out waiting for chunk [{}, {}] to load", cx, cz);

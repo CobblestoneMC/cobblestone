@@ -11,9 +11,11 @@ import com.google.inject.Inject;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 import org.apache.logging.log4j.Logger;
 import org.bstats.sponge.Metrics;
+import org.cobblestonemc.Workers;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.regions.RegionStores;
@@ -23,6 +25,7 @@ import org.cobblestonemc.plugin.config.ConfigManager;
 import org.cobblestonemc.plugin.config.MenuIcons;
 import org.cobblestonemc.plugin.config.RegionConfig;
 import org.cobblestonemc.plugin.config.SearchConfig;
+import org.cobblestonemc.plugin.config.ThreadsConfig;
 import org.cobblestonemc.plugin.data.DataStore;
 import org.cobblestonemc.plugin.data.DataStoreException;
 import org.cobblestonemc.plugin.data.DataStores;
@@ -83,6 +86,7 @@ public final class CobblestoneSpongePlugin {
   private final Logger logger;
   private final Path configDir;
   private RegionStores regionStores;
+  private Workers workers;
   private ScheduledTask regionFlush;
   private final Metrics.Factory metricsFactory;
 
@@ -147,13 +151,23 @@ public final class CobblestoneSpongePlugin {
       return;
     }
 
+    // Every thread Cobblestone runs besides the server's own, closed last on stopping. Records are
+    // written on one lane, in the order they happen, so a mount's last move never lands after its
+    // removal.
+    this.workers = ThreadsConfig.workers(config, keys);
+    Executor data = workers.lane("data");
+
     // Regions are shared by every search, kept on disk across restarts, and forgotten when a
     // block in their chunk changes.
     // Sponge gives a plugin a config directory and no data one: a cache is not configuration, so
     // it is kept beside the server's own folders, as Paper keeps it in the plugin's data folder.
     this.regionStores =
         RegionConfig.stores(
-            config, keys, Sponge.game().gameDirectory().resolve("cobblestone"), cobblestoneLogger);
+            config,
+            keys,
+            Sponge.game().gameDirectory().resolve("cobblestone"),
+            workers,
+            cobblestoneLogger);
 
     this.navigationService =
         new SpongeNavigationServiceImpl(
@@ -165,8 +179,10 @@ public final class CobblestoneSpongePlugin {
                 config.get(keys.chunksFetchAttempts),
                 config.get(keys.chunksPolicy)),
             () -> config.get(spongeKeys.chunksMaxLoadRequests),
-            new AnvilOfflineChunkSource(cobblestoneLogger),
-            regionStores);
+            new AnvilOfflineChunkSource(cobblestoneLogger, workers.io()),
+            regionStores,
+            workers.search(),
+            workers.io());
     this.navigationService.registerListeners(container);
     CobblestoneCoreApi.install(navigationService, navigationService);
 
@@ -186,7 +202,7 @@ public final class CobblestoneSpongePlugin {
                 dataStore.portalTransitions(),
                 dataStore.endReturnPortals(),
                 dataStore.gateways(),
-                navigationService.scheduler(),
+                data,
                 cobblestoneLogger,
                 () -> config.get(keys.portalsCostSeconds),
                 () -> config.get(keys.portalsDiscovery)));
@@ -199,7 +215,10 @@ public final class CobblestoneSpongePlugin {
     this.messages =
         new Messages(defaultLocale, config.get(keys.messagesShowPrefix), cobblestoneLogger);
     this.tripManager =
-        new TripManager<>(navigationService.scheduler(), config.get(keys.tripsMaxActivePerPlayer));
+        new TripManager<>(
+            navigationService.scheduler(),
+            workers.time(),
+            config.get(keys.tripsMaxActivePerPlayer));
     this.integrationRegistry = new SpongeIntegrationRegistry(navigationService.regions());
     // Each trail floats its trip's name over itself while the player stands still; hitting the
     // Cancel line above it cancels the trip. SpongeAPI can't show an entity to one player only, so
@@ -222,6 +241,7 @@ public final class CobblestoneSpongePlugin {
         new TripHud<>(
             tripManager,
             navigationService.scheduler(),
+            data,
             messages,
             dataStore.playerPreferences(),
             () -> config.get(keys.tripsHud),
@@ -246,12 +266,9 @@ public final class CobblestoneSpongePlugin {
     Sponge.eventManager()
         .registerListeners(
             container,
-            new SpongeDeathListener(
-                dataStore.deaths(),
-                navigationService.scheduler(),
-                () -> config.get(keys.deathsTrack)));
+            new SpongeDeathListener(dataStore.deaths(), data, () -> config.get(keys.deathsTrack)));
     // So are their last mount, and when each of their pets was tamed (to number same-named pets).
-    mountListener = new SpongeMountListener(dataStore.mounts(), navigationService.scheduler());
+    mountListener = new SpongeMountListener(dataStore.mounts(), data);
     Sponge.eventManager().registerListeners(container, mountListener);
     Sponge.eventManager().registerListeners(container, petListener);
 
@@ -392,7 +409,9 @@ public final class CobblestoneSpongePlugin {
         .ifPresent(uuid -> LogoutCleanup.onLogout(uuid, tripManager, searchRegistry, tripHud));
   }
 
-  /** Tears down: stop the search workers, withdraw the core services, close the data store. */
+  /**
+   * Tears down: stop searches, withdraw the core services, finish writing, close the data store.
+   */
   @Listener
   public void onStoppingEngine(StoppingEngineEvent<Server> event) {
     if (metrics != null) {
@@ -408,18 +427,25 @@ public final class CobblestoneSpongePlugin {
       holograms.removeAll();
     }
     if (navigationService != null) {
+      // Cancels in-flight searches and the chunk reads they queued.
       navigationService.shutdown();
     }
     if (regionFlush != null) {
       regionFlush.cancel();
     }
     if (regionStores != null) {
-      // After the searches stop, so nothing builds a section behind the final write.
+      // After the searches stop, so nothing builds a section behind the final write, and before
+      // the workers close, so the writes have a thread to run on.
       regionStores.close();
     }
     CobblestoneSpongeApi.uninstall();
     CobblestoneCoreApi.uninstall();
+    if (workers != null) {
+      // Stops searches and builds, and lets the writes already given finish.
+      workers.close();
+    }
     if (mountListener != null) {
+      // After the writes, which are older: where a mount is now is the last word.
       try {
         mountListener.saveLoaded();
       } catch (RuntimeException e) {

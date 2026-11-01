@@ -9,6 +9,7 @@ package org.cobblestonemc.plugin.trip;
 
 import java.util.Objects;
 import java.util.function.Consumer;
+import org.cobblestonemc.TimeSource;
 import org.cobblestonemc.api.Path;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.ScheduledTaskHandle;
@@ -33,6 +34,7 @@ public final class Trip<E, P extends TripAgent<E>, L> {
   private final TripLabel label;
   private final Navigator<L> navigator;
   private final MinecraftScheduler<E> scheduler;
+  private final TimeSource time;
   private final long periodTicks;
   private final Consumer<Trip<E, P, L>> onEnd;
   private final LiveSearch<L> liveSearch;
@@ -52,6 +54,7 @@ public final class Trip<E, P extends TripAgent<E>, L> {
       TripLabel label,
       Navigator<L> navigator,
       MinecraftScheduler<E> scheduler,
+      TimeSource time,
       long periodTicks,
       Consumer<Trip<E, P, L>> onEnd,
       LiveSearch<L> liveSearch,
@@ -64,6 +67,7 @@ public final class Trip<E, P extends TripAgent<E>, L> {
     this.label = label;
     this.navigator = navigator;
     this.scheduler = scheduler;
+    this.time = time;
     this.periodTicks = periodTicks;
     this.onEnd = onEnd;
     this.liveSearch = liveSearch;
@@ -83,7 +87,7 @@ public final class Trip<E, P extends TripAgent<E>, L> {
   }
 
   private void scheduleReSearch() {
-    scheduler.runAsyncLater(() -> reSearch(true), liveIntervalMillis);
+    time.schedule(() -> reSearch(true), liveIntervalMillis);
   }
 
   /**
