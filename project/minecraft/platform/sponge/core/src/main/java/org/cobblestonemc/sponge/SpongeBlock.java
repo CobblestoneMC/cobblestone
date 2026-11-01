@@ -7,7 +7,9 @@
 
 package org.cobblestonemc.sponge;
 
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MiningClass;
 import org.spongepowered.api.block.BlockState;
@@ -57,12 +59,69 @@ final class SpongeBlock implements MinecraftBlock {
           BlockTypes.BLUE_ICE.get(),
           BlockTypes.FROSTED_ICE.get());
 
-  private final BlockState state;
-  private final BlockType type;
+  /** One per block state: states are shared, and their answers never change. */
+  private static final Map<BlockState, SpongeBlock> BY_STATE = new ConcurrentHashMap<>();
 
-  SpongeBlock(BlockState state) {
+  private final BlockState state;
+  private final boolean isPassable;
+  private final boolean isSolidTop;
+  private final boolean isHalfHeight;
+  private final boolean isWater;
+  private final boolean isLava;
+  private final MiningClass miningClass;
+  private final boolean isClimbable;
+  private final boolean isScaffolding;
+  private final boolean isDangerous;
+  private final double damagePerSecond;
+  private final double breakTimeSeconds;
+  private final boolean supportsBoat;
+  private final boolean boostsSoulSpeed;
+  private final double speedFactor;
+  private final boolean isDoor;
+  private final boolean isTrapdoor;
+  private final boolean isOpen;
+  private final boolean opensByHand;
+  private final boolean isPressurePlate;
+
+  /**
+   * Works out everything a block state says of itself, once.
+   *
+   * <p>Most of it comes from vanilla tags and Sponge's data keys, each a lookup: asked for every
+   * cell of every section a search builds, they were most of what building one cost.
+   */
+  private SpongeBlock(BlockState state) {
     this.state = state;
-    this.type = state.type();
+    BlockType type = state.type();
+    this.isPassable = isPassable(state, type);
+    this.isSolidTop = isSolidTop(state, type);
+    this.isHalfHeight = isHalfHeight(state, type);
+    this.isWater = isWater(state, type);
+    this.isLava = isLava(state, type);
+    this.miningClass = miningClass(state, type);
+    this.isClimbable = isClimbable(state, type);
+    this.isScaffolding = isScaffolding(state, type);
+    this.isDangerous = isDangerous(state, type);
+    this.damagePerSecond = damagePerSecond(state, type);
+    this.breakTimeSeconds = breakTimeSeconds(state, type);
+    this.supportsBoat = supportsBoat(state, type);
+    this.boostsSoulSpeed = boostsSoulSpeed(state, type);
+    this.speedFactor = speedFactor(state, type);
+    this.isDoor = isDoor(state, type);
+    this.isTrapdoor = isTrapdoor(state, type);
+    this.isOpen = isOpen(state, type);
+    this.opensByHand = opensByHand(state, type);
+    this.isPressurePlate = isPressurePlate(state, type);
+  }
+
+  /**
+   * Returns the block for a state.
+   *
+   * @param state the state
+   * @return its block, the same one every time
+   */
+  static SpongeBlock of(BlockState state) {
+    SpongeBlock known = BY_STATE.get(state);
+    return known != null ? known : BY_STATE.computeIfAbsent(state, SpongeBlock::new);
   }
 
   /** The backing snapshot block state, handed to integration break checkers. */
@@ -70,39 +129,129 @@ final class SpongeBlock implements MinecraftBlock {
     return state;
   }
 
-  private boolean flag(Key<Value<Boolean>> key) {
-    return state.get(key).orElse(false);
-  }
-
   @Override
   public boolean isPassable() {
-    return AIR.contains(type) || (!flag(Keys.IS_SOLID) && !isWater() && !isLava());
+    return isPassable;
   }
 
   @Override
   public boolean isSolidTop() {
-    return flag(Keys.IS_SOLID);
+    return isSolidTop;
   }
 
   @Override
   public boolean isHalfHeight() {
-    return type.is(BlockTypeTags.SLABS) || type.equals(BlockTypes.SNOW.get());
+    return isHalfHeight;
   }
 
   @Override
   public boolean isWater() {
-    return type.equals(BlockTypes.WATER.get());
+    return isWater;
   }
 
   @Override
   public boolean isLava() {
-    return type.equals(BlockTypes.LAVA.get());
+    return isLava;
   }
 
   @Override
   public MiningClass miningClass() {
+    return miningClass;
+  }
+
+  @Override
+  public boolean isClimbable() {
+    return isClimbable;
+  }
+
+  @Override
+  public boolean isScaffolding() {
+    return isScaffolding;
+  }
+
+  @Override
+  public boolean isDangerous() {
+    return isDangerous;
+  }
+
+  @Override
+  public double damagePerSecond() {
+    return damagePerSecond;
+  }
+
+  @Override
+  public double breakTimeSeconds() {
+    return breakTimeSeconds;
+  }
+
+  @Override
+  public boolean supportsBoat() {
+    return supportsBoat;
+  }
+
+  @Override
+  public boolean boostsSoulSpeed() {
+    return boostsSoulSpeed;
+  }
+
+  @Override
+  public double speedFactor() {
+    return speedFactor;
+  }
+
+  @Override
+  public boolean isDoor() {
+    return isDoor;
+  }
+
+  @Override
+  public boolean isTrapdoor() {
+    return isTrapdoor;
+  }
+
+  @Override
+  public boolean isOpen() {
+    return isOpen;
+  }
+
+  @Override
+  public boolean opensByHand() {
+    return opensByHand;
+  }
+
+  @Override
+  public boolean isPressurePlate() {
+    return isPressurePlate;
+  }
+
+  private static boolean flag(BlockState state, Key<Value<Boolean>> key) {
+    return state.get(key).orElse(false);
+  }
+
+  private static boolean isPassable(BlockState state, BlockType type) {
+    return AIR.contains(type)
+        || (!flag(state, Keys.IS_SOLID) && !isWater(state, type) && !isLava(state, type));
+  }
+
+  private static boolean isSolidTop(BlockState state, BlockType type) {
+    return flag(state, Keys.IS_SOLID);
+  }
+
+  private static boolean isHalfHeight(BlockState state, BlockType type) {
+    return type.is(BlockTypeTags.SLABS) || type.equals(BlockTypes.SNOW.get());
+  }
+
+  private static boolean isWater(BlockState state, BlockType type) {
+    return type.equals(BlockTypes.WATER.get());
+  }
+
+  private static boolean isLava(BlockState state, BlockType type) {
+    return type.equals(BlockTypes.LAVA.get());
+  }
+
+  private static MiningClass miningClass(BlockState state, BlockType type) {
     return MiningClass.of(
-        tool(),
+        tool(type),
         type.is(BlockTypeTags.NEEDS_DIAMOND_TOOL),
         state.get(Keys.DESTROY_SPEED).orElse(0.0),
         type.key(RegistryTypes.BLOCK_TYPE).value());
@@ -112,7 +261,7 @@ final class SpongeBlock implements MinecraftBlock {
    * The tool the block's vanilla tags say breaks it fastest, of those {@link MiningClass} buckets
    * by: a hoe's blocks count as no tool's.
    */
-  private MiningClass.Tool tool() {
+  private static MiningClass.Tool tool(BlockType type) {
     if (type.is(BlockTypeTags.MINEABLE_PICKAXE)) {
       return MiningClass.Tool.PICKAXE;
     }
@@ -125,31 +274,26 @@ final class SpongeBlock implements MinecraftBlock {
     return MiningClass.Tool.NONE;
   }
 
-  @Override
-  public boolean isClimbable() {
+  private static boolean isClimbable(BlockState state, BlockType type) {
     return type.is(BlockTypeTags.CLIMBABLE);
   }
 
-  @Override
-  public boolean isScaffolding() {
+  private static boolean isScaffolding(BlockState state, BlockType type) {
     return type.equals(BlockTypes.SCAFFOLDING.get());
   }
 
-  @Override
-  public boolean isDangerous() {
+  private static boolean isDangerous(BlockState state, BlockType type) {
     return DANGEROUS.contains(type);
   }
 
-  @Override
-  public double damagePerSecond() {
-    if (isLava()) {
+  private static double damagePerSecond(BlockState state, BlockType type) {
+    if (isLava(state, type)) {
       return 20.0;
     }
-    return isDangerous() ? 4.0 : 0.0;
+    return isDangerous(state, type) ? 4.0 : 0.0;
   }
 
-  @Override
-  public double breakTimeSeconds() {
+  private static double breakTimeSeconds(BlockState state, BlockType type) {
     double hardness = state.get(Keys.DESTROY_SPEED).orElse(Double.POSITIVE_INFINITY);
     if (hardness < 0.0) {
       return Double.POSITIVE_INFINITY; // bedrock, barriers, etc.
@@ -157,18 +301,15 @@ final class SpongeBlock implements MinecraftBlock {
     return Math.max(hardness * 1.5, 0.05);
   }
 
-  @Override
-  public boolean supportsBoat() {
+  private static boolean supportsBoat(BlockState state, BlockType type) {
     return BOAT_SURFACES.contains(type);
   }
 
-  @Override
-  public boolean boostsSoulSpeed() {
+  private static boolean boostsSoulSpeed(BlockState state, BlockType type) {
     return type.equals(BlockTypes.SOUL_SAND.get()) || type.equals(BlockTypes.SOUL_SOIL.get());
   }
 
-  @Override
-  public double speedFactor() {
+  private static double speedFactor(BlockState state, BlockType type) {
     if (ICE.contains(type)) {
       return 1.4;
     }
@@ -182,32 +323,27 @@ final class SpongeBlock implements MinecraftBlock {
     return 1.0;
   }
 
-  @Override
-  public boolean isDoor() {
+  private static boolean isDoor(BlockState state, BlockType type) {
     return type.is(BlockTypeTags.DOORS)
         || type.is(BlockTypeTags.TRAPDOORS)
         || type.is(BlockTypeTags.FENCE_GATES);
   }
 
-  @Override
-  public boolean isTrapdoor() {
+  private static boolean isTrapdoor(BlockState state, BlockType type) {
     return type.is(BlockTypeTags.TRAPDOORS);
   }
 
-  @Override
-  public boolean isOpen() {
-    return flag(Keys.IS_OPEN);
+  private static boolean isOpen(BlockState state, BlockType type) {
+    return flag(state, Keys.IS_OPEN);
   }
 
-  @Override
-  public boolean opensByHand() {
+  private static boolean opensByHand(BlockState state, BlockType type) {
     return type.is(BlockTypeTags.WOODEN_DOORS)
         || type.is(BlockTypeTags.WOODEN_TRAPDOORS)
         || type.is(BlockTypeTags.FENCE_GATES);
   }
 
-  @Override
-  public boolean isPressurePlate() {
+  private static boolean isPressurePlate(BlockState state, BlockType type) {
     return type.is(BlockTypeTags.PRESSURE_PLATES);
   }
 }

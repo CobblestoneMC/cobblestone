@@ -63,18 +63,189 @@ final class PaperBlock implements MinecraftBlock {
           Material.REDSTONE_WALL_TORCH);
 
   private final BlockData data;
-  private final Material material;
+  private final Traits traits;
 
   PaperBlock(BlockData data) {
     this.data = data;
-    this.material = data.getMaterial();
+    this.traits = Traits.of(data.getMaterial());
   }
 
   @Override
   public boolean isPassable() {
+    return traits.isPassable;
+  }
+
+  @Override
+  public boolean isSolidTop() {
+    return traits.isSolidTop;
+  }
+
+  @Override
+  public boolean isHalfHeight() {
+    return traits.isHalfHeight;
+  }
+
+  @Override
+  public boolean isWater() {
+    return traits.isWater;
+  }
+
+  @Override
+  public boolean isLava() {
+    return traits.isLava;
+  }
+
+  @Override
+  public boolean isClimbable() {
+    return traits.isClimbable;
+  }
+
+  @Override
+  public boolean isScaffolding() {
+    return traits.isScaffolding;
+  }
+
+  @Override
+  public boolean isDangerous() {
+    return traits.isDangerous;
+  }
+
+  @Override
+  public double damagePerSecond() {
+    return traits.damagePerSecond;
+  }
+
+  @Override
+  public double breakTimeSeconds() {
+    return traits.breakTimeSeconds;
+  }
+
+  @Override
+  public MiningClass miningClass() {
+    return traits.miningClass;
+  }
+
+  @Override
+  public boolean supportsBoat() {
+    return traits.supportsBoat;
+  }
+
+  @Override
+  public boolean boostsSoulSpeed() {
+    return traits.boostsSoulSpeed;
+  }
+
+  @Override
+  public double speedFactor() {
+    return traits.speedFactor;
+  }
+
+  @Override
+  public boolean isDoor() {
+    return traits.isDoor;
+  }
+
+  @Override
+  public boolean isTrapdoor() {
+    return traits.isTrapdoor;
+  }
+
+  @Override
+  public boolean opensByHand() {
+    return traits.opensByHand;
+  }
+
+  @Override
+  public boolean isPressurePlate() {
+    return traits.isPressurePlate;
+  }
+
+  @Override
+  public boolean isOpen() {
+    return data instanceof Openable openable && openable.isOpen();
+  }
+
+  /**
+   * Whether a material's answers depend on its live block state, and its block has to be read
+   * whole: only an openable's do.
+   *
+   * @param material the material
+   * @return {@code true} if they do
+   */
+  static boolean isStateful(Material material) {
+    return Traits.of(material).stateful;
+  }
+
+  /**
+   * Everything a material says of itself, worked out once.
+   *
+   * <p>Most of it comes from vanilla tags, and asking a tag is a lookup through the server's tag
+   * registry: asked for every cell of every section a search builds, it was most of what building
+   * one cost. A material's answers never change while the server runs, so they are asked once.
+   *
+   * <p>Unsynchronized, as {@link PaperBlocks}' instances are: two threads racing on a material each
+   * build the same answers, and the fields are final.
+   */
+  private static final class Traits {
+
+    private static final Traits[] BY_MATERIAL = new Traits[Material.values().length];
+
+    private final boolean stateful;
+    private final boolean isPassable;
+    private final boolean isSolidTop;
+    private final boolean isHalfHeight;
+    private final boolean isWater;
+    private final boolean isLava;
+    private final boolean isClimbable;
+    private final boolean isScaffolding;
+    private final boolean isDangerous;
+    private final double damagePerSecond;
+    private final double breakTimeSeconds;
+    private final MiningClass miningClass;
+    private final boolean supportsBoat;
+    private final boolean boostsSoulSpeed;
+    private final double speedFactor;
+    private final boolean isDoor;
+    private final boolean isTrapdoor;
+    private final boolean opensByHand;
+    private final boolean isPressurePlate;
+
+    private Traits(Material material) {
+      this.stateful = isDoor(material);
+      this.isPassable = PaperBlock.isPassable(material);
+      this.isSolidTop = PaperBlock.isSolidTop(material);
+      this.isHalfHeight = PaperBlock.isHalfHeight(material);
+      this.isWater = PaperBlock.isWater(material);
+      this.isLava = PaperBlock.isLava(material);
+      this.isClimbable = PaperBlock.isClimbable(material);
+      this.isScaffolding = PaperBlock.isScaffolding(material);
+      this.isDangerous = PaperBlock.isDangerous(material);
+      this.damagePerSecond = PaperBlock.damagePerSecond(material);
+      this.breakTimeSeconds = PaperBlock.breakTimeSeconds(material);
+      this.miningClass = PaperBlock.miningClass(material);
+      this.supportsBoat = PaperBlock.supportsBoat(material);
+      this.boostsSoulSpeed = PaperBlock.boostsSoulSpeed(material);
+      this.speedFactor = PaperBlock.speedFactor(material);
+      this.isDoor = PaperBlock.isDoor(material);
+      this.isTrapdoor = PaperBlock.isTrapdoor(material);
+      this.opensByHand = PaperBlock.opensByHand(material);
+      this.isPressurePlate = PaperBlock.isPressurePlate(material);
+    }
+
+    static Traits of(Material material) {
+      Traits known = BY_MATERIAL[material.ordinal()];
+      if (known == null) {
+        known = new Traits(material);
+        BY_MATERIAL[material.ordinal()] = known;
+      }
+      return known;
+    }
+  }
+
+  private static boolean isPassable(Material material) {
     return material.isAir()
         || walkThrough(material)
-        || (!material.isSolid() && !isWater() && !isLava());
+        || (!material.isSolid() && !isWater(material) && !isLava(material));
   }
 
   /**
@@ -93,53 +264,44 @@ final class PaperBlock implements MinecraftBlock {
         || FLAT_FURNITURE.contains(material);
   }
 
-  @Override
-  public boolean isSolidTop() {
+  private static boolean isSolidTop(Material material) {
     // The same materials that do not stop a body do not hold one up either: nobody stands on top
     // of a torch, and a pressure plate is footing for the cell it occupies, not the one above it.
     return material.isSolid() && !walkThrough(material);
   }
 
-  @Override
-  public boolean isHalfHeight() {
+  private static boolean isHalfHeight(Material material) {
     return Tag.SLABS.isTagged(material) || material == Material.SNOW;
   }
 
-  @Override
-  public boolean isWater() {
+  private static boolean isWater(Material material) {
     return material == Material.WATER;
   }
 
-  @Override
-  public boolean isLava() {
+  private static boolean isLava(Material material) {
     return material == Material.LAVA;
   }
 
-  @Override
-  public boolean isClimbable() {
+  private static boolean isClimbable(Material material) {
     return Tag.CLIMBABLE.isTagged(material);
   }
 
-  @Override
-  public boolean isScaffolding() {
+  private static boolean isScaffolding(Material material) {
     return material == Material.SCAFFOLDING;
   }
 
-  @Override
-  public boolean isDangerous() {
+  private static boolean isDangerous(Material material) {
     return DANGEROUS.contains(material);
   }
 
-  @Override
-  public double damagePerSecond() {
+  private static double damagePerSecond(Material material) {
     if (material == Material.LAVA) {
       return 20.0;
     }
-    return isDangerous() ? 4.0 : 0.0;
+    return isDangerous(material) ? 4.0 : 0.0;
   }
 
-  @Override
-  public double breakTimeSeconds() {
+  private static double breakTimeSeconds(Material material) {
     float hardness = material.getHardness();
     if (hardness < 0.0f) {
       return Double.POSITIVE_INFINITY; // bedrock, barriers, etc.
@@ -147,10 +309,9 @@ final class PaperBlock implements MinecraftBlock {
     return Math.max(hardness * 1.5, 0.05);
   }
 
-  @Override
-  public MiningClass miningClass() {
+  private static MiningClass miningClass(Material material) {
     return MiningClass.of(
-        tool(),
+        tool(material),
         Tag.NEEDS_DIAMOND_TOOL.isTagged(material),
         material.getHardness(),
         material.getKey().getKey());
@@ -160,7 +321,7 @@ final class PaperBlock implements MinecraftBlock {
    * The tool the block's vanilla tags say breaks it fastest, of those {@link MiningClass} buckets
    * by: a hoe's blocks count as no tool's.
    */
-  private MiningClass.Tool tool() {
+  private static MiningClass.Tool tool(Material material) {
     if (Tag.MINEABLE_PICKAXE.isTagged(material)) {
       return MiningClass.Tool.PICKAXE;
     }
@@ -173,18 +334,15 @@ final class PaperBlock implements MinecraftBlock {
     return MiningClass.Tool.NONE;
   }
 
-  @Override
-  public boolean supportsBoat() {
+  private static boolean supportsBoat(Material material) {
     return BOAT_SURFACES.contains(material);
   }
 
-  @Override
-  public boolean boostsSoulSpeed() {
+  private static boolean boostsSoulSpeed(Material material) {
     return material == Material.SOUL_SAND || material == Material.SOUL_SOIL;
   }
 
-  @Override
-  public double speedFactor() {
+  private static double speedFactor(Material material) {
     if (ICE.contains(material)) {
       return 1.4;
     }
@@ -196,32 +354,23 @@ final class PaperBlock implements MinecraftBlock {
     };
   }
 
-  @Override
-  public boolean isDoor() {
+  private static boolean isDoor(Material material) {
     return Tag.DOORS.isTagged(material)
         || Tag.TRAPDOORS.isTagged(material)
         || Tag.FENCE_GATES.isTagged(material);
   }
 
-  @Override
-  public boolean isTrapdoor() {
+  private static boolean isTrapdoor(Material material) {
     return Tag.TRAPDOORS.isTagged(material);
   }
 
-  @Override
-  public boolean isOpen() {
-    return data instanceof Openable openable && openable.isOpen();
-  }
-
-  @Override
-  public boolean opensByHand() {
+  private static boolean opensByHand(Material material) {
     return Tag.WOODEN_DOORS.isTagged(material)
         || Tag.WOODEN_TRAPDOORS.isTagged(material)
         || Tag.FENCE_GATES.isTagged(material);
   }
 
-  @Override
-  public boolean isPressurePlate() {
+  private static boolean isPressurePlate(Material material) {
     return Tag.PRESSURE_PLATES.isTagged(material);
   }
 }
