@@ -69,7 +69,7 @@ final class SpongeBlocks implements PaletteResolver {
     }
     MinecraftBlock block;
     try {
-      block = new SpongeBlock(BlockState.fromString(state));
+      block = SpongeBlock.of(BlockState.fromString(state));
     } catch (RuntimeException error) {
       // An id this server has no block for — a world that visited a mod this server is missing.
       // There is no honest answer, so the chunk is failed and obtained the ordinary way instead.
@@ -84,7 +84,7 @@ final class SpongeBlocks implements PaletteResolver {
     MinecraftBlock resolved = air;
     if (resolved == null) {
       // A race here costs a second identical instance, never a wrong one.
-      resolved = new SpongeBlock(BlockTypes.AIR.get().defaultState());
+      resolved = SpongeBlock.of(BlockTypes.AIR.get().defaultState());
       air = resolved;
     }
     return resolved;

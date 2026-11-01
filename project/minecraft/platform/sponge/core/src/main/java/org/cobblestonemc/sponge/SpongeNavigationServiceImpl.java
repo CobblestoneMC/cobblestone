@@ -402,8 +402,8 @@ public final class SpongeNavigationServiceImpl
     }
     ServerLocation at = vehicle.get().serverLocation();
     ServerLocation below = at.sub(0, 1, 0);
-    if (!new SpongeBlock(at.block()).supportsBoat()
-        && new SpongeBlock(below.block()).supportsBoat()) {
+    if (!SpongeBlock.of(at.block()).supportsBoat()
+        && SpongeBlock.of(below.block()).supportsBoat()) {
       return below;
     }
     return at;
