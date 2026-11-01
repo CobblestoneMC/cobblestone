@@ -22,12 +22,14 @@ final class SpongeWorld implements MinecraftWorld {
   private final String key;
   private final int minY;
   private final int maxY;
+  private final long seed;
   private final Environment environment;
 
   SpongeWorld(ServerWorld world) {
     this.key = world.key().asString();
     this.minY = world.min().y();
     this.maxY = world.max().y();
+    this.seed = world.properties().worldGenerationConfig().seed();
     this.environment = environmentOf(world.worldType());
   }
 
@@ -52,6 +54,11 @@ final class SpongeWorld implements MinecraftWorld {
   @Override
   public int maxY() {
     return maxY;
+  }
+
+  @Override
+  public long seed() {
+    return seed;
   }
 
   @Override

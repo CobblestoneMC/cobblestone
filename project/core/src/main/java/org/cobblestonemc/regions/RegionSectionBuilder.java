@@ -32,12 +32,20 @@ import org.jetbrains.annotations.Nullable;
  *       for the graph to follow down.
  * </ol>
  *
+ * <p><b>Change the rules, bump {@link #FILL_VERSION} or the terrain's version.</b> A built section
+ * is a fact about the rules it was built by; one built under others is a different graph.
+ *
  * <p>Not thread-safe: it reuses a section's worth of scratch between builds. One per thread.
  *
  * @param <C> the platform's terrain
  * @param <K> the terrain's classes
  */
 public final class RegionSectionBuilder<C, K extends Enum<K> & RegionKind> {
+
+  /**
+   * The version of how this fills regions and finds contacts, apart from the terrain's own rules.
+   */
+  public static final int FILL_VERSION = 1;
 
   /**
    * Blocks of detour allowed regardless of distance, so a seed's immediate neighbors never split.

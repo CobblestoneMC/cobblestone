@@ -27,9 +27,8 @@ import org.cobblestonemc.regions.RegionKind;
  * <p><b>Adding a class</b> is a line here, saying how a body moves through it ({@link Body}), and
  * its price in {@link MinecraftAgent}, whose exhaustive switch will not compile without one.
  *
- * <p><b>A region stores its class by ordinal.</b> Reordering, adding or retiring a class changes
- * what a stored number means, which is fine for regions in memory, rebuilt with the server, and is
- * why anything keeping them longer must know the enum it was written with.
+ * <p><b>A region stores its class by ordinal,</b> and stored regions are kept with these names in
+ * this order, so reordering, adding or retiring a class only means regions on disk are built again.
  */
 public enum RegionClass implements RegionKind {
 

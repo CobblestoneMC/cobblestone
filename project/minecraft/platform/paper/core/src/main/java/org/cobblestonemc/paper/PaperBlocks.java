@@ -8,7 +8,6 @@
 package org.cobblestonemc.paper;
 
 import org.bukkit.Material;
-import org.bukkit.Tag;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 
 /**
@@ -55,7 +54,7 @@ final class PaperBlocks {
    */
   static MinecraftBlock of(PaperChunk chunk, int localX, int y, int localZ) {
     Material material = chunk.blockType(localX, y, localZ);
-    if (isStateful(material)) {
+    if (PaperBlock.isStateful(material)) {
       return new PaperBlock(chunk.blockData(localX, y, localZ));
     }
     PaperBlock cached = BY_MATERIAL[material.ordinal()];
@@ -65,12 +64,5 @@ final class PaperBlocks {
     PaperBlock block = new PaperBlock(material.createBlockData());
     BY_MATERIAL[material.ordinal()] = block;
     return block;
-  }
-
-  /** Whether this material's traits depend on its live block state (only openables do). */
-  private static boolean isStateful(Material material) {
-    return Tag.DOORS.isTagged(material)
-        || Tag.TRAPDOORS.isTagged(material)
-        || Tag.FENCE_GATES.isTagged(material);
   }
 }

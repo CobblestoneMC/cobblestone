@@ -18,7 +18,11 @@ import org.cobblestonemc.DomainBounds;
  * RegionKind}). What crossing a class costs is a {@link RegionAgent}'s answer, never the terrain's.
  *
  * <p><b>Classes are an enum,</b> of fewer than 128 constants. A region stores its class by ordinal,
- * so anything that keeps regions past the running server has to know when the enum changes.
+ * so {@link RegionFiles} keeps the enum's names with what it stores, and reads nothing back stored
+ * under others.
+ *
+ * <p><b>Change how cells are classified, bump {@link #version()}.</b> A built section is a fact
+ * about the rules it was built by; one built under others is a different graph.
  *
  * <p>Must be safe to call from several threads at once: builds run in parallel.
  *
@@ -26,6 +30,15 @@ import org.cobblestonemc.DomainBounds;
  * @param <K> the terrain's classes
  */
 public interface RegionTerrain<C, K extends Enum<K> & RegionKind> {
+
+  /**
+   * Returns the version of these rules: how cells are classified. Sections stored under any other
+   * version are built again: read back, they would mix two models in one search. The classes
+   * themselves need no bump, since a stored section is kept with their names.
+   *
+   * @return the version
+   */
+  int version();
 
   /**
    * Returns the terrain's classes.

@@ -37,6 +37,12 @@ public final class StonebrickWorld implements MinecraftWorld {
     return maxY;
   }
 
+  /** None recorded: a capture's terrain never changes under its key. */
+  @Override
+  public long seed() {
+    return 0;
+  }
+
   @Override
   public String key() {
     return key;

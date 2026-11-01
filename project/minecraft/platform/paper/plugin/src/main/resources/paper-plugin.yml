@@ -30,6 +30,9 @@ permissions:
   cobblestone.admin.portals:
     description: "Clear discovered portals"
     default: op
+  cobblestone.admin.regions:
+    description: "Delete a world's region cache"
+    default: op
   cobblestone.admin.location.global:
     description: "Manage server-wide locations (-global)"
     default: op

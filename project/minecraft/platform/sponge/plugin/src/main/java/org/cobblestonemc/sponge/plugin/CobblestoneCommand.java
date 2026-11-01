@@ -16,6 +16,7 @@ import java.util.stream.Stream;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import org.cobblestonemc.LogLevel;
+import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.plugin.Permissions;
 import org.cobblestonemc.plugin.config.ConfigKeys;
 import org.cobblestonemc.plugin.config.ConfigManager;
@@ -38,6 +39,7 @@ import org.spongepowered.api.command.parameter.managed.Flag;
 import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.world.server.ServerLocation;
+import org.spongepowered.api.world.server.ServerWorld;
 
 /**
  * The {@code /cobblestone} (alias {@code /stone}) command tree. Its {@code navigate} and {@code
@@ -54,6 +56,7 @@ final class CobblestoneCommand {
       Messages messages,
       Log4JCobblestoneLogger log,
       PortalTransitionDao portals,
+      RegionStores regions,
       TripManager<Entity, SpongeTripAgent, ServerLocation> trips,
       TripHud<Entity, SpongeTripAgent, ServerLocation> hud,
       SearchRegistry<ServerLocation> searches,
@@ -115,6 +118,19 @@ final class CobblestoneCommand {
             .addChild(portalsClear, "clear")
             .executor(ctx -> help(ctx, messages))
             .build();
+    Parameter.Value<ServerWorld> regionsWorld = Parameter.world().key("world").build();
+    Command.Parameterized regionsClear =
+        Command.builder()
+            .permission(Permissions.REGIONS.value())
+            .addParameter(regionsWorld)
+            .executor(ctx -> clearRegions(ctx, messages, log, regions, regionsWorld))
+            .build();
+    Command.Parameterized regionsCmd =
+        Command.builder()
+            .permission(Permissions.REGIONS.value())
+            .addChild(regionsClear, "clear")
+            .executor(ctx -> help(ctx, messages))
+            .build();
     return Command.builder()
         .shortDescription(Component.text("Cobblestone commands"))
         .addChild(reload, "reload")
@@ -123,6 +139,7 @@ final class CobblestoneCommand {
         .addChild(tripsCmd, "trips")
         .addChild(hudCmd, "hud")
         .addChild(portalsCmd, "portals")
+        .addChild(regionsCmd, "regions")
         .addChild(navigate, "navigate")
         .addChild(location, "location", "loc")
         .executor(ctx -> help(ctx, messages))
@@ -205,6 +222,12 @@ final class CobblestoneCommand {
         locale,
         "/cobblestone portals clear",
         "command.cobblestone.help.portals");
+    SpongeCommandHelp.line(
+        audience,
+        messages,
+        locale,
+        "/cobblestone regions clear <world>",
+        "command.cobblestone.help.regions");
     SpongeCommandHelp.line(
         audience,
         messages,
@@ -364,6 +387,30 @@ final class CobblestoneCommand {
         localeOf(ctx, messages),
         CobblestoneMessages.PORTALS_CLEARED,
         removed);
+    return CommandResult.success();
+  }
+
+  /** Deletes a world's regions off the server thread, and says so once they are gone. */
+  private static CommandResult clearRegions(
+      CommandContext ctx,
+      Messages messages,
+      Log4JCobblestoneLogger log,
+      RegionStores regions,
+      Parameter.Value<ServerWorld> worldParam) {
+    Audience audience = ctx.cause().audience();
+    Locale locale = localeOf(ctx, messages);
+    String key = ctx.requireOne(worldParam).key().asString();
+    regions
+        .clear(key)
+        .whenComplete(
+            (cleared, failed) -> {
+              if (failed == null) {
+                messages.send(audience, locale, CobblestoneMessages.REGIONS_CLEARED, key);
+              } else {
+                log.error("Could not delete the regions of {}", failed, key);
+                messages.send(audience, locale, CobblestoneMessages.REGIONS_CLEAR_FAILED, key);
+              }
+            });
     return CommandResult.success();
   }
 

@@ -31,6 +31,9 @@ import org.cobblestonemc.regions.RegionTerrain;
  * water or a ladder, and drops off a ledge onto ground, a ladder or water up to {@link
  * #DEEPEST_FALL} below. Which of those falls a player survives is {@link MinecraftAgent}'s to say.
  *
+ * <p><b>Change any of it, bump {@link #VERSION}.</b> Stored sections built under other rules are
+ * built again.
+ *
  * <p><b>One per environment,</b> because what soft rock is depends on the dimension: netherrack in
  * the Nether, mostly sandstone elsewhere, at twice the hardness. A rock region's class is chosen by
  * its cells' hardness, so the same blocks can make a different class in a different dimension.
@@ -45,6 +48,9 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk, Reg
       BY_ENVIRONMENT.put(environment, new MinecraftTerrain(environment));
     }
   }
+
+  /** The version of these rules; see {@link RegionTerrain#version()}. */
+  public static final int VERSION = 1;
 
   /** A chunk section is 16 blocks a side: {@code 1 << 4}. */
   private static final int SECTION_SHIFT = 4;
@@ -80,6 +86,11 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk, Reg
    */
   public static MinecraftTerrain of(Environment environment) {
     return BY_ENVIRONMENT.get(environment);
+  }
+
+  @Override
+  public int version() {
+    return VERSION;
   }
 
   @Override

@@ -238,6 +238,14 @@ public final class CobblestoneMessages {
   public static final Message1 PORTALS_CLEARED =
       Message1.success("command.cobblestone.portals.cleared");
 
+  /** Confirms a world's region cache was deleted ({@code {0}} = the world's key). */
+  public static final Message1 REGIONS_CLEARED =
+      Message1.success("command.cobblestone.regions.cleared");
+
+  /** A world's region cache could not be deleted ({@code {0}} = the world's key). */
+  public static final Message1 REGIONS_CLEAR_FAILED =
+      Message1.error("command.cobblestone.regions.clear_failed");
+
   /** The navigation menu's hint on an entry that opens a further level. */
   public static final Message0 MENU_OPEN = Message0.info("menu.open");
 

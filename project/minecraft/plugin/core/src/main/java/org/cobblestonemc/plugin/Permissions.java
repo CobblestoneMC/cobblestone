@@ -43,6 +43,9 @@ public enum Permissions {
   /** Clearing the discovered-portal store. Default op. */
   PORTALS("cobblestone.admin.portals"),
 
+  /** Deleting a world's region cache with {@code /cobblestone regions clear}. Default op. */
+  REGIONS("cobblestone.admin.regions"),
+
   /** Creating and deleting server-wide locations ({@code -global}). Default op. */
   LOCATION_GLOBAL("cobblestone.admin.location.global");
 

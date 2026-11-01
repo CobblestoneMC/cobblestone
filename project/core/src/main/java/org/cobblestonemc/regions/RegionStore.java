@@ -7,6 +7,8 @@
 
 package org.cobblestonemc.regions;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -21,23 +23,27 @@ import org.jetbrains.annotations.Nullable;
 /**
  * Every built {@link RegionSection} of one domain, shared by every search over it.
  *
- * <p><b>Built once, kept in memory.</b> Building a section is most of what a search over new
- * terrain spends, and a section only needs building again when a block it was read from changes, so
- * a section built once serves every later search, by every agent, until then.
+ * <p><b>Three places a section can come from,</b> tried in order: memory, disk, and building it
+ * from the terrain. Building is the expensive one — it is most of what a search over new terrain
+ * spends — and a section only needs building again when a block it was read from changes, so a
+ * section built once serves every later search, by every agent, until then; and through {@link
+ * RegionFiles}, across restarts. A section built but not yet written is held until the next {@link
+ * #flush}, whatever the budget, so evicting it never loses it.
  *
  * <p><b>Two kinds of section in memory.</b> <em>Pinned</em> sections are kept whatever the budget,
  * until their last pin is released: a navigating player's surroundings, so the short searches that
  * re-plan around them never build. The rest are kept up to a byte budget, least recently used first
  * out. The two are held apart, so evicting never has to look past a pinned section.
  *
- * <p><b>Changes invalidate.</b> {@link #invalidate} drops a section, and the next search to need it
- * builds it again. A section being built when its terrain changes is handed to the search that
- * asked for it — it is at most a moment stale — but not kept. Only seams cross sections, and seams
- * are built per search, so a change never reaches a neighbor.
+ * <p><b>Changes invalidate.</b> {@link #invalidate} drops a section from memory, and from disk at
+ * the next flush, and the next search to need it builds it again. A section being built when its
+ * terrain changes is handed to the search that asked for it — it is at most a moment stale — but
+ * not kept. Only seams cross sections, and seams are built per search, so a change never reaches a
+ * neighbor.
  *
  * <p>Thread-safe. Searches on several workers, block-change listeners on the server thread and
  * builds all use it at once; its maps are guarded by the store's own lock, and nothing slow —
- * building — happens while holding it.
+ * building, reading, writing — happens while holding it.
  *
  * @param <C> the platform's terrain
  * @param <K> the terrain's classes
@@ -46,6 +52,8 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
 
   private final RegionSpec<C, K> spec;
   private final long memoryBudget;
+  private final RegionStorage storage;
+  private final Executor disk;
   private final Executor builds;
   private final ThreadLocal<RegionSectionBuilder<C, K>> builders;
 
@@ -67,10 +75,21 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
   /** Each owner's pinned sections. */
   private final Map<Object, Set<Long>> pins = new HashMap<>();
 
+  /** Built since the last flush, and not yet on disk. Kept whatever the budget says. */
+  private final Map<Long, RegionSection> unwritten = new HashMap<>();
+
+  /** Invalidated since the last flush: to come off disk. */
+  private final Set<Long> removed = new HashSet<>();
+
+  /** Set by {@link #delete}: nothing is written after it. */
+  private volatile boolean deleted;
+
   private final Map<Long, CompletableFuture<RegionSection>> loading = new HashMap<>();
   private final Set<Long> changedWhileLoading = new HashSet<>();
 
   private long memoryHits;
+  private long diskLoads;
+  private long diskNanos;
   private long built;
   private long buildNanos;
   private long evictions;
@@ -80,18 +99,29 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
    *
    * @param spec how the domain's terrain is cut into regions
    * @param memoryBudget how many bytes of sections not pinned to keep in memory
+   * @param storage where to keep sections beyond memory: {@link RegionFiles}, or {@link
+   *     RegionStorage#NONE} to keep them only in memory
+   * @param disk where disk reads and writes run, one task at a time and in order, so they never
+   *     race
    * @param builds where a section is built when its terrain arrives later rather than at once
    */
-  public RegionStore(RegionSpec<C, K> spec, long memoryBudget, Executor builds) {
+  public RegionStore(
+      RegionSpec<C, K> spec,
+      long memoryBudget,
+      RegionStorage storage,
+      Executor disk,
+      Executor builds) {
     this.spec = spec;
     this.memoryBudget = memoryBudget;
+    this.storage = storage;
+    this.disk = disk;
     this.builds = builds;
     this.builders = ThreadLocal.withInitial(() -> new RegionSectionBuilder<>(spec));
   }
 
   /**
-   * Creates a store that keeps everything, on the caller's thread: one search's worth, as for a
-   * benchmark or a test.
+   * Creates a store that keeps everything in memory, on the caller's thread: one search's worth, as
+   * for a benchmark or a test.
    *
    * @param spec how the domain's terrain is cut into regions
    * @param <C> the platform's terrain
@@ -100,7 +130,8 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
    */
   public static <C, K extends Enum<K> & RegionKind> RegionStore<C, K> inMemory(
       RegionSpec<C, K> spec) {
-    return new RegionStore<>(spec, Long.MAX_VALUE, Runnable::run);
+    return new RegionStore<>(
+        spec, Long.MAX_VALUE, RegionStorage.NONE, Runnable::run, Runnable::run);
   }
 
   /**
@@ -113,12 +144,13 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
   }
 
   /**
-   * Returns a section, from memory or by building it from terrain {@code source} supplies.
+   * Returns a section, from memory, from disk, or by building it from terrain {@code source}
+   * supplies.
    *
-   * <p>Immediate when the section is in memory, when its terrain answered at once, or when it is
-   * wholly outside the domain, which is never read. Otherwise a future that completes once the
-   * section is built; a search should keep what it was handed rather than ask again, since a tight
-   * budget may already have evicted it.
+   * <p>Immediate when the section is in memory, when every step on the way to it — the disk read,
+   * the terrain — answered at once, or when it is wholly outside the domain, which is never read.
+   * Otherwise a future that completes once the section is ready; a search should keep what it was
+   * handed rather than ask again, since a tight budget may already have evicted it.
    *
    * @param sectionX the section X
    * @param sectionY the section Y
@@ -138,6 +170,12 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
       if (known == null) {
         known = memory.get(key);
       }
+      if (known == null) {
+        known = unwritten.get(key);
+        if (known != null) {
+          remember(key, known);
+        }
+      }
       if (known != null) {
         memoryHits++;
         return FutureOr.of(known);
@@ -146,13 +184,57 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
       if (inFlight != null) {
         return FutureOr.from(inFlight);
       }
-      // Registered before any work starts: terrain that answers at once completes the promise
-      // inside this call, and its completion has to find the entry to clear.
+      // Registered before any work starts: a disk read or terrain that answers at once completes
+      // the promise inside this call, and its completion has to find the entry to clear.
       promise = new CompletableFuture<>();
       loading.put(key, promise);
     }
-    build(sectionX, sectionY, sectionZ, key, source, promise);
+    load(sectionX, sectionY, sectionZ, key, source, promise);
     return FutureOr.from(promise);
+  }
+
+  private void load(
+      int sx,
+      int sy,
+      int sz,
+      long key,
+      TerrainSource<C> source,
+      CompletableFuture<RegionSection> to) {
+    boolean stale;
+    synchronized (this) {
+      // Invalidated and not yet removed from disk: what is there is the terrain before the change.
+      stale = removed.contains(key);
+    }
+    if (!storage.keeps() || stale) {
+      build(sx, sy, sz, key, source, to);
+      return;
+    }
+    disk.execute(
+        () -> {
+          RegionSection stored;
+          long started = System.nanoTime();
+          try {
+            stored = storage.read(sx, sy, sz);
+          } catch (IOException | RuntimeException unreadable) {
+            // A file that cannot be read is a section that has to be built again; the next write
+            // of that section replaces it.
+            stored = null;
+          }
+          long took = System.nanoTime() - started;
+          synchronized (this) {
+            diskNanos += took;
+            if (stored != null) {
+              diskLoads++;
+            }
+          }
+          if (stored != null) {
+            settle(key, stored, true, false, to);
+          } else {
+            // Built on the build pool: the disk runs one task at a time, every read and write of
+            // the domain's, and a build is far slower than a read.
+            builds.execute(() -> build(sx, sy, sz, key, source, to));
+          }
+        });
   }
 
   private void build(
@@ -170,8 +252,9 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
       return;
     }
     if (terrain.isImmediate()) {
+      boolean readable = terrain.value() != null;
       try {
-        settle(key, built(sx, sy, sz, terrain.value()), terrain.value(), to);
+        settle(key, built(sx, sy, sz, terrain.value()), readable, readable, to);
       } catch (RuntimeException failed) {
         // Failed, not thrown: left in flight, the section would park every later search on it.
         fail(key, to, failed);
@@ -185,7 +268,8 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
             (arrived, failure) -> {
               try {
                 C readable = failure == null ? arrived : null;
-                settle(key, built(sx, sy, sz, readable), readable, to);
+                boolean real = readable != null;
+                settle(key, built(sx, sy, sz, readable), real, real, to);
               } catch (RuntimeException failed) {
                 fail(key, to, failed);
               }
@@ -205,19 +289,30 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
   }
 
   /**
-   * Keeps a section that has been built, unless its terrain changed meanwhile, and hands it over.
+   * Keeps a section that has arrived, unless its terrain changed meanwhile, and hands it over.
    *
    * <p>A section whose terrain could not be read is handed over but not kept: the terrain may be
    * generated, or a load policy relax, and a remembered empty section would wall it off for every
    * later search.
+   *
+   * @param keep whether it describes real terrain, built or read back
+   * @param fresh whether it was built just now, and so belongs on disk
    */
   private void settle(
-      long key, RegionSection section, @Nullable C terrain, CompletableFuture<RegionSection> to) {
+      long key,
+      RegionSection section,
+      boolean keep,
+      boolean fresh,
+      CompletableFuture<RegionSection> to) {
     synchronized (this) {
       loading.remove(key);
       boolean changed = changedWhileLoading.remove(key);
-      if (!changed && terrain != null) {
+      if (!changed && keep) {
         remember(key, section);
+        if (fresh && storage.keeps()) {
+          unwritten.put(key, section);
+          removed.remove(key);
+        }
       }
     }
     to.complete(section);
@@ -329,13 +424,17 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
     if (dropped != null) {
       pinnedBytes -= dropped.footprintBytes();
     }
+    unwritten.remove(key);
     if (loading.containsKey(key)) {
       changedWhileLoading.add(key);
+    }
+    if (storage.keeps()) {
+      removed.add(key);
     }
   }
 
   /**
-   * Returns whether a section is in memory, pinned or not.
+   * Returns whether a section is in memory, pinned or not. Says nothing about disk.
    *
    * @param sectionX the section X
    * @param sectionY the section Y
@@ -345,6 +444,96 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
   public synchronized boolean inMemory(int sectionX, int sectionY, int sectionZ) {
     long key = RegionSection.key(sectionX, sectionY, sectionZ);
     return memory.containsKey(key) || pinned.containsKey(key);
+  }
+
+  /**
+   * Writes every section built since the last flush, and removes every invalidated one, on the disk
+   * thread.
+   *
+   * <p>A write that fails puts its sections back, so the next flush tries again.
+   *
+   * @return a future completing when the write is done
+   */
+  public CompletableFuture<Void> flush() {
+    if (deleted) {
+      return CompletableFuture.completedFuture(null);
+    }
+    Map<Long, RegionSection> writing;
+    Set<Long> removing;
+    synchronized (this) {
+      if (unwritten.isEmpty() && removed.isEmpty()) {
+        return CompletableFuture.completedFuture(null);
+      }
+      writing = new HashMap<>(unwritten);
+      removing = new HashSet<>(removed);
+      unwritten.clear();
+      removed.clear();
+    }
+    return CompletableFuture.runAsync(
+        () -> {
+          if (deleted) {
+            return; // queued before the files went, and run after: what it holds went with them
+          }
+          try {
+            storage.write(writing.values(), removing);
+          } catch (IOException failed) {
+            synchronized (this) {
+              // Not a section invalidated while the write ran: putting it back would serve, and
+              // then write, the terrain before the change.
+              writing.forEach(
+                  (key, section) -> {
+                    if (!removed.contains(key)) {
+                      unwritten.putIfAbsent(key, section);
+                    }
+                  });
+              removed.addAll(removing);
+            }
+            throw new UncheckedIOException(failed);
+          }
+        },
+        disk);
+  }
+
+  /**
+   * Deletes every section on disk, on the disk executor, and writes nothing after: for terrain that
+   * changed where no {@link #invalidate} said so. The store is done with once it is called; a store
+   * made afresh for the domain, on the same disk executor, reads nothing that was here.
+   *
+   * @return a future completing once the files are deleted
+   */
+  public CompletableFuture<Void> delete() {
+    deleted = true;
+    synchronized (this) {
+      unwritten.clear();
+      removed.clear();
+    }
+    return CompletableFuture.runAsync(
+        () -> {
+          try {
+            storage.delete();
+          } catch (IOException failed) {
+            throw new UncheckedIOException(failed);
+          }
+        },
+        disk);
+  }
+
+  /**
+   * Releases the files the store holds open, on the disk executor. Unwritten sections are not
+   * written: {@link #flush} first.
+   *
+   * @return a future completing once they are closed
+   */
+  public CompletableFuture<Void> close() {
+    return CompletableFuture.runAsync(
+        () -> {
+          try {
+            storage.close();
+          } catch (IOException ignored) {
+            // A handle that will not close is released when the process ends.
+          }
+        },
+        disk);
   }
 
   /**
@@ -358,10 +547,15 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
         memoryBytes,
         pinned.size(),
         pinnedBytes,
+        unwritten.size(),
         memoryHits,
+        diskLoads,
+        diskNanos,
         built,
         buildNanos,
-        evictions);
+        evictions,
+        storage.bytesRead(),
+        storage.bytesWritten());
   }
 
   /**
@@ -371,20 +565,30 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
    * @param unpinnedBytes their approximate footprint
    * @param pinnedSections pinned sections held in memory now, beyond the budget
    * @param pinnedBytes their approximate footprint
+   * @param unwrittenSections sections built and not yet on disk
    * @param memoryHits sections answered from memory
+   * @param diskLoads sections read back from disk
+   * @param diskNanos time spent reading the disk, including reads that found nothing
    * @param builds sections built from terrain
    * @param buildNanos time spent building them
    * @param evictions sections dropped from memory for the budget
+   * @param diskBytesRead record bytes read
+   * @param diskBytesWritten bytes written
    */
   public record Stats(
       int unpinnedSections,
       long unpinnedBytes,
       int pinnedSections,
       long pinnedBytes,
+      int unwrittenSections,
       long memoryHits,
+      long diskLoads,
+      long diskNanos,
       long builds,
       long buildNanos,
-      long evictions) {}
+      long evictions,
+      long diskBytesRead,
+      long diskBytesWritten) {}
 
   /** Puts a section in memory as most recently used, evicting the least recent past the budget. */
   private void remember(long key, RegionSection section) {

@@ -52,6 +52,14 @@ public interface MinecraftWorld extends Domain {
   }
 
   /**
+   * Returns the seed the world's terrain was generated from. A world made again under the same key
+   * from another seed is other terrain, which is how regions kept on disk tell it apart.
+   *
+   * @return the seed
+   */
+  long seed();
+
+  /**
    * Returns the world's environment, for dimension-aware cost tuning.
    *
    * @return the environment
