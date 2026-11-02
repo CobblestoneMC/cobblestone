@@ -273,6 +273,20 @@ class TrailLabelManagerTest {
   }
 
   @Test
+  void aPlayerWhoCannotAimGetsNoCancel() {
+    platform.aims = false;
+    Trip<Object, TestTripAgent, Vec3> trip = start(address("player", "Steve"), AHEAD);
+    assertTrue(platform.cancels().isEmpty());
+
+    platform.lookAt(HologramPlacement.cancelAt(platform.only().at));
+    assertFalse(labels.swing(player.uuid()), "where Cancel would be is just air");
+    assertEquals(1, trips.trips(player.uuid()).size());
+
+    trips.stop(trip);
+    assertTrue(platform.only().removed);
+  }
+
+  @Test
   void hittingFromFarAwayCounts() {
     Vec3 far = new Vec3(20.0, 0.9, 0.5); // well past the 3 blocks a survival player can reach
     start(address("player", "Steve"), far);
@@ -352,6 +366,7 @@ class TrailLabelManagerTest {
     Vec3 feet = FEET;
     Vec3 look = new Vec3(1, 0, 0);
     boolean online = true;
+    boolean aims = true;
 
     /** The one label's name line. */
     FakeHologram only() {
@@ -388,6 +403,11 @@ class TrailLabelManagerTest {
     @Override
     public TrailSmoother.BlockProbe probe(TestTripAgent agent) {
       return probe;
+    }
+
+    @Override
+    public boolean aims(TestTripAgent agent) {
+      return aims;
     }
 
     @Override

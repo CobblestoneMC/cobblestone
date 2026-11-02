@@ -54,8 +54,10 @@ The trail renders only the next segment of the route, brightest at the point to 
 ## The navigation menu
 
 Type `/nav` on its own to open a menu of everywhere you can go. `/nav -help` lists the flags
-`/nav` takes. On a server with the Geyser integration, Bedrock players can open the menu without
-typing by doing the **Simple Clap** emote.
+`/nav` takes. On a Paper server with Geyser, Bedrock players can also open it without typing by
+doing the **Simple Clap** emote. On Bedrock, the menu is a scrolling list of buttons rather than a
+chest, showing only what you can use right now. It starts with a button to
+stop each trip you have running, and a **Recents** button for your recent destinations.
 
 - Items marked **»** open a further list. Others start navigating as soon as you click them.
 - Something that is both a place and a list opens, and lists the place itself first.
@@ -279,7 +281,8 @@ each trip appears over its trail (or the guide back to it), named the same way a
 one trip to a player named Steve it reads `Steve`; add a trip to a town also named Steve and they
 read `player Steve` and `town Steve`. A label only appears where you can see it, and the labels go
 away as soon as you move, so they stay out of your way while you follow the trail. **Hit the red
-`Cancel` above a label to cancel that trip**; it works from any distance you can see it from. On
+`Cancel` above a label to cancel that trip**; it works from any distance you can see it from.
+Bedrock players get no `Cancel`: use the stop buttons in the menu, or `/stone cancel`. On
 Sponge servers, other players nearby can see your labels too, but only you can cancel your trips
 with them.
 

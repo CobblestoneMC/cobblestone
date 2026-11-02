@@ -1,6 +1,6 @@
 ---
 title: Integrations
-description: Companion plugins for Towny, EssentialsX, Citizens, Geyser, quest plugins, and Typewriter.
+description: Companion plugins for Towny, EssentialsX, Citizens, quest plugins, and Typewriter.
 ---
 
 # Integrations
@@ -49,22 +49,6 @@ The `town` level is strict: `/nav town riverwood home` is valid; `/nav riverwood
 
 Change how homes and the spawn look in the navigation menu under `icons` in
 `plugins/CobblestoneEssentials/config.yml`.
-
-## Geyser
-
-**CobblestoneGeyser** · requires Geyser on this server
-
-Bedrock players open the [navigation menu](config.md#menu) by performing an emote, instead of
-typing `/nav`. The emote runs `/navigate` as the player, so it needs the same permission. The
-default emote is **Simple Clap**, one of the four every Bedrock player starts with; change the list
-of emote ids under `emotes` in `plugins/CobblestoneGeyser/config.yml`.
-
-Geyser must run on this server: Geyser on a proxy cannot report emotes to it.
-
-!!! note
-
-    Bedrock players see textured heads in the menu as plain heads unless the texture is also listed
-    in Geyser's `custom-skulls.yml`.
 
 ## Citizens
 

@@ -7,6 +7,7 @@
 
 package org.cobblestonemc.plugin.menu;
 
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.function.Supplier;
@@ -93,14 +94,49 @@ public final class NavigationMenus<P> {
    * @param redraw draws the menu again
    */
   public void click(P player, NavigationMenu menu, int slot, Runnable redraw) {
-    switch (menu.click(slot)) {
+    act(player, menu, menu.click(slot), redraw, true);
+  }
+
+  /**
+   * A player's menu as a {@linkplain NavigationMenu#list list} of buttons, with only what would
+   * work to press: each destination is built to see whether it is usable now. Call on the player's
+   * own thread, as for {@link #click}.
+   *
+   * @param player the player
+   * @param menu their menu
+   * @return the buttons' names, in order
+   */
+  public List<Component> list(P player, NavigationMenu menu) {
+    return menu.list(pick -> build(player, pick) instanceof Validity.Valid<NavigationTarget>);
+  }
+
+  /**
+   * Handles the press of a button in a player's menu, drawn as a {@linkplain NavigationMenu#list
+   * list}, as {@link #click} does a click on a slot. Call on the player's own thread. A destination
+   * that has become unusable since it was listed is not marked as refused, as in the chest: drawn
+   * again, the list leaves it out.
+   *
+   * @param player the player
+   * @param menu their menu
+   * @param index the button's position in the list
+   * @param redraw draws the menu again
+   */
+  public void choose(P player, NavigationMenu menu, int index, Runnable redraw) {
+    act(player, menu, menu.choose(index), redraw, false);
+  }
+
+  private void act(
+      P player, NavigationMenu menu, MenuAction action, Runnable redraw, boolean refuse) {
+    switch (action) {
       case MenuAction.None none -> {}
       case MenuAction.Redraw again -> redraw.run();
       case MenuAction.Close close -> platform.closeThen(player, () -> {});
       case MenuAction.Navigate pick -> {
         switch (build(player, pick.destination())) {
           case Validity.Invalid<NavigationTarget>(Component reason) -> {
-            menu.refuse(reason);
+            if (refuse) {
+              menu.refuse(reason);
+            }
             redraw.run();
           }
           case Validity.Valid<NavigationTarget>(NavigationTarget destination) ->

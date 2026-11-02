@@ -46,7 +46,8 @@ import org.cobblestonemc.plugin.trip.TripManager;
  *
  * <p>Each label reads {@code Cancel} in red above the trip's name, and hitting that cancels the
  * trip. The client can't hit a label (see {@link LabelHit}), so the platform reports every left
- * click to {@link #swing}, which works out what it landed on.
+ * click to {@link #swing}, which works out what it landed on. A player who can't {@linkplain
+ * HologramPlatform#aims aim} at it gets the name alone.
  *
  * @param <E> the native entity type
  * @param <A> the trip-agent type wrapping a player
@@ -151,6 +152,9 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
       TrailSmoother.BlockProbe probe = platform.probe(agent);
       double nearest = Double.POSITIVE_INFINITY;
       for (Shown<E, A, L> shown : session.shown.values()) {
+        if (shown.cancel() == null) {
+          continue;
+        }
         OptionalDouble distance =
             LabelHit.distance(
                 position.get().eye(),
@@ -241,13 +245,16 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
     }
   }
 
-  /** Places a trip's label, its name at {@code at} and {@code Cancel} above. */
+  /** Places a trip's label, its name at {@code at} and {@code Cancel} above if they can aim. */
   private Optional<Shown<E, A, L>> spawn(A agent, Trip<E, A, L> trip, Vec3 at, Component text) {
-    String cancelText = messages.raw(agent.locale(), CobblestoneMessages.HOLOGRAM_CANCEL.key());
     Optional<Hologram> name = platform.spawn(agent, at, text);
     if (name.isEmpty()) {
       return Optional.empty();
     }
+    if (!platform.aims(agent)) {
+      return Optional.of(new Shown<>(name.get(), null, at, text, trip, 0));
+    }
+    String cancelText = messages.raw(agent.locale(), CobblestoneMessages.HOLOGRAM_CANCEL.key());
     Optional<Hologram> cancel =
         platform.spawn(
             agent, HologramPlacement.cancelAt(at), Component.text(cancelText, NamedTextColor.RED));
@@ -314,7 +321,7 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
    * A trip's label as shown.
    *
    * @param name the line with the trip's name
-   * @param cancel the {@code Cancel} line above it
+   * @param cancel the {@code Cancel} line above it, or {@code null} if the player can't aim at it
    * @param at the center of the name
    * @param text the name
    * @param trip the trip it cancels
@@ -334,7 +341,9 @@ public final class TrailLabelManager<E, A extends TripAgent<E>, L> implements Tr
 
     void remove() {
       name.remove();
-      cancel.remove();
+      if (cancel != null) {
+        cancel.remove();
+      }
     }
   }
 }
