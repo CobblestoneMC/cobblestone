@@ -174,7 +174,8 @@ public final class CobblestonePaperPlugin extends JavaPlugin {
     // is
     // registered as a service so it is discovered like any third-party navigator.
     this.tripManager =
-        new TripManager<>(platformApi.scheduler(), workers.time(), config.get(keys.tripsMaxActivePerPlayer));
+        new TripManager<>(
+            platformApi.scheduler(), workers.time(), config.get(keys.tripsMaxActivePerPlayer));
     // Bedrock players, told apart by Geyser or Floodgate if either is here, get a form rather than
     // a chest and labels without a Cancel they would have to aim at.
     PaperBedrock bedrock = PaperBedrock.find(this);

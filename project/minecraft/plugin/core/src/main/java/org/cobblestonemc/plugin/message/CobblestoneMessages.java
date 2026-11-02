@@ -285,9 +285,6 @@ public final class CobblestoneMessages {
   /** The button that submits a destination's options in its dialog. */
   public static final Message0 MENU_DIALOG_NAVIGATE = Message0.info("menu.dialog.navigate");
 
-  /** The button that dismisses a destination's options dialog. */
-  public static final Message0 MENU_DIALOG_CANCEL = Message0.info("menu.dialog.cancel");
-
   /** The label of an option that may be left out ({@code {0}} = the option's name). */
   public static final Message1 MENU_DIALOG_OPTIONAL = Message1.info("menu.dialog.optional");
 

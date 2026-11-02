@@ -32,7 +32,7 @@ import org.cobblestonemc.plugin.message.Messages;
 
 /**
  * Asks a player for a destination's options in a dialog, then navigates there as though they had
- * typed it all.
+ * typed it all. It has the one button, {@code Navigate}; closing it cancels.
  *
  * <p>Paper marks its dialog API experimental, so a Paper update may change it under this class.
  */
@@ -73,9 +73,6 @@ final class PaperOptionDialog {
                                 null),
                     ClickCallback.Options.builder().uses(1).lifetime(LIFETIME).build()))
             .build();
-    ActionButton cancel =
-        ActionButton.builder(messages.renderBare(locale, CobblestoneMessages.MENU_DIALOG_CANCEL))
-            .build();
     Dialog dialog =
         Dialog.create(
             factory ->
@@ -86,7 +83,9 @@ final class PaperOptionDialog {
                             .canCloseWithEscape(true)
                             .inputs(inputs)
                             .build())
-                    .type(DialogType.confirmation(go, cancel)));
+                    // One button: Escape already cancels, and Geyser turns a second button into a
+                    // dropdown on Bedrock, choosing which button the form's one Submit stands for.
+                    .type(DialogType.notice(go)));
     player.showDialog(dialog);
   }
 
