@@ -19,12 +19,14 @@ final class PaperWorld implements MinecraftWorld {
   private final String key;
   private final int minY;
   private final int maxY;
+  private final long seed;
   private final World.Environment environment;
 
   PaperWorld(World world) {
     this.key = world.getKey().asString();
     this.minY = world.getMinHeight();
     this.maxY = world.getMaxHeight() - 1;
+    this.seed = world.getSeed();
     this.environment = world.getEnvironment();
   }
 
@@ -36,6 +38,11 @@ final class PaperWorld implements MinecraftWorld {
   @Override
   public int maxY() {
     return this.maxY;
+  }
+
+  @Override
+  public long seed() {
+    return seed;
   }
 
   @Override

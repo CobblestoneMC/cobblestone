@@ -16,6 +16,7 @@ import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
+import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -23,10 +24,12 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.cobblestonemc.LogLevel;
+import org.cobblestonemc.minecraft.regions.RegionStores;
 import org.cobblestonemc.plugin.Permissions;
 import org.cobblestonemc.plugin.config.ConfigKeys;
 import org.cobblestonemc.plugin.config.ConfigManager;
@@ -56,6 +59,7 @@ final class CobblestoneCommand {
    * @param keys the registered config keys (to re-read after reload)
    * @param messages the message renderer
    * @param portals the portal-transition DAO (for {@code portals clear})
+   * @param regions the region stores (for {@code regions clear})
    * @param trips the trip manager (for {@code cancel}/{@code trips})
    * @param hud the trip HUD (for {@code hud})
    * @param searches the search registry (for {@code cancel})
@@ -69,6 +73,7 @@ final class CobblestoneCommand {
       Messages messages,
       JulCobblestoneLogger log,
       PortalTransitionDao portals,
+      RegionStores regions,
       TripManager<Entity, PaperTripAgent, Location> trips,
       TripHud<Entity, PaperTripAgent, Location> hud,
       SearchRegistry<Location> searches,
@@ -138,6 +143,22 @@ final class CobblestoneCommand {
                     Commands.literal("clear")
                         .executes(
                             ctx -> clearPortals(ctx.getSource().getSender(), messages, portals))))
+        .then(
+            Commands.literal("regions")
+                .requires(source -> source.getSender().hasPermission(Permissions.REGIONS.value()))
+                .executes(ctx -> showHelp(ctx.getSource().getSender(), messages))
+                .then(
+                    Commands.literal("clear")
+                        .then(
+                            Commands.argument("world", ArgumentTypes.world())
+                                .executes(
+                                    ctx ->
+                                        clearRegions(
+                                            ctx.getSource().getSender(),
+                                            messages,
+                                            log,
+                                            regions,
+                                            ctx.getArgument("world", World.class))))))
         .then(navigate)
         .then(location)
         .then(Commands.literal("loc").redirect(location))
@@ -283,6 +304,12 @@ final class CobblestoneCommand {
         sender, messages, locale, "/cobblestone hud [on|off]", "command.cobblestone.help.hud");
     PaperCommandHelp.line(
         sender, messages, locale, "/cobblestone portals clear", "command.cobblestone.help.portals");
+    PaperCommandHelp.line(
+        sender,
+        messages,
+        locale,
+        "/cobblestone regions clear <world>",
+        "command.cobblestone.help.regions");
     PaperCommandHelp.line(
         sender,
         messages,
@@ -445,6 +472,29 @@ final class CobblestoneCommand {
     Locale locale = localeOf(sender, messages);
     int removed = portals.clear();
     messages.send(sender, locale, CobblestoneMessages.PORTALS_CLEARED, removed);
+    return Command.SINGLE_SUCCESS;
+  }
+
+  /** Deletes a world's regions off the server thread, and says so once they are gone. */
+  private static int clearRegions(
+      CommandSender sender,
+      Messages messages,
+      JulCobblestoneLogger log,
+      RegionStores regions,
+      World world) {
+    Locale locale = localeOf(sender, messages);
+    String key = world.getKey().asString();
+    regions
+        .clear(key)
+        .whenComplete(
+            (cleared, failed) -> {
+              if (failed == null) {
+                messages.send(sender, locale, CobblestoneMessages.REGIONS_CLEARED, key);
+              } else {
+                log.error("Could not delete the regions of {}", failed, key);
+                messages.send(sender, locale, CobblestoneMessages.REGIONS_CLEAR_FAILED, key);
+              }
+            });
     return Command.SINGLE_SUCCESS;
   }
 

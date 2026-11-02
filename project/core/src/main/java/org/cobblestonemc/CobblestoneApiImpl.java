@@ -14,7 +14,7 @@ import org.cobblestonemc.api.SearchSettings;
 
 /**
  * The default {@link CobblestoneApi} implementation, running the two-tier search on a {@link
- * Scheduler}.
+ * SearchScheduler}.
  *
  * <p>The {@link HeuristicStrategy} is supplied at construction (a single instance serves all
  * searches, since it is domain-type-agnostic). It defaults to {@link Heuristics#zero()}; supply
@@ -26,7 +26,7 @@ public final class CobblestoneApiImpl implements CobblestoneApi {
   @Override
   public <T, D extends Domain> SearchHandle<Position<D>, T> navigate(
       CobblestoneLogger logger,
-      Scheduler scheduler,
+      SearchScheduler scheduler,
       Position<D> origin,
       Destination<DomainRegion<D>> destination,
       MovementBehavior<T, D> behavior,

@@ -37,6 +37,7 @@ import org.cobblestonemc.HeuristicStrategy;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.Restriction;
 import org.cobblestonemc.SearchObserver;
+import org.cobblestonemc.SearchScheduler;
 import org.cobblestonemc.SingleDestination;
 import org.cobblestonemc.api.Destination;
 import org.cobblestonemc.api.SearchHandle;
@@ -66,6 +67,7 @@ public final class PaperNavigationServiceImpl
 
   private final CobblestoneLogger logger;
   private final PaperScheduler scheduler;
+  private final SearchScheduler searches;
   private final PaperPlatformApi platform;
   private final ChunkProviderSettings chunkSettings;
   private final CobblestoneApi core;
@@ -81,16 +83,18 @@ public final class PaperNavigationServiceImpl
    * @param logger the logger
    * @param chunkSettings the chunk cache tunables
    * @param regionStores the server's region stores, shared by every search
+   * @param searches where searches run
    */
   public PaperNavigationServiceImpl(
       Plugin plugin,
       CobblestoneLogger logger,
       ChunkProviderSettings chunkSettings,
-      RegionStores regionStores) {
+      RegionStores regionStores,
+      SearchScheduler searches) {
     this.logger = logger;
     this.regionStores = regionStores;
-    int workerThreads = Math.max(2, Runtime.getRuntime().availableProcessors() / 2);
-    this.scheduler = new PaperScheduler(plugin, workerThreads);
+    this.searches = searches;
+    this.scheduler = new PaperScheduler(plugin);
     this.platform = new PaperPlatformApi(plugin, scheduler, logger);
     this.chunkSettings = chunkSettings;
     this.core = CobblestoneApi.load();
@@ -168,14 +172,13 @@ public final class PaperNavigationServiceImpl
   /**
    * Stops Cobblestone; call on plugin disable.
    *
-   * <p>The platform goes first: it cancels the chunk reads the server has queued but not started
-   * and waits, bounded, for the ones it did — those are reads against region files the server is
-   * about to close, and abandoning them mid-shutdown is what makes stopping a server during a
-   * search go badly. Only once Cobblestone owes the server no more IO does the worker pool go away.
+   * <p>Cancels the chunk reads the server has queued but not started and waits, bounded, for the
+   * ones it did — those are reads against region files the server is about to close, and abandoning
+   * them mid-shutdown is what makes stopping a server during a search go badly. The threads
+   * searches run on are the plugin's to stop, once nothing else will give them work.
    */
   public void shutdown() {
     platform.shutdown();
-    scheduler.shutdown();
   }
 
   @Override
@@ -228,7 +231,7 @@ public final class PaperNavigationServiceImpl
                 gathered ->
                     core.navigate(
                         logger,
-                        scheduler,
+                        searches,
                         originPosition,
                         destination,
                         behavior,

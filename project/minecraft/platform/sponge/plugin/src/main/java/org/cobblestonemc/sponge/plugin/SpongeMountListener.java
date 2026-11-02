@@ -9,7 +9,7 @@ package org.cobblestonemc.sponge.plugin;
 
 import java.util.Optional;
 import java.util.UUID;
-import org.cobblestonemc.minecraft.MinecraftScheduler;
+import java.util.concurrent.Executor;
 import org.cobblestonemc.plugin.data.MountDao;
 import org.cobblestonemc.plugin.data.MountLocation;
 import org.spongepowered.api.Sponge;
@@ -39,14 +39,14 @@ import org.spongepowered.api.world.server.ServerWorld;
 final class SpongeMountListener {
 
   private final MountDao mounts;
-  private final MinecraftScheduler<?> scheduler;
+  private final Executor data;
 
   /** Set once the server is stopping and every mount has been saved; nothing is written after. */
   private volatile boolean stopped;
 
-  SpongeMountListener(MountDao mounts, MinecraftScheduler<?> scheduler) {
+  SpongeMountListener(MountDao mounts, Executor data) {
     this.mounts = mounts;
-    this.scheduler = scheduler;
+    this.data = data;
   }
 
   /** Records the tamed mount a player just got off. */
@@ -58,7 +58,7 @@ final class SpongeMountListener {
     }
     MountLocation record = ridden(rider.get(), mount);
     if (record != null) {
-      scheduler.runAsync(() -> mounts.upsert(record));
+      data.execute(() -> mounts.upsert(record));
     }
   }
 
@@ -72,7 +72,7 @@ final class SpongeMountListener {
       if (entity instanceof HorseLike mount) {
         Runnable move = moved(mount);
         if (move != null) {
-          scheduler.runAsync(move);
+          data.execute(move);
         }
       }
     }
@@ -85,7 +85,7 @@ final class SpongeMountListener {
         && event.entity() instanceof HorseLike mount
         && mount.get(Keys.IS_TAMED).orElse(false)) {
       UUID uuid = mount.uniqueId();
-      scheduler.runAsync(() -> mounts.remove(uuid));
+      data.execute(() -> mounts.remove(uuid));
     }
   }
 

@@ -20,7 +20,8 @@ import org.junit.jupiter.api.Test;
 class RegionStoreTest {
 
   private static RegionStore<ToyWorld.Blocks, ToyWorld.Toy> store(long memoryBudget) {
-    return new RegionStore<>(ToyWorld.spec(), memoryBudget, Runnable::run);
+    return new RegionStore<>(
+        ToyWorld.spec(), memoryBudget, RegionStorage.NONE, Runnable::run, Runnable::run);
   }
 
   private static RegionSection section(

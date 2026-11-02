@@ -52,6 +52,6 @@ final class SpongeChunk implements MinecraftChunk {
       return UnknownBlock.INSTANCE;
     }
     BlockState state = states[SpongeChunk.index(localX, localY, localZ)];
-    return state == null ? UnknownBlock.INSTANCE : new SpongeBlock(state);
+    return state == null ? UnknownBlock.INSTANCE : SpongeBlock.of(state);
   }
 }

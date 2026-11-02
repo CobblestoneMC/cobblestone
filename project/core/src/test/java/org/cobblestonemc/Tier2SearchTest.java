@@ -17,7 +17,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -32,31 +31,15 @@ class Tier2SearchTest {
    *
    * <p>Tests that pass {@code 0} for the deadline never schedule anything here at all.
    */
-  private static final Scheduler DIRECT_SCHEDULER =
-      new Scheduler() {
-        private final ScheduledExecutorService timer =
-            Executors.newSingleThreadScheduledExecutor(
-                runnable -> {
-                  Thread thread = new Thread(runnable, "tier2-test-timer");
-                  thread.setDaemon(true);
-                  return thread;
-                });
+  private static final ScheduledExecutorService TIMER =
+      Executors.newSingleThreadScheduledExecutor(
+          runnable -> {
+            Thread thread = new Thread(runnable, "tier2-test-timer");
+            thread.setDaemon(true);
+            return thread;
+          });
 
-        @Override
-        public void runAsync(Runnable task) {
-          task.run();
-        }
-
-        @Override
-        public void runAsyncLater(Runnable task, long delayMillis) {
-          timer.schedule(task, delayMillis, TimeUnit.MILLISECONDS);
-        }
-
-        @Override
-        public ExecutorService asyncExecutor() {
-          return timer;
-        }
-      };
+  private static final TimeSource REAL_TIME = TimeSource.system(TIMER, TIMER);
 
   private static final TestDomain DOMAIN = new TestDomain("test");
 
@@ -88,7 +71,7 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Executors.newSingleThreadExecutor(),
-            TimeSource.system(DIRECT_SCHEDULER),
+            REAL_TIME,
             SearchObserver.none(),
             System.currentTimeMillis() + 100);
 
@@ -137,7 +120,7 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
-            TimeSource.system(DIRECT_SCHEDULER),
+            REAL_TIME,
             SearchObserver.none(),
             0);
 
@@ -181,7 +164,7 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
-            TimeSource.system(DIRECT_SCHEDULER),
+            REAL_TIME,
             SearchObserver.none(),
             0);
 
@@ -230,7 +213,7 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
-            TimeSource.system(DIRECT_SCHEDULER),
+            REAL_TIME,
             SearchObserver.none(),
             0);
 
@@ -319,7 +302,7 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
-            TimeSource.system(DIRECT_SCHEDULER),
+            REAL_TIME,
             SearchObserver.none(),
             0);
 
@@ -401,7 +384,7 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
-            TimeSource.system(DIRECT_SCHEDULER),
+            REAL_TIME,
             observer,
             0);
 
@@ -439,7 +422,7 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Executors.newSingleThreadExecutor(),
-            TimeSource.system(DIRECT_SCHEDULER),
+            REAL_TIME,
             SearchObserver.none(),
             System.currentTimeMillis() + 100);
 
@@ -466,7 +449,7 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
-            TimeSource.system(DIRECT_SCHEDULER),
+            REAL_TIME,
             SearchObserver.none(),
             0);
 
@@ -494,7 +477,7 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
-            TimeSource.system(DIRECT_SCHEDULER),
+            REAL_TIME,
             SearchObserver.none(),
             0);
 
@@ -532,7 +515,7 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
-            TimeSource.system(DIRECT_SCHEDULER),
+            REAL_TIME,
             SearchObserver.none(),
             0);
 
@@ -555,7 +538,7 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
-            TimeSource.system(DIRECT_SCHEDULER),
+            REAL_TIME,
             SearchObserver.none(),
             0);
 
@@ -582,7 +565,7 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
-            TimeSource.system(DIRECT_SCHEDULER),
+            REAL_TIME,
             SearchObserver.none(),
             0);
 
@@ -611,7 +594,7 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
-            TimeSource.system(DIRECT_SCHEDULER),
+            REAL_TIME,
             SearchObserver.none(),
             0);
 
@@ -645,7 +628,7 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
-            TimeSource.system(DIRECT_SCHEDULER),
+            REAL_TIME,
             SearchObserver.none(),
             0);
 
@@ -710,7 +693,7 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
-            TimeSource.system(DIRECT_SCHEDULER),
+            REAL_TIME,
             SearchObserver.none(),
             0);
 
@@ -753,7 +736,7 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
-            TimeSource.system(DIRECT_SCHEDULER),
+            REAL_TIME,
             SearchObserver.none(),
             0);
 
@@ -889,7 +872,7 @@ class Tier2SearchTest {
             1.0,
             () -> false,
             Runnable::run,
-            TimeSource.system(DIRECT_SCHEDULER),
+            REAL_TIME,
             SearchObserver.none(),
             0);
 

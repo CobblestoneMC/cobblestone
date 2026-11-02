@@ -7,13 +7,13 @@
 
 package org.cobblestonemc.paper.plugin;
 
+import java.util.concurrent.Executor;
 import java.util.function.BooleanSupplier;
 import org.bukkit.Location;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
-import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.plugin.data.DeathLocation;
 import org.cobblestonemc.plugin.data.DeathLocationDao;
 
@@ -27,13 +27,12 @@ import org.cobblestonemc.plugin.data.DeathLocationDao;
 final class PaperDeathListener implements Listener {
 
   private final DeathLocationDao deaths;
-  private final MinecraftScheduler<?> scheduler;
+  private final Executor data;
   private final BooleanSupplier enabled;
 
-  PaperDeathListener(
-      DeathLocationDao deaths, MinecraftScheduler<?> scheduler, BooleanSupplier enabled) {
+  PaperDeathListener(DeathLocationDao deaths, Executor data, BooleanSupplier enabled) {
     this.deaths = deaths;
-    this.scheduler = scheduler;
+    this.data = data;
     this.enabled = enabled;
   }
 
@@ -53,6 +52,6 @@ final class PaperDeathListener implements Listener {
             location.getBlockX(),
             location.getBlockY(),
             location.getBlockZ());
-    scheduler.runAsync(() -> deaths.upsert(death));
+    data.execute(() -> deaths.upsert(death));
   }
 }

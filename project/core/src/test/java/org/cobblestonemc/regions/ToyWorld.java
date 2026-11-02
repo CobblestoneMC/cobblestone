@@ -86,10 +86,17 @@ final class ToyWorld {
    */
   static final class Terrain implements RegionTerrain<Blocks, Toy> {
 
+    private final int version;
     private final int shift;
 
-    Terrain(int shift) {
+    Terrain(int version, int shift) {
+      this.version = version;
       this.shift = shift;
+    }
+
+    @Override
+    public int version() {
+      return version;
     }
 
     @Override
@@ -131,7 +138,7 @@ final class ToyWorld {
     }
   }
 
-  static final Terrain TERRAIN = new Terrain(4);
+  static final Terrain TERRAIN = new Terrain(1, 4);
 
   static RegionSpec<Blocks, Toy> spec() {
     return new RegionSpec<>(TERRAIN, DomainBounds.vertical(MIN_Y, MAX_Y));

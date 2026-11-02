@@ -108,11 +108,17 @@ public final class ConfigKeys {
    */
   public final ConfigKey<Integer> chunksFetchAttempts;
 
+  /** Whether regions are kept on disk across restarts. Requires a restart. */
+  public final ConfigKey<Boolean> regionsPersist;
+
   /**
    * How much memory each world's regions may hold beyond navigating players' surroundings, in
    * megabytes. Requires a restart.
    */
   public final ConfigKey<Integer> regionsMemory;
+
+  /** How often new regions are written to disk, in seconds. Requires a restart. */
+  public final ConfigKey<Integer> regionsFlushPeriod;
 
   /** A* heuristic weight for {@code REGIONS}. Mutable. See {@link #heuristicWeight}. */
   public final ConfigKey<Double> regionsHeuristicWeight;
@@ -165,6 +171,15 @@ public final class ConfigKeys {
 
   /** Whether anonymous bStats metrics are reported. Requires a restart. */
   public final ConfigKey<Boolean> metricsEnabled;
+
+  /**
+   * How many threads searches and region builds run on, or 0 for half the processors and at least
+   * two. Requires a restart.
+   */
+  public final ConfigKey<Integer> threadsCompute;
+
+  /** How many threads disk and database work runs on, or 0 for two. Requires a restart. */
+  public final ConfigKey<Integer> threadsIo;
 
   /** How many cells of the trail ahead the {@code trail} navigator renders. Mutable. */
   public final ConfigKey<Integer> trailBufferCells;
@@ -465,6 +480,17 @@ public final class ConfigKeys {
         """
         The terrain regions the REGIONS heuristic searches over. Each chunk is cut into regions
         once and kept, shared by every search, until a block in it changes.""");
+    this.regionsPersist =
+        manager
+            .key("search.regions.persist", true, Codec.ofBoolean())
+            .comment(
+                """
+                Whether to keep regions on disk, under Cobblestone's data folder, so a restart does
+                not have to build them again. A few kilobytes per chunk, for chunks searches have
+                touched. Off keeps them in memory only. "/cobblestone regions clear <world>" deletes
+                a world's, for terrain changed where Cobblestone could not see it.""")
+            .requiresRestart()
+            .register();
     this.regionsMemory =
         manager
             .key("search.regions.memory", 128, Codec.ofInt())
@@ -474,6 +500,16 @@ public final class ConfigKeys {
                 recently used dropped first. The chunks around each navigating player are kept on top of this,
                 about 3 MB a player, until their trip ends, so the searches that re-plan around
                 them stay fast.""")
+            .requiresRestart()
+            .register();
+    this.regionsFlushPeriod =
+        manager
+            .key("search.regions.flush_period", 60, Codec.ofInt())
+            .comment(
+                """
+                How often new regions are written to disk, in seconds. They are also written when
+                a world saves and when the server stops; a crash loses at most this much, and what
+                is lost is built again when next needed.""")
             .requiresRestart()
             .register();
     this.regionsHeuristicWeight =
@@ -626,6 +662,31 @@ public final class ConfigKeys {
         manager
             .key("metrics.enabled", true, Codec.ofBoolean())
             .comment("Whether to report anonymous usage metrics.")
+            .requiresRestart()
+            .register();
+
+    manager.section(
+        "threads",
+        """
+        The threads Cobblestone runs on besides the server's own. Searches never share a thread
+        with disk or database work, so a slow write cannot hold one up.""");
+    this.threadsCompute =
+        manager
+            .key("threads.compute", 0, Codec.ofInt())
+            .comment(
+                """
+                How many threads searches and region builds run on, shared by every player's
+                searches. 0 leaves it to Cobblestone: half the server's processors, and at least
+                two. Lower it to leave more of the processors to the server itself.""")
+            .requiresRestart()
+            .register();
+    this.threadsIo =
+        manager
+            .key("threads.io", 0, Codec.ofInt())
+            .comment(
+                """
+                How many threads disk and database work runs on: saving what players and portals
+                leave behind, and reading chunks from disk. 0 leaves it to Cobblestone: two.""")
             .requiresRestart()
             .register();
 

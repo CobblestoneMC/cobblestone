@@ -146,27 +146,39 @@ shares them between every search until a block in that cube changes.
 
 | Setting | Default | |
 | --- | --- | --- |
+| `search.regions.persist` | `true` | restart |
 | `search.regions.memory` | `128` | restart |
+| `search.regions.flush_period` | `60` | restart |
 | `search.regions.heuristic_weight` | `1.7` | live |
 
+- **`persist`**: Keep regions on disk, so a restart does not start from nothing: under
+  `plugins/Cobblestone/regions/` on Paper and `cobblestone/regions/` in the server folder on Sponge,
+  a folder per world by its key, as the world's own data is kept: `minecraft:the_nether` in
+  `regions/minecraft/the_nether/`. A few kilobytes per chunk's worth of terrain, only where searches went. A world's regions are
+  built again from scratch if its seed or height changes.
 - **`memory`**: Memory each world's regions may use, in megabytes, least recently used dropped
-  first. The terrain within about 70 blocks of each navigating player is kept on top of this until
-  their trip ends, so the searches that re-plan around them stay fast.
+  first and read back from disk when needed. The terrain within about 70 blocks of each navigating
+  player is kept on top of this until their trip ends, so the searches that re-plan around them stay
+  fast.
+- **`flush_period`**: How often new regions are written, in seconds. They are also written when a
+  world saves and when the server stops. A write touches only the regions that changed.
 - **`heuristic_weight`**: A* heuristic weight under `REGIONS`. `1.0` yields optimal routes; higher
   values search faster with routes at most this factor longer than optimal. The region estimate
   runs close to the true cost, so it bears a higher weight than the running average.
 
 Block changes made while the server is running are tracked: a changed cube's regions are dropped
 about 10 seconds after the change, together with any further changes in that time, and built again
-when a search next needs them. Regions are kept in memory only, so a restart builds them again as
-searches need them.
+when a search next needs them. Changes Cobblestone cannot see are not tracked: edits made while the
+server is stopped, edits by tools that set blocks without block events (such as WorldEdit or
+`/fill`), and chunks trimmed or deleted to be generated again. After those, clear the world's
+regions with [`/cobblestone regions clear <world>`](commands.md#cobblestone-regions-clear-world).
 
 ### Tuning
 
 | Symptom | Adjustment |
 | --- | --- |
 | Long routes fail with "ran out of resources" or "took too long" | Increase `max_cells_visited` and `max_wall_clock_seconds`. Ensure `search.chunks.policy` is at least `allow_load`. |
-| High CPU usage | Increase `trips.live_interval_ticks`, keep `search.max_concurrent_per_player` at `1`, and decrease `max_cells_visited`. On Sponge, decrease `search.chunks.max_load_requests`. |
+| High CPU usage | Increase `trips.live_interval_ticks`, keep `search.max_concurrent_per_player` at `1`, decrease `max_cells_visited`, and set `threads.compute` below half the processors. On Sponge, decrease `search.chunks.max_load_requests`. |
 | High memory usage | Decrease `max_cells_visited`. |
 | Searches must not load chunks | Set `search.chunks.policy` to `loaded_only`. |
 
@@ -255,6 +267,22 @@ in a dialog on Paper, and on Sponge by handing the player the command to finish 
 
 Anonymous usage data via [bStats](https://bstats.org). bStats can also be disabled globally in its
 own configuration.
+
+## `threads`
+
+The threads Cobblestone runs on besides the server's own. Searches never share a thread with disk
+or database work, so a slow write can't hold one up.
+
+| Setting | Default | |
+| --- | --- | --- |
+| `threads.compute` | `0` | restart |
+| `threads.io` | `0` | restart |
+
+- **`compute`**: How many threads searches and region builds run on, shared by every player's
+  searches. `0` leaves it to Cobblestone: half the server's processors, and at least two.
+- **`io`**: How many threads disk and database work runs on: saving deaths, mounts, portals and
+  preferences, and on Sponge, reading chunks from disk. `0` leaves it to Cobblestone: two. Writes
+  happen one at a time and in order whatever this is, and are finished before the server stops.
 
 ## `navigators.trail`
 

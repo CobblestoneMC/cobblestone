@@ -15,6 +15,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
+import org.cobblestonemc.TimeSource;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.plugin.api.Navigator;
 
@@ -32,6 +33,7 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
   private static final long TICK_PERIOD = 1L;
 
   private final MinecraftScheduler<E> scheduler;
+  private final TimeSource time;
   private final int maxActivePerPlayer;
   private final Map<UUID, List<Trip<E, P, L>>> byPlayer = new ConcurrentHashMap<>();
   private final List<Consumer<P>> onChange = new CopyOnWriteArrayList<>();
@@ -40,10 +42,12 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
    * Creates a trip manager.
    *
    * @param scheduler the scheduler trips tick on
+   * @param time the clock live trips wait on between re-searches
    * @param maxActivePerPlayer the most simultaneous trips one player may run
    */
-  public TripManager(MinecraftScheduler<E> scheduler, int maxActivePerPlayer) {
+  public TripManager(MinecraftScheduler<E> scheduler, TimeSource time, int maxActivePerPlayer) {
     this.scheduler = scheduler;
+    this.time = time;
     this.maxActivePerPlayer = maxActivePerPlayer;
   }
 
@@ -129,6 +133,7 @@ public final class TripManager<E, P extends TripAgent<E>, L> {
             label,
             navigator,
             scheduler,
+            time,
             TICK_PERIOD,
             this::untrack,
             liveSearch,

@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
 
 class SearchIntegrationTest {
 
-  private final Scheduler scheduler = new InlineScheduler();
+  private final SearchScheduler scheduler = new InlineSearchScheduler();
   private final CobblestoneApi api = new CobblestoneApiImpl();
 
   private Path<Position<TestDomain>, TestStep> requireSuccess(

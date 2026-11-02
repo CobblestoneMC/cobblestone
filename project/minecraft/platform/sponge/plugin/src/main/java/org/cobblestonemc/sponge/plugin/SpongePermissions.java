@@ -33,6 +33,7 @@ final class SpongePermissions {
     describe(service, container, Permissions.LOG_LEVEL, "Set the console log level", false);
     describe(service, container, Permissions.RELOAD, "Reload the Cobblestone configuration", false);
     describe(service, container, Permissions.PORTALS, "Clear discovered portals", false);
+    describe(service, container, Permissions.REGIONS, "Delete a world's region cache", false);
     describe(
         service, container, Permissions.LOCATION_GLOBAL, "Manage server-wide locations", false);
   }
