@@ -25,6 +25,8 @@ import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.Threats;
+import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
@@ -118,7 +120,14 @@ public final class StonebrickSolve {
     // the benchmark measures.
     ChunkProvider chunks = new ChunkProvider(platform, platform.settings());
     MinecraftMovementBehavior behavior =
-        MinecraftMovementBehavior.forPlayer(chunks, player, Set.<MinecraftStepType>of());
+        MinecraftMovementBehavior.forPlayer(
+            chunks,
+            player,
+            Set.<MinecraftStepType>of(),
+            null,
+            0,
+            CostWeights.defaults(),
+            Threats.NONE);
     HeuristicStrategy heuristic =
         MinecraftHeuristics.forPlayer(
             behavior,

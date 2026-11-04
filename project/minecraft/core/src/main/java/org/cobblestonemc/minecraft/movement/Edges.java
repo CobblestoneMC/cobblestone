@@ -8,8 +8,10 @@
 package org.cobblestonemc.minecraft.movement;
 
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
@@ -35,6 +37,16 @@ import org.jetbrains.annotations.Nullable;
  * passes a hostile mob or sculk.
  */
 final class Edges {
+
+  /** The steps with momentum to lose, so that changing direction during them is charged. */
+  private static final Set<MinecraftStepType> MOMENTUM =
+      EnumSet.of(
+          MinecraftStepType.WALK,
+          MinecraftStepType.JUMP,
+          MinecraftStepType.SWIM,
+          MinecraftStepType.FLY,
+          MinecraftStepType.BOAT,
+          MinecraftStepType.HORSE);
 
   private final Map<Key, Movement<MinecraftStepPayload>> best = new LinkedHashMap<>();
   private final CostWeights weights;
@@ -134,7 +146,8 @@ final class Edges {
             time,
             new MinecraftStepPayload(type, MinecraftInstruction.None.INSTANCE),
             state,
-            restricted));
+            restricted,
+            MOMENTUM.contains(type) ? weights.turn() : 0));
   }
 
   /** Offers a fully built movement. */

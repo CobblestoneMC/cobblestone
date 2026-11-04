@@ -127,6 +127,12 @@ public final class ConfigKeys {
   /** Seconds a half-heart of damage is worth avoiding. Mutable. See {@code CostWeights}. */
   public final ConfigKey<Double> costsDamagePerHalfHeart;
 
+  /** Seconds an ender pearl is worth keeping. */
+  public final ConfigKey<Double> costsEnderPearl;
+
+  /** Seconds a change of direction costs while moving with momentum. */
+  public final ConfigKey<Double> costsTurn;
+
   /** Seconds added per second spent beside dangerous terrain. Mutable. */
   public final ConfigKey<Double> costsDangerousTerrain;
 
@@ -568,6 +574,21 @@ public final class ConfigKeys {
                 """
                 Seconds a half-heart of damage is worth: from a long fall, an ender pearl's landing
                 or drowning.""")
+            .mutable()
+            .register();
+    this.costsEnderPearl =
+        manager
+            .key("search.costs.ender_pearl", costs.enderPearl(), Codec.ofDouble())
+            .comment("Seconds of travel an ender pearl is worth keeping rather than throwing.")
+            .mutable()
+            .register();
+    this.costsTurn =
+        manager
+            .key("search.costs.turn", costs.turn(), Codec.ofDouble())
+            .comment(
+                """
+                Seconds a change of direction costs while walking, swimming, flying, boating or
+                riding. More makes straighter routes, and makes a search visit more cells.""")
             .mutable()
             .register();
     this.costsDangerousTerrain =

@@ -65,20 +65,6 @@ public final class MinecraftMovementBehavior
   }
 
   /**
-   * Builds the behavior for {@code player} with no mining constraint, no ender pearls and the
-   * {@linkplain CostWeights#defaults() default cost weights}.
-   *
-   * @param chunks where the search reads blocks from
-   * @param player the player being navigated
-   * @param excluded step types to leave out
-   * @return the behavior
-   */
-  public static MinecraftMovementBehavior forPlayer(
-      ChunkSource chunks, CobblestonePlayer player, Set<MinecraftStepType> excluded) {
-    return forPlayer(chunks, player, excluded, null, 0, CostWeights.defaults());
-  }
-
-  /**
    * Builds the behavior for {@code player}, minus any excluded step types (e.g. {@code -no-fly}).
    * The player's capabilities are read here, once, so call this on a thread allowed to read them.
    *
@@ -92,32 +78,8 @@ public final class MinecraftMovementBehavior
    * @param enderPearls how many ender pearls the player holds
    * @param weights what hazards cost on top of the time they take; those for harm are dropped for a
    *     player who cannot be hurt
-   * @return the behavior
-   */
-  public static MinecraftMovementBehavior forPlayer(
-      ChunkSource chunks,
-      CobblestonePlayer player,
-      Set<MinecraftStepType> excluded,
-      @Nullable BreakChecker breakChecker,
-      int enderPearls,
-      CostWeights weights) {
-    return forPlayer(chunks, player, excluded, breakChecker, enderPearls, weights, Threats.NONE);
-  }
-
-  /**
-   * Builds the behavior for {@code player} as the overload without threats does, steering around
-   * the mobs and sculk a snapshot saw.
-   *
-   * @param chunks where the search reads blocks from; see the overload without threats
-   * @param player the player being navigated
-   * @param excluded step types to leave out
-   * @param breakChecker the injected breakability check for mining, or {@code null} if no
-   *     integration constrains mining
-   * @param enderPearls how many ender pearls the player holds
-   * @param weights what hazards cost on top of the time they take; those for harm are dropped for a
-   *     player who cannot be hurt
-   * @param threats where mobs and sculk were when the search began; ignored for a player who cannot
-   *     be hurt
+   * @param threats where mobs and sculk were when the search began, or {@link Threats#NONE} if
+   *     nothing was looked for; ignored for a player who cannot be hurt
    * @return the behavior
    */
   public static MinecraftMovementBehavior forPlayer(
