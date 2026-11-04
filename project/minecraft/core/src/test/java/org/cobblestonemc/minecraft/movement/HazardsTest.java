@@ -37,7 +37,8 @@ class HazardsTest {
   private static final int BREATH = (int) (MovementCosts.BREATH_SECONDS / MovementCosts.SWIM);
 
   private static MinecraftMovementBehavior behavior(TestPlayer player) {
-    return MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of());
+    return MinecraftMovementBehavior.forPlayer(
+        TestWorld.CHUNKS, player, Set.of(), null, 0, CostWeights.defaults());
   }
 
   /** Wide ground, so that nothing near the origin is the lip of a drop. */

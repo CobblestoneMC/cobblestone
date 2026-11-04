@@ -27,7 +27,8 @@ class FallingTest {
 
   private final TestPlayer player = TestPlayer.walker().vulnerable();
   private final MinecraftMovementBehavior walker =
-      MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of());
+      MinecraftMovementBehavior.forPlayer(
+          TestWorld.CHUNKS, player, Set.of(), null, 0, CostWeights.defaults());
 
   @Test
   void fallsOffAnEdgeAndCostsItsDamageButDoesNotTimeIt() {
@@ -105,7 +106,12 @@ class FallingTest {
   void excludingSwimmingKeepsAPlayerOutOfTheWaterBelow() {
     MinecraftMovementBehavior noSwim =
         MinecraftMovementBehavior.forPlayer(
-            TestWorld.CHUNKS, player, Set.of(MinecraftStepType.SWIM));
+            TestWorld.CHUNKS,
+            player,
+            Set.of(MinecraftStepType.SWIM),
+            null,
+            0,
+            CostWeights.defaults());
     assertFalse(
         TestMovements.from(noSwim, iceBesideWater(), new Cell(0, 5, 0)).reaches(new Cell(1, 4, 0)));
   }
@@ -128,7 +134,12 @@ class FallingTest {
             .build();
     MinecraftMovementBehavior noFall =
         MinecraftMovementBehavior.forPlayer(
-            TestWorld.CHUNKS, player, Set.of(MinecraftStepType.FALL));
+            TestWorld.CHUNKS,
+            player,
+            Set.of(MinecraftStepType.FALL),
+            null,
+            0,
+            CostWeights.defaults());
     assertFalse(TestMovements.from(noFall, world, new Cell(0, 5, 0)).reaches(new Cell(1, 1, 0)));
   }
 }

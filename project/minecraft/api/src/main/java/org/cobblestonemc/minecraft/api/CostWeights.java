@@ -24,6 +24,9 @@ package org.cobblestonemc.minecraft.api;
  *
  * @param damagePerHalfHeart seconds of travel worth avoiding a half-heart of damage, such as from a
  *     long fall, an ender pearl's landing or drowning
+ * @param enderPearl seconds of travel worth keeping an ender pearl rather than throwing it
+ * @param turn seconds of travel worth not changing direction while moving with momentum: walking,
+ *     jumping, swimming, flying, boating or riding. Steers towards straight routes
  * @param dangerousTerrain seconds added for each second spent beside dangerous terrain — lava,
  *     fire, magma, cactus, or a drop deep enough to hurt — at full strength, right next to it
  * @param dangerousTerrainRadius how many blocks away dangerous terrain is noticed; its weight falls
@@ -37,6 +40,8 @@ package org.cobblestonemc.minecraft.api;
  */
 public record CostWeights(
     double damagePerHalfHeart,
+    double enderPearl,
+    double turn,
     double dangerousTerrain,
     int dangerousTerrainRadius,
     double builtBlock,
@@ -49,6 +54,8 @@ public record CostWeights(
    */
   public CostWeights {
     requireNonNegative("damagePerHalfHeart", damagePerHalfHeart);
+    requireNonNegative("enderPearl", enderPearl);
+    requireNonNegative("turn", turn);
     requireNonNegative("dangerousTerrain", dangerousTerrain);
     requireNonNegative("dangerousTerrainRadius", dangerousTerrainRadius);
     requireNonNegative("builtBlock", builtBlock);
@@ -62,6 +69,10 @@ public record CostWeights(
    * <ul>
    *   <li>A half-heart is worth eight seconds, twice the four natural regeneration takes to heal
    *       it.
+   *   <li>An ender pearl is worth five minutes, about what finding and killing an enderman for
+   *       another takes.
+   *   <li>A turn is worth a twentieth of a second, a quarter of a walked block, which on the bench
+   *       corpus cut turns by about a quarter for about an eighth more nodes.
    *   <li>A second beside danger costs two more, noticed up to two blocks away.
    *   <li>A built block is worth ten seconds of going round it.
    *   <li>A second of cramped gliding costs ten more: covering ground slower than walking, so a
@@ -72,16 +83,18 @@ public record CostWeights(
    * @return the default weights
    */
   public static CostWeights defaults() {
-    return new CostWeights(8.0, 2.0, 2, 10.0, 10.0, 1.0);
+    return new CostWeights(8.0, 300.0, 0.05, 2.0, 2, 10.0, 10.0, 1.0);
   }
 
   /**
-   * Returns these weights for a player who cannot be hurt: damage and danger cost nothing.
+   * Returns these weights for a player who cannot be hurt: damage and danger cost nothing, and what
+   * a pearl is worth and what a turn costs stay as they are.
    *
    * @return the weights without harm
    */
   public CostWeights harmless() {
-    return new CostWeights(0.0, 0.0, dangerousTerrainRadius, builtBlock, crampedGliding, coast);
+    return new CostWeights(
+        0.0, enderPearl, turn, 0.0, dangerousTerrainRadius, builtBlock, crampedGliding, coast);
   }
 
   /**

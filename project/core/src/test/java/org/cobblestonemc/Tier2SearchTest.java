@@ -436,12 +436,46 @@ class Tier2SearchTest {
 
   /**
    * An open plane, eight ways, costs the same along every ordering of the same straight and
-   * diagonal steps. Of all those equal routes the search should hand back the one that turns least:
-   * three diagonals then six straights (or the reverse) turn once, and a zig-zag through the same
-   * steps turns at every corner.
+   * diagonal steps, until turning costs something: then the route to hand back is the one that
+   * turns least, three diagonals then six straights (or the reverse), and the charge is in its cost
+   * but never in its time.
    */
   @Test
-  void ofRoutesThatCostTheSameTheStraightestIsKept() {
+  void aChargeForTurningKeepsTheStraightestRoute() {
+    Tier2Result.Solved<TestStep, TestDomain> solved = solvedAcrossAPlane(0.05);
+
+    double time = 6 + 3 * Math.sqrt(2);
+    assertEquals(1, turns(solved), "the route " + solved.steps());
+    assertEquals(time + 0.05, solved.cost(), 1e-9);
+    assertEquals(solved.cost(), solved.steps().stream().mapToDouble(RawStep::stepCost).sum(), 1e-9);
+    assertEquals(time, solved.steps().stream().mapToDouble(RawStep::stepTime).sum(), 1e-9);
+  }
+
+  @Test
+  void turningIsFreeUnlessAStepChargesForIt() {
+    Tier2Result.Solved<TestStep, TestDomain> solved = solvedAcrossAPlane(0);
+
+    assertEquals(6 + 3 * Math.sqrt(2), solved.cost(), 1e-9);
+  }
+
+  /** A step straight up has no direction to keep or to turn from. */
+  @Test
+  void aStepStraightUpIsNotATurn() {
+    MovementBehavior<TestStep, TestDomain> stairs =
+        (from, domain, state, goal) ->
+            FutureOr.of(
+                List.of(
+                    from.y() == from.x()
+                        ? new Movement<>(from.plus(0, 1, 0), 1, 1, TestStep.MOVE, state, null, 5)
+                        : new Movement<>(from.plus(1, 0, 0), 1, 1, TestStep.MOVE, state, null, 5)));
+
+    Tier2Result.Solved<TestStep, TestDomain> solved =
+        solve(stairs, new Cell(0, 0, 0), new Cell(3, 3, 0));
+
+    assertEquals(6, solved.cost(), 1e-9);
+  }
+
+  private Tier2Result.Solved<TestStep, TestDomain> solvedAcrossAPlane(double turnCost) {
     double diagonal = Math.sqrt(2);
     MovementBehavior<TestStep, TestDomain> plane =
         (from, domain, state, goal) -> {
@@ -451,17 +485,23 @@ class Tier2SearchTest {
               if (dx != 0 || dz != 0) {
                 double cost = dx != 0 && dz != 0 ? diagonal : 1.0;
                 movements.add(
-                    new Movement<>(from.plus(dx, 0, dz), cost, cost, TestStep.MOVE, state));
+                    new Movement<>(
+                        from.plus(dx, 0, dz), cost, cost, TestStep.MOVE, state, null, turnCost));
               }
             }
           }
           return FutureOr.of(movements);
         };
+    return solve(plane, new Cell(0, 0, 0), new Cell(9, 0, 3));
+  }
+
+  private Tier2Result.Solved<TestStep, TestDomain> solve(
+      MovementBehavior<TestStep, TestDomain> behavior, Cell from, Cell to) {
     Tier2Search<TestStep, TestDomain> search =
         new Tier2Search<>(
             new TestCobblestoneLogger(),
-            virtualPath(new Cell(0, 0, 0), new Cell(9, 0, 3)),
-            plane,
+            virtualPath(from, to),
+            behavior,
             List.of(),
             Heuristics.zero(),
             10000,
@@ -472,13 +512,12 @@ class Tier2SearchTest {
             REAL_TIME,
             SearchObserver.none(),
             0);
-
     Tier2Result<TestStep, TestDomain> result = search.solve().getNow(null);
-
     assertInstanceOf(Tier2Result.Solved.class, result);
-    Tier2Result.Solved<TestStep, TestDomain> solved =
-        (Tier2Result.Solved<TestStep, TestDomain>) result;
-    assertEquals(6 + 3 * diagonal, solved.cost(), 1e-9);
+    return (Tier2Result.Solved<TestStep, TestDomain>) result;
+  }
+
+  private static int turns(Tier2Result.Solved<TestStep, TestDomain> solved) {
     Cell previous = new Cell(0, 0, 0);
     Cell heading = null;
     int turns = 0;
@@ -491,7 +530,7 @@ class Tier2SearchTest {
       heading = direction;
       previous = cell;
     }
-    assertEquals(1, turns, "the route " + solved.steps());
+    return turns;
   }
 
   @Test

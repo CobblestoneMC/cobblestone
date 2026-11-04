@@ -23,6 +23,7 @@ import org.cobblestonemc.minecraft.TestMovements;
 import org.cobblestonemc.minecraft.TestMovements.Moves;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.TestWorld;
+import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.junit.jupiter.api.Test;
@@ -31,7 +32,8 @@ class WalkingTest {
 
   private final TestPlayer player = TestPlayer.walker();
   private final MinecraftMovementBehavior walker =
-      MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of());
+      MinecraftMovementBehavior.forPlayer(
+          TestWorld.CHUNKS, player, Set.of(), null, 0, CostWeights.defaults());
 
   @Test
   void flatMovesInAllEightDirectionsAndNothingElse() {
@@ -125,7 +127,8 @@ class WalkingTest {
   @Test
   void soulSpeedBootsSpeedUpSoulBlocksOnly() {
     MinecraftMovementBehavior boots =
-        MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, TestPlayer.soulSpeed(3), Set.of());
+        MinecraftMovementBehavior.forPlayer(
+            TestWorld.CHUNKS, TestPlayer.soulSpeed(3), Set.of(), null, 0, CostWeights.defaults());
     double fast = MovementCosts.WALK / MovementCosts.soulSpeedFactor(3);
     for (MinecraftBlock floor : List.of(TestBlocks.soulSand(), TestBlocks.soulSoil())) {
       TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, floor).build();
@@ -156,5 +159,19 @@ class WalkingTest {
     assertEquals(8, moves.size());
     assertTrue(moves.ofType(MinecraftStepType.WALK).isEmpty());
     assertEquals(8, moves.ofType(MinecraftStepType.HORSE).size());
+  }
+
+  @Test
+  void walkingChargesForATurnAndFallingDoesNot() {
+    TestWorld world =
+        TestWorld.builder("w")
+            .set(0, 4, 0, TestBlocks.solid())
+            .set(1, 4, 0, TestBlocks.solid())
+            .set(0, 0, 1, TestBlocks.solid())
+            .build();
+    Moves moves = TestMovements.from(walker, world, new Cell(0, 5, 0));
+
+    assertEquals(CostWeights.defaults().turn(), moves.to(new Cell(1, 5, 0)).turnCost(), 1e-9);
+    assertEquals(0, moves.to(new Cell(0, 1, 1)).turnCost(), 1e-9);
   }
 }
