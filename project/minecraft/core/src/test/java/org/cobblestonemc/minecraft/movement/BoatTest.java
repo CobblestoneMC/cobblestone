@@ -22,6 +22,7 @@ import org.cobblestonemc.minecraft.TestMovements;
 import org.cobblestonemc.minecraft.TestMovements.Moves;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.TestWorld;
+import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.junit.jupiter.api.Test;
@@ -30,7 +31,8 @@ class BoatTest {
 
   private final CobblestonePlayer withBoat = TestPlayer.create(false, true, false);
   private final MinecraftMovementBehavior boat =
-      MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, withBoat, Set.of());
+      MinecraftMovementBehavior.forPlayer(
+          TestWorld.CHUNKS, withBoat, Set.of(), null, 0, CostWeights.defaults());
 
   @Test
   void enteringWaterPlacesBoatAndSetsVehicleState() {
@@ -94,7 +96,12 @@ class BoatTest {
   void excludingBoatsStillLetsAPlayerInOneGetOut() {
     MinecraftMovementBehavior noBoat =
         MinecraftMovementBehavior.forPlayer(
-            TestWorld.CHUNKS, withBoat, Set.of(MinecraftStepType.BOAT));
+            TestWorld.CHUNKS,
+            withBoat,
+            Set.of(MinecraftStepType.BOAT),
+            null,
+            0,
+            CostWeights.defaults());
     Moves moves = TestMovements.from(noBoat, shore(), new Cell(1, 1, 0), BOATING);
 
     assertTrue(moves.ofType(MinecraftStepType.BOAT).isEmpty());
@@ -108,7 +115,8 @@ class BoatTest {
   @Test
   void aPlayerInABoatStartsInItAndPaddles() {
     MinecraftMovementBehavior behavior =
-        MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, inBoat, Set.of());
+        MinecraftMovementBehavior.forPlayer(
+            TestWorld.CHUNKS, inBoat, Set.of(), null, 0, CostWeights.defaults());
     assertEquals(MinecraftKeys.Vehicle.BOAT, behavior.initialState().get(MinecraftKeys.VEHICLE));
 
     Moves moves = TestMovements.from(behavior, shore(), new Cell(1, 1, 0), behavior.initialState());
@@ -120,7 +128,12 @@ class BoatTest {
   void excludingBoatsLeavesAPlayerInOneOnlyGettingOut() {
     MinecraftMovementBehavior behavior =
         MinecraftMovementBehavior.forPlayer(
-            TestWorld.CHUNKS, inBoat, Set.of(MinecraftStepType.BOAT));
+            TestWorld.CHUNKS,
+            inBoat,
+            Set.of(MinecraftStepType.BOAT),
+            null,
+            0,
+            CostWeights.defaults());
     assertEquals(MinecraftKeys.Vehicle.BOAT, behavior.initialState().get(MinecraftKeys.VEHICLE));
 
     Moves moves = TestMovements.from(behavior, shore(), new Cell(1, 1, 0), behavior.initialState());
@@ -139,7 +152,8 @@ class BoatTest {
             .build();
     assertTrue(
         TestMovements.from(
-                MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, inBoat, Set.of()),
+                MinecraftMovementBehavior.forPlayer(
+                    TestWorld.CHUNKS, inBoat, Set.of(), null, 0, CostWeights.defaults()),
                 world,
                 new Cell(0, 1, 0))
             .ofType(MinecraftStepType.PLACE_BOAT)
@@ -171,7 +185,8 @@ class BoatTest {
     CobblestonePlayer walker = TestPlayer.walker();
     assertTrue(
         TestMovements.from(
-                MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, walker, Set.of()),
+                MinecraftMovementBehavior.forPlayer(
+                    TestWorld.CHUNKS, walker, Set.of(), null, 0, CostWeights.defaults()),
                 world,
                 new Cell(0, 1, 0))
             .ofType(MinecraftStepType.PLACE_BOAT)
