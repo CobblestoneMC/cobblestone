@@ -30,6 +30,7 @@ import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
@@ -89,7 +90,12 @@ class SimulatedIoTest {
 
     MinecraftMovementBehavior behavior =
         MinecraftMovementBehavior.forPlayer(
-            new ChunkProvider(platform, platform.settings()), player, Set.<MinecraftStepType>of());
+            new ChunkProvider(platform, platform.settings()),
+            player,
+            Set.<MinecraftStepType>of(),
+            null,
+            0,
+            CostWeights.defaults());
 
     SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> handle =
         CobblestoneApi.load()

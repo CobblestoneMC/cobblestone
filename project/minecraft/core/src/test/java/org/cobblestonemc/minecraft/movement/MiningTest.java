@@ -32,7 +32,8 @@ class MiningTest {
 
   private final TestPlayer player = TestPlayer.walker();
   private final MinecraftMovementBehavior walker =
-      MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of());
+      MinecraftMovementBehavior.forPlayer(
+          TestWorld.CHUNKS, player, Set.of(), null, 0, CostWeights.defaults());
 
   private static TestWorld wallTo(int wallX, MinecraftBlock feet, MinecraftBlock head) {
     return TestWorld.builder("w")
@@ -103,7 +104,12 @@ class MiningTest {
     assertFalse(
         TestMovements.from(
                 MinecraftMovementBehavior.forPlayer(
-                    TestWorld.CHUNKS, player, Set.of(MinecraftStepType.MINE)),
+                    TestWorld.CHUNKS,
+                    player,
+                    Set.of(MinecraftStepType.MINE),
+                    null,
+                    0,
+                    CostWeights.defaults()),
                 world,
                 new Cell(0, 1, 0))
             .reaches(new Cell(1, 1, 0)));

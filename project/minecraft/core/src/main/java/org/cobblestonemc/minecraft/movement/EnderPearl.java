@@ -40,7 +40,6 @@ final class EnderPearl {
 
   private static final double RANGE = 32.0; // max throw distance, blocks
   private static final double MIN_RANGE = 2.0; // below this, just walk
-  private static final double PEARL_VALUE = 300.0; // ~5 minutes: find + kill an enderman
   private static final double LANDING_HALF_HEARTS = 5.0; // a pearl's landing deals 5 damage
   private static final double SPEED = 25.0; // pearl flight speed, blocks/second
   private static final double THROW_SECONDS = 2.0; // pull it to the hotbar and throw
@@ -70,7 +69,7 @@ final class EnderPearl {
     edges.add(
         new Movement<>(
             goal,
-            time + PEARL_VALUE + edges.weights().damage(LANDING_HALF_HEARTS),
+            time + edges.weights().enderPearl() + edges.weights().damage(LANDING_HALF_HEARTS),
             time,
             MinecraftStepPayload.of(MinecraftStepType.TELEPORT),
             next,

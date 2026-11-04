@@ -17,6 +17,7 @@ import org.cobblestonemc.minecraft.TestBlocks;
 import org.cobblestonemc.minecraft.TestMovements;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.TestWorld;
+import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.junit.jupiter.api.Test;
 
@@ -24,7 +25,8 @@ class DoorwayTest {
 
   private final TestPlayer player = TestPlayer.walker();
   private final MinecraftMovementBehavior door =
-      MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of());
+      MinecraftMovementBehavior.forPlayer(
+          TestWorld.CHUNKS, player, Set.of(), null, 0, CostWeights.defaults());
 
   @Test
   void walksThroughClosedWoodenDoorToTheFarSide() {
@@ -91,7 +93,12 @@ class DoorwayTest {
   void aPlayerForbiddenFromOpeningDoorsCannotWorkAShutOne() {
     MinecraftMovementBehavior cannotOpen =
         MinecraftMovementBehavior.forPlayer(
-            TestWorld.CHUNKS, player, Set.of(MinecraftStepType.OPEN_DOOR));
+            TestWorld.CHUNKS,
+            player,
+            Set.of(MinecraftStepType.OPEN_DOOR),
+            null,
+            0,
+            CostWeights.defaults());
     TestWorld world =
         TestWorld.builder("w")
             .floor(0, -1, -1, 3, 1, TestBlocks.solid())
@@ -106,7 +113,12 @@ class DoorwayTest {
   void aPlayerForbiddenFromOpeningDoorsStillWalksThroughAnOpenOne() {
     MinecraftMovementBehavior cannotOpen =
         MinecraftMovementBehavior.forPlayer(
-            TestWorld.CHUNKS, player, Set.of(MinecraftStepType.OPEN_DOOR));
+            TestWorld.CHUNKS,
+            player,
+            Set.of(MinecraftStepType.OPEN_DOOR),
+            null,
+            0,
+            CostWeights.defaults());
     TestWorld world =
         TestWorld.builder("w")
             .floor(0, -1, -1, 3, 1, TestBlocks.solid())

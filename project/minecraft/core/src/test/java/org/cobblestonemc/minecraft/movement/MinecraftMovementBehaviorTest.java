@@ -36,7 +36,8 @@ class MinecraftMovementBehaviorTest {
   private static final CobblestonePlayer FLIER = TestPlayer.create(true, false, false);
 
   private static Abilities abilitiesOf(CobblestonePlayer player, MinecraftStepType... excluded) {
-    return MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of(excluded))
+    return MinecraftMovementBehavior.forPlayer(
+            TestWorld.CHUNKS, player, Set.of(excluded), null, 0, CostWeights.defaults())
         .abilities();
   }
 
@@ -105,7 +106,8 @@ class MinecraftMovementBehaviorTest {
     TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
     Moves moves =
         TestMovements.from(
-            MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, FLIER, Set.of()),
+            MinecraftMovementBehavior.forPlayer(
+                TestWorld.CHUNKS, FLIER, Set.of(), null, 0, CostWeights.defaults()),
             world,
             new Cell(0, 1, 0));
     assertTrue(moves.ofType(MinecraftStepType.WALK).isEmpty());
@@ -122,7 +124,8 @@ class MinecraftMovementBehaviorTest {
     TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
     Moves moves =
         TestMovements.from(
-            MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, glider, Set.of()),
+            MinecraftMovementBehavior.forPlayer(
+                TestWorld.CHUNKS, glider, Set.of(), null, 0, CostWeights.defaults()),
             world,
             new Cell(0, 1, 0));
 
@@ -160,13 +163,19 @@ class MinecraftMovementBehaviorTest {
   void theCheapestCostPerBlockFollowsTheAbilities() {
     assertEquals(
         MovementCosts.FLY,
-        MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, FLIER, Set.of())
+        MinecraftMovementBehavior.forPlayer(
+                TestWorld.CHUNKS, FLIER, Set.of(), null, 0, CostWeights.defaults())
             .cheapestCostPerBlock(),
         1e-9);
     assertEquals(
         MovementCosts.FALL_PER_BLOCK,
         MinecraftMovementBehavior.forPlayer(
-                TestWorld.CHUNKS, TestPlayer.walker(), Set.of(MinecraftStepType.HORSE))
+                TestWorld.CHUNKS,
+                TestPlayer.walker(),
+                Set.of(MinecraftStepType.HORSE),
+                null,
+                0,
+                CostWeights.defaults())
             .cheapestCostPerBlock(),
         1e-9);
   }

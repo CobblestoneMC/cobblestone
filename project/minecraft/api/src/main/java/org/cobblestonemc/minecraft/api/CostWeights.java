@@ -21,8 +21,9 @@ package org.cobblestonemc.minecraft.api;
  *
  * @param damagePerHalfHeart seconds of travel worth avoiding a half-heart of damage, such as from a
  *     long fall or an ender pearl's landing
+ * @param enderPearl seconds of travel worth keeping an ender pearl rather than throwing it
  */
-public record CostWeights(double damagePerHalfHeart) {
+public record CostWeights(double damagePerHalfHeart, double enderPearl) {
 
   /**
    * Rejects a negative weight: a penalty below zero would make a step cost less than it takes, and
@@ -32,16 +33,20 @@ public record CostWeights(double damagePerHalfHeart) {
     if (!(damagePerHalfHeart >= 0)) {
       throw new IllegalArgumentException("damagePerHalfHeart must be >= 0: " + damagePerHalfHeart);
     }
+    if (!(enderPearl >= 0)) {
+      throw new IllegalArgumentException("enderPearl must be >= 0: " + enderPearl);
+    }
   }
 
   /**
    * The default weights: a half-heart is worth eight seconds, twice the four seconds natural
-   * regeneration takes to heal it.
+   * regeneration takes to heal it, and an ender pearl five minutes, about what finding and killing
+   * an enderman for another takes.
    *
    * @return the default weights
    */
   public static CostWeights defaults() {
-    return new CostWeights(8.0);
+    return new CostWeights(8.0, 300.0);
   }
 
   /**

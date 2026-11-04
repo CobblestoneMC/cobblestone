@@ -58,20 +58,6 @@ public final class MinecraftMovementBehavior
   }
 
   /**
-   * Builds the behavior for {@code player} with no mining constraint, no ender pearls and the
-   * {@linkplain CostWeights#defaults() default cost weights}.
-   *
-   * @param chunks where the search reads blocks from
-   * @param player the player being navigated
-   * @param excluded step types to leave out
-   * @return the behavior
-   */
-  public static MinecraftMovementBehavior forPlayer(
-      ChunkSource chunks, CobblestonePlayer player, Set<MinecraftStepType> excluded) {
-    return forPlayer(chunks, player, excluded, null, 0, CostWeights.defaults());
-  }
-
-  /**
    * Builds the behavior for {@code player}, minus any excluded step types (e.g. {@code -no-fly}).
    * The player's capabilities are read here, once, so call this on a thread allowed to read them.
    *
