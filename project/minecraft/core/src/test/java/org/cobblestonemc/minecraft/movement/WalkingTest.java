@@ -160,4 +160,18 @@ class WalkingTest {
     assertTrue(moves.ofType(MinecraftStepType.WALK).isEmpty());
     assertEquals(8, moves.ofType(MinecraftStepType.HORSE).size());
   }
+
+  @Test
+  void walkingChargesForATurnAndFallingDoesNot() {
+    TestWorld world =
+        TestWorld.builder("w")
+            .set(0, 4, 0, TestBlocks.solid())
+            .set(1, 4, 0, TestBlocks.solid())
+            .set(0, 0, 1, TestBlocks.solid())
+            .build();
+    Moves moves = TestMovements.from(walker, world, new Cell(0, 5, 0));
+
+    assertEquals(CostWeights.defaults().turn(), moves.to(new Cell(1, 5, 0)).turnCost(), 1e-9);
+    assertEquals(0, moves.to(new Cell(0, 1, 1)).turnCost(), 1e-9);
+  }
 }
