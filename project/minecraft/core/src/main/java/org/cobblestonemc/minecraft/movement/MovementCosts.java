@@ -8,9 +8,9 @@
 package org.cobblestonemc.minecraft.movement;
 
 /**
- * Default per-step cost constants, in <b>seconds</b> (Cobblestone's universal cost unit). These are
- * rough vanilla speeds and will become configurable; for now they are tuned to be simple and
- * relative-correct (flying &lt; walking &lt; swimming, etc.).
+ * Default per-step times, in <b>seconds</b>. These are rough vanilla speeds, tuned to be simple and
+ * relative-correct (flying &lt; walking &lt; swimming, etc.). They are what a step takes; what it
+ * costs on top, for harm done along the way, is priced by {@code CostWeights}.
  */
 final class MovementCosts {
 
@@ -58,12 +58,6 @@ final class MovementCosts {
 
   /** Blocks you can fall without taking damage. */
   static final int SAFE_FALL_BLOCKS = 3;
-
-  /** Seconds of natural regeneration per half-heart of damage. */
-  static final double HEAL_SECONDS_PER_HALF_HEART = 4.0;
-
-  /** Multiplier turning heal time into a deterrent cost for taking damage. */
-  static final double DAMAGE_COST_MULTIPLIER = 2.0;
 
   private MovementCosts() {}
 }

@@ -23,6 +23,7 @@ import org.cobblestonemc.minecraft.TestBlocks;
 import org.cobblestonemc.minecraft.TestMovements;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.TestWorld;
+import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.junit.jupiter.api.Test;
@@ -31,7 +32,8 @@ class MiningTest {
 
   private final TestPlayer player = TestPlayer.walker();
   private final MinecraftMovementBehavior walker =
-      MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of());
+      MinecraftMovementBehavior.forPlayer(
+          TestWorld.CHUNKS, player, Set.of(), null, 0, CostWeights.defaults());
 
   private static TestWorld wallTo(int wallX, MinecraftBlock feet, MinecraftBlock head) {
     return TestWorld.builder("w")
@@ -102,7 +104,12 @@ class MiningTest {
     assertFalse(
         TestMovements.from(
                 MinecraftMovementBehavior.forPlayer(
-                    TestWorld.CHUNKS, player, Set.of(MinecraftStepType.MINE)),
+                    TestWorld.CHUNKS,
+                    player,
+                    Set.of(MinecraftStepType.MINE),
+                    null,
+                    0,
+                    CostWeights.defaults()),
                 world,
                 new Cell(0, 1, 0))
             .reaches(new Cell(1, 1, 0)));
@@ -118,7 +125,8 @@ class MiningTest {
         (cell, breakWorld, block) ->
             CompletableFuture.completedFuture(!cell.equals(new Cell(1, 1, 0)));
     MinecraftMovementBehavior checked =
-        MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of(), forbidWall, 0);
+        MinecraftMovementBehavior.forPlayer(
+            TestWorld.CHUNKS, player, Set.of(), forbidWall, 0, CostWeights.defaults());
 
     Movement<MinecraftStepPayload> tunnel =
         TestMovements.from(checked, world, new Cell(0, 1, 0)).to(new Cell(1, 1, 0));

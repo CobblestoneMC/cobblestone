@@ -12,10 +12,10 @@ package org.cobblestonemc.api;
  * step (not a running total). Keeping the values per-step lets {@link Path} total them on demand
  * and keeps each step self-describing.
  *
- * <p>{@code cost} is the algorithm-facing metric the search minimizes (it may later fold in danger
- * or other penalties); {@code time} is the player-facing real duration of the step, in seconds.
- * Today the two are equal everywhere, but they are stored separately so danger weighting can
- * diverge cost from time without breaking any duration readout.
+ * <p>{@code cost} is the algorithm-facing metric the search minimizes: the step's time plus any
+ * penalty for harm or risk along the way, such as fall damage. {@code time} is the player-facing
+ * real duration of the step, in seconds, and never includes a penalty. A cost is never less than
+ * its time.
  *
  * @param <P> the position type
  * @param <T> the payload type
