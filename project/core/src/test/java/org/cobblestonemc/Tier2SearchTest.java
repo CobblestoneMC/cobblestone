@@ -476,8 +476,7 @@ class Tier2SearchTest {
     assertEquals(6, solved.cost(), 1e-9);
   }
 
-  private static final TraversalKey<Integer> SPENT =
-      TraversalKey.ranked("spent", Integer::compare);
+  private static final TraversalKey<Integer> SPENT = TraversalKey.ranked("spent", Integer::compare);
 
   /**
    * Down a line of cells, with a cheap step and a dear one to each: the dear one spends one more,
@@ -526,8 +525,7 @@ class Tier2SearchTest {
           if (from.equals(start)) {
             return FutureOr.of(
                 List.of(
-                    new Movement<>(
-                        middle, 1, 1, TestStep.MOVE, state, () -> FutureOr.from(barred)),
+                    new Movement<>(middle, 1, 1, TestStep.MOVE, state, () -> FutureOr.from(barred)),
                     new Movement<>(middle, 2, 2, TestStep.MOVE, state.with(SPENT, 1), null)));
           }
           return FutureOr.of(List.of(new Movement<>(goal, 5, 5, TestStep.MOVE, state, null)));

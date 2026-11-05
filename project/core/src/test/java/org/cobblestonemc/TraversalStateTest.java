@@ -27,8 +27,7 @@ class TraversalStateTest {
 
   private static final TraversalKey<Vehicle> VEHICLE = new TraversalKey<>("vehicle");
   private static final TraversalKey<Boolean> BOAT_CONSUMED = new TraversalKey<>("boat_consumed");
-  private static final TraversalKey<Integer> SPENT =
-      TraversalKey.ranked("spent", Integer::compare);
+  private static final TraversalKey<Integer> SPENT = TraversalKey.ranked("spent", Integer::compare);
 
   @Test
   void aStateWithLessSpentDominates() {

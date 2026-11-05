@@ -197,8 +197,7 @@ final class Surroundings {
   }
 
   /** Marks each column of the box that holds dangerous terrain near the expanding cell's level. */
-  private static boolean[] dangerousColumns(
-      BlockView box, Cell from, int radius, boolean ledges) {
+  private static boolean[] dangerousColumns(BlockView box, Cell from, int radius, boolean ledges) {
     // A ledge is something to walk off. In the air there is nothing to walk off, however far down
     // the ground is.
     boolean grounded = ledges && box.at(from, 0, -1, 0).isSolidTop();
