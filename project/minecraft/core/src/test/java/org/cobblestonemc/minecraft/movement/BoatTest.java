@@ -22,6 +22,7 @@ import org.cobblestonemc.minecraft.TestMovements;
 import org.cobblestonemc.minecraft.TestMovements.Moves;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.TestWorld;
+import org.cobblestonemc.minecraft.Threats;
 import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
@@ -32,7 +33,7 @@ class BoatTest {
   private final CobblestonePlayer withBoat = TestPlayer.create(false, true, false);
   private final MinecraftMovementBehavior boat =
       MinecraftMovementBehavior.forPlayer(
-          TestWorld.CHUNKS, withBoat, Set.of(), null, 0, CostWeights.defaults());
+          TestWorld.CHUNKS, withBoat, Set.of(), null, 0, CostWeights.defaults(), Threats.NONE);
 
   @Test
   void enteringWaterPlacesBoatAndSetsVehicleState() {
@@ -101,7 +102,8 @@ class BoatTest {
             Set.of(MinecraftStepType.BOAT),
             null,
             0,
-            CostWeights.defaults());
+            CostWeights.defaults(),
+            Threats.NONE);
     Moves moves = TestMovements.from(noBoat, shore(), new Cell(1, 1, 0), BOATING);
 
     assertTrue(moves.ofType(MinecraftStepType.BOAT).isEmpty());
@@ -116,7 +118,7 @@ class BoatTest {
   void aPlayerInABoatStartsInItAndPaddles() {
     MinecraftMovementBehavior behavior =
         MinecraftMovementBehavior.forPlayer(
-            TestWorld.CHUNKS, inBoat, Set.of(), null, 0, CostWeights.defaults());
+            TestWorld.CHUNKS, inBoat, Set.of(), null, 0, CostWeights.defaults(), Threats.NONE);
     assertEquals(MinecraftKeys.Vehicle.BOAT, behavior.initialState().get(MinecraftKeys.VEHICLE));
 
     Moves moves = TestMovements.from(behavior, shore(), new Cell(1, 1, 0), behavior.initialState());
@@ -133,7 +135,8 @@ class BoatTest {
             Set.of(MinecraftStepType.BOAT),
             null,
             0,
-            CostWeights.defaults());
+            CostWeights.defaults(),
+            Threats.NONE);
     assertEquals(MinecraftKeys.Vehicle.BOAT, behavior.initialState().get(MinecraftKeys.VEHICLE));
 
     Moves moves = TestMovements.from(behavior, shore(), new Cell(1, 1, 0), behavior.initialState());
@@ -153,7 +156,13 @@ class BoatTest {
     assertTrue(
         TestMovements.from(
                 MinecraftMovementBehavior.forPlayer(
-                    TestWorld.CHUNKS, inBoat, Set.of(), null, 0, CostWeights.defaults()),
+                    TestWorld.CHUNKS,
+                    inBoat,
+                    Set.of(),
+                    null,
+                    0,
+                    CostWeights.defaults(),
+                    Threats.NONE),
                 world,
                 new Cell(0, 1, 0))
             .ofType(MinecraftStepType.PLACE_BOAT)
@@ -186,7 +195,13 @@ class BoatTest {
     assertTrue(
         TestMovements.from(
                 MinecraftMovementBehavior.forPlayer(
-                    TestWorld.CHUNKS, walker, Set.of(), null, 0, CostWeights.defaults()),
+                    TestWorld.CHUNKS,
+                    walker,
+                    Set.of(),
+                    null,
+                    0,
+                    CostWeights.defaults(),
+                    Threats.NONE),
                 world,
                 new Cell(0, 1, 0))
             .ofType(MinecraftStepType.PLACE_BOAT)

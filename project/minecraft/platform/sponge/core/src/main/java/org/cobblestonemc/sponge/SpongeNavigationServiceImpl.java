@@ -40,6 +40,8 @@ import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftScheduler;
 import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.RegionFactory;
+import org.cobblestonemc.minecraft.Threats;
+import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.movement.MinecraftMovementBehavior;
@@ -280,7 +282,8 @@ public final class SpongeNavigationServiceImpl
             settings.excludedModes(),
             breakChecker,
             countEnderPearls(player),
-            settings.costWeights());
+            settings.costWeights(),
+            threats(agent, player, settings.costWeights()));
     HeuristicStrategy heuristic =
         MinecraftHeuristics.forPlayer(
             behavior, chunks, agent, originPosition.cell(), settings, regionStores);
@@ -421,6 +424,18 @@ public final class SpongeNavigationServiceImpl
       return below;
     }
     return at;
+  }
+
+  /**
+   * Snapshots the threats around a player, on the server thread, only when a player who can be hurt
+   * would be charged for them.
+   */
+  private static Threats threats(
+      CobblestonePlayer agent, ServerPlayer player, CostWeights weights) {
+    if (!agent.takesDamage() || (weights.dangerousEntity() == 0 && weights.sculk() == 0)) {
+      return Threats.NONE;
+    }
+    return SpongeThreats.around(player, weights);
   }
 
   /** Counts the ender pearls in the player's inventory (read on the server thread). */

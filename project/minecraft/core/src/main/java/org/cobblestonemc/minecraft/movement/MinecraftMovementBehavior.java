@@ -21,6 +21,7 @@ import org.cobblestonemc.minecraft.ChunkSource;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftKeys;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.Threats;
 import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
@@ -43,6 +44,7 @@ public final class MinecraftMovementBehavior
   private final TraversalState initialState;
   private final CostWeights weights;
   private final Hazards hazards;
+  private final Threats threats;
 
   private MinecraftMovementBehavior(
       ChunkSource chunks,
@@ -50,11 +52,13 @@ public final class MinecraftMovementBehavior
       @Nullable BreakChecker breakChecker,
       TraversalState initialState,
       CostWeights weights,
-      Hazards hazards) {
+      Hazards hazards,
+      Threats threats) {
     this.chunks = chunks;
     this.can = can;
     this.weights = weights;
     this.hazards = hazards;
+    this.threats = threats;
     this.initialState = initialState;
     this.mining = can.mine() ? new Mining(breakChecker) : null;
     this.dismountedOffsets = dismountedOffsets(can.doors(), can.mine());
@@ -74,6 +78,8 @@ public final class MinecraftMovementBehavior
    * @param enderPearls how many ender pearls the player holds
    * @param weights what hazards cost on top of the time they take; those for harm are dropped for a
    *     player who cannot be hurt
+   * @param threats where mobs and sculk were when the search began, or {@link Threats#NONE} if
+   *     nothing was looked for; ignored for a player who cannot be hurt
    * @return the behavior
    */
   public static MinecraftMovementBehavior forPlayer(
@@ -82,7 +88,8 @@ public final class MinecraftMovementBehavior
       Set<MinecraftStepType> excluded,
       @Nullable BreakChecker breakChecker,
       int enderPearls,
-      CostWeights weights) {
+      CostWeights weights,
+      Threats threats) {
     // Flight is cheaper than walking, falling and climbing and reaches every cell they do, so a
     // flier skips them. Gliding is not flight: a glider cannot hover or climb.
     boolean flies = !excluded.contains(MinecraftStepType.FLY) && player.canFly();
@@ -113,7 +120,8 @@ public final class MinecraftMovementBehavior
             Math.max(0, enderPearls),
             player.soulSpeedLevel(),
             player.depthStriderLevel());
-    CostWeights priced = player.takesDamage() ? weights : weights.harmless();
+    boolean hurtable = player.takesDamage();
+    CostWeights priced = hurtable ? weights : weights.harmless();
     Hazards hazards =
         new Hazards(
             priced.dangerousTerrain() > 0 ? priced.dangerousTerrainRadius() : 0,
@@ -129,7 +137,14 @@ public final class MinecraftMovementBehavior
         player.isInBoat()
             ? TraversalState.DEFAULT.with(MinecraftKeys.VEHICLE, MinecraftKeys.Vehicle.BOAT)
             : TraversalState.DEFAULT;
-    return new MinecraftMovementBehavior(chunks, can, breakChecker, initialState, priced, hazards);
+    return new MinecraftMovementBehavior(
+        chunks,
+        can,
+        breakChecker,
+        initialState,
+        priced,
+        hazards,
+        hurtable ? threats : Threats.NONE);
   }
 
   /**
@@ -147,7 +162,12 @@ public final class MinecraftMovementBehavior
     return Surroundings.fetch(chunks, world, from, state, goal, hazards)
         .flatMap(
             around ->
-                expand(from, world, state, goal, new Edges(weights, around, hazards.airBlocks())));
+                expand(
+                    from,
+                    world,
+                    state,
+                    goal,
+                    new Edges(weights, around, hazards.airBlocks(), threats)));
   }
 
   private FutureOr<Collection<Movement<MinecraftStepPayload>>> expand(

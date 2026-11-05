@@ -18,6 +18,7 @@ import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.Movement;
 import org.cobblestonemc.api.TraversalState;
 import org.cobblestonemc.minecraft.MinecraftKeys;
+import org.cobblestonemc.minecraft.Threats;
 import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftInstruction;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
@@ -32,7 +33,8 @@ import org.jetbrains.annotations.Nullable;
  * with the search's {@link CostWeights} and adds it to the cost, never to the time. Where a step
  * ends up is priced here too, from the expansion's {@link Surroundings}, so no rule has to: how
  * near dangerous terrain it passes, how cramped a glide is, how close a boat runs to the shore, and
- * how long the player has gone without a breath.
+ * how long the player has gone without a breath; and from the search's {@link Threats}, how near it
+ * passes a hostile mob or sculk.
  */
 final class Edges {
 
@@ -50,9 +52,10 @@ final class Edges {
   private final CostWeights weights;
   private final Surroundings surroundings;
   private final int airBlocks;
+  private final Threats threats;
 
   Edges(CostWeights weights) {
-    this(weights, Surroundings.NONE, 0);
+    this(weights, Surroundings.NONE, 0, Threats.NONE);
   }
 
   /**
@@ -61,11 +64,13 @@ final class Edges {
    * @param weights what penalties are priced with
    * @param surroundings what is around the expanding cell
    * @param airBlocks how many blocks one breath lasts, or 0 if drowning is not priced
+   * @param threats where mobs and sculk were when the search began
    */
-  Edges(CostWeights weights, Surroundings surroundings, int airBlocks) {
+  Edges(CostWeights weights, Surroundings surroundings, int airBlocks, Threats threats) {
     this.weights = weights;
     this.surroundings = surroundings;
     this.airBlocks = airBlocks;
+    this.threats = threats;
   }
 
   /** The weights this expansion's penalties are priced with. */
@@ -108,6 +113,12 @@ final class Edges {
     // A fall is priced by the damage it does, not by the drop it goes over.
     if (type != MinecraftStepType.FALL) {
       penalty += weights.dangerousTerrain() * time * surroundings.danger(cell);
+    }
+    if (!threats.isEmpty()) {
+      penalty +=
+          time
+              * (weights.dangerousEntity() * threats.mobs(cell, weights.dangerousEntityRadius())
+                  + weights.sculk() * threats.sculk(cell, CostWeights.SCULK_RADIUS));
     }
     if (type == MinecraftStepType.FLY) {
       penalty += weights.crampedGliding() * time * surroundings.cramped(cell);

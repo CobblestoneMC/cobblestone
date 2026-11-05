@@ -148,6 +148,15 @@ public final class ConfigKeys {
   /** Seconds added per second boating right beside the shore. Mutable. */
   public final ConfigKey<Double> costsCoast;
 
+  /** Seconds added per second spent beside a hostile mob. Mutable. */
+  public final ConfigKey<Double> costsDangerousEntity;
+
+  /** How many blocks away a hostile mob is noticed. Mutable. */
+  public final ConfigKey<Integer> costsDangerousEntityRadius;
+
+  /** Seconds added per second spent beside sculk that can summon a warden. Mutable. */
+  public final ConfigKey<Double> costsSculk;
+
   /** Whether Cobblestone discovers vanilla portal links by watching players teleport. Mutable. */
   public final ConfigKey<Boolean> portalsDiscovery;
 
@@ -629,6 +638,35 @@ public final class ConfigKeys {
                 """
                 Seconds added for each second spent boating right beside the shore, which keeps a
                 boat a block or two out.""")
+            .mutable()
+            .register();
+    this.costsDangerousEntity =
+        manager
+            .key("search.costs.dangerous_entity", costs.dangerousEntity(), Codec.ofDouble())
+            .comment(
+                """
+                Seconds added for each second spent right beside a hostile mob, such as a zombie
+                or a creeper; less the further away it is. Mobs are seen where they stood when the
+                search began, and only near the player.""")
+            .mutable()
+            .register();
+    this.costsDangerousEntityRadius =
+        manager
+            .key(
+                "search.costs.dangerous_entity_radius",
+                costs.dangerousEntityRadius(),
+                Codec.ofInt())
+            .comment("How many blocks away a hostile mob is noticed.")
+            .mutable()
+            .register();
+    this.costsSculk =
+        manager
+            .key("search.costs.sculk", costs.sculk(), Codec.ofDouble())
+            .comment(
+                """
+                Seconds added for each second spent within eight blocks of a sculk shrieker that
+                can summon a warden, or a sculk sensor that can set one off; less the further away
+                it is. Only sculk in chunks loaded when the search began is seen.""")
             .mutable()
             .register();
 
