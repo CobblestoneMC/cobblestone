@@ -82,7 +82,12 @@ class StonebrickPlatformTest {
                 StonebrickPlayer.builder().build(),
                 new Position<>(new Cell(8, 64, 8), world),
                 StonebrickSolve.at(world, new Cell(56, 64, 56)),
-                SearchSettings.builder().maxWallClockMillis(30_000).build(),
+                // The running average reads only what the fine search does. The region layer reads
+                // past the edge of any capture by design, and this test is about the search's own.
+                SearchSettings.builder()
+                    .maxWallClockMillis(30_000)
+                    .heuristic(SearchSettings.Heuristic.RUNNING_AVERAGE)
+                    .build(),
                 List.of(),
                 List.of())
             .get(60, TimeUnit.SECONDS);
