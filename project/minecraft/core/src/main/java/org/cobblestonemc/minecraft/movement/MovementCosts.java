@@ -35,8 +35,9 @@ final class MovementCosts {
   /**
    * Seconds a jump up a full block takes on top of the step: a sprint cannot carry through it, so
    * the player slows, waits out the jump's air time and builds speed again. A slab or stair is
-   * stepped up without one. About one block's walk, so a hop has to save a block to be worth taking.
-   * The region heuristic does not know about it, so raising it makes searches expand much more.
+   * stepped up without one. About one block's walk, so a hop has to save a block to be worth
+   * taking. The region heuristic does not know about it, so raising it makes searches expand much
+   * more.
    */
   static final double JUMP_UP = 0.20;
 

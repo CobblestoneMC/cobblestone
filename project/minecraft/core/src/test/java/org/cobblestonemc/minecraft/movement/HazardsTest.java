@@ -98,7 +98,10 @@ class HazardsTest {
     // Right above the ground and beside the drop, which would charge anyone who could fall.
     TestWorld world = TestWorld.builder("lip").floor(0, -8, -8, 0, 8, TestBlocks.solid()).build();
     Movement<MinecraftStepPayload> flight =
-        TestMovements.from(behavior(TestPlayer.create(true, false, false).vulnerable()), world, new Cell(0, 1, -1))
+        TestMovements.from(
+                behavior(TestPlayer.create(true, false, false).vulnerable()),
+                world,
+                new Cell(0, 1, -1))
             .to(new Cell(0, 1, 0), MinecraftStepType.FLY);
 
     assertEquals(flight.time(), flight.cost(), 1e-9);
@@ -108,11 +111,11 @@ class HazardsTest {
   void aPlayerWhoFliesIsStillChargedForLava() {
     TestWorld world = ground("lava-flyer").set(2, 1, 0, TestBlocks.lava()).build();
     Movement<MinecraftStepPayload> beside =
-        TestMovements.from(behavior(TestPlayer.create(true, false, false).vulnerable()), world, ORIGIN)
+        TestMovements.from(
+                behavior(TestPlayer.create(true, false, false).vulnerable()), world, ORIGIN)
             .to(new Cell(1, 1, 0), MinecraftStepType.FLY);
 
-    assertEquals(
-        beside.time() + WEIGHTS.dangerousTerrain() * beside.time(), beside.cost(), 1e-9);
+    assertEquals(beside.time() + WEIGHTS.dangerousTerrain() * beside.time(), beside.cost(), 1e-9);
   }
 
   @Test
