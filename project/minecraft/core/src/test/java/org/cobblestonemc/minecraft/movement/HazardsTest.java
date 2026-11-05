@@ -54,7 +54,13 @@ class HazardsTest {
     Moves moves =
         TestMovements.from(
             MinecraftMovementBehavior.forPlayer(
-                TestWorld.CHUNKS, TestPlayer.walker().vulnerable(), Set.of(), null, 0, wide),
+                TestWorld.CHUNKS,
+                TestPlayer.walker().vulnerable(),
+                Set.of(),
+                null,
+                0,
+                wide,
+                Threats.NONE),
             world,
             ORIGIN);
 
