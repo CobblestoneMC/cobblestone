@@ -76,7 +76,9 @@ class WalkingTest {
     Movement<MinecraftStepPayload> jump =
         TestMovements.from(walker, full, new Cell(0, 1, 0)).to(new Cell(1, 2, 0));
     assertEquals(MinecraftStepType.JUMP, jump.payload().stepType());
-    assertEquals(MovementCosts.WALK * MovementCosts.DIAGONAL, jump.cost(), 1e-9);
+    assertEquals(
+        MovementCosts.WALK * MovementCosts.DIAGONAL + MovementCosts.JUMP_UP, jump.time(), 1e-9);
+    assertEquals(jump.time(), jump.cost(), 1e-9);
 
     TestWorld slab =
         TestWorld.builder("w")
@@ -157,5 +159,19 @@ class WalkingTest {
     assertEquals(8, moves.size());
     assertTrue(moves.ofType(MinecraftStepType.WALK).isEmpty());
     assertEquals(8, moves.ofType(MinecraftStepType.HORSE).size());
+  }
+
+  @Test
+  void walkingChargesForATurnAndFallingDoesNot() {
+    TestWorld world =
+        TestWorld.builder("w")
+            .set(0, 4, 0, TestBlocks.solid())
+            .set(1, 4, 0, TestBlocks.solid())
+            .set(0, 0, 1, TestBlocks.solid())
+            .build();
+    Moves moves = TestMovements.from(walker, world, new Cell(0, 5, 0));
+
+    assertEquals(CostWeights.defaults().turn(), moves.to(new Cell(1, 5, 0)).turnCost(), 1e-9);
+    assertEquals(0, moves.to(new Cell(0, 1, 1)).turnCost(), 1e-9);
   }
 }

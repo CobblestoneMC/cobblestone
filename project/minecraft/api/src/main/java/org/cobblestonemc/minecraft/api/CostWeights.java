@@ -22,8 +22,10 @@ package org.cobblestonemc.minecraft.api;
  * @param damagePerHalfHeart seconds of travel worth avoiding a half-heart of damage, such as from a
  *     long fall or an ender pearl's landing
  * @param enderPearl seconds of travel worth keeping an ender pearl rather than throwing it
+ * @param turn seconds of travel worth not changing direction while moving with momentum: walking,
+ *     jumping, swimming, flying, boating or riding. Steers towards straight routes
  */
-public record CostWeights(double damagePerHalfHeart, double enderPearl) {
+public record CostWeights(double damagePerHalfHeart, double enderPearl, double turn) {
 
   /**
    * Rejects a negative weight: a penalty below zero would make a step cost less than it takes, and
@@ -36,17 +38,21 @@ public record CostWeights(double damagePerHalfHeart, double enderPearl) {
     if (!(enderPearl >= 0)) {
       throw new IllegalArgumentException("enderPearl must be >= 0: " + enderPearl);
     }
+    if (!(turn >= 0)) {
+      throw new IllegalArgumentException("turn must be >= 0: " + turn);
+    }
   }
 
   /**
    * The default weights: a half-heart is worth eight seconds, twice the four seconds natural
    * regeneration takes to heal it, and an ender pearl five minutes, about what finding and killing
-   * an enderman for another takes.
+   * an enderman for another takes. A turn is worth a twentieth of a second, a quarter of a walked
+   * block, which on the bench corpus cut turns by about a quarter for about an eighth more nodes.
    *
    * @return the default weights
    */
   public static CostWeights defaults() {
-    return new CostWeights(8.0, 300.0);
+    return new CostWeights(8.0, 300.0, 0.05);
   }
 
   /**
