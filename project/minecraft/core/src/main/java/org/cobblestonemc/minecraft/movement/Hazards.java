@@ -19,10 +19,11 @@ import org.jetbrains.annotations.Nullable;
  * @param cramped whether the player glides, and cramped gliding is priced
  * @param coast whether the player boats, and boating beside the shore is priced
  * @param airBlocks how many blocks one breath lasts underwater, or 0 if drowning is not priced
+ * @param ledges whether the drop off a ledge counts as dangerous terrain: not to a player who flies
  */
-record Hazards(int dangerRadius, boolean cramped, boolean coast, int airBlocks) {
+record Hazards(int dangerRadius, boolean cramped, boolean coast, int airBlocks, boolean ledges) {
 
-  static final Hazards NONE = new Hazards(0, false, false, 0);
+  static final Hazards NONE = new Hazards(0, false, false, 0, false);
 
   boolean isNone() {
     return dangerRadius == 0 && !cramped && !coast && airBlocks == 0;
@@ -34,11 +35,11 @@ record Hazards(int dangerRadius, boolean cramped, boolean coast, int airBlocks) 
    */
   Hazards meetable(MinecraftKeys.@Nullable Vehicle vehicle) {
     if (vehicle == MinecraftKeys.Vehicle.BOAT) {
-      return coast ? new Hazards(0, false, true, 0) : NONE;
+      return coast ? new Hazards(0, false, true, 0, false) : NONE;
     }
     if (vehicle == MinecraftKeys.Vehicle.HORSE) {
-      return dangerRadius > 0 ? new Hazards(dangerRadius, false, false, 0) : NONE;
+      return dangerRadius > 0 ? new Hazards(dangerRadius, false, false, 0, ledges) : NONE;
     }
-    return coast ? new Hazards(dangerRadius, cramped, false, airBlocks) : this;
+    return coast ? new Hazards(dangerRadius, cramped, false, airBlocks, ledges) : this;
   }
 }

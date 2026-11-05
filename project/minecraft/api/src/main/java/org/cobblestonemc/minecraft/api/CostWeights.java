@@ -83,7 +83,7 @@ public record CostWeights(
    * @return the default weights
    */
   public static CostWeights defaults() {
-    return new CostWeights(8.0, 300.0, 0.05, 2.0, 2, 10.0, 10.0, 1.0);
+    return new CostWeights(8.0, 300.0, 0.05, 1.0, 1, 10.0, 10.0, 1.0);
   }
 
   /**

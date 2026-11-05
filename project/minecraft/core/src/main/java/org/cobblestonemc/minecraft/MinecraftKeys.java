@@ -28,7 +28,8 @@ public final class MinecraftKeys {
    * How many blocks in a row the agent has moved with its head underwater, capped just past what
    * one breath lasts; absent while it can breathe. Only tracked for an agent that can drown.
    */
-  public static final TraversalKey<Integer> HELD_BREATH = new TraversalKey<>("held_breath");
+  public static final TraversalKey<Integer> HELD_BREATH =
+      TraversalKey.ranked("held_breath", Integer::compare);
 
   private MinecraftKeys() {}
 
