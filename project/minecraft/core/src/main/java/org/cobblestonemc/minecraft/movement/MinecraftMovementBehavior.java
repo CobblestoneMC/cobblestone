@@ -129,7 +129,8 @@ public final class MinecraftMovementBehavior
             can.paddle() && priced.coast() > 0,
             can.swim() && priced.damagePerHalfHeart() > 0
                 ? breathBlocks(player.respirationLevel(), can)
-                : 0);
+                : 0,
+            !player.canFly());
     // A player already in a boat starts in it. Getting out is always open to them, so excluding
     // boats leaves them only that.
     TraversalState initialState =

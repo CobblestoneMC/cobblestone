@@ -514,6 +514,10 @@ final class Tier2Search<T, D extends Domain> {
       if (node == null || node.closed || entry.currentCost() != node.cost) {
         continue; // stale duplicate (superseded, or dropped/raised by a repair)
       }
+      node.parked = dominated(node);
+      if (node.parked) {
+        continue; // a better state got here for no more; a repair wakes this if that one falls
+      }
       // Verify this node's incoming best edge now that we are committing to expand toward it.
       // Optimistic: a pending verdict does not block — we expand anyway and repair if it later
       // resolves barred; only an immediately-known bar drops the edge here.
@@ -650,6 +654,52 @@ final class Tier2Search<T, D extends Domain> {
       node.trailAverage =
           heuristic.advance(
               parent.trailAverage, edge.cost(), parentKey.cell().distance(node.key.cell()));
+    }
+  }
+
+  /**
+   * Whether another state has reached this node's cell, for no more cost, in a state at least as
+   * good: nothing can follow from this node that does not follow from that one for no more, so
+   * expanding it could only multiply the states at every cell after it.
+   *
+   * <p>A node with no state can't be dominated, and most cells hold one state, so most nodes never
+   * compare anything.
+   */
+  private boolean dominated(Node<T> node) {
+    if (node.key.state().isEmpty()) {
+      return false;
+    }
+    Set<CellState> siblings = byCell.get(node.key.cell());
+    if (siblings == null || siblings.size() < 2) {
+      return false;
+    }
+    for (CellState key : siblings) {
+      if (!key.equals(node.key)
+          && nodes.get(key).cost <= node.cost
+          && key.state().dominates(node.key.state())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Puts back on the open set the nodes parked at these cells. The node that outdid one of them may
+   * just have been raised or removed by a repair; any still outdone parks again when it is popped.
+   */
+  private void wakeParked(Set<Cell> cells) {
+    for (Cell cell : cells) {
+      Set<CellState> siblings = byCell.get(cell);
+      if (siblings == null) {
+        continue;
+      }
+      for (CellState key : siblings) {
+        Node<T> node = nodes.get(key);
+        if (node.parked) {
+          node.parked = false;
+          offer(key, node.cost, node.trailAverage);
+        }
+      }
     }
   }
 
@@ -918,11 +968,14 @@ final class Tier2Search<T, D extends Domain> {
       }
     }
 
+    Set<Cell> cells = new HashSet<>();
     for (CellState key : affected) {
+      cells.add(key.cell());
       if (!settled.contains(key)) {
         removeNode(key); // no surviving route — orphaned
       }
     }
+    wakeParked(cells);
   }
 
   /**
@@ -1058,6 +1111,9 @@ final class Tier2Search<T, D extends Domain> {
     CellState bestParent;
     Movement<T> bestEdge;
     boolean closed;
+
+    /** Popped while another state at this cell outdid it, so left off the open set. */
+    boolean parked;
 
     /** The first candidate parent; {@code null} when this node has none. */
     private @Nullable CellState parentKey0;

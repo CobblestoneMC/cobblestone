@@ -21,6 +21,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import org.cobblestonemc.api.TraversalKey;
 import org.cobblestonemc.api.TraversalState;
 import org.junit.jupiter.api.Test;
 
@@ -473,6 +474,89 @@ class Tier2SearchTest {
         solve(stairs, new Cell(0, 0, 0), new Cell(3, 3, 0));
 
     assertEquals(6, solved.cost(), 1e-9);
+  }
+
+  private static final TraversalKey<Integer> SPENT =
+      TraversalKey.ranked("spent", Integer::compare);
+
+  /**
+   * Down a line of cells, with a cheap step and a dear one to each: the dear one spends one more,
+   * and a route's count is its own, so without dropping dominated states every count is searched at
+   * every cell.
+   */
+  private static MovementBehavior<TestStep, TestDomain> spending(List<Cell> expanded, int length) {
+    return (from, domain, state, goal) -> {
+      expanded.add(from);
+      if (from.x() >= length) {
+        return FutureOr.of(List.of());
+      }
+      Integer spent = state.get(SPENT);
+      int count = spent == null ? 0 : spent;
+      return FutureOr.of(
+          List.of(
+              new Movement<>(from.plus(1, 0, 0), 1, 1, TestStep.MOVE, state, null),
+              new Movement<>(
+                  from.plus(1, 0, 0), 2, 2, TestStep.MOVE, state.with(SPENT, count + 1), null)));
+    };
+  }
+
+  @Test
+  void aDominatedStateIsNotExpanded() {
+    List<Cell> expanded = new ArrayList<>();
+
+    Tier2Result.Solved<TestStep, TestDomain> solved =
+        solve(spending(expanded, 6), new Cell(0, 0, 0), new Cell(6, 0, 0));
+
+    assertEquals(6, solved.cost(), 1e-9);
+    assertTrue(expanded.size() <= 6, "expanded " + expanded);
+  }
+
+  /**
+   * The better state's way in is barred only after the other has parked behind it, so the other has
+   * to be woken: dropping it for good would strand the search.
+   */
+  @Test
+  void aDominatedStateTakesOverWhenTheBetterOneIsBarred() {
+    Cell start = new Cell(0, 0, 0);
+    Cell middle = new Cell(1, 0, 0);
+    Cell goal = new Cell(2, 0, 0);
+    CompletableFuture<Boolean> barred = new CompletableFuture<>();
+    MovementBehavior<TestStep, TestDomain> behavior =
+        (from, domain, state, target) -> {
+          if (from.equals(start)) {
+            return FutureOr.of(
+                List.of(
+                    new Movement<>(
+                        middle, 1, 1, TestStep.MOVE, state, () -> FutureOr.from(barred)),
+                    new Movement<>(middle, 2, 2, TestStep.MOVE, state.with(SPENT, 1), null)));
+          }
+          return FutureOr.of(List.of(new Movement<>(goal, 5, 5, TestStep.MOVE, state, null)));
+        };
+    Tier2Search<TestStep, TestDomain> search =
+        new Tier2Search<>(
+            new TestCobblestoneLogger(),
+            virtualPath(start, goal),
+            behavior,
+            List.of(),
+            Heuristics.zero(),
+            1000,
+            5,
+            1.0,
+            () -> false,
+            Runnable::run,
+            REAL_TIME,
+            SearchObserver.none(),
+            0);
+
+    CompletableFuture<Tier2Result<TestStep, TestDomain>> future = search.solve();
+    assertFalse(future.isDone(), "the goal is reached, but its route is unconfirmed");
+
+    barred.complete(true);
+
+    assertTrue(future.isDone(), "the parked state carried on to the goal");
+    Tier2Result<TestStep, TestDomain> result = future.getNow(null);
+    assertInstanceOf(Tier2Result.Solved.class, result);
+    assertEquals(7, ((Tier2Result.Solved<TestStep, TestDomain>) result).cost(), 1e-9);
   }
 
   private Tier2Result.Solved<TestStep, TestDomain> solvedAcrossAPlane(double turnCost) {

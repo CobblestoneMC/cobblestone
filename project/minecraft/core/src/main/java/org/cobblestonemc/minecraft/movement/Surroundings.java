@@ -88,7 +88,7 @@ final class Surroundings {
     int dyLow = 0;
     if (meets.dangerRadius() > 0) {
       radius = Math.max(radius, 1 + meets.dangerRadius());
-      dyLow = Math.min(dyLow, -(MovementCosts.SAFE_FALL_BLOCKS + 2));
+      dyLow = Math.min(dyLow, meets.ledges() ? -(MovementCosts.SAFE_FALL_BLOCKS + 2) : -2);
     }
     if (meets.cramped()) {
       radius = Math.max(radius, 1 + CRAMPED_RADIUS);
@@ -111,7 +111,7 @@ final class Surroundings {
                         from,
                         b,
                         meets.dangerRadius() > 0
-                            ? dangerousColumns(b, from, 1 + meets.dangerRadius())
+                            ? dangerousColumns(b, from, 1 + meets.dangerRadius(), meets.ledges())
                             : null,
                         meets.cramped() && covers(a, from.plus(0, 4, 0)))));
   }
@@ -197,13 +197,17 @@ final class Surroundings {
   }
 
   /** Marks each column of the box that holds dangerous terrain near the expanding cell's level. */
-  private static boolean[] dangerousColumns(BlockView box, Cell from, int radius) {
+  private static boolean[] dangerousColumns(
+      BlockView box, Cell from, int radius, boolean ledges) {
+    // A ledge is something to walk off. In the air there is nothing to walk off, however far down
+    // the ground is.
+    boolean grounded = ledges && box.at(from, 0, -1, 0).isSolidTop();
     int width = 2 * radius + 1;
     boolean[] dangerous = new boolean[width * width];
     for (int ix = 0; ix < width; ix++) {
       for (int iz = 0; iz < width; iz++) {
         Cell column = new Cell(from.x() - radius + ix, from.y(), from.z() - radius + iz);
-        dangerous[ix * width + iz] = harmful(box, column) || ledge(box, column);
+        dangerous[ix * width + iz] = harmful(box, column) || (grounded && ledge(box, column));
       }
     }
     return dangerous;
