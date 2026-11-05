@@ -25,6 +25,7 @@ import org.cobblestonemc.minecraft.MinecraftBlock;
  * @param paddle travel by boat once in one
  * @param enderPearls how many ender pearls may be thrown
  * @param soulSpeed the Soul Speed level of the boots worn, or 0
+ * @param depthStrider the Depth Strider level of the boots worn, or 0
  */
 record Abilities(
     boolean walk,
@@ -39,7 +40,17 @@ record Abilities(
     boolean boardBoat,
     boolean paddle,
     int enderPearls,
-    int soulSpeed) {
+    int soulSpeed,
+    int depthStrider) {
+
+  /**
+   * Returns what a block of swimming across costs, by the boots' Depth Strider.
+   *
+   * @return the seconds to swim a block, before any diagonal
+   */
+  double swimAcross() {
+    return MovementCosts.swimAcross(depthStrider);
+  }
 
   /**
    * Returns what a block of walking costs onto a floor, by its speed factor or, where Soul Speed

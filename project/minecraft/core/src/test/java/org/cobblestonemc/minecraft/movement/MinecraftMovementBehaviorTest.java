@@ -116,7 +116,8 @@ class MinecraftMovementBehaviorTest {
 
   /**
    * A glider can both walk and fly to each neighbor on flat ground. Only one edge per neighbor is
-   * handed to the search — the cheaper flight.
+   * handed to the search — and it is the walk: skimming the floor is cramped gliding, priced so a
+   * glider walks on the ground and glides in open air.
    */
   @Test
   void oneEdgePerDestinationAndTheCheapestWins() {
@@ -133,12 +134,12 @@ class MinecraftMovementBehaviorTest {
     for (Movement<MinecraftStepPayload> movement : moves.all()) {
       assertTrue(seen.add(movement.cell()), "a second edge into " + movement.cell());
     }
-    assertTrue(moves.ofType(MinecraftStepType.WALK).isEmpty(), "flying is cheaper than walking");
+    assertEquals(8, moves.ofType(MinecraftStepType.WALK).size(), "walking beats a cramped glide");
   }
 
   @Test
   void anEnderPearlReachesAGoalInRange() {
-    CobblestonePlayer player = TestPlayer.walker();
+    CobblestonePlayer player = TestPlayer.walker().vulnerable();
     TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
     Cell goal = new Cell(10, 8, 0);
     Collection<Movement<MinecraftStepPayload>> movements =

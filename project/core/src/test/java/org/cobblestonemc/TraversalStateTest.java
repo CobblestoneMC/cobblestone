@@ -27,6 +27,39 @@ class TraversalStateTest {
 
   private static final TraversalKey<Vehicle> VEHICLE = new TraversalKey<>("vehicle");
   private static final TraversalKey<Boolean> BOAT_CONSUMED = new TraversalKey<>("boat_consumed");
+  private static final TraversalKey<Integer> SPENT = TraversalKey.ranked("spent", Integer::compare);
+
+  @Test
+  void aStateWithLessSpentDominates() {
+    TraversalState three = TraversalState.DEFAULT.with(SPENT, 3);
+    TraversalState five = TraversalState.DEFAULT.with(SPENT, 5);
+
+    assertTrue(three.dominates(five));
+    assertFalse(five.dominates(three));
+    assertTrue(three.dominates(three));
+  }
+
+  @Test
+  void havingSpentNothingIsBest() {
+    TraversalState five = TraversalState.DEFAULT.with(SPENT, 5);
+
+    assertTrue(TraversalState.DEFAULT.dominates(five));
+    assertFalse(five.dominates(TraversalState.DEFAULT));
+  }
+
+  @Test
+  void differentConditionsDoNotDominateEachOther() {
+    TraversalState boat = TraversalState.DEFAULT.with(VEHICLE, Vehicle.BOAT);
+    TraversalState horse = TraversalState.DEFAULT.with(VEHICLE, Vehicle.HORSE);
+
+    assertFalse(boat.dominates(horse));
+    assertFalse(horse.dominates(boat));
+    assertFalse(boat.dominates(TraversalState.DEFAULT));
+    assertFalse(TraversalState.DEFAULT.dominates(boat));
+    assertFalse(boat.with(SPENT, 3).dominates(TraversalState.DEFAULT.with(SPENT, 5)));
+    assertFalse(TraversalState.DEFAULT.with(SPENT, 3).dominates(horse.with(SPENT, 5)));
+    assertTrue(boat.with(SPENT, 3).dominates(boat.with(SPENT, 5)));
+  }
 
   @Test
   void defaultIsEmpty() {

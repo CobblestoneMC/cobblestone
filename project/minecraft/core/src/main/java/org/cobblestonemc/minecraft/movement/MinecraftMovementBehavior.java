@@ -42,16 +42,19 @@ public final class MinecraftMovementBehavior
   private final int[][] dismountedOffsets;
   private final TraversalState initialState;
   private final CostWeights weights;
+  private final Hazards hazards;
 
   private MinecraftMovementBehavior(
       ChunkSource chunks,
       Abilities can,
       @Nullable BreakChecker breakChecker,
       TraversalState initialState,
-      CostWeights weights) {
+      CostWeights weights,
+      Hazards hazards) {
     this.chunks = chunks;
     this.can = can;
     this.weights = weights;
+    this.hazards = hazards;
     this.initialState = initialState;
     this.mining = can.mine() ? new Mining(breakChecker) : null;
     this.dismountedOffsets = dismountedOffsets(can.doors(), can.mine());
@@ -69,7 +72,8 @@ public final class MinecraftMovementBehavior
    * @param breakChecker the injected breakability check for mining, or {@code null} if no
    *     integration constrains mining
    * @param enderPearls how many ender pearls the player holds
-   * @param weights what hazards cost on top of the time they take
+   * @param weights what hazards cost on top of the time they take; those for harm are dropped for a
+   *     player who cannot be hurt
    * @return the behavior
    */
   public static MinecraftMovementBehavior forPlayer(
@@ -107,20 +111,47 @@ public final class MinecraftMovementBehavior
             boats && player.hasBoatInInventory(),
             boats && (player.hasBoatInInventory() || player.isInBoat()),
             Math.max(0, enderPearls),
-            player.soulSpeedLevel());
+            player.soulSpeedLevel(),
+            player.depthStriderLevel());
+    CostWeights priced = player.takesDamage() ? weights : weights.harmless();
+    Hazards hazards =
+        new Hazards(
+            priced.dangerousTerrain() > 0 ? priced.dangerousTerrainRadius() : 0,
+            flightHeight == 1 && priced.crampedGliding() > 0,
+            can.paddle() && priced.coast() > 0,
+            can.swim() && priced.damagePerHalfHeart() > 0
+                ? breathBlocks(player.respirationLevel(), can)
+                : 0,
+            !player.canFly());
     // A player already in a boat starts in it. Getting out is always open to them, so excluding
     // boats leaves them only that.
     TraversalState initialState =
         player.isInBoat()
             ? TraversalState.DEFAULT.with(MinecraftKeys.VEHICLE, MinecraftKeys.Vehicle.BOAT)
             : TraversalState.DEFAULT;
-    return new MinecraftMovementBehavior(chunks, can, breakChecker, initialState, weights);
+    return new MinecraftMovementBehavior(chunks, can, breakChecker, initialState, priced, hazards);
+  }
+
+  /**
+   * How many blocks one breath lasts, swimming across: fifteen seconds, and fifteen more for each
+   * level of Respiration, which in vanilla spends the breath only one tick in {@code level + 1}.
+   */
+  private static int breathBlocks(int respiration, Abilities can) {
+    double seconds = MovementCosts.BREATH_SECONDS * (1 + Math.max(0, respiration));
+    return Math.max(1, (int) (seconds / can.swimAcross()));
   }
 
   @Override
   public FutureOr<Collection<Movement<MinecraftStepPayload>>> movements(
       Cell from, MinecraftWorld world, TraversalState state, Cell goal) {
-    Edges edges = new Edges(weights);
+    return Surroundings.fetch(chunks, world, from, state, goal, hazards)
+        .flatMap(
+            around ->
+                expand(from, world, state, goal, new Edges(weights, around, hazards.airBlocks())));
+  }
+
+  private FutureOr<Collection<Movement<MinecraftStepPayload>>> expand(
+      Cell from, MinecraftWorld world, TraversalState state, Cell goal, Edges edges) {
     MinecraftKeys.Vehicle vehicle = state.get(MinecraftKeys.VEHICLE);
     FutureOr<Edges> local;
     if (vehicle == null) {

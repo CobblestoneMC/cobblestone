@@ -95,6 +95,39 @@ public final class TraversalState {
     return values.isEmpty();
   }
 
+  /**
+   * Returns whether this state is at least as good as {@code other}: every {@linkplain
+   * TraversalKey#ranked ranked} key is no worse here, and every other key holds the same value.
+   * From the same cell, whatever an agent in {@code other} can go on to do, an agent in this state
+   * can do for no more cost.
+   *
+   * @param other the state to compare with
+   * @return {@code true} if this state is at least as good as {@code other}
+   */
+  public boolean dominates(TraversalState other) {
+    for (Map.Entry<TraversalKey<?>, Object> entry : values.entrySet()) {
+      if (!noWorse(entry.getKey(), entry.getValue(), other.values.get(entry.getKey()))) {
+        return false;
+      }
+    }
+    for (TraversalKey<?> key : other.values.keySet()) {
+      if (key.preference() == null && !values.containsKey(key)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static <V> boolean noWorse(TraversalKey<V> key, Object value, Object other) {
+    if (other == null) {
+      return false; // having no value is best, so the other state is better here
+    }
+    return key.preference() == null
+        ? value.equals(other)
+        : key.preference().compare((V) value, (V) other) <= 0;
+  }
+
   @Override
   public boolean equals(Object o) {
     return o instanceof TraversalState other && values.equals(other.values);

@@ -68,7 +68,7 @@ final class Dismounted {
       boolean standable = Geometry.standable(view, level);
 
       if (can.swim() && view.at(level).isWater()) {
-        double cost = MovementCosts.SWIM * (diagonal ? MovementCosts.DIAGONAL : 1.0);
+        double cost = can.swimAcross() * (diagonal ? MovementCosts.DIAGONAL : 1.0);
         edges.add(level, cost, MinecraftStepType.SWIM, state);
       }
       if (diagonal) {

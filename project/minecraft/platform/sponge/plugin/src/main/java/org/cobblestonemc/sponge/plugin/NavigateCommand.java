@@ -91,7 +91,7 @@ final class NavigateCommand {
   private final SpongeIntegrationRegistry integrations;
   private final SearchRegistry<ServerLocation> searches;
   private final SearchGate gate;
-  private final Supplier<SearchSettings> searchSettings;
+  private final Supplier<MinecraftSearchSettings> searchSettings;
   private final CobblestoneLogger log;
   private final Messages messages;
   private final RecentDestinations recents;
@@ -102,7 +102,7 @@ final class NavigateCommand {
       SpongeIntegrationRegistry integrations,
       SearchRegistry<ServerLocation> searches,
       SearchGate gate,
-      Supplier<SearchSettings> searchSettings,
+      Supplier<MinecraftSearchSettings> searchSettings,
       CobblestoneLogger log,
       Messages messages,
       RecentDestinations recents) {
@@ -458,23 +458,21 @@ final class NavigateCommand {
           .navigatePlayer(
               player,
               target,
-              new MinecraftSearchSettings(
-                  GUIDE_SETTINGS,
-                  flags.excludedModes(),
-                  flags.excludedWorlds(),
-                  flags.excludedDimensions()))
+              searchSettings
+                  .get()
+                  .withSettings(GUIDE_SETTINGS)
+                  .excluding(
+                      flags.excludedModes(), flags.excludedWorlds(), flags.excludedDimensions()))
           .future()
           .handle(NavigateCommand::convertUpdateResult);
     };
   }
 
   private static MinecraftSearchSettings searchSettingsFor(
-      Supplier<SearchSettings> searchSettings, NavigationFlags flags) {
-    return new MinecraftSearchSettings(
-        searchSettings.get(),
-        flags.excludedModes(),
-        flags.excludedWorlds(),
-        flags.excludedDimensions());
+      Supplier<MinecraftSearchSettings> searchSettings, NavigationFlags flags) {
+    return searchSettings
+        .get()
+        .excluding(flags.excludedModes(), flags.excludedWorlds(), flags.excludedDimensions());
   }
 
   private void navHelp(ServerPlayer player, Locale locale) {
