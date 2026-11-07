@@ -142,7 +142,7 @@ public final class ConfigKeys {
   /** Seconds added per block broken that is most likely someone's build. Mutable. */
   public final ConfigKey<Double> costsBuiltBlock;
 
-  /** Seconds added per second gliding under cover or beside a wall. Mutable. */
+  /** Seconds added per block boosted with too little room. Mutable. */
   public final ConfigKey<Double> costsCrampedGliding;
 
   /** Seconds added per second boating right beside the shore. Mutable. */
@@ -625,9 +625,9 @@ public final class ConfigKeys {
             .key("search.costs.cramped_gliding", costs.crampedGliding(), Codec.ofDouble())
             .comment(
                 """
-                Seconds added for each second spent gliding on an elytra under trees, roofs or a
-                cave's ceiling, or close to a wall, where a glider is hard to steer. Enough by
-                default that a glider climbs into open sky instead.""")
+                Seconds added for each block boosted by a rocket on an elytra with too little room
+                to steer: the full amount right beside a block, nothing with four blocks of room all
+                round.""")
             .mutable()
             .register();
     this.costsDangerousEntity =

@@ -66,6 +66,12 @@ public final class MinecraftAgent implements RegionAgent<RegionClass> {
   /** {@code MovementCosts.FLY}. */
   private static final double FLY = 0.08;
 
+  /** {@code MovementCosts.BOOST}. */
+  private static final double BOOST = 0.05;
+
+  /** {@code MovementCosts.GLIDE_DOWN}. */
+  private static final double GLIDE_DOWN = 0.10;
+
   /** {@code MovementCosts.FALL_PER_BLOCK}, which a mining step down pays on top of breaking. */
   private static final double FALL = 0.18;
 
@@ -149,8 +155,16 @@ public final class MinecraftAgent implements RegionAgent<RegionClass> {
       CobblestonePlayer player, Set<MinecraftStepType> excluded, Environment environment) {
     boolean walks = !excluded.contains(MinecraftStepType.WALK);
     int soulSpeed = walks ? player.soulSpeedLevel() : 0;
-    boolean flies =
-        !excluded.contains(MinecraftStepType.FLY) && (player.canFly() || player.canGlide());
+    boolean flies = !excluded.contains(MinecraftStepType.FLY) && player.canFly();
+    boolean glides =
+        !excluded.contains(MinecraftStepType.FLY)
+            && !excluded.contains(MinecraftStepType.ELYTRA)
+            && player.canGlide();
+    // Through the air a glider is quickest boosted, and slowest gliding down without a rocket.
+    double air = flies ? FLY : Double.NaN;
+    if (glides) {
+      air = least(air, player.rocketFlightDuration() > 0 ? BOOST : GLIDE_DOWN);
+    }
     boolean boats =
         !excluded.contains(MinecraftStepType.BOAT)
             && (player.hasBoatInInventory() || player.isInBoat());
@@ -162,7 +176,7 @@ public final class MinecraftAgent implements RegionAgent<RegionClass> {
             : SWIM - (SWIM - WALK) * Math.min(player.depthStriderLevel(), 3) / 3.0,
         boats ? BOAT : Double.NaN,
         excluded.contains(MinecraftStepType.CLIMB) ? Double.NaN : CLIMB,
-        flies ? FLY : Double.NaN,
+        air,
         !excluded.contains(MinecraftStepType.MINE),
         environment);
   }

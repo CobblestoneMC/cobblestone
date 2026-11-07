@@ -28,10 +28,11 @@ public final class TestPlayer implements CobblestonePlayer {
   private final int soulSpeed;
   private final boolean takesDamage;
   private final int depthStrider;
+  private final int rockets;
 
   private TestPlayer(
       boolean canFly, boolean canGlide, boolean hasBoat, boolean inBoat, int soulSpeed) {
-    this(canFly, canGlide, hasBoat, inBoat, soulSpeed, false, 0);
+    this(canFly, canGlide, hasBoat, inBoat, soulSpeed, false, 0, 0);
   }
 
   private TestPlayer(
@@ -41,7 +42,8 @@ public final class TestPlayer implements CobblestonePlayer {
       boolean inBoat,
       int soulSpeed,
       boolean takesDamage,
-      int depthStrider) {
+      int depthStrider,
+      int rockets) {
     this.canFly = canFly;
     this.canGlide = canGlide;
     this.hasBoat = hasBoat;
@@ -49,25 +51,34 @@ public final class TestPlayer implements CobblestonePlayer {
     this.soulSpeed = soulSpeed;
     this.takesDamage = takesDamage;
     this.depthStrider = depthStrider;
+    this.rockets = rockets;
   }
 
   /** This player, but one that can be hurt, as in survival. */
   public TestPlayer vulnerable() {
-    return new TestPlayer(canFly, canGlide, hasBoat, inBoat, soulSpeed, true, depthStrider);
+    return new TestPlayer(
+        canFly, canGlide, hasBoat, inBoat, soulSpeed, true, depthStrider, rockets);
   }
 
   /** This player, in boots with Depth Strider of the given level. */
   public TestPlayer striding(int depthStrider) {
-    return new TestPlayer(canFly, canGlide, hasBoat, inBoat, soulSpeed, takesDamage, depthStrider);
+    return new TestPlayer(
+        canFly, canGlide, hasBoat, inBoat, soulSpeed, takesDamage, depthStrider, rockets);
   }
 
   public static TestPlayer walker() {
     return new TestPlayer(false, false, false, false, 0);
   }
 
-  /** A player wearing an elytra: can glide, but cannot hover or gain height. */
+  /** A player wearing an elytra, with no rockets: can glide down, but never climb. */
   public static TestPlayer glider() {
     return new TestPlayer(false, true, false, false, 0);
+  }
+
+  /** This player, holding rockets of the given Flight Duration. */
+  public TestPlayer withRockets(int flightDuration) {
+    return new TestPlayer(
+        canFly, canGlide, hasBoat, inBoat, soulSpeed, takesDamage, depthStrider, flightDuration);
   }
 
   /** A walker in boots with Soul Speed of the given level. */
@@ -97,6 +108,11 @@ public final class TestPlayer implements CobblestonePlayer {
   @Override
   public boolean canGlide() {
     return canGlide;
+  }
+
+  @Override
+  public int rocketFlightDuration() {
+    return rockets;
   }
 
   @Override

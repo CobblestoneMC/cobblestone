@@ -36,6 +36,7 @@ public final class StonebrickPlayer implements CobblestonePlayer {
   private final boolean hasBoat;
   private final boolean inBoat;
   private final int soulSpeed;
+  private final int rockets;
   private final @Nullable Position<MinecraftWorld> lastHorse;
 
   private StonebrickPlayer(Builder builder) {
@@ -46,6 +47,7 @@ public final class StonebrickPlayer implements CobblestonePlayer {
     this.hasBoat = builder.hasBoat;
     this.inBoat = builder.inBoat;
     this.soulSpeed = builder.soulSpeed;
+    this.rockets = builder.rockets;
     this.lastHorse = builder.lastHorse;
   }
 
@@ -94,6 +96,11 @@ public final class StonebrickPlayer implements CobblestonePlayer {
   }
 
   @Override
+  public int rocketFlightDuration() {
+    return rockets;
+  }
+
+  @Override
   public Optional<Position<MinecraftWorld>> lastRiddenHorse() {
     return Optional.ofNullable(lastHorse);
   }
@@ -118,6 +125,7 @@ public final class StonebrickPlayer implements CobblestonePlayer {
     private boolean hasBoat;
     private boolean inBoat;
     private int soulSpeed;
+    private int rockets;
     private @Nullable Position<MinecraftWorld> lastHorse;
 
     private Builder() {}
@@ -197,6 +205,17 @@ public final class StonebrickPlayer implements CobblestonePlayer {
      */
     public Builder soulSpeed(int level) {
       this.soulSpeed = level;
+      return this;
+    }
+
+    /**
+     * Sets the longest Flight Duration among the rockets the player holds.
+     *
+     * @param flightDuration 1 to 3, or 0 for no rockets
+     * @return this builder
+     */
+    public Builder rockets(int flightDuration) {
+      this.rockets = flightDuration;
       return this;
     }
 

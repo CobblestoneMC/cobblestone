@@ -39,9 +39,10 @@ public enum MinecraftStepType {
   /** Teleport, e.g. through a portal or by running a command. */
   TELEPORT(true),
 
-  // reserved (unimplemented in v1)
-  /** Glide with an elytra (reserved; not produced yet). */
+  /** Glide with an elytra: take off, glide, boost with a rocket. */
   ELYTRA,
+
+  // reserved (unimplemented in v1)
   /** Ride a minecart (reserved; not produced yet). */
   RIDE_MINECART;
 

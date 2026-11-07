@@ -17,6 +17,8 @@ import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Boat;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.Damageable;
+import org.bukkit.inventory.meta.FireworkMeta;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -61,12 +63,25 @@ final class PaperPlayer implements CobblestonePlayer {
     if (chest == null || chest.getType() != Material.ELYTRA) {
       return false;
     }
+    // An elytra with one point of durability left is broken and will not open.
+    return !(chest.getItemMeta() instanceof Damageable damage)
+        || damage.getDamage() < chest.getType().getMaxDurability() - 1;
+  }
+
+  @Override
+  public int rocketFlightDuration() {
+    final Optional<Player> player = player();
+    if (player.isEmpty()) {
+      return 0;
+    }
+    int longest = 0;
     for (ItemStack item : player.get().getInventory().getContents()) {
       if (item != null && item.getType() == Material.FIREWORK_ROCKET) {
-        return true;
+        int power = item.getItemMeta() instanceof FireworkMeta meta ? meta.getPower() : 1;
+        longest = Math.max(longest, Math.max(1, Math.min(3, power)));
       }
     }
-    return false;
+    return longest;
   }
 
   @Override

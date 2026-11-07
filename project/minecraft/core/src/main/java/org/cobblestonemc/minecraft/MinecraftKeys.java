@@ -24,6 +24,9 @@ public final class MinecraftKeys {
   /** How many ender pearls the agent has thrown so far this route (caps at the inventory count). */
   public static final TraversalKey<Integer> PEARLS_USED = new TraversalKey<>("pearls_used");
 
+  /** Present, and {@code true}, while the agent glides on an elytra; absent on the ground. */
+  public static final TraversalKey<Boolean> GLIDING = new TraversalKey<>("gliding");
+
   private MinecraftKeys() {}
 
   /** A rideable vehicle carried in the traversal state. */

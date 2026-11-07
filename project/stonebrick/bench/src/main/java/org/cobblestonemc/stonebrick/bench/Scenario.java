@@ -165,11 +165,12 @@ public record Scenario(
       boolean hasBoat,
       boolean inBoat,
       int soulSpeed,
+      int rockets,
       Set<String> permissions) {
 
     /** Returns a plain survival player with no special capabilities. */
     public static AgentSpec plain() {
-      return new AgentSpec(false, false, false, false, 0, Set.of());
+      return new AgentSpec(false, false, false, false, 0, 0, Set.of());
     }
   }
 

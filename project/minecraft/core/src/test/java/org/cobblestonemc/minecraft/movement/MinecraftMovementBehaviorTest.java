@@ -89,13 +89,14 @@ class MinecraftMovementBehaviorTest {
   }
 
   /**
-   * Gliding is not flight — a glider cannot hover or gain height — so it dominates nothing and the
-   * ground movements must stay.
+   * Gliding is not flight — a glider takes off from the ground and lands on it — so it dominates
+   * nothing and the ground movements must stay.
    */
   @Test
   void aGliderKeepsWalking() {
     Abilities can = abilitiesOf(TestPlayer.glider());
-    assertEquals(1, can.flightHeight(), "the glider is modelled as a 1-tall flier");
+    assertTrue(can.glide());
+    assertEquals(0, can.flightHeight(), "a glider is not a flier");
     assertTrue(can.walk());
     assertTrue(can.fall());
   }
@@ -121,11 +122,7 @@ class MinecraftMovementBehaviorTest {
     assertEquals(17, moves.ofType(MinecraftStepType.FLY).size(), "every neighbor but the floor");
   }
 
-  /**
-   * A glider can both walk and fly to each neighbor on flat ground. Only one edge per neighbor is
-   * handed to the search — and it is the walk: skimming the floor is cramped gliding, priced so a
-   * glider walks on the ground and glides in open air.
-   */
+  /** Only one edge per neighbor is handed to the search, and on flat ground a glider walks. */
   @Test
   void oneEdgePerDestinationAndTheCheapestWins() {
     CobblestonePlayer glider = TestPlayer.glider();
@@ -141,7 +138,7 @@ class MinecraftMovementBehaviorTest {
     for (Movement<MinecraftStepPayload> movement : moves.all()) {
       assertTrue(seen.add(movement.cell()), "a second edge into " + movement.cell());
     }
-    assertEquals(8, moves.ofType(MinecraftStepType.WALK).size(), "walking beats a cramped glide");
+    assertEquals(8, moves.ofType(MinecraftStepType.WALK).size());
   }
 
   @Test

@@ -38,13 +38,23 @@ public interface CobblestonePlayer {
   boolean canFly();
 
   /**
-   * Returns whether the player can glide with an elytra right now — an elytra equipped and at least
-   * one firework rocket to sustain it. Used to model thin (1-block-tall) flight for reaching an end
-   * gateway.
+   * Returns whether the player can glide: an elytra worn that is not broken. Rockets are counted
+   * apart, by {@link #rocketFlightDuration()}: without one a glider can still glide down.
    *
    * @return {@code true} if the player can elytra-glide
    */
   boolean canGlide();
+
+  /**
+   * Returns the longest Flight Duration among the firework rockets the player holds, or 0 without
+   * one. A rocket boosts a glide, and from the ground launches one along a line as long as its
+   * flight lasts.
+   *
+   * @return the Flight Duration, 1 to 3, or 0
+   */
+  default int rocketFlightDuration() {
+    return 0;
+  }
 
   /**
    * Returns whether the player can be hurt: in survival or adventure mode, and not made
