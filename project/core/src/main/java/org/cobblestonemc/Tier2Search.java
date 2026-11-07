@@ -555,7 +555,12 @@ final class Tier2Search<T, D extends Domain> {
   /** Expands one closed node, where {@code goal} is the target cell its movements aim at. */
   private void expand(Node<T> node, Cell goal) {
     FutureOr<Collection<Movement<T>>> movements =
-        behavior.movements(node.key.cell(), domain, node.key.state(), goal);
+        behavior.movements(
+            node.key.cell(),
+            node.bestParent == null ? null : node.bestParent.cell(),
+            domain,
+            node.key.state(),
+            goal);
     if (!movements.isImmediate()) {
       pendingExpansion = new PendingExpansion<>(node.key, movements);
       movements
@@ -593,7 +598,7 @@ final class Tier2Search<T, D extends Domain> {
       // A per-edge restriction is checked lazily —
       // when this node is popped, not here — so its supplier fires only for edges we commit to.
       // Use the parent's current g: a repair may have raised it while these were pending.
-      double tentative = parent.cost + costVia(parentKey, movement);
+      double tentative = parent.cost + movement.cost();
       if (tentative < neighbor.cost) {
         // setBestParent first: it folds this edge into the neighbor's trail average, which is what
         // prices the neighbor's remaining journey.
@@ -601,37 +606,6 @@ final class Tier2Search<T, D extends Domain> {
         offer(key, tentative, neighbor.trailAverage);
       }
     }
-  }
-
-  /**
-   * What taking {@code edge} out of {@code via} costs: its own cost, plus its {@linkplain
-   * Movement#turnCost() turn cost} if it does not carry on in the direction the route to {@code
-   * via} arrived in.
-   *
-   * <p>The direction comes from the route currently kept to {@code via}, not from the traversal
-   * state, so this stays one node per cell at the price of being a nudge rather than an exact cost:
-   * a cell reached cheaply from the wrong side is not searched again from the right one. Only the
-   * horizontal direction counts, and a step straight up or down neither makes nor resets a turn's
-   * charge. A route's first step has nothing to turn from.
-   */
-  private double costVia(CellState via, Movement<T> edge) {
-    if (edge.turnCost() == 0) {
-      return edge.cost();
-    }
-    Node<T> node = nodes.get(via);
-    if (node == null || node.bestParent == null) {
-      return edge.cost();
-    }
-    Cell from = node.bestParent.cell();
-    Cell at = via.cell();
-    Cell to = edge.cell();
-    int inX = Integer.signum(at.x() - from.x());
-    int inZ = Integer.signum(at.z() - from.z());
-    int outX = Integer.signum(to.x() - at.x());
-    int outZ = Integer.signum(to.z() - at.z());
-    boolean turns =
-        (inX != 0 || inZ != 0) && (outX != 0 || outZ != 0) && (inX != outX || inZ != outZ);
-    return turns ? edge.cost() + edge.turnCost() : edge.cost();
   }
 
   private void setBestParent(Node<T> node, CellState parentKey, Movement<T> edge, double g) {
@@ -913,7 +887,7 @@ final class Tier2Search<T, D extends Domain> {
         }
         Movement<T> edge = nodes.get(childKey).parentEdge(key);
         if (edge != null && relaxRepair(tentative, childKey, key, edge, node.cost)) {
-          queue.add(new RepairEntry(childKey, node.cost + costVia(key, edge)));
+          queue.add(new RepairEntry(childKey, node.cost + edge.cost()));
         }
       }
     }
@@ -935,7 +909,7 @@ final class Tier2Search<T, D extends Domain> {
       CellState parentKey,
       Movement<T> edge,
       double parentG) {
-    double g = parentG + costVia(parentKey, edge);
+    double g = parentG + edge.cost();
     Repair<T> current = tentative.get(key);
     if (current != null && current.cost() <= g) {
       return false;
@@ -997,11 +971,7 @@ final class Tier2Search<T, D extends Domain> {
       cells.add(step.position().cell());
     }
     observer.solved(cells);
-    double cost = 0;
-    for (RawStep<T, D> step : path) {
-      cost += step.stepCost();
-    }
-    result.complete(new Tier2Result.Solved<>(path, cost));
+    result.complete(new Tier2Result.Solved<>(path, nodes.get(goal).cost));
   }
 
   private List<RawStep<T, D>> reconstruct(CellState goal) {
@@ -1013,7 +983,7 @@ final class Tier2Search<T, D extends Domain> {
       steps.addFirst(
           new RawStep<>(
               new Position<>(cursor.cell(), domain),
-              costVia(node.bestParent, movement),
+              movement.cost(),
               movement.time(),
               movement.payload()));
       cursor = node.bestParent;
