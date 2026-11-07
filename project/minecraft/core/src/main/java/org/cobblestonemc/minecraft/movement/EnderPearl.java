@@ -26,10 +26,11 @@ import org.cobblestonemc.minecraft.api.MinecraftStepType;
  * ender pearls, it can pearl straight to it — the only way to reach a floating target like an end
  * gateway without flight.
  *
- * <p>It is deliberately <b>expensive</b> ({@code cost} ≈ five minutes, the rough value of the
- * pearls an enderman drops) so A* only ever chooses it when there is no cheaper route — a genuine
- * last resort. Its real {@code time} is short (flight time of the throw). The pearls used so far
- * ride in the {@link MinecraftKeys#PEARLS_USED traversal state}, capped at the inventory count.
+ * <p>It is deliberately <b>expensive</b>: on top of its short real {@code time} (the flight of the
+ * throw), its {@code cost} carries the value of the pearl, about five minutes of finding and
+ * killing an enderman, and the landing's damage, so A* only ever chooses it when there is no
+ * cheaper route — a genuine last resort. The pearls used so far ride in the {@link
+ * MinecraftKeys#PEARLS_USED traversal state}, capped at the inventory count.
  *
  * <p>Whether the throw is actually clear (no blocks in the ballistic path) rides on the movement's
  * lazy {@link Movement#restricted() restricted} supplier, so those block lookups run only if the
@@ -39,8 +40,7 @@ final class EnderPearl {
 
   private static final double RANGE = 32.0; // max throw distance, blocks
   private static final double MIN_RANGE = 2.0; // below this, just walk
-  private static final double COST =
-      300.0; // ~5 minutes: the value of a pearl (find + kill enderman)
+  private static final double LANDING_HALF_HEARTS = 5.0; // a pearl's landing deals 5 damage
   private static final double SPEED = 25.0; // pearl flight speed, blocks/second
   private static final double THROW_SECONDS = 2.0; // pull it to the hotbar and throw
 
@@ -69,7 +69,7 @@ final class EnderPearl {
     edges.add(
         new Movement<>(
             goal,
-            COST,
+            time + edges.weights().enderPearl() + edges.weights().damage(LANDING_HALF_HEARTS),
             time,
             MinecraftStepPayload.of(MinecraftStepType.TELEPORT),
             next,

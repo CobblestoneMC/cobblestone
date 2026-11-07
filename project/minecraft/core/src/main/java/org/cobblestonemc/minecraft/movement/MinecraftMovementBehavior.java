@@ -21,6 +21,7 @@ import org.cobblestonemc.minecraft.ChunkSource;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftKeys;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.jetbrains.annotations.Nullable;
@@ -40,30 +41,20 @@ public final class MinecraftMovementBehavior
   private final @Nullable Mining mining;
   private final int[][] dismountedOffsets;
   private final TraversalState initialState;
+  private final CostWeights weights;
 
   private MinecraftMovementBehavior(
       ChunkSource chunks,
       Abilities can,
       @Nullable BreakChecker breakChecker,
-      TraversalState initialState) {
+      TraversalState initialState,
+      CostWeights weights) {
     this.chunks = chunks;
     this.can = can;
+    this.weights = weights;
     this.initialState = initialState;
     this.mining = can.mine() ? new Mining(breakChecker) : null;
     this.dismountedOffsets = dismountedOffsets(can.doors(), can.mine());
-  }
-
-  /**
-   * Builds the behavior for {@code player} with no mining constraint and no ender pearls.
-   *
-   * @param chunks where the search reads blocks from
-   * @param player the player being navigated
-   * @param excluded step types to leave out
-   * @return the behavior
-   */
-  public static MinecraftMovementBehavior forPlayer(
-      ChunkSource chunks, CobblestonePlayer player, Set<MinecraftStepType> excluded) {
-    return forPlayer(chunks, player, excluded, null, 0);
   }
 
   /**
@@ -78,6 +69,7 @@ public final class MinecraftMovementBehavior
    * @param breakChecker the injected breakability check for mining, or {@code null} if no
    *     integration constrains mining
    * @param enderPearls how many ender pearls the player holds
+   * @param weights what hazards cost on top of the time they take
    * @return the behavior
    */
   public static MinecraftMovementBehavior forPlayer(
@@ -85,7 +77,8 @@ public final class MinecraftMovementBehavior
       CobblestonePlayer player,
       Set<MinecraftStepType> excluded,
       @Nullable BreakChecker breakChecker,
-      int enderPearls) {
+      int enderPearls,
+      CostWeights weights) {
     // Flight is cheaper than walking, falling and climbing and reaches every cell they do, so a
     // flier skips them. Gliding is not flight: a glider cannot hover or climb.
     boolean flies = !excluded.contains(MinecraftStepType.FLY) && player.canFly();
@@ -121,13 +114,13 @@ public final class MinecraftMovementBehavior
         player.isInBoat()
             ? TraversalState.DEFAULT.with(MinecraftKeys.VEHICLE, MinecraftKeys.Vehicle.BOAT)
             : TraversalState.DEFAULT;
-    return new MinecraftMovementBehavior(chunks, can, breakChecker, initialState);
+    return new MinecraftMovementBehavior(chunks, can, breakChecker, initialState, weights);
   }
 
   @Override
   public FutureOr<Collection<Movement<MinecraftStepPayload>>> movements(
       Cell from, MinecraftWorld world, TraversalState state, Cell goal) {
-    Edges edges = new Edges();
+    Edges edges = new Edges(weights);
     MinecraftKeys.Vehicle vehicle = state.get(MinecraftKeys.VEHICLE);
     FutureOr<Edges> local;
     if (vehicle == null) {
@@ -179,7 +172,8 @@ public final class MinecraftMovementBehavior
   }
 
   /**
-   * Returns a lower bound on the cost of one block of travel by any movement this behavior offers.
+   * Returns a lower bound on the cost of one block of travel by any movement this behavior offers:
+   * the fastest time, since a penalty only ever adds to it.
    *
    * @return the cheapest possible cost of moving one block, in seconds
    */

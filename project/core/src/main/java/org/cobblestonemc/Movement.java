@@ -20,9 +20,9 @@ import org.jetbrains.annotations.Nullable;
  *
  * @param <T> the payload type
  * @param cell the reachable destination cell
- * @param cost the algorithm cost in seconds to perform this step (what the search minimizes)
- * @param time the real traversal time in seconds (player-facing); equals {@code cost} until danger
- *     weighting diverges them
+ * @param cost the algorithm cost in seconds to perform this step (what the search minimizes): its
+ *     time plus any penalty, so never less than {@code time}
+ * @param time the real traversal time in seconds (player-facing)
  * @param payload the payload to send through to the search response
  * @param state the resulting traversal state after the step
  * @param restricted a supplier, invoked lazily at pop, of a verdict resolving {@code true} if this

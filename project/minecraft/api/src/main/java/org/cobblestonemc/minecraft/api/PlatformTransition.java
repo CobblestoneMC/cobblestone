@@ -41,8 +41,8 @@ public interface PlatformTransition<R, P> {
   double cost();
 
   /**
-   * The real traversal time in seconds (player-facing). Defaults to {@link #cost()} so existing
-   * providers need no change until they distinguish danger/penalty weighting from actual duration.
+   * The real traversal time in seconds (player-facing). Defaults to {@link #cost()}, for a
+   * transition that carries no penalty on top of its duration.
    *
    * @return the traversal time
    */

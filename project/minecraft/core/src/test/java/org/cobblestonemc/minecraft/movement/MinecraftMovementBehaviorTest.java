@@ -26,6 +26,7 @@ import org.cobblestonemc.minecraft.TestMovements;
 import org.cobblestonemc.minecraft.TestMovements.Moves;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.TestWorld;
+import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,8 @@ class MinecraftMovementBehaviorTest {
   private static final CobblestonePlayer FLIER = TestPlayer.create(true, false, false);
 
   private static Abilities abilitiesOf(CobblestonePlayer player, MinecraftStepType... excluded) {
-    return MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of(excluded))
+    return MinecraftMovementBehavior.forPlayer(
+            TestWorld.CHUNKS, player, Set.of(excluded), null, 0, CostWeights.defaults())
         .abilities();
   }
 
@@ -104,7 +106,8 @@ class MinecraftMovementBehaviorTest {
     TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
     Moves moves =
         TestMovements.from(
-            MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, FLIER, Set.of()),
+            MinecraftMovementBehavior.forPlayer(
+                TestWorld.CHUNKS, FLIER, Set.of(), null, 0, CostWeights.defaults()),
             world,
             new Cell(0, 1, 0));
     assertTrue(moves.ofType(MinecraftStepType.WALK).isEmpty());
@@ -121,7 +124,8 @@ class MinecraftMovementBehaviorTest {
     TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
     Moves moves =
         TestMovements.from(
-            MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, glider, Set.of()),
+            MinecraftMovementBehavior.forPlayer(
+                TestWorld.CHUNKS, glider, Set.of(), null, 0, CostWeights.defaults()),
             world,
             new Cell(0, 1, 0));
 
@@ -138,7 +142,8 @@ class MinecraftMovementBehaviorTest {
     TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
     Cell goal = new Cell(10, 8, 0);
     Collection<Movement<MinecraftStepPayload>> movements =
-        MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, player, Set.of(), null, 1)
+        MinecraftMovementBehavior.forPlayer(
+                TestWorld.CHUNKS, player, Set.of(), null, 1, CostWeights.defaults())
             .movements(new Cell(0, 1, 0), world, TraversalState.DEFAULT, goal)
             .value();
 
@@ -149,19 +154,28 @@ class MinecraftMovementBehaviorTest {
     assertEquals(MinecraftStepType.TELEPORT, pearl.payload().stepType());
     assertEquals(1, pearl.state().get(MinecraftKeys.PEARLS_USED));
     assertNotNull(pearl.restricted(), "the throw's path is checked lazily");
+    // A short throw, but a last resort: the pearl's value and its landing's damage are costed.
+    assertTrue(pearl.time() < 5, "the throw itself is quick");
+    assertEquals(pearl.time() + 300 + CostWeights.defaults().damage(5), pearl.cost(), 1e-9);
   }
 
   @Test
   void theCheapestCostPerBlockFollowsTheAbilities() {
     assertEquals(
         MovementCosts.FLY,
-        MinecraftMovementBehavior.forPlayer(TestWorld.CHUNKS, FLIER, Set.of())
+        MinecraftMovementBehavior.forPlayer(
+                TestWorld.CHUNKS, FLIER, Set.of(), null, 0, CostWeights.defaults())
             .cheapestCostPerBlock(),
         1e-9);
     assertEquals(
         MovementCosts.FALL_PER_BLOCK,
         MinecraftMovementBehavior.forPlayer(
-                TestWorld.CHUNKS, TestPlayer.walker(), Set.of(MinecraftStepType.HORSE))
+                TestWorld.CHUNKS,
+                TestPlayer.walker(),
+                Set.of(MinecraftStepType.HORSE),
+                null,
+                0,
+                CostWeights.defaults())
             .cheapestCostPerBlock(),
         1e-9);
   }

@@ -275,7 +275,12 @@ public final class SpongeNavigationServiceImpl
     CobblestonePlayer agent = new SpongePlayer(player);
     MinecraftMovementBehavior behavior =
         MinecraftMovementBehavior.forPlayer(
-            chunks, agent, settings.excludedModes(), breakChecker, countEnderPearls(player));
+            chunks,
+            agent,
+            settings.excludedModes(),
+            breakChecker,
+            countEnderPearls(player),
+            settings.costWeights());
     HeuristicStrategy heuristic =
         MinecraftHeuristics.forPlayer(
             behavior, chunks, agent, originPosition.cell(), settings, regionStores);
