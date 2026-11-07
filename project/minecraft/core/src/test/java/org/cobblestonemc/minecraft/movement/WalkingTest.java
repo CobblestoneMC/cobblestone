@@ -172,13 +172,47 @@ class WalkingTest {
   void walkingChargesForATurnAndFallingDoesNot() {
     TestWorld world =
         TestWorld.builder("w")
+            .set(-1, 4, 0, TestBlocks.solid())
             .set(0, 4, 0, TestBlocks.solid())
-            .set(1, 4, 0, TestBlocks.solid())
-            .set(0, 0, 1, TestBlocks.solid())
+            .set(0, 4, -1, TestBlocks.solid())
+            .set(0, 1, 1, TestBlocks.solid())
             .build();
-    Moves moves = TestMovements.from(walker, world, new Cell(0, 5, 0));
+    // Arrived walking in +x; every step below leaves another way.
+    Moves moves =
+        TestMovements.from(
+            walker, world, new Cell(-1, 5, 0), new Cell(0, 5, 0), TraversalState.DEFAULT);
 
-    assertEquals(CostWeights.defaults().turn(), moves.to(new Cell(1, 5, 0)).turnCost(), 1e-9);
-    assertEquals(0, moves.to(new Cell(0, 1, 1)).turnCost(), 1e-9);
+    Movement<MinecraftStepPayload> turn = moves.to(new Cell(0, 5, -1), MinecraftStepType.WALK);
+    assertEquals(turn.time() + CostWeights.defaults().turn(), turn.cost(), 1e-9);
+    Movement<MinecraftStepPayload> back = moves.to(new Cell(-1, 5, 0), MinecraftStepType.WALK);
+    assertEquals(back.time() + CostWeights.defaults().turn(), back.cost(), 1e-9);
+    Movement<MinecraftStepPayload> fall = moves.to(new Cell(0, 2, 1), MinecraftStepType.FALL);
+    assertEquals(fall.time(), fall.cost(), 1e-9);
+  }
+
+  @Test
+  void aFirstStepOrAStepStraightOnIsNotATurn() {
+    TestWorld world =
+        TestWorld.builder("w")
+            .set(0, 4, 0, TestBlocks.solid())
+            .set(0, 4, 1, TestBlocks.solid())
+            .set(1, 4, 0, TestBlocks.solid())
+            .build();
+    Movement<MinecraftStepPayload> on =
+        TestMovements.from(
+                walker, world, new Cell(0, 5, -1), new Cell(0, 5, 0), TraversalState.DEFAULT)
+            .to(new Cell(0, 5, 1));
+    assertEquals(on.time(), on.cost(), 1e-9);
+
+    Movement<MinecraftStepPayload> first =
+        TestMovements.from(walker, world, new Cell(0, 5, 0)).to(new Cell(1, 5, 0));
+    assertEquals(first.time(), first.cost(), 1e-9);
+
+    // Arrived straight down, as from a fall: no direction to turn from.
+    Movement<MinecraftStepPayload> afterFall =
+        TestMovements.from(
+                walker, world, new Cell(0, 9, 0), new Cell(0, 5, 0), TraversalState.DEFAULT)
+            .to(new Cell(1, 5, 0));
+    assertEquals(afterFall.time(), afterFall.cost(), 1e-9);
   }
 }

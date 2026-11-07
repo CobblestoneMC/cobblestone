@@ -17,7 +17,7 @@ import org.jetbrains.annotations.Nullable;
  *
  * @param dangerRadius how far away dangerous terrain is noticed, or 0 if it is not priced
  * @param cramped whether the player glides, and cramped gliding is priced
- * @param coast whether the player boats, and boating beside the shore is priced
+ * @param coast whether the player boats, so the shore slows them
  * @param ledges whether the drop off a ledge counts as dangerous terrain: not to a player who flies
  */
 record Hazards(int dangerRadius, boolean cramped, boolean coast, boolean ledges) {

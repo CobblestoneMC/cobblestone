@@ -102,11 +102,11 @@ class SearchConfigTest {
   void theCostsAreReadAndANegativeOneIsReadAsZero() throws IOException {
     CostWeights costs =
         readMinecraft(
-                "search:\n  costs:\n    built_block: 25.0\n    coast: -3.0\n"
+                "search:\n  costs:\n    built_block: 25.0\n    cramped_gliding: -3.0\n"
                     + "    dangerous_terrain_radius: 4\n")
             .costWeights();
     assertEquals(25.0, costs.builtBlock());
-    assertEquals(0.0, costs.coast());
+    assertEquals(0.0, costs.crampedGliding());
     assertEquals(4, costs.dangerousTerrainRadius());
     assertEquals(CostWeights.defaults().damagePerHalfHeart(), costs.damagePerHalfHeart());
   }

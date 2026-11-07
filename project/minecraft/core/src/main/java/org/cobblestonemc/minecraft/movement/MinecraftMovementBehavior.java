@@ -126,7 +126,7 @@ public final class MinecraftMovementBehavior
         new Hazards(
             priced.dangerousTerrain() > 0 ? priced.dangerousTerrainRadius() : 0,
             flightHeight == 1 && priced.crampedGliding() > 0,
-            can.paddle() && priced.coast() > 0,
+            can.paddle(),
             !player.canFly());
     // A player already in a boat starts in it. Getting out is always open to them, so excluding
     // boats leaves them only that.
@@ -147,8 +147,17 @@ public final class MinecraftMovementBehavior
   @Override
   public FutureOr<Collection<Movement<MinecraftStepPayload>>> movements(
       Cell from, MinecraftWorld world, TraversalState state, Cell goal) {
+    return movements(from, null, world, state, goal);
+  }
+
+  @Override
+  public FutureOr<Collection<Movement<MinecraftStepPayload>>> movements(
+      Cell from, @Nullable Cell previous, MinecraftWorld world, TraversalState state, Cell goal) {
     return Surroundings.fetch(chunks, world, from, state, goal, hazards)
-        .flatMap(around -> expand(from, world, state, goal, new Edges(weights, around, threats)));
+        .flatMap(
+            around ->
+                expand(
+                    from, world, state, goal, new Edges(weights, from, previous, around, threats)));
   }
 
   private FutureOr<Collection<Movement<MinecraftStepPayload>>> expand(

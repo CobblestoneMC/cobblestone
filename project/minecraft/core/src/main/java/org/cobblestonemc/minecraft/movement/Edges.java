@@ -31,8 +31,9 @@ import org.jetbrains.annotations.Nullable;
  * <p>Rules offer what a step takes in seconds, and what it does to the player; this prices the harm
  * with the search's {@link CostWeights} and adds it to the cost, never to the time. Where a step
  * ends up is priced here too, from the expansion's {@link Surroundings}, so no rule has to: how
- * near dangerous terrain it passes, how cramped a glide is, and how close a boat runs to the shore;
- * and from the search's {@link Threats}, how near it passes a hostile mob or sculk.
+ * near dangerous terrain it passes, how cramped a glide is, and how much the shore slows a boat;
+ * and from the search's {@link Threats}, how near it passes a hostile mob or sculk. A step with
+ * momentum that changes the direction the route arrived in is charged for the turn.
  */
 final class Edges {
 
@@ -48,22 +49,29 @@ final class Edges {
 
   private final Map<Key, Movement<MinecraftStepPayload>> best = new LinkedHashMap<>();
   private final CostWeights weights;
+  private final Cell from;
+  private final @Nullable Cell previous;
   private final Surroundings surroundings;
   private final Threats threats;
 
-  Edges(CostWeights weights) {
-    this(weights, Surroundings.NONE, Threats.NONE);
-  }
-
   /**
-   * Prices edges with what is around the expanding cell.
+   * Collects the movements out of one cell, pricing what is around it.
    *
    * @param weights what penalties are priced with
+   * @param from the cell the movements leave
+   * @param previous the cell the route to {@code from} came from, or {@code null} if unknown
    * @param surroundings what is around the expanding cell
    * @param threats where mobs and sculk were when the search began
    */
-  Edges(CostWeights weights, Surroundings surroundings, Threats threats) {
+  Edges(
+      CostWeights weights,
+      Cell from,
+      @Nullable Cell previous,
+      Surroundings surroundings,
+      Threats threats) {
     this.weights = weights;
+    this.from = from;
+    this.previous = previous;
     this.surroundings = surroundings;
     this.threats = threats;
   }
@@ -105,6 +113,9 @@ final class Edges {
       MinecraftStepType type,
       TraversalState state,
       @Nullable Supplier<FutureOr<Boolean>> restricted) {
+    if (type == MinecraftStepType.BOAT) {
+      time *= 1 + MovementCosts.COAST_SLOWDOWN * surroundings.coast(cell);
+    }
     // A fall is priced by the damage it does, not by the drop it goes over.
     if (type != MinecraftStepType.FALL) {
       penalty += weights.dangerousTerrain() * time * surroundings.danger(cell);
@@ -117,8 +128,9 @@ final class Edges {
     }
     if (type == MinecraftStepType.FLY) {
       penalty += weights.crampedGliding() * time * surroundings.cramped(cell);
-    } else if (type == MinecraftStepType.BOAT) {
-      penalty += weights.coast() * time * surroundings.coast(cell);
+    }
+    if (MOMENTUM.contains(type) && turns(cell)) {
+      penalty += weights.turn();
     }
     add(
         new Movement<>(
@@ -127,8 +139,23 @@ final class Edges {
             time,
             new MinecraftStepPayload(type, MinecraftInstruction.None.INSTANCE),
             state,
-            restricted,
-            MOMENTUM.contains(type) ? weights.turn() : 0));
+            restricted));
+  }
+
+  /**
+   * Whether a step to {@code to} changes the horizontal direction the route arrived in. Only the
+   * horizontal direction counts, so a step straight up or down neither turns nor is turned from,
+   * and a route's first step has nothing to turn from.
+   */
+  private boolean turns(Cell to) {
+    if (previous == null) {
+      return false;
+    }
+    int inX = Integer.signum(from.x() - previous.x());
+    int inZ = Integer.signum(from.z() - previous.z());
+    int outX = Integer.signum(to.x() - from.x());
+    int outZ = Integer.signum(to.z() - from.z());
+    return (inX != 0 || inZ != 0) && (outX != 0 || outZ != 0) && (inX != outX || inZ != outZ);
   }
 
   /** Offers a fully built movement. */
