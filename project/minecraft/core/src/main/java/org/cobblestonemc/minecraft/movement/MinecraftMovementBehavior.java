@@ -118,7 +118,7 @@ public final class MinecraftMovementBehavior
         new Hazards(
             priced.dangerousTerrain() > 0 ? priced.dangerousTerrainRadius() : 0,
             flightHeight == 1 && priced.crampedGliding() > 0,
-            can.paddle() && priced.coast() > 0,
+            can.paddle(),
             !player.canFly());
     // A player already in a boat starts in it. Getting out is always open to them, so excluding
     // boats leaves them only that.

@@ -30,8 +30,8 @@ import org.jetbrains.annotations.Nullable;
  * <p>Rules offer what a step takes in seconds, and what it does to the player; this prices the harm
  * with the search's {@link CostWeights} and adds it to the cost, never to the time. Where a step
  * ends up is priced here too, from the expansion's {@link Surroundings}, so no rule has to: how
- * near dangerous terrain it passes, how cramped a glide is, and how close a boat runs to the shore.
- * A step with momentum that changes the direction the route arrived in is charged for the turn.
+ * near dangerous terrain it passes, how cramped a glide is, and how much the shore slows a boat. A
+ * step with momentum that changes the direction the route arrived in is charged for the turn.
  */
 final class Edges {
 
@@ -103,14 +103,15 @@ final class Edges {
       MinecraftStepType type,
       TraversalState state,
       @Nullable Supplier<FutureOr<Boolean>> restricted) {
+    if (type == MinecraftStepType.BOAT) {
+      time *= 1 + MovementCosts.COAST_SLOWDOWN * surroundings.coast(cell);
+    }
     // A fall is priced by the damage it does, not by the drop it goes over.
     if (type != MinecraftStepType.FALL) {
       penalty += weights.dangerousTerrain() * time * surroundings.danger(cell);
     }
     if (type == MinecraftStepType.FLY) {
       penalty += weights.crampedGliding() * time * surroundings.cramped(cell);
-    } else if (type == MinecraftStepType.BOAT) {
-      penalty += weights.coast() * time * surroundings.coast(cell);
     }
     if (MOMENTUM.contains(type) && turns(cell)) {
       penalty += weights.turn();

@@ -146,7 +146,6 @@ public final class ConfigKeys {
   public final ConfigKey<Double> costsCrampedGliding;
 
   /** Seconds added per second boating right beside the shore. Mutable. */
-  public final ConfigKey<Double> costsCoast;
 
   /** Whether Cobblestone discovers vanilla portal links by watching players teleport. Mutable. */
   public final ConfigKey<Boolean> portalsDiscovery;
@@ -620,15 +619,6 @@ public final class ConfigKeys {
                 Seconds added for each second spent gliding on an elytra under trees, roofs or a
                 cave's ceiling, or close to a wall, where a glider is hard to steer. Enough by
                 default that a glider climbs into open sky instead.""")
-            .mutable()
-            .register();
-    this.costsCoast =
-        manager
-            .key("search.costs.coast", costs.coast(), Codec.ofDouble())
-            .comment(
-                """
-                Seconds added for each second spent boating right beside the shore, which keeps a
-                boat a block or two out.""")
             .mutable()
             .register();
 

@@ -42,7 +42,7 @@ class HazardsTest {
   @Test
   void dangerousTerrainCostsByHowNearItPasses() {
     TestWorld world = ground("lava").set(3, 1, 0, TestBlocks.lava()).build();
-    CostWeights wide = new CostWeights(8.0, 300.0, 0.05, 1.0, 2, 10.0, 10.0, 1.0);
+    CostWeights wide = new CostWeights(8.0, 300.0, 0.05, 1.0, 2, 10.0, 10.0);
     Moves moves =
         TestMovements.from(
             MinecraftMovementBehavior.forPlayer(
@@ -167,7 +167,7 @@ class HazardsTest {
   }
 
   @Test
-  void boatingBesideTheShoreCostsMoreThanOffshore() {
+  void boatingBesideTheShoreTakesLongerThanOffshore() {
     TestWorld world =
         TestWorld.builder("sea")
             .floor(0, -8, -8, 8, 8, TestBlocks.water())
@@ -179,9 +179,10 @@ class HazardsTest {
             .ofType(MinecraftStepType.BOAT);
 
     Movement<MinecraftStepPayload> ashore = moves.to(new Cell(1, 0, 0));
-    assertEquals(ashore.time() + WEIGHTS.coast() * ashore.time(), ashore.cost(), 1e-9);
+    assertEquals(MovementCosts.BOAT * (1 + MovementCosts.COAST_SLOWDOWN), ashore.time(), 1e-9);
+    assertEquals(ashore.time(), ashore.cost(), 1e-9);
     Movement<MinecraftStepPayload> offshore = moves.to(new Cell(-1, 0, 0));
-    assertEquals(offshore.time(), offshore.cost(), 1e-9);
+    assertEquals(MovementCosts.BOAT, offshore.time(), 1e-9);
   }
 
   /** A pool deep enough to swim across. */

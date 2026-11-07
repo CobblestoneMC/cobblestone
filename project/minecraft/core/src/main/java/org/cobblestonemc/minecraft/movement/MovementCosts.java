@@ -29,6 +29,14 @@ final class MovementCosts {
   /** Seconds to travel one block by boat over water. */
   static final double BOAT = 0.15;
 
+  /**
+   * How much longer a boat takes right beside the shore: half as long again, falling off to nothing
+   * past {@link Surroundings#COAST_RADIUS}. Scraping along the bank and catching on corners slows
+   * it down; it is not a danger, so it is time rather than a penalty. It keeps a boat a block or
+   * two out, where it is free.
+   */
+  static final double COAST_SLOWDOWN = 0.5;
+
   /** Seconds to travel one block on horseback. */
   static final double HORSE = 0.12;
 
