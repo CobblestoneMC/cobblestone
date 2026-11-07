@@ -7,7 +7,6 @@
 
 package org.cobblestonemc.api;
 
-import java.util.Comparator;
 import java.util.Objects;
 
 /**
@@ -23,46 +22,14 @@ import java.util.Objects;
 public final class TraversalKey<V> {
 
   private final String name;
-  private final Comparator<V> preference;
 
   /**
-   * Creates a key with the given diagnostic name. Different values of this key are simply different
-   * conditions, and neither is better than the other.
+   * Creates a key with the given diagnostic name.
    *
    * @param name a human-readable name used only for {@code toString}
    */
   public TraversalKey(String name) {
-    this(name, null);
-  }
-
-  private TraversalKey(String name, Comparator<V> preference) {
     this.name = Objects.requireNonNull(name, "name");
-    this.preference = preference;
-  }
-
-  /**
-   * Creates a key whose values are ranked: a value that sorts earlier is never worse for the agent,
-   * and having no value at all is best of all. Everything an agent can do with a later value it can
-   * do with an earlier one, for no more cost, which is what lets the search drop a state that is
-   * {@linkplain TraversalState#dominates dominated}. A key that does not keep that promise must not
-   * be ranked, or the search will lose routes.
-   *
-   * @param name a human-readable name used only for {@code toString}
-   * @param preference orders the values from best to worst
-   * @param <V> the type of value stored under this key
-   * @return the key
-   */
-  public static <V> TraversalKey<V> ranked(String name, Comparator<V> preference) {
-    return new TraversalKey<>(name, Objects.requireNonNull(preference, "preference"));
-  }
-
-  /**
-   * Returns how this key orders its values from best to worst.
-   *
-   * @return the order, or {@code null} if its values are not ranked
-   */
-  Comparator<V> preference() {
-    return preference;
   }
 
   /**

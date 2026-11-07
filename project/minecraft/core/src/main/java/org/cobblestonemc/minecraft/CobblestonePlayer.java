@@ -57,16 +57,6 @@ public interface CobblestonePlayer {
   }
 
   /**
-   * Returns the level of Respiration on the helmet the player wears, or 0 without it. Each level
-   * stretches the breath a player holds underwater by another fifteen seconds.
-   *
-   * @return the Respiration level
-   */
-  default int respirationLevel() {
-    return 0;
-  }
-
-  /**
    * Returns the level of Depth Strider on the boots the player wears, or 0 without it. Each level,
    * up to three, takes a third of the gap between swimming and walking speed away.
    *

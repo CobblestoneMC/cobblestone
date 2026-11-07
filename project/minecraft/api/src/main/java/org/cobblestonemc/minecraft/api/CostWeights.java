@@ -23,7 +23,7 @@ package org.cobblestonemc.minecraft.api;
  * charged to a player who can be hurt; see {@link #harmless()}. The rest apply to everyone.
  *
  * @param damagePerHalfHeart seconds of travel worth avoiding a half-heart of damage, such as from a
- *     long fall, an ender pearl's landing or drowning
+ *     long fall or an ender pearl's landing
  * @param enderPearl seconds of travel worth keeping an ender pearl rather than throwing it
  * @param turn seconds of travel worth not changing direction while moving with momentum: walking,
  *     jumping, swimming, flying, boating or riding. Steers towards straight routes

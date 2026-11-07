@@ -563,8 +563,8 @@ public final class ConfigKeys {
             .key("search.costs.damage_per_half_heart", costs.damagePerHalfHeart(), Codec.ofDouble())
             .comment(
                 """
-                Seconds a half-heart of damage is worth: from a long fall, an ender pearl's landing
-                or drowning.""")
+                Seconds a half-heart of damage is worth: from a long fall or an ender pearl's
+                landing.""")
             .mutable()
             .register();
     this.costsEnderPearl =

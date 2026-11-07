@@ -139,11 +139,6 @@ final class SpongePlayer implements CobblestonePlayer {
   }
 
   @Override
-  public int respirationLevel() {
-    return enchantment(ServerPlayer::head, EnchantmentTypes.RESPIRATION.get());
-  }
-
-  @Override
   public int depthStriderLevel() {
     return enchantment(ServerPlayer::feet, EnchantmentTypes.DEPTH_STRIDER.get());
   }

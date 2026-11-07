@@ -27,12 +27,11 @@ public final class TestPlayer implements CobblestonePlayer {
   private final boolean inBoat;
   private final int soulSpeed;
   private final boolean takesDamage;
-  private final int respiration;
   private final int depthStrider;
 
   private TestPlayer(
       boolean canFly, boolean canGlide, boolean hasBoat, boolean inBoat, int soulSpeed) {
-    this(canFly, canGlide, hasBoat, inBoat, soulSpeed, false, 0, 0);
+    this(canFly, canGlide, hasBoat, inBoat, soulSpeed, false, 0);
   }
 
   private TestPlayer(
@@ -42,7 +41,6 @@ public final class TestPlayer implements CobblestonePlayer {
       boolean inBoat,
       int soulSpeed,
       boolean takesDamage,
-      int respiration,
       int depthStrider) {
     this.canFly = canFly;
     this.canGlide = canGlide;
@@ -50,20 +48,17 @@ public final class TestPlayer implements CobblestonePlayer {
     this.inBoat = inBoat;
     this.soulSpeed = soulSpeed;
     this.takesDamage = takesDamage;
-    this.respiration = respiration;
     this.depthStrider = depthStrider;
   }
 
   /** This player, but one that can be hurt, as in survival. */
   public TestPlayer vulnerable() {
-    return new TestPlayer(
-        canFly, canGlide, hasBoat, inBoat, soulSpeed, true, respiration, depthStrider);
+    return new TestPlayer(canFly, canGlide, hasBoat, inBoat, soulSpeed, true, depthStrider);
   }
 
-  /** This player, in a helmet with Respiration and boots with Depth Strider of the given levels. */
-  public TestPlayer enchanted(int respiration, int depthStrider) {
-    return new TestPlayer(
-        canFly, canGlide, hasBoat, inBoat, soulSpeed, takesDamage, respiration, depthStrider);
+  /** This player, in boots with Depth Strider of the given level. */
+  public TestPlayer striding(int depthStrider) {
+    return new TestPlayer(canFly, canGlide, hasBoat, inBoat, soulSpeed, takesDamage, depthStrider);
   }
 
   public static TestPlayer walker() {
@@ -122,11 +117,6 @@ public final class TestPlayer implements CobblestonePlayer {
   @Override
   public boolean takesDamage() {
     return takesDamage;
-  }
-
-  @Override
-  public int respirationLevel() {
-    return respiration;
   }
 
   @Override
