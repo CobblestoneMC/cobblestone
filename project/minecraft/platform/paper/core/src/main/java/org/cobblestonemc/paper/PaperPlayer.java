@@ -108,14 +108,6 @@ final class PaperPlayer implements CobblestonePlayer {
   }
 
   @Override
-  public int respirationLevel() {
-    return player()
-        .map(player -> player.getInventory().getHelmet())
-        .map(helmet -> helmet.getEnchantmentLevel(Enchantment.RESPIRATION))
-        .orElse(0);
-  }
-
-  @Override
   public int depthStriderLevel() {
     return player()
         .map(player -> player.getInventory().getBoots())

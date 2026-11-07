@@ -8,15 +8,11 @@
 package org.cobblestonemc.minecraft.movement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.util.Set;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.Movement;
-import org.cobblestonemc.api.TraversalState;
 import org.cobblestonemc.minecraft.MinecraftBlock;
-import org.cobblestonemc.minecraft.MinecraftKeys;
 import org.cobblestonemc.minecraft.TestBlocks;
 import org.cobblestonemc.minecraft.TestMovements;
 import org.cobblestonemc.minecraft.TestMovements.Moves;
@@ -33,9 +29,6 @@ class HazardsTest {
 
   private static final CostWeights WEIGHTS = CostWeights.defaults();
   private static final Cell ORIGIN = new Cell(0, 1, 0);
-
-  /** Seconds of breath, in blocks swum across without Respiration or Depth Strider. */
-  private static final int BREATH = (int) (MovementCosts.BREATH_SECONDS / MovementCosts.SWIM);
 
   private static MinecraftMovementBehavior behavior(TestPlayer player) {
     return MinecraftMovementBehavior.forPlayer(
@@ -198,80 +191,13 @@ class HazardsTest {
     assertEquals(offshore.time(), offshore.cost(), 1e-9);
   }
 
-  /** A pool deep enough to swim across with the head under. */
+  /** A pool deep enough to swim across. */
   private static TestWorld pool(String key) {
     TestWorld.Builder pool = ground(key);
     for (int y = 1; y <= 4; y++) {
       pool.floor(y, -4, -4, 4, 4, TestBlocks.water());
     }
     return pool.build();
-  }
-
-  @Test
-  void aBreathRunsOutAndThenEveryBlockDrowns() {
-    TestPlayer swimmer = TestPlayer.walker().vulnerable();
-    Cell across = new Cell(1, 1, 0);
-
-    Movement<MinecraftStepPayload> first =
-        TestMovements.from(behavior(swimmer), pool("first"), ORIGIN)
-            .to(across, MinecraftStepType.SWIM);
-    assertEquals(1, first.state().get(MinecraftKeys.HELD_BREATH));
-    assertEquals(first.time(), first.cost(), 1e-9);
-
-    TestWorld pool = pool("last");
-    TraversalState holding = TraversalState.DEFAULT.with(MinecraftKeys.HELD_BREATH, BREATH);
-    Movement<MinecraftStepPayload> drowning =
-        TestMovements.from(behavior(swimmer), pool, ORIGIN, holding)
-            .to(across, MinecraftStepType.SWIM);
-    assertEquals(BREATH + 1, drowning.state().get(MinecraftKeys.HELD_BREATH));
-    assertEquals(
-        drowning.time()
-            + WEIGHTS.damage(MovementCosts.DROWNING_HALF_HEARTS_PER_SECOND * drowning.time()),
-        drowning.cost(),
-        1e-9);
-
-    // Already capped: counting on would only multiply the states.
-    TraversalState capped = TraversalState.DEFAULT.with(MinecraftKeys.HELD_BREATH, BREATH + 1);
-    assertEquals(
-        BREATH + 1,
-        TestMovements.from(behavior(swimmer), pool, ORIGIN, capped)
-            .to(across, MinecraftStepType.SWIM)
-            .state()
-            .get(MinecraftKeys.HELD_BREATH));
-  }
-
-  @Test
-  void respirationStretchesTheBreath() {
-    TraversalState holding = TraversalState.DEFAULT.with(MinecraftKeys.HELD_BREATH, BREATH);
-    Movement<MinecraftStepPayload> stillHolding =
-        TestMovements.from(
-                behavior(TestPlayer.walker().vulnerable().enchanted(1, 0)),
-                pool("respiration"),
-                ORIGIN,
-                holding)
-            .to(new Cell(1, 1, 0), MinecraftStepType.SWIM);
-
-    assertEquals(stillHolding.time(), stillHolding.cost(), 1e-9);
-  }
-
-  @Test
-  void surfacingTakesABreath() {
-    TestWorld shallow = ground("shallow").floor(1, -4, -4, 4, 4, TestBlocks.water()).build();
-    TraversalState holding = TraversalState.DEFAULT.with(MinecraftKeys.HELD_BREATH, 10);
-    Movement<MinecraftStepPayload> surfaced =
-        TestMovements.from(behavior(TestPlayer.walker().vulnerable()), shallow, ORIGIN, holding)
-            .to(new Cell(1, 1, 0), MinecraftStepType.SWIM);
-
-    assertNull(surfaced.state().get(MinecraftKeys.HELD_BREATH));
-  }
-
-  @Test
-  void aPlayerWhoCannotDrownHoldsNoBreath() {
-    Movement<MinecraftStepPayload> swim =
-        TestMovements.from(behavior(TestPlayer.walker()), pool("creative-pool"), ORIGIN)
-            .to(new Cell(1, 1, 0), MinecraftStepType.SWIM);
-
-    assertFalse(swim.state().contains(MinecraftKeys.HELD_BREATH));
   }
 
   @Test
@@ -316,7 +242,7 @@ class HazardsTest {
   @Test
   void depthStriderSwimsAtWalkingSpeed() {
     Movement<MinecraftStepPayload> swim =
-        TestMovements.from(behavior(TestPlayer.walker().enchanted(0, 3)), pool("strider"), ORIGIN)
+        TestMovements.from(behavior(TestPlayer.walker().striding(3)), pool("strider"), ORIGIN)
             .to(new Cell(1, 1, 0), MinecraftStepType.SWIM);
 
     assertEquals(MovementCosts.WALK, swim.time(), 1e-9);

@@ -127,9 +127,6 @@ public final class MinecraftMovementBehavior
             priced.dangerousTerrain() > 0 ? priced.dangerousTerrainRadius() : 0,
             flightHeight == 1 && priced.crampedGliding() > 0,
             can.paddle() && priced.coast() > 0,
-            can.swim() && priced.damagePerHalfHeart() > 0
-                ? breathBlocks(player.respirationLevel(), can)
-                : 0,
             !player.canFly());
     // A player already in a boat starts in it. Getting out is always open to them, so excluding
     // boats leaves them only that.
@@ -147,27 +144,11 @@ public final class MinecraftMovementBehavior
         hurtable ? threats : Threats.NONE);
   }
 
-  /**
-   * How many blocks one breath lasts, swimming across: fifteen seconds, and fifteen more for each
-   * level of Respiration, which in vanilla spends the breath only one tick in {@code level + 1}.
-   */
-  private static int breathBlocks(int respiration, Abilities can) {
-    double seconds = MovementCosts.BREATH_SECONDS * (1 + Math.max(0, respiration));
-    return Math.max(1, (int) (seconds / can.swimAcross()));
-  }
-
   @Override
   public FutureOr<Collection<Movement<MinecraftStepPayload>>> movements(
       Cell from, MinecraftWorld world, TraversalState state, Cell goal) {
     return Surroundings.fetch(chunks, world, from, state, goal, hazards)
-        .flatMap(
-            around ->
-                expand(
-                    from,
-                    world,
-                    state,
-                    goal,
-                    new Edges(weights, around, hazards.airBlocks(), threats)));
+        .flatMap(around -> expand(from, world, state, goal, new Edges(weights, around, threats)));
   }
 
   private FutureOr<Collection<Movement<MinecraftStepPayload>>> expand(

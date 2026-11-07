@@ -183,11 +183,6 @@ final class Surroundings {
     return falloff(nearest, COAST_RADIUS);
   }
 
-  /** Whether a player at {@code to} has its head underwater; {@code false} if not looked for. */
-  boolean headUnderwater(Cell to) {
-    return hazards.airBlocks() > 0 && box.at(to, 0, 1, 0).isWater();
-  }
-
   /** 1 at a distance of 1 or less, falling off linearly to 0 past {@code radius}. */
   private static double falloff(int distance, int radius) {
     if (distance > radius) {

@@ -17,7 +17,6 @@ import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.Movement;
 import org.cobblestonemc.api.TraversalState;
-import org.cobblestonemc.minecraft.MinecraftKeys;
 import org.cobblestonemc.minecraft.Threats;
 import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftInstruction;
@@ -32,9 +31,8 @@ import org.jetbrains.annotations.Nullable;
  * <p>Rules offer what a step takes in seconds, and what it does to the player; this prices the harm
  * with the search's {@link CostWeights} and adds it to the cost, never to the time. Where a step
  * ends up is priced here too, from the expansion's {@link Surroundings}, so no rule has to: how
- * near dangerous terrain it passes, how cramped a glide is, how close a boat runs to the shore, and
- * how long the player has gone without a breath; and from the search's {@link Threats}, how near it
- * passes a hostile mob or sculk.
+ * near dangerous terrain it passes, how cramped a glide is, and how close a boat runs to the shore;
+ * and from the search's {@link Threats}, how near it passes a hostile mob or sculk.
  */
 final class Edges {
 
@@ -51,11 +49,10 @@ final class Edges {
   private final Map<Key, Movement<MinecraftStepPayload>> best = new LinkedHashMap<>();
   private final CostWeights weights;
   private final Surroundings surroundings;
-  private final int airBlocks;
   private final Threats threats;
 
   Edges(CostWeights weights) {
-    this(weights, Surroundings.NONE, 0, Threats.NONE);
+    this(weights, Surroundings.NONE, Threats.NONE);
   }
 
   /**
@@ -63,13 +60,11 @@ final class Edges {
    *
    * @param weights what penalties are priced with
    * @param surroundings what is around the expanding cell
-   * @param airBlocks how many blocks one breath lasts, or 0 if drowning is not priced
    * @param threats where mobs and sculk were when the search began
    */
-  Edges(CostWeights weights, Surroundings surroundings, int airBlocks, Threats threats) {
+  Edges(CostWeights weights, Surroundings surroundings, Threats threats) {
     this.weights = weights;
     this.surroundings = surroundings;
-    this.airBlocks = airBlocks;
     this.threats = threats;
   }
 
@@ -124,20 +119,6 @@ final class Edges {
       penalty += weights.crampedGliding() * time * surroundings.cramped(cell);
     } else if (type == MinecraftStepType.BOAT) {
       penalty += weights.coast() * time * surroundings.coast(cell);
-    }
-    if (airBlocks > 0) {
-      if (state.get(MinecraftKeys.VEHICLE) == null && surroundings.headUnderwater(cell)) {
-        Integer held = state.get(MinecraftKeys.HELD_BREATH);
-        int holding = held == null ? 1 : held + 1;
-        if (holding > airBlocks) {
-          penalty += weights.damage(MovementCosts.DROWNING_HALF_HEARTS_PER_SECOND * time);
-        }
-        // Capped just past the breath: beyond it every block drowns alike, so counting on would
-        // only multiply the states.
-        state = state.with(MinecraftKeys.HELD_BREATH, Math.min(holding, airBlocks + 1));
-      } else {
-        state = state.without(MinecraftKeys.HELD_BREATH);
-      }
     }
     add(
         new Movement<>(
