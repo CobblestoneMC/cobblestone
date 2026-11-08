@@ -23,15 +23,15 @@ import org.cobblestonemc.minecraft.MinecraftWorld;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 
 /**
- * Taking off from the ground with a rocket: a boosted climb along a long, straight, clear line.
+ * Taking off with a rocket: a boosted climb along a long, straight, clear line.
  *
- * <p>A rocket fired from the ground carries a glider up a straight line as long as its flight
- * lasts, {@link MovementCosts#TAKEOFF_BLOCKS_PER_DURATION} blocks for each level of Flight
- * Duration, using the longest the player holds. The line must be clear three blocks wide all the
- * way: a glider that clips a branch or a roof on the way up falls. It climbs at between 25 and 70
- * degrees above the horizon, steepest first, and the first clear line wins, tried towards the goal
- * first. One takeoff is offered at most, since a glider in the air can boost anywhere from where it
- * ends.
+ * <p>A rocket fired from the ground, or by a swimmer leaping from the surface of water, carries a
+ * glider up a straight line as long as its flight lasts, {@link
+ * MovementCosts#TAKEOFF_BLOCKS_PER_DURATION} blocks for each level of Flight Duration, using the
+ * longest the player holds. The line must be clear three blocks wide all the way: a glider that
+ * clips a branch or a roof on the way up falls. It climbs at between 25 and 70 degrees above the
+ * horizon, steepest first, and the first clear line wins, tried towards the goal first. One takeoff
+ * is offered at most, since a glider in the air can boost anywhere from where it ends.
  *
  * <p>The line reaches well past the blocks an expansion reads, so it is read straight from the
  * chunks it crosses, a chunk at a time, stopping at the first block in the way.
@@ -54,9 +54,11 @@ final class Takeoff {
   private Takeoff() {}
 
   /**
-   * Offers a takeoff from {@code from}, where a player stands, if a clear line leaves it.
+   * Offers a takeoff from {@code from}, where a player stands or swims at the surface, if a clear
+   * line leaves it.
    *
    * @param rockets the longest Flight Duration among the rockets held, at least 1
+   * @param extra seconds to get clear before the rocket fires, as out of water
    */
   static FutureOr<Edges> offer(
       ChunkSource chunks,
@@ -64,6 +66,7 @@ final class Takeoff {
       Cell from,
       Cell goal,
       int rockets,
+      double extra,
       TraversalState state,
       Edges edges) {
     int length = MovementCosts.TAKEOFF_BLOCKS_PER_DURATION * rockets;
@@ -84,7 +87,7 @@ final class Takeoff {
               if (end != null) {
                 edges.add(
                     end,
-                    MovementCosts.BOOST * length,
+                    MovementCosts.BOOST * length + extra,
                     MinecraftStepType.ELYTRA,
                     state.with(MinecraftKeys.GLIDING, true));
               }

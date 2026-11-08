@@ -132,6 +132,17 @@ class GlidingTest {
   }
 
   @Test
+  void comingDownIntoWaterLands() {
+    TestWorld sea = TestWorld.builder("sea").floor(0, -8, -8, 8, 8, TestBlocks.water()).build();
+    Moves moves = gliding(TestPlayer.glider(), sea, new Cell(0, 1, 0));
+
+    Movement<MinecraftStepPayload> splash = moves.to(new Cell(1, 0, 0), MinecraftStepType.ELYTRA);
+    assertNotNull(splash, "a splashdown");
+    assertNull(splash.state().get(MinecraftKeys.GLIDING));
+    assertEquals(MovementCosts.GLIDE_DOWN * Math.sqrt(2), splash.time(), 1e-9);
+  }
+
+  @Test
   void steppingOffADropOpensTheElytra() {
     TestWorld ledge =
         TestWorld.builder("ledge").floor(10, -2, -2, 0, 2, TestBlocks.solid()).build();
@@ -166,6 +177,43 @@ class GlidingTest {
         2 + Math.round(MovementCosts.TAKEOFF_BLOCKS_PER_DURATION * Math.sin(Math.toRadians(70))),
         takeoff.cell().y(),
         "the steepest climb, from the head");
+  }
+
+  @Test
+  void aSwimmerTakesOffFromTheSurface() {
+    TestWorld sea =
+        TestWorld.builder("sea")
+            .floor(-4, -8, -8, 8, 8, TestBlocks.solid())
+            .floor(0, -8, -8, 8, 8, TestBlocks.water())
+            .build();
+    List<Movement<MinecraftStepPayload>> takeoffs =
+        TestMovements.from(behavior(TestPlayer.glider().withRockets(1)), sea, new Cell(0, 0, 0))
+            .all()
+            .stream()
+            .filter(m -> m.state().equals(GLIDING))
+            .toList();
+
+    assertEquals(1, takeoffs.size(), "one takeoff at most: " + takeoffs);
+    assertEquals(
+        MovementCosts.BOOST * MovementCosts.TAKEOFF_BLOCKS_PER_DURATION
+            + MovementCosts.WATER_TAKEOFF,
+        takeoffs.getFirst().time(),
+        1e-9,
+        "a leap clear first");
+  }
+
+  @Test
+  void noTakeoffUnderwater() {
+    TestWorld deep =
+        TestWorld.builder("deep")
+            .floor(-4, -8, -8, 8, 8, TestBlocks.solid())
+            .floor(0, -8, -8, 8, 8, TestBlocks.water())
+            .floor(1, -8, -8, 8, 8, TestBlocks.water())
+            .build();
+    Moves moves =
+        TestMovements.from(behavior(TestPlayer.glider().withRockets(1)), deep, new Cell(0, 0, 0));
+
+    assertTrue(moves.all().stream().noneMatch(m -> m.state().equals(GLIDING)));
   }
 
   @Test

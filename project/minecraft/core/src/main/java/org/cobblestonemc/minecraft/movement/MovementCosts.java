@@ -38,6 +38,12 @@ final class MovementCosts {
   /** Blocks a rocket fired from the ground carries a glider, for each level of Flight Duration. */
   static final int TAKEOFF_BLOCKS_PER_DURATION = 40;
 
+  /**
+   * Seconds added to a takeoff from the surface of water: a swimmer has to leap clear before the
+   * elytra opens and the rocket fires, which takes a try or two.
+   */
+  static final double WATER_TAKEOFF = 1.0;
+
   /** Seconds to climb one block (ladder/scaffolding/vine). */
   static final double CLIMB = 0.40;
 

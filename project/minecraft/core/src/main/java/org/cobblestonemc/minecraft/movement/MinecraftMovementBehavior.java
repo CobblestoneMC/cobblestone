@@ -222,9 +222,18 @@ public final class MinecraftMovementBehavior
     }
     FutureOr<Edges> offered =
         can.fall() ? Falls.offer(chunks, world, from, state, view, edges) : FutureOr.of(edges);
-    if (can.glide() && can.rockets() > 0 && Geometry.standable(view, from)) {
+    if (can.glide() && can.rockets() > 0) {
+      double extra;
+      if (Geometry.standable(view, from)) {
+        extra = 0;
+      } else if (Geometry.atTheSurface(view, from)) {
+        extra = MovementCosts.WATER_TAKEOFF;
+      } else {
+        return offered;
+      }
       return offered.flatMap(
-          collected -> Takeoff.offer(chunks, world, from, goal, can.rockets(), state, collected));
+          collected ->
+              Takeoff.offer(chunks, world, from, goal, can.rockets(), extra, state, collected));
     }
     return offered;
   }

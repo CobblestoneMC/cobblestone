@@ -29,8 +29,8 @@ import org.cobblestonemc.minecraft.api.MinecraftStepType;
  *       it threads a tight space, where a boost would strike the walls.
  * </ul>
  *
- * <p>A glider never climbs without a boost. A step that ends standing on the ground, or in water,
- * ends the glide.
+ * <p>A glider never climbs without a boost. A step that ends standing on the ground, or down into
+ * water, ends the glide.
  */
 final class Gliding {
 
@@ -46,12 +46,13 @@ final class Gliding {
             continue;
           }
           Cell to = from.plus(dx, dy, dz);
-          if (!Geometry.bodyFits(view, to, 1) || cutsACorner(view, from, dx, dy, dz)) {
+          // Water is not passable, but a glider may come down into it: a splashdown.
+          boolean splash = dy <= 0 && view.at(to).isWater();
+          if (!(splash || Geometry.bodyFits(view, to, 1)) || cutsACorner(view, from, dx, dy, dz)) {
             continue;
           }
           double distance = Math.sqrt((double) dx * dx + (double) dy * dy + (double) dz * dz);
-          TraversalState after =
-              Geometry.standable(view, to) || view.at(to).isWater() ? landed : state;
+          TraversalState after = splash || Geometry.standable(view, to) ? landed : state;
           if (can.rockets() > 0) {
             edges.addBoosted(to, distance, after);
           }
@@ -90,6 +91,11 @@ final class Gliding {
     }
   }
 
+  /** Whether a glider can move into {@code cell}, or splash down into it when going down. */
+  private static boolean open(BlockView view, Cell cell, int dy) {
+    return Geometry.bodyFits(view, cell, 1) || (dy < 0 && view.at(cell).isWater());
+  }
+
   /**
    * Whether a diagonal step squeezes past a solid block: a one-block-tall body still cannot pass
    * between two blocks that meet at a corner.
@@ -100,7 +106,7 @@ final class Gliding {
       return false;
     }
     return (dx != 0 && !Geometry.bodyFits(view, from.plus(dx, 0, 0), 1))
-        || (dy != 0 && !Geometry.bodyFits(view, from.plus(0, dy, 0), 1))
+        || (dy != 0 && !open(view, from.plus(0, dy, 0), dy))
         || (dz != 0 && !Geometry.bodyFits(view, from.plus(0, 0, dz), 1));
   }
 }
