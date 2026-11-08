@@ -239,6 +239,15 @@ public final class MinecraftMovementBehavior
   }
 
   /**
+   * Returns the penalties this behavior charges on top of time.
+   *
+   * @return the weights
+   */
+  public CostWeights weights() {
+    return weights;
+  }
+
+  /**
    * Returns a lower bound on the cost of one block of travel by any movement this behavior offers:
    * the fastest time, since a penalty only ever adds to it.
    *

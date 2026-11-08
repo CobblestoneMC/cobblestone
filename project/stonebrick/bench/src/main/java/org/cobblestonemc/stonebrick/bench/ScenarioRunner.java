@@ -520,7 +520,8 @@ public final class ScenarioRunner {
             region -> columns,
             region -> store,
             region ->
-                MinecraftAgent.forPlayer(player, settings.excludedModes(), world.environment()),
+                MinecraftAgent.forPlayer(
+                    player, settings.excludedModes(), world.environment(), behavior.weights()),
             behavior.cheapestCostPerBlock());
     // Production's heuristic, with each solve kept so the run can report what its search did.
     return new HeuristicStrategy() {

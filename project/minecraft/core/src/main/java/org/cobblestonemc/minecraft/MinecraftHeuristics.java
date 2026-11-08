@@ -77,7 +77,10 @@ public final class MinecraftHeuristics {
                       : stores.of(worldOf(target)),
               target ->
                   MinecraftAgent.forPlayer(
-                      agent, settings.excludedModes(), worldOf(target).environment()),
+                      agent,
+                      settings.excludedModes(),
+                      worldOf(target).environment(),
+                      behavior.weights()),
               behavior.cheapestCostPerBlock());
     };
   }
