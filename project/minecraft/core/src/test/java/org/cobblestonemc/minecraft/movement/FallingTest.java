@@ -58,7 +58,7 @@ class FallingTest {
             .build();
     MinecraftMovementBehavior careless =
         MinecraftMovementBehavior.forPlayer(
-            TestWorld.CHUNKS, player, Set.of(), null, 0, new CostWeights(0.0, 300.0, 0.05));
+            TestWorld.CHUNKS, player, Set.of(), null, 0, new CostWeights(0.0, 300.0));
     Movement<MinecraftStepPayload> landing =
         TestMovements.from(careless, world, new Cell(0, 5, 0)).to(new Cell(1, 1, 0));
 

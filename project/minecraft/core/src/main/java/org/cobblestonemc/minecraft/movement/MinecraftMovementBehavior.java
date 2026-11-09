@@ -120,13 +120,7 @@ public final class MinecraftMovementBehavior
   @Override
   public FutureOr<Collection<Movement<MinecraftStepPayload>>> movements(
       Cell from, MinecraftWorld world, TraversalState state, Cell goal) {
-    return movements(from, null, world, state, goal);
-  }
-
-  @Override
-  public FutureOr<Collection<Movement<MinecraftStepPayload>>> movements(
-      Cell from, @Nullable Cell previous, MinecraftWorld world, TraversalState state, Cell goal) {
-    Edges edges = new Edges(weights, from, previous);
+    Edges edges = new Edges(weights);
     MinecraftKeys.Vehicle vehicle = state.get(MinecraftKeys.VEHICLE);
     FutureOr<Edges> local;
     if (vehicle == null) {

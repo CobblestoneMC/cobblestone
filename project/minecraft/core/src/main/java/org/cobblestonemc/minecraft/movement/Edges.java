@@ -8,10 +8,8 @@
 package org.cobblestonemc.minecraft.movement;
 
 import java.util.Collection;
-import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Supplier;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
@@ -28,37 +26,15 @@ import org.jetbrains.annotations.Nullable;
  * On a tie, an edge with no {@link Movement#restricted() restriction} wins.
  *
  * <p>Rules offer what a step takes in seconds, and what it does to the player; this prices the harm
- * with the search's {@link CostWeights} and adds it to the cost, never to the time. A step with
- * momentum that changes the direction the route arrived in is charged for the turn.
+ * with the search's {@link CostWeights} and adds it to the cost, never to the time.
  */
 final class Edges {
 
-  /** The steps with momentum to lose, so that changing direction during them is charged. */
-  private static final Set<MinecraftStepType> MOMENTUM =
-      EnumSet.of(
-          MinecraftStepType.WALK,
-          MinecraftStepType.JUMP,
-          MinecraftStepType.SWIM,
-          MinecraftStepType.FLY,
-          MinecraftStepType.BOAT,
-          MinecraftStepType.HORSE);
-
   private final Map<Key, Movement<MinecraftStepPayload>> best = new LinkedHashMap<>();
   private final CostWeights weights;
-  private final Cell from;
-  private final @Nullable Cell previous;
 
-  /**
-   * Collects the movements out of one cell.
-   *
-   * @param weights what penalties are priced with
-   * @param from the cell the movements leave
-   * @param previous the cell the route to {@code from} came from, or {@code null} if unknown
-   */
-  Edges(CostWeights weights, Cell from, @Nullable Cell previous) {
+  Edges(CostWeights weights) {
     this.weights = weights;
-    this.from = from;
-    this.previous = previous;
   }
 
   /** The weights this expansion's penalties are priced with. */
@@ -94,9 +70,6 @@ final class Edges {
       MinecraftStepType type,
       TraversalState state,
       @Nullable Supplier<FutureOr<Boolean>> restricted) {
-    if (MOMENTUM.contains(type) && turns(cell)) {
-      penalty += weights.turn();
-    }
     add(
         new Movement<>(
             cell,
@@ -105,22 +78,6 @@ final class Edges {
             new MinecraftStepPayload(type, MinecraftInstruction.None.INSTANCE),
             state,
             restricted));
-  }
-
-  /**
-   * Whether a step to {@code to} changes the horizontal direction the route arrived in. Only the
-   * horizontal direction counts, so a step straight up or down neither turns nor is turned from,
-   * and a route's first step has nothing to turn from.
-   */
-  private boolean turns(Cell to) {
-    if (previous == null) {
-      return false;
-    }
-    int inX = Integer.signum(from.x() - previous.x());
-    int inZ = Integer.signum(from.z() - previous.z());
-    int outX = Integer.signum(to.x() - from.x());
-    int outZ = Integer.signum(to.z() - from.z());
-    return (inX != 0 || inZ != 0) && (outX != 0 || outZ != 0) && (inX != outX || inZ != outZ);
   }
 
   /** Offers a fully built movement. */
