@@ -60,7 +60,6 @@ public final class SearchConfig {
     return new CostWeights(
         Math.max(0, config.get(keys.costsDamagePerHalfHeart)),
         Math.max(0, config.get(keys.costsEnderPearl)),
-        Math.max(0, config.get(keys.costsTurn)),
         Math.max(0, config.get(keys.costsDangerousTerrain)),
         Math.max(0, config.get(keys.costsDangerousTerrainRadius)),
         Math.max(0, config.get(keys.costsBuiltBlock)),

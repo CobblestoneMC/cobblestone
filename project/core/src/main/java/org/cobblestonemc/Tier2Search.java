@@ -555,12 +555,7 @@ final class Tier2Search<T, D extends Domain> {
   /** Expands one closed node, where {@code goal} is the target cell its movements aim at. */
   private void expand(Node<T> node, Cell goal) {
     FutureOr<Collection<Movement<T>>> movements =
-        behavior.movements(
-            node.key.cell(),
-            node.bestParent == null ? null : node.bestParent.cell(),
-            domain,
-            node.key.state(),
-            goal);
+        behavior.movements(node.key.cell(), domain, node.key.state(), goal);
     if (!movements.isImmediate()) {
       pendingExpansion = new PendingExpansion<>(node.key, movements);
       movements
