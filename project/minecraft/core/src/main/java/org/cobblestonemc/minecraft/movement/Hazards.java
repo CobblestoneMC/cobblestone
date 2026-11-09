@@ -16,16 +16,15 @@ import org.jetbrains.annotations.Nullable;
  * player, is not looked for, and costs no reads.
  *
  * @param dangerRadius how far away dangerous terrain is noticed, or 0 if it is not priced
- * @param cramped whether the player glides, and cramped gliding is priced
  * @param coast whether the player boats, so the shore slows them
  * @param ledges whether the drop off a ledge counts as dangerous terrain: not to a player who flies
  */
-record Hazards(int dangerRadius, boolean cramped, boolean coast, boolean ledges) {
+record Hazards(int dangerRadius, boolean coast, boolean ledges) {
 
-  static final Hazards NONE = new Hazards(0, false, false, false);
+  static final Hazards NONE = new Hazards(0, false, false);
 
   boolean isNone() {
-    return dangerRadius == 0 && !cramped && !coast;
+    return dangerRadius == 0 && !coast;
   }
 
   /**
@@ -34,11 +33,11 @@ record Hazards(int dangerRadius, boolean cramped, boolean coast, boolean ledges)
    */
   Hazards meetable(MinecraftKeys.@Nullable Vehicle vehicle) {
     if (vehicle == MinecraftKeys.Vehicle.BOAT) {
-      return coast ? new Hazards(0, false, true, false) : NONE;
+      return coast ? new Hazards(0, true, false) : NONE;
     }
     if (vehicle == MinecraftKeys.Vehicle.HORSE) {
-      return dangerRadius > 0 ? new Hazards(dangerRadius, false, false, ledges) : NONE;
+      return dangerRadius > 0 ? new Hazards(dangerRadius, false, ledges) : NONE;
     }
-    return coast ? new Hazards(dangerRadius, cramped, false, ledges) : this;
+    return coast ? new Hazards(dangerRadius, false, ledges) : this;
   }
 }

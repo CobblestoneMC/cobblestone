@@ -139,9 +139,6 @@ public final class ConfigKeys {
   /** Seconds added per block broken that is most likely someone's build. Mutable. */
   public final ConfigKey<Double> costsBuiltBlock;
 
-  /** Seconds added per second gliding under cover or beside a wall. Mutable. */
-  public final ConfigKey<Double> costsCrampedGliding;
-
   /** Seconds added per second boating right beside the shore. Mutable. */
 
   /** Whether Cobblestone discovers vanilla portal links by watching players teleport. Mutable. */
@@ -597,16 +594,6 @@ public final class ConfigKeys {
                 """
                 Seconds added for each block a route breaks that is most likely someone's build:
                 planks, glass, bricks, cobblestone and the like. Charged in creative mode too.""")
-            .mutable()
-            .register();
-    this.costsCrampedGliding =
-        manager
-            .key("search.costs.cramped_gliding", costs.crampedGliding(), Codec.ofDouble())
-            .comment(
-                """
-                Seconds added for each second spent gliding on an elytra under trees, roofs or a
-                cave's ceiling, or close to a wall, where a glider is hard to steer. Enough by
-                default that a glider climbs into open sky instead.""")
             .mutable()
             .register();
 

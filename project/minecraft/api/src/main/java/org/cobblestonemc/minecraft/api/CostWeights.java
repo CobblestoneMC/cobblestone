@@ -31,16 +31,13 @@ package org.cobblestonemc.minecraft.api;
  *     off linearly to nothing past this distance. A wider radius reads more blocks every step
  * @param builtBlock seconds added for each block broken that is most likely someone's build, such
  *     as planks, glass or cobblestone
- * @param crampedGliding seconds added for each second spent gliding on an elytra under cover or
- *     close to a wall, where it is hard to steer; open sky is free
  */
 public record CostWeights(
     double damagePerHalfHeart,
     double enderPearl,
     double dangerousTerrain,
     int dangerousTerrainRadius,
-    double builtBlock,
-    double crampedGliding) {
+    double builtBlock) {
 
   /**
    * Rejects a negative weight: a penalty below zero would make a step cost less than it takes, and
@@ -52,7 +49,6 @@ public record CostWeights(
     requireNonNegative("dangerousTerrain", dangerousTerrain);
     requireNonNegative("dangerousTerrainRadius", dangerousTerrainRadius);
     requireNonNegative("builtBlock", builtBlock);
-    requireNonNegative("crampedGliding", crampedGliding);
   }
 
   /**
@@ -65,14 +61,12 @@ public record CostWeights(
    *       another takes.
    *   <li>A second beside danger costs one more, noticed only from the next block.
    *   <li>A built block is worth ten seconds of going round it.
-   *   <li>A second of cramped gliding costs ten more: covering ground slower than walking, so a
-   *       glider climbs into open sky rather than threading through trees.
    * </ul>
    *
    * @return the default weights
    */
   public static CostWeights defaults() {
-    return new CostWeights(8.0, 300.0, 1.0, 1, 10.0, 10.0);
+    return new CostWeights(8.0, 300.0, 1.0, 1, 10.0);
   }
 
   /**
@@ -82,8 +76,7 @@ public record CostWeights(
    * @return the weights without harm
    */
   public CostWeights harmless() {
-    return new CostWeights(
-        0.0, enderPearl, 0.0, dangerousTerrainRadius, builtBlock, crampedGliding);
+    return new CostWeights(0.0, enderPearl, 0.0, dangerousTerrainRadius, builtBlock);
   }
 
   /**

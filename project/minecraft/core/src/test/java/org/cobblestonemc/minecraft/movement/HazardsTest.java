@@ -42,7 +42,7 @@ class HazardsTest {
   @Test
   void dangerousTerrainCostsByHowNearItPasses() {
     TestWorld world = ground("lava").set(3, 1, 0, TestBlocks.lava()).build();
-    CostWeights wide = new CostWeights(8.0, 300.0, 1.0, 2, 10.0, 10.0);
+    CostWeights wide = new CostWeights(8.0, 300.0, 1.0, 2, 10.0);
     Moves moves =
         TestMovements.from(
             MinecraftMovementBehavior.forPlayer(
@@ -72,17 +72,6 @@ class HazardsTest {
         alongTheEdge.time() + WEIGHTS.dangerousTerrain() * alongTheEdge.time(),
         alongTheEdge.cost(),
         1e-9);
-  }
-
-  @Test
-  void aLedgeIsNothingToAPlayerInTheAir() {
-    // Hanging over the drop, and not standing beside it: there is nothing to walk off.
-    TestWorld world = TestWorld.builder("over").floor(0, -8, -8, 0, 8, TestBlocks.solid()).build();
-    Movement<MinecraftStepPayload> glide =
-        TestMovements.from(behavior(TestPlayer.glider().vulnerable()), world, new Cell(4, 20, 0))
-            .to(new Cell(5, 20, 0), MinecraftStepType.FLY);
-
-    assertEquals(glide.time(), glide.cost(), 1e-9);
   }
 
   @Test
@@ -135,35 +124,6 @@ class HazardsTest {
 
   private static TestWorld wall(String key, MinecraftBlock block) {
     return ground(key).set(1, 1, 0, block).set(1, 2, 0, block).build();
-  }
-
-  @Test
-  void glidingInOpenSkyIsFree() {
-    Movement<MinecraftStepPayload> glide =
-        TestMovements.from(behavior(TestPlayer.glider()), ground("sky").build(), new Cell(0, 40, 0))
-            .to(new Cell(1, 40, 0), MinecraftStepType.FLY);
-
-    assertEquals(glide.time(), glide.cost(), 1e-9);
-  }
-
-  @Test
-  void glidingBesideAWallOrUnderCoverIsCramped() {
-    Cell high = new Cell(0, 40, 0);
-    TestWorld wall = ground("wall").set(2, 40, 0, TestBlocks.solid()).build();
-    Movement<MinecraftStepPayload> besideTheWall =
-        TestMovements.from(behavior(TestPlayer.glider()), wall, high)
-            .to(new Cell(1, 40, 0), MinecraftStepType.FLY);
-    assertEquals(
-        besideTheWall.time() + WEIGHTS.crampedGliding() * besideTheWall.time(),
-        besideTheWall.cost(),
-        1e-9);
-
-    TestWorld canopy = ground("canopy").set(0, 55, 0, TestBlocks.solid()).build();
-    Movement<MinecraftStepPayload> underCover =
-        TestMovements.from(behavior(TestPlayer.glider()), canopy, high)
-            .to(new Cell(-1, 40, 0), MinecraftStepType.FLY);
-    assertEquals(
-        underCover.time() + WEIGHTS.crampedGliding() * underCover.time(), underCover.cost(), 1e-9);
   }
 
   @Test

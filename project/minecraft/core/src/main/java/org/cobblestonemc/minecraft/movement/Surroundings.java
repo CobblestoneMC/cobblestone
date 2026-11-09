@@ -14,7 +14,6 @@ import org.cobblestonemc.minecraft.ChunkSource;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MinecraftKeys;
 import org.cobblestonemc.minecraft.MinecraftWorld;
-import org.cobblestonemc.minecraft.UnknownBlock;
 
 /**
  * What one expansion knows about the blocks around it, past the few its rules read: what makes a
@@ -32,16 +31,10 @@ import org.cobblestonemc.minecraft.UnknownBlock;
 final class Surroundings {
 
   /** Nothing to price: every strength is 0. */
-  static final Surroundings NONE = new Surroundings(Hazards.NONE, null, null, null, false);
-
-  /** How far from a wall or ceiling a glider counts as cramped. */
-  static final int CRAMPED_RADIUS = 2;
+  static final Surroundings NONE = new Surroundings(Hazards.NONE, null, null, null);
 
   /** How far from the shore a boat counts as beside it. */
   static final int COAST_RADIUS = 2;
-
-  /** How far above a glider cover is looked for: trees, roofs, a cave's ceiling. */
-  static final int COVER_HEIGHT = 24;
 
   private final Hazards hazards;
   private final Cell from;
@@ -50,16 +43,11 @@ final class Surroundings {
   /** Per column of the box, whether it holds dangerous terrain; {@code null} if not looked for. */
   private final boolean[] dangerous;
 
-  /** Whether anything solid stands over the expanding cell, for a glider. */
-  private final boolean covered;
-
-  private Surroundings(
-      Hazards hazards, Cell from, BlockView box, boolean[] dangerous, boolean covered) {
+  private Surroundings(Hazards hazards, Cell from, BlockView box, boolean[] dangerous) {
     this.hazards = hazards;
     this.from = from;
     this.box = box;
     this.dangerous = dangerous;
-    this.covered = covered;
   }
 
   /**
@@ -90,30 +78,19 @@ final class Surroundings {
       radius = Math.max(radius, 1 + meets.dangerRadius());
       dyLow = Math.min(dyLow, meets.ledges() ? -(MovementCosts.SAFE_FALL_BLOCKS + 2) : -2);
     }
-    if (meets.cramped()) {
-      radius = Math.max(radius, 1 + CRAMPED_RADIUS);
-      dyLow = Math.min(dyLow, -(1 + CRAMPED_RADIUS));
-    }
     if (meets.coast()) {
       radius = Math.max(radius, 1 + COAST_RADIUS);
     }
     FutureOr<BlockView> box = BlockLookup.fetchBox(chunks, world, from, radius, dyLow, 3, goal);
-    FutureOr<BlockView> above =
-        meets.cramped()
-            ? BlockLookup.fetchBox(chunks, world, from.plus(0, 4, 0), 0, 0, COVER_HEIGHT, goal)
-            : FutureOr.of(BlockView.empty());
-    return box.flatMap(
+    return box.map(
         b ->
-            above.map(
-                a ->
-                    new Surroundings(
-                        meets,
-                        from,
-                        b,
-                        meets.dangerRadius() > 0
-                            ? dangerousColumns(b, from, 1 + meets.dangerRadius(), meets.ledges())
-                            : null,
-                        meets.cramped() && covers(a, from.plus(0, 4, 0)))));
+            new Surroundings(
+                meets,
+                from,
+                b,
+                meets.dangerRadius() > 0
+                    ? dangerousColumns(b, from, 1 + meets.dangerRadius(), meets.ledges())
+                    : null));
   }
 
   /**
@@ -137,31 +114,6 @@ final class Surroundings {
       }
     }
     return falloff(nearest, r);
-  }
-
-  /**
-   * How cramped a glider is at {@code to}: 1 under cover, else how close the nearest block it could
-   * strike is. 0 for anyone but a glider.
-   */
-  double cramped(Cell to) {
-    if (!hazards.cramped()) {
-      return 0.0;
-    }
-    if (covered) {
-      return 1.0;
-    }
-    int nearest = Integer.MAX_VALUE;
-    for (int dx = -CRAMPED_RADIUS; dx <= CRAMPED_RADIUS; dx++) {
-      for (int dy = -CRAMPED_RADIUS; dy <= CRAMPED_RADIUS; dy++) {
-        for (int dz = -CRAMPED_RADIUS; dz <= CRAMPED_RADIUS; dz++) {
-          if (!box.at(to, dx, dy, dz).isPassable()) {
-            nearest =
-                Math.min(nearest, Math.max(Math.abs(dx), Math.max(Math.abs(dy), Math.abs(dz))));
-          }
-        }
-      }
-    }
-    return falloff(nearest, CRAMPED_RADIUS);
   }
 
   /** How close a boat at {@code to} is to the shore. 0 for anyone not boating. */
@@ -231,16 +183,5 @@ final class Surroundings {
       }
     }
     return true;
-  }
-
-  /** Whether any block in the column above stops a glider climbing straight out; not the sky. */
-  private static boolean covers(BlockView above, Cell bottom) {
-    for (int dy = 0; dy <= COVER_HEIGHT; dy++) {
-      MinecraftBlock block = above.at(bottom, 0, dy, 0);
-      if (block != UnknownBlock.INSTANCE && !block.isPassable()) {
-        return true;
-      }
-    }
-    return false;
   }
 }
