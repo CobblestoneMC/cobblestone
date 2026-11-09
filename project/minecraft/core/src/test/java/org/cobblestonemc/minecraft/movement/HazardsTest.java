@@ -43,7 +43,7 @@ class HazardsTest {
   @Test
   void dangerousTerrainCostsByHowNearItPasses() {
     TestWorld world = ground("lava").set(3, 1, 0, TestBlocks.lava()).build();
-    CostWeights wide = new CostWeights(8.0, 300.0, 0.05, 1.0, 2, 10.0, 10.0, 5.0, 16, 50.0);
+    CostWeights wide = new CostWeights(8.0, 300.0, 1.0, 2, 10.0, 10.0, 5.0, 16, 50.0);
     Moves moves =
         TestMovements.from(
             MinecraftMovementBehavior.forPlayer(

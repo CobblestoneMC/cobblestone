@@ -147,17 +147,8 @@ public final class MinecraftMovementBehavior
   @Override
   public FutureOr<Collection<Movement<MinecraftStepPayload>>> movements(
       Cell from, MinecraftWorld world, TraversalState state, Cell goal) {
-    return movements(from, null, world, state, goal);
-  }
-
-  @Override
-  public FutureOr<Collection<Movement<MinecraftStepPayload>>> movements(
-      Cell from, @Nullable Cell previous, MinecraftWorld world, TraversalState state, Cell goal) {
     return Surroundings.fetch(chunks, world, from, state, goal, hazards)
-        .flatMap(
-            around ->
-                expand(
-                    from, world, state, goal, new Edges(weights, from, previous, around, threats)));
+        .flatMap(around -> expand(from, world, state, goal, new Edges(weights, around, threats)));
   }
 
   private FutureOr<Collection<Movement<MinecraftStepPayload>>> expand(
