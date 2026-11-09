@@ -30,6 +30,7 @@ import org.cobblestonemc.minecraft.ChunkLoadPolicy;
 import org.cobblestonemc.minecraft.ChunkProvider;
 import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.Threats;
 import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
@@ -95,7 +96,8 @@ class SimulatedIoTest {
             Set.<MinecraftStepType>of(),
             null,
             0,
-            CostWeights.defaults());
+            CostWeights.defaults(),
+            Threats.NONE);
 
     SearchHandle<Position<MinecraftWorld>, MinecraftStepPayload> handle =
         CobblestoneApi.load()

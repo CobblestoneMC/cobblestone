@@ -18,6 +18,7 @@ import org.cobblestonemc.minecraft.TestMovements;
 import org.cobblestonemc.minecraft.TestMovements.Moves;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.TestWorld;
+import org.cobblestonemc.minecraft.Threats;
 import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
@@ -31,7 +32,7 @@ class HazardsTest {
 
   private static MinecraftMovementBehavior behavior(TestPlayer player) {
     return MinecraftMovementBehavior.forPlayer(
-        TestWorld.CHUNKS, player, Set.of(), null, 0, CostWeights.defaults());
+        TestWorld.CHUNKS, player, Set.of(), null, 0, CostWeights.defaults(), Threats.NONE);
   }
 
   /** Wide ground, so that nothing near the origin is the lip of a drop. */
@@ -42,11 +43,17 @@ class HazardsTest {
   @Test
   void dangerousTerrainCostsByHowNearItPasses() {
     TestWorld world = ground("lava").set(3, 1, 0, TestBlocks.lava()).build();
-    CostWeights wide = new CostWeights(8.0, 300.0, 1.0, 2, 10.0);
+    CostWeights wide = new CostWeights(8.0, 300.0, 1.0, 2, 10.0, 5.0, 16, 50.0);
     Moves moves =
         TestMovements.from(
             MinecraftMovementBehavior.forPlayer(
-                TestWorld.CHUNKS, TestPlayer.walker().vulnerable(), Set.of(), null, 0, wide),
+                TestWorld.CHUNKS,
+                TestPlayer.walker().vulnerable(),
+                Set.of(),
+                null,
+                0,
+                wide,
+                Threats.NONE),
             world,
             ORIGIN);
 
@@ -152,6 +159,45 @@ class HazardsTest {
       pool.floor(y, -4, -4, 4, 4, TestBlocks.water());
     }
     return pool.build();
+  }
+
+  @Test
+  void aMobOrSculkNearbyCostsByHowNearItWas() {
+    Threats threats = Threats.builder().mob(new Cell(9, 1, 0)).sculk(new Cell(0, 1, -5)).build();
+    Movement<MinecraftStepPayload> step =
+        TestMovements.from(
+                MinecraftMovementBehavior.forPlayer(
+                    TestWorld.CHUNKS,
+                    TestPlayer.walker().vulnerable(),
+                    Set.of(),
+                    null,
+                    0,
+                    WEIGHTS,
+                    threats),
+                ground("threats").build(),
+                ORIGIN)
+            .to(new Cell(1, 1, 0));
+
+    double mob = (WEIGHTS.dangerousEntityRadius() + 1 - 8.0) / WEIGHTS.dangerousEntityRadius();
+    double sculk = (CostWeights.SCULK_RADIUS + 1 - Math.sqrt(26)) / CostWeights.SCULK_RADIUS;
+    assertEquals(
+        step.time() + step.time() * (WEIGHTS.dangerousEntity() * mob + WEIGHTS.sculk() * sculk),
+        step.cost(),
+        1e-9);
+  }
+
+  @Test
+  void aPlayerWhoCannotBeHurtIgnoresThreats() {
+    Threats threats = Threats.builder().mob(new Cell(2, 1, 0)).build();
+    Movement<MinecraftStepPayload> step =
+        TestMovements.from(
+                MinecraftMovementBehavior.forPlayer(
+                    TestWorld.CHUNKS, TestPlayer.walker(), Set.of(), null, 0, WEIGHTS, threats),
+                ground("threats-creative").build(),
+                ORIGIN)
+            .to(new Cell(1, 1, 0));
+
+    assertEquals(step.time(), step.cost(), 1e-9);
   }
 
   @Test

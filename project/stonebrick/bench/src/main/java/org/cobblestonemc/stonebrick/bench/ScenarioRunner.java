@@ -38,6 +38,7 @@ import org.cobblestonemc.minecraft.ChunkProviderSettings;
 import org.cobblestonemc.minecraft.MinecraftChunk;
 import org.cobblestonemc.minecraft.MinecraftHeuristics;
 import org.cobblestonemc.minecraft.MinecraftWorld;
+import org.cobblestonemc.minecraft.Threats;
 import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
@@ -215,7 +216,7 @@ public final class ScenarioRunner {
     ChunkProvider chunks = new ChunkProvider(platform, platform.settings());
     MinecraftMovementBehavior behavior =
         MinecraftMovementBehavior.forPlayer(
-            chunks, player, excluded, null, 0, CostWeights.defaults());
+            chunks, player, excluded, null, 0, CostWeights.defaults(), Threats.NONE);
 
     DomainRegion<MinecraftWorld> target =
         new DomainRegion.Impl<>(

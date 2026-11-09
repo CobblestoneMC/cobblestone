@@ -23,6 +23,7 @@ import org.cobblestonemc.minecraft.TestMovements;
 import org.cobblestonemc.minecraft.TestMovements.Moves;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.TestWorld;
+import org.cobblestonemc.minecraft.Threats;
 import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
@@ -33,7 +34,7 @@ class WalkingTest {
   private final TestPlayer player = TestPlayer.walker();
   private final MinecraftMovementBehavior walker =
       MinecraftMovementBehavior.forPlayer(
-          TestWorld.CHUNKS, player, Set.of(), null, 0, CostWeights.defaults());
+          TestWorld.CHUNKS, player, Set.of(), null, 0, CostWeights.defaults(), Threats.NONE);
 
   @Test
   void flatMovesInAllEightDirectionsAndNothingElse() {
@@ -128,7 +129,13 @@ class WalkingTest {
   void soulSpeedBootsSpeedUpSoulBlocksOnly() {
     MinecraftMovementBehavior boots =
         MinecraftMovementBehavior.forPlayer(
-            TestWorld.CHUNKS, TestPlayer.soulSpeed(3), Set.of(), null, 0, CostWeights.defaults());
+            TestWorld.CHUNKS,
+            TestPlayer.soulSpeed(3),
+            Set.of(),
+            null,
+            0,
+            CostWeights.defaults(),
+            Threats.NONE);
     double fast = MovementCosts.WALK / MovementCosts.soulSpeedFactor(3);
     for (MinecraftBlock floor : List.of(TestBlocks.soulSand(), TestBlocks.soulSoil())) {
       TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, floor).build();

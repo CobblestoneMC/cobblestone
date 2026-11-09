@@ -18,6 +18,7 @@ import org.cobblestonemc.minecraft.TestMovements;
 import org.cobblestonemc.minecraft.TestMovements.Moves;
 import org.cobblestonemc.minecraft.TestPlayer;
 import org.cobblestonemc.minecraft.TestWorld;
+import org.cobblestonemc.minecraft.Threats;
 import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
@@ -28,7 +29,7 @@ class FallingTest {
   private final TestPlayer player = TestPlayer.walker().vulnerable();
   private final MinecraftMovementBehavior walker =
       MinecraftMovementBehavior.forPlayer(
-          TestWorld.CHUNKS, player, Set.of(), null, 0, CostWeights.defaults());
+          TestWorld.CHUNKS, player, Set.of(), null, 0, CostWeights.defaults(), Threats.NONE);
 
   @Test
   void fallsOffAnEdgeAndCostsItsDamageButDoesNotTimeIt() {
@@ -58,7 +59,13 @@ class FallingTest {
             .build();
     MinecraftMovementBehavior careless =
         MinecraftMovementBehavior.forPlayer(
-            TestWorld.CHUNKS, player, Set.of(), null, 0, CostWeights.defaults().harmless());
+            TestWorld.CHUNKS,
+            player,
+            Set.of(),
+            null,
+            0,
+            CostWeights.defaults().harmless(),
+            Threats.NONE);
     Movement<MinecraftStepPayload> landing =
         TestMovements.from(careless, world, new Cell(0, 5, 0)).to(new Cell(1, 1, 0));
 
@@ -111,7 +118,8 @@ class FallingTest {
             Set.of(MinecraftStepType.SWIM),
             null,
             0,
-            CostWeights.defaults());
+            CostWeights.defaults(),
+            Threats.NONE);
     assertFalse(
         TestMovements.from(noSwim, iceBesideWater(), new Cell(0, 5, 0)).reaches(new Cell(1, 4, 0)));
   }
@@ -139,7 +147,8 @@ class FallingTest {
             Set.of(MinecraftStepType.FALL),
             null,
             0,
-            CostWeights.defaults());
+            CostWeights.defaults(),
+            Threats.NONE);
     assertFalse(TestMovements.from(noFall, world, new Cell(0, 5, 0)).reaches(new Cell(1, 1, 0)));
   }
 }

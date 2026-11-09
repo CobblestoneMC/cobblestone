@@ -15,6 +15,7 @@ import org.cobblestonemc.Cell;
 import org.cobblestonemc.FutureOr;
 import org.cobblestonemc.Movement;
 import org.cobblestonemc.api.TraversalState;
+import org.cobblestonemc.minecraft.Threats;
 import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftInstruction;
 import org.cobblestonemc.minecraft.api.MinecraftStepPayload;
@@ -28,23 +29,27 @@ import org.jetbrains.annotations.Nullable;
  * <p>Rules offer what a step takes in seconds, and what it does to the player; this prices the harm
  * with the search's {@link CostWeights} and adds it to the cost, never to the time. Where a step
  * ends up is priced here too, from the expansion's {@link Surroundings}, so no rule has to: how
- * near dangerous terrain it passes, and how much the shore slows a boat.
+ * near dangerous terrain it passes, and how much the shore slows a boat; and from the search's
+ * {@link Threats}, how near it passes a hostile mob or sculk.
  */
 final class Edges {
 
   private final Map<Key, Movement<MinecraftStepPayload>> best = new LinkedHashMap<>();
   private final CostWeights weights;
   private final Surroundings surroundings;
+  private final Threats threats;
 
   /**
    * Collects the movements out of one cell, pricing what is around it.
    *
    * @param weights what penalties are priced with
    * @param surroundings what is around the expanding cell
+   * @param threats where mobs and sculk were when the search began
    */
-  Edges(CostWeights weights, Surroundings surroundings) {
+  Edges(CostWeights weights, Surroundings surroundings, Threats threats) {
     this.weights = weights;
     this.surroundings = surroundings;
+    this.threats = threats;
   }
 
   /** The weights this expansion's penalties are priced with. */
@@ -90,6 +95,12 @@ final class Edges {
     // A fall is priced by the damage it does, not by the drop it goes over.
     if (type != MinecraftStepType.FALL) {
       penalty += weights.dangerousTerrain() * time * surroundings.danger(cell);
+    }
+    if (!threats.isEmpty()) {
+      penalty +=
+          time
+              * (weights.dangerousEntity() * threats.mobs(cell, weights.dangerousEntityRadius())
+                  + weights.sculk() * threats.sculk(cell, CostWeights.SCULK_RADIUS));
     }
     add(
         new Movement<>(
