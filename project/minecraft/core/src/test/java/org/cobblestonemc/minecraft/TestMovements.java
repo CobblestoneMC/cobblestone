@@ -29,20 +29,10 @@ public final class TestMovements {
       TestWorld world,
       Cell origin,
       TraversalState state) {
-    return from(behavior, world, null, origin, state);
-  }
-
-  /** One expansion of a route that arrived at {@code origin} from {@code previous}. */
-  public static Moves from(
-      MovementBehavior<MinecraftStepPayload, MinecraftWorld> behavior,
-      TestWorld world,
-      Cell previous,
-      Cell origin,
-      TraversalState state) {
     FutureOr<Collection<Movement<MinecraftStepPayload>>> result =
         // A test world serves every block from memory, so the goal — which only steers chunk
         // read-ahead and the ender pearl — is set to the origin, out of any throw's range.
-        behavior.movements(origin, previous, world, state, origin);
+        behavior.movements(origin, world, state, origin);
     assertTrue(result.isImmediate(), "test worlds serve blocks immediately");
     return new Moves(List.copyOf(result.value()));
   }
