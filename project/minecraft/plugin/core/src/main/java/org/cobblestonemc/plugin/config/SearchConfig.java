@@ -63,7 +63,6 @@ public final class SearchConfig {
         Math.max(0, config.get(keys.costsDangerousTerrain)),
         Math.max(0, config.get(keys.costsDangerousTerrainRadius)),
         Math.max(0, config.get(keys.costsBuiltBlock)),
-        Math.max(0, config.get(keys.costsCrampedGliding)),
         Math.max(0, config.get(keys.costsDangerousEntity)),
         Math.max(0, config.get(keys.costsDangerousEntityRadius)),
         Math.max(0, config.get(keys.costsSculk)));

@@ -91,19 +91,12 @@ public final class MinecraftMovementBehavior
       CostWeights weights,
       Threats threats) {
     // Flight is cheaper than walking, falling and climbing and reaches every cell they do, so a
-    // flier skips them. Gliding is not flight: a glider cannot hover or climb.
+    // flier skips them. An elytra is ignored until gliding is modelled properly (#99): the old
+    // model flew a glider like a short flier, under trees and through houses.
     boolean flies = !excluded.contains(MinecraftStepType.FLY) && player.canFly();
     boolean walks = !excluded.contains(MinecraftStepType.WALK);
     boolean boats = !excluded.contains(MinecraftStepType.BOAT);
-    int flightHeight = 0;
-    if (!excluded.contains(MinecraftStepType.FLY)) {
-      // A glider is modelled 1 tall so it can slip through a 1-block hole (an end gateway).
-      if (player.canFly()) {
-        flightHeight = 2;
-      } else if (player.canGlide()) {
-        flightHeight = 1;
-      }
-    }
+    int flightHeight = flies ? 2 : 0;
     Abilities can =
         new Abilities(
             walks && !flies,
@@ -125,7 +118,6 @@ public final class MinecraftMovementBehavior
     Hazards hazards =
         new Hazards(
             priced.dangerousTerrain() > 0 ? priced.dangerousTerrainRadius() : 0,
-            flightHeight == 1 && priced.crampedGliding() > 0,
             can.paddle(),
             !player.canFly());
     // A player already in a boat starts in it. Getting out is always open to them, so excluding

@@ -149,8 +149,8 @@ public final class MinecraftAgent implements RegionAgent<RegionClass> {
       CobblestonePlayer player, Set<MinecraftStepType> excluded, Environment environment) {
     boolean walks = !excluded.contains(MinecraftStepType.WALK);
     int soulSpeed = walks ? player.soulSpeedLevel() : 0;
-    boolean flies =
-        !excluded.contains(MinecraftStepType.FLY) && (player.canFly() || player.canGlide());
+    // An elytra is ignored, as in the fine search, until gliding is modelled properly (#99).
+    boolean flies = !excluded.contains(MinecraftStepType.FLY) && player.canFly();
     boolean boats =
         !excluded.contains(MinecraftStepType.BOAT)
             && (player.hasBoatInInventory() || player.isInBoat());
