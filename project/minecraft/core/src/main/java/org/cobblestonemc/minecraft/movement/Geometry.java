@@ -8,6 +8,7 @@
 package org.cobblestonemc.minecraft.movement;
 
 import org.cobblestonemc.Cell;
+import org.cobblestonemc.minecraft.MinecraftBlock;
 
 /**
  * Shared coarse-body geometry helpers for the 1×1×1 movement model: a body needs two blocks of
@@ -38,6 +39,14 @@ final class Geometry {
   /** Whether a body can stand in {@code cell}: it fits and the block below has a solid top. */
   static boolean standable(BlockView view, Cell cell) {
     return bodyFits(view, cell) && view.at(cell, 0, -1, 0).isSolidTop();
+  }
+
+  /**
+   * Whether a swimmer at {@code cell} is at the surface of water: in water, head in the open air.
+   */
+  static boolean atTheSurface(BlockView view, Cell cell) {
+    MinecraftBlock head = view.at(cell, 0, 1, 0);
+    return view.at(cell).isWater() && head.isPassable() && !head.isWater();
   }
 
   /**

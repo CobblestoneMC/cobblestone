@@ -23,6 +23,27 @@ final class MovementCosts {
   /** Seconds to fly one block. */
   static final double FLY = 0.08;
 
+  /** Seconds a glider boosted by a rocket takes for a block: about twenty blocks a second. */
+  static final double BOOST = 0.05;
+
+  /** Seconds a glider takes for a block gliding down without a boost. */
+  static final double GLIDE_DOWN = 0.10;
+
+  /**
+   * Seconds a glider takes for a block coasting level without a boost: slow and careful, as through
+   * a one-block hole such as an end gateway.
+   */
+  static final double GLIDE_LEVEL = 1.0;
+
+  /** Blocks a rocket fired from the ground carries a glider, for each level of Flight Duration. */
+  static final int TAKEOFF_BLOCKS_PER_DURATION = 40;
+
+  /**
+   * Seconds added to a takeoff from the surface of water: a swimmer has to leap clear before the
+   * elytra opens and the rocket fires, which takes a try or two.
+   */
+  static final double WATER_TAKEOFF = 1.0;
+
   /** Seconds to climb one block (ladder/scaffolding/vine). */
   static final double CLIMB = 0.40;
 

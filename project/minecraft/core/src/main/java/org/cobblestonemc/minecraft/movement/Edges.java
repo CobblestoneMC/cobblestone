@@ -29,8 +29,8 @@ import org.jetbrains.annotations.Nullable;
  * <p>Rules offer what a step takes in seconds, and what it does to the player; this prices the harm
  * with the search's {@link CostWeights} and adds it to the cost, never to the time. Where a step
  * ends up is priced here too, from the expansion's {@link Surroundings}, so no rule has to: how
- * near dangerous terrain it passes, and how much the shore slows a boat; and from the search's
- * {@link Threats}, how near it passes a hostile mob or sculk.
+ * near dangerous terrain it passes, how little room a boosted glide has, and how much the shore
+ * slows a boat; and from the search's {@link Threats}, how near it passes a hostile mob or sculk.
  */
 final class Edges {
 
@@ -70,6 +70,22 @@ final class Edges {
       TraversalState state,
       @Nullable Supplier<FutureOr<Boolean>> restricted) {
     addPenalized(cell, time, 0.0, type, state, restricted);
+  }
+
+  /**
+   * Offers a glide boosted by a rocket, {@code distance} blocks to {@code cell}. Boosting is fast,
+   * but with less than {@link Surroundings#BOOST_CLEARANCE} blocks of room around it the glider can
+   * strike a wall, so each block costs up to {@link CostWeights#crampedGliding()} more, the full
+   * amount right beside a block.
+   */
+  void addBoosted(Cell cell, double distance, TraversalState state) {
+    addPenalized(
+        cell,
+        MovementCosts.BOOST * distance,
+        weights.crampedGliding() * distance * surroundings.cramped(cell),
+        MinecraftStepType.ELYTRA,
+        state,
+        null);
   }
 
   /** Offers a movement taking {@code time} seconds that deals {@code halfHearts} of damage. */

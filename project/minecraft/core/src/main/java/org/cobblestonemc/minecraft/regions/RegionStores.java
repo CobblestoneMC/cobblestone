@@ -188,8 +188,8 @@ public final class RegionStores implements AutoCloseable {
   /**
    * Marks the sections a changed block is read by as changed, to be forgotten after {@link
    * #INVALIDATION_DELAY} with every other change they have meanwhile: its own, and the one above or
-   * below where the block is on its section's edge, since a class reads the blocks over and under
-   * it. Cheap enough for every block event.
+   * below where the block is near its section's edge, since a class reads the blocks up to {@link
+   * MinecraftTerrain#LOW_AIR_REACH} over and under it. Cheap enough for every block event.
    *
    * @param world the world
    * @param x the block's X
@@ -200,7 +200,8 @@ public final class RegionStores implements AutoCloseable {
     RegionSpec<MinecraftChunk, RegionClass> spec = of(world).spec();
     int sectionX = spec.sectionOf(x);
     int sectionZ = spec.sectionOf(z);
-    for (int dy = -1; dy <= 1; dy++) {
+    int reach = MinecraftTerrain.LOW_AIR_REACH;
+    for (int dy = -reach; dy <= reach; dy += reach) {
       mark(new Changed(world.key(), sectionX, spec.sectionOf(y + dy), sectionZ));
     }
   }

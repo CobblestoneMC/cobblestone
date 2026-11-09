@@ -52,6 +52,11 @@ public enum RegionClass implements RegionKind {
 
   /** Open space nothing stands in: crossed by flying, or fallen through. */
   AIR(Body.OPEN),
+  /**
+   * {@link #AIR} with a block within {@link MinecraftTerrain#LOW_AIR_REACH} of it: too little room
+   * for a glider to boost, and the air a glider comes down through to land.
+   */
+  LOW_AIR(Body.OPEN),
 
   /** Breakable by hand: leaves, glass, wool. */
   SOFT(Body.SOLID),

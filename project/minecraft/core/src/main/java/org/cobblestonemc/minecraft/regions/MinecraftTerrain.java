@@ -24,7 +24,8 @@ import org.cobblestonemc.regions.RegionTerrain;
  *
  * <p><b>Classes come from a block, the block under it and the block over it.</b> Open space with a
  * solid top below and headroom above is ground, of a class by what it stands on; without them it is
- * air. Water open to the air is a surface. Breakable material is bucketed by its {@link
+ * air, and low air with a block within {@link #LOW_AIR_REACH} of it in the same chunk. Water open
+ * to the air is a surface. Breakable material is bucketed by its {@link
  * org.cobblestonemc.minecraft.MiningClass}. Lava and unbreakable blocks belong to no region.
  *
  * <p><b>The joining rules are a walking body's.</b> Ground steps a level up or down into ground,
@@ -50,7 +51,7 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk, Reg
   }
 
   /** The version of these rules; see {@link RegionTerrain#version()}. */
-  public static final int VERSION = 1;
+  public static final int VERSION = 2;
 
   /** A chunk section is 16 blocks a side: {@code 1 << 4}. */
   private static final int SECTION_SHIFT = 4;
@@ -61,6 +62,12 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk, Reg
 
   /** Blocks in one layer of a section. */
   private static final int LAYER = WIDTH * WIDTH;
+
+  /**
+   * How far above or below open air a block makes it {@link RegionClass#LOW_AIR}: the reach of a
+   * glider's want of room, {@code Surroundings.BOOST_CLEARANCE - 1}.
+   */
+  static final int LOW_AIR_REACH = 3;
 
   /** The deepest fall a portal joins: two sections, far past anything a player survives on land. */
   static final int DEEPEST_FALL = 32;
@@ -73,6 +80,9 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk, Reg
    * run in parallel.
    */
   private final ThreadLocal<MinecraftBlock[]> scratch = new ThreadLocal<>();
+
+  /** The two grids {@link #near} reads a section's surroundings into, per thread. */
+  private final ThreadLocal<boolean[][]> nearScratch = new ThreadLocal<>();
 
   private MinecraftTerrain(Environment environment) {
     this.environment = environment;
@@ -138,6 +148,7 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk, Reg
         blocks[layer * LAYER + i] = inside ? chunk.block(i & MASK, y, i >> SECTION_SHIFT) : null;
       }
     }
+    boolean[] near = null; // read only once the section has air
     for (int cell = 0; cell < cells.length; cell++) {
       int at = cell + LAYER;
       MinecraftBlock block = blocks[at];
@@ -155,13 +166,81 @@ public final class MinecraftTerrain implements RegionTerrain<MinecraftChunk, Reg
         MinecraftBlock floor = blocks[at - LAYER];
         MinecraftBlock head = blocks[at + LAYER];
         boolean stands = floor != null && floor.isSolidTop() && (head == null || head.isPassable());
-        cells[cell] = stands ? ground(floor) : RegionClass.AIR;
+        if (stands) {
+          cells[cell] = ground(floor);
+        } else {
+          if (near == null) {
+            near = near(chunk, originY, bounds);
+          }
+          cells[cell] = near[cell] ? RegionClass.LOW_AIR : RegionClass.AIR;
+        }
       } else if (!block.isLava() && !Double.isInfinite(block.breakTimeSeconds())) {
         cells[cell] = solid(block.miningClass());
       }
       // Lava, and unbreakable blocks such as bedrock: nothing, not a region a miner could be priced
       // through.
     }
+  }
+
+  /**
+   * Per cell of the section at {@code originY}, by the index {@link #classify} writes: whether a
+   * block that is not passable lies within {@link #LOW_AIR_REACH} of it along every axis, as {@code
+   * Surroundings.cramped} measures room. Only the chunk is read, so air beside a wall in the next
+   * chunk is still {@link RegionClass#AIR}: low air is too little room for certain, not all of it.
+   */
+  private boolean[] near(MinecraftChunk chunk, int originY, DomainBounds bounds) {
+    int reach = LOW_AIR_REACH;
+    int height = WIDTH + 2 * reach;
+    boolean[][] grids = nearScratch.get();
+    if (grids == null) {
+      grids = new boolean[][] {new boolean[LAYER * height], new boolean[LAYER * height]};
+      nearScratch.set(grids);
+    }
+    boolean[] a = grids[0];
+    boolean[] b = grids[1];
+    // Layer l is y = originY + l - reach; within a layer, z * WIDTH + x.
+    for (int l = 0; l < height; l++) {
+      int y = originY + l - reach;
+      boolean inside = y >= bounds.minY() && y <= bounds.maxY();
+      for (int i = 0; i < LAYER; i++) {
+        a[l * LAYER + i] = inside && !chunk.block(i & MASK, y, i >> SECTION_SHIFT).isPassable();
+      }
+    }
+    // A cube's reach is the reach along each axis in turn: x, then z, then y.
+    for (int l = 0; l < height; l++) {
+      for (int z = 0; z < WIDTH; z++) {
+        int row = l * LAYER + z * WIDTH;
+        for (int x = 0; x < WIDTH; x++) {
+          boolean any = false;
+          for (int d = Math.max(0, x - reach); d <= Math.min(MASK, x + reach) && !any; d++) {
+            any = a[row + d];
+          }
+          b[row + x] = any;
+        }
+      }
+    }
+    for (int l = 0; l < height; l++) {
+      for (int x = 0; x < WIDTH; x++) {
+        for (int z = 0; z < WIDTH; z++) {
+          boolean any = false;
+          for (int d = Math.max(0, z - reach); d <= Math.min(MASK, z + reach) && !any; d++) {
+            any = b[l * LAYER + d * WIDTH + x];
+          }
+          a[l * LAYER + z * WIDTH + x] = any;
+        }
+      }
+    }
+    boolean[] near = new boolean[LAYER * WIDTH];
+    for (int y = 0; y < WIDTH; y++) {
+      for (int i = 0; i < LAYER; i++) {
+        boolean any = false;
+        for (int l = y; l <= y + 2 * reach && !any; l++) {
+          any = a[l * LAYER + i];
+        }
+        near[y * LAYER + i] = any;
+      }
+    }
+    return near;
   }
 
   /** The class of breakable material in a mining bucket: one each, and no block is mixed rock. */

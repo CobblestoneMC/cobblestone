@@ -139,6 +139,9 @@ public final class ConfigKeys {
   /** Seconds added per block broken that is most likely someone's build. Mutable. */
   public final ConfigKey<Double> costsBuiltBlock;
 
+  /** Seconds added per block boosted with too little room. Mutable. */
+  public final ConfigKey<Double> costsCrampedGliding;
+
   /** Seconds added per second boating right beside the shore. Mutable. */
 
   /** Seconds added per second spent beside a hostile mob. Mutable. */
@@ -603,6 +606,16 @@ public final class ConfigKeys {
                 """
                 Seconds added for each block a route breaks that is most likely someone's build:
                 planks, glass, bricks, cobblestone and the like. Charged in creative mode too.""")
+            .mutable()
+            .register();
+    this.costsCrampedGliding =
+        manager
+            .key("search.costs.cramped_gliding", costs.crampedGliding(), Codec.ofDouble())
+            .comment(
+                """
+                Seconds added for each block boosted by a rocket on an elytra with too little room
+                to steer: the full amount right beside a block, nothing with four blocks of room all
+                round.""")
             .mutable()
             .register();
     this.costsDangerousEntity =

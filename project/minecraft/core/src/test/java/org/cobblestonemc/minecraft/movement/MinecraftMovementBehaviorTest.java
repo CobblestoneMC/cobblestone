@@ -88,11 +88,15 @@ class MinecraftMovementBehaviorTest {
     assertTrue(can.climb());
   }
 
-  /** An elytra is ignored until gliding is modelled properly (#99): a glider is routed on foot. */
+  /**
+   * Gliding is not flight — a glider takes off from the ground and lands on it — so it dominates
+   * nothing and the ground movements must stay.
+   */
   @Test
-  void anElytraIsIgnored() {
+  void aGliderKeepsWalking() {
     Abilities can = abilitiesOf(TestPlayer.glider());
-    assertEquals(0, can.flightHeight(), "no flight");
+    assertTrue(can.glide());
+    assertEquals(0, can.flightHeight(), "a glider is not a flier");
     assertTrue(can.walk());
     assertTrue(can.fall());
   }
@@ -118,14 +122,15 @@ class MinecraftMovementBehaviorTest {
     assertEquals(17, moves.ofType(MinecraftStepType.FLY).size(), "every neighbor but the floor");
   }
 
-  /** Only one edge per neighbor is handed to the search. */
+  /** Only one edge per neighbor is handed to the search, and on flat ground a glider walks. */
   @Test
-  void oneEdgePerDestination() {
+  void oneEdgePerDestinationAndTheCheapestWins() {
+    CobblestonePlayer glider = TestPlayer.glider();
     TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
     Moves moves =
         TestMovements.from(
             MinecraftMovementBehavior.forPlayer(
-                TestWorld.CHUNKS, FLIER, Set.of(), null, 0, CostWeights.defaults(), Threats.NONE),
+                TestWorld.CHUNKS, glider, Set.of(), null, 0, CostWeights.defaults(), Threats.NONE),
             world,
             new Cell(0, 1, 0));
 
@@ -133,6 +138,7 @@ class MinecraftMovementBehaviorTest {
     for (Movement<MinecraftStepPayload> movement : moves.all()) {
       assertTrue(seen.add(movement.cell()), "a second edge into " + movement.cell());
     }
+    assertEquals(8, moves.ofType(MinecraftStepType.WALK).size());
   }
 
   @Test

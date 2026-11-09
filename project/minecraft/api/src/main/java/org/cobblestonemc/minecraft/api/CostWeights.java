@@ -32,6 +32,9 @@ package org.cobblestonemc.minecraft.api;
  *     off linearly to nothing past this distance. A wider radius reads more blocks every step
  * @param builtBlock seconds added for each block broken that is most likely someone's build, such
  *     as planks, glass or cobblestone
+ * @param crampedGliding seconds added for each block boosted by a rocket on an elytra with too
+ *     little room to steer: the full amount right beside a block, falling off to nothing with four
+ *     blocks of room all round
  * @param dangerousEntity seconds added for each second spent beside a hostile mob, such as a zombie
  *     or a creeper, where it stood when the search began, at full strength
  * @param dangerousEntityRadius how many blocks away a hostile mob is noticed; its weight falls off
@@ -46,6 +49,7 @@ public record CostWeights(
     double dangerousTerrain,
     int dangerousTerrainRadius,
     double builtBlock,
+    double crampedGliding,
     double dangerousEntity,
     int dangerousEntityRadius,
     double sculk) {
@@ -66,6 +70,7 @@ public record CostWeights(
     requireNonNegative("dangerousTerrain", dangerousTerrain);
     requireNonNegative("dangerousTerrainRadius", dangerousTerrainRadius);
     requireNonNegative("builtBlock", builtBlock);
+    requireNonNegative("crampedGliding", crampedGliding);
     requireNonNegative("dangerousEntity", dangerousEntity);
     requireNonNegative("dangerousEntityRadius", dangerousEntityRadius);
     requireNonNegative("sculk", sculk);
@@ -81,6 +86,9 @@ public record CostWeights(
    *       another takes.
    *   <li>A second beside danger costs one more, noticed only from the next block.
    *   <li>A built block is worth ten seconds of going round it.
+   *   <li>A block boosted right beside a wall costs two seconds more, forty times the boost itself:
+   *       through a one-block tunnel, coasting at a second a block is cheaper, and in the open a
+   *       glider keeps its distance.
    *   <li>A second beside a hostile mob costs five more, noticed up to sixteen blocks away: a mob
    *       moves, so its reach is wide and its weight gentle.
    *   <li>A second beside sculk costs fifty more: a warden is worth a long way round.
@@ -89,7 +97,7 @@ public record CostWeights(
    * @return the default weights
    */
   public static CostWeights defaults() {
-    return new CostWeights(8.0, 300.0, 1.0, 1, 10.0, 5.0, 16, 50.0);
+    return new CostWeights(8.0, 300.0, 1.0, 1, 10.0, 2.0, 5.0, 16, 50.0);
   }
 
   /**
@@ -100,7 +108,15 @@ public record CostWeights(
    */
   public CostWeights harmless() {
     return new CostWeights(
-        0.0, enderPearl, 0.0, dangerousTerrainRadius, builtBlock, 0.0, dangerousEntityRadius, 0.0);
+        0.0,
+        enderPearl,
+        0.0,
+        dangerousTerrainRadius,
+        builtBlock,
+        crampedGliding,
+        0.0,
+        dangerousEntityRadius,
+        0.0);
   }
 
   /**

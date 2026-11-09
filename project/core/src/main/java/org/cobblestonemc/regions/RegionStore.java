@@ -406,7 +406,7 @@ public final class RegionStore<C, K extends Enum<K> & RegionKind> {
 
   /**
    * Forgets a section because a block it was read from changed: one in it, or, since a class may
-   * read the cells over and under it, one just above or below it.
+   * read cells over and under it, one above or below it.
    *
    * <p>Cheap, and safe to call on the server thread for every block event.
    *

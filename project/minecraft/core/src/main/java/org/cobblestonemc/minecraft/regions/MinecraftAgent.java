@@ -10,6 +10,7 @@ package org.cobblestonemc.minecraft.regions;
 import java.util.Set;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftWorld.Environment;
+import org.cobblestonemc.minecraft.api.CostWeights;
 import org.cobblestonemc.minecraft.api.MinecraftStepType;
 import org.cobblestonemc.regions.RegionAgent;
 
@@ -66,6 +67,24 @@ public final class MinecraftAgent implements RegionAgent<RegionClass> {
   /** {@code MovementCosts.FLY}. */
   private static final double FLY = 0.08;
 
+  /** {@code MovementCosts.BOOST}. */
+  private static final double BOOST = 0.05;
+
+  /** {@code MovementCosts.GLIDE_DOWN}. */
+  private static final double GLIDE_DOWN = 0.10;
+
+  /**
+   * The least share of the cramped penalty a boost pays in low air: a block three away, the
+   * farthest that makes air low, is {@code Surroundings.cramped} of a third.
+   */
+  private static final double LOW_AIR_ROOM = 1.0 / 3.0;
+
+  /** {@code MovementCosts.GLIDE_LEVEL}. */
+  private static final double GLIDE_LEVEL = 1.0;
+
+  /** The farthest across a glide down goes for each block it comes down: a diagonal. */
+  private static final double GLIDE_REACH = Math.sqrt(2);
+
   /** {@code MovementCosts.FALL_PER_BLOCK}, which a mining step down pays on top of breaking. */
   private static final double FALL = 0.18;
 
@@ -88,6 +107,19 @@ public final class MinecraftAgent implements RegionAgent<RegionClass> {
 
   private final boolean mine;
 
+  /**
+   * The agent's least cost for each block it rises through low air, where only a boost climbs and
+   * pays for want of room, or {@code NaN} if nothing sets one: a flier climbs at its flying rate.
+   */
+  private final double lowRise;
+
+  /**
+   * Per class, by ordinal: the agent's least rate across it level, or {@code NaN}. A glider glides
+   * only down, so near the ground going level is walking or a cramped boost, and only coming down
+   * is as quick as gliding: up to {@link #GLIDE_REACH} blocks across for each block down.
+   */
+  private final double[] levels = new double[RegionClass.values().length];
+
   /** The environment of the world it is priced in, which says what its soft rock is. */
   private final Environment environment;
 
@@ -100,26 +132,40 @@ public final class MinecraftAgent implements RegionAgent<RegionClass> {
       double boat,
       double climb,
       double fly,
+      double lowFly,
+      double lowRise,
+      double lowLevel,
       boolean mine,
       Environment environment) {
     this.boat = boat;
+    this.lowRise = lowRise;
     this.mine = mine;
     this.environment = environment;
     double least = FALLBACK_COST_PER_BLOCK;
     for (RegionClass clazz : RegionClass.values()) {
       double rate =
           switch (clazz) {
-            case STAND -> least(walk, fly);
-            case SOUL_SAND -> least(least(walk / SOUL_SAND_SPEED, soulSpeed), fly);
-            case SOUL_SOIL -> least(least(walk, soulSpeed), fly);
+            case STAND -> least(walk, lowFly);
+            case SOUL_SAND -> least(least(walk / SOUL_SAND_SPEED, soulSpeed), lowFly);
+            case SOUL_SOIL -> least(least(walk, soulSpeed), lowFly);
             case WATER, WATER_SURFACE -> swim;
-            case CLIMB -> least(climb, fly);
+            case CLIMB -> least(climb, lowFly);
             case AIR -> fly;
+            case LOW_AIR -> lowFly;
             // Priced by break time and direction; see traverse.
             case SOFT, SOFT_ROCK, ROCK, MIXED_ROCK, HARD_ROCK, VERY_HARD_ROCK, LOOSE, WOODEN ->
                 Double.NaN;
           };
       rates[clazz.ordinal()] = rate;
+      levels[clazz.ordinal()] =
+          switch (clazz) {
+            case STAND -> least(walk, lowLevel);
+            case SOUL_SAND -> least(least(walk / SOUL_SAND_SPEED, soulSpeed), lowLevel);
+            case SOUL_SOIL -> least(least(walk, soulSpeed), lowLevel);
+            case CLIMB -> least(climb, lowLevel);
+            case LOW_AIR -> lowLevel;
+            default -> Double.NaN;
+          };
       if (has(rate)) {
         least = Math.min(least, rate);
       }
@@ -147,10 +193,51 @@ public final class MinecraftAgent implements RegionAgent<RegionClass> {
    */
   public static MinecraftAgent forPlayer(
       CobblestonePlayer player, Set<MinecraftStepType> excluded, Environment environment) {
+    return forPlayer(player, excluded, environment, CostWeights.defaults());
+  }
+
+  /**
+   * Returns the cost model for a player in a world, as {@link #forPlayer(CobblestonePlayer, Set,
+   * Environment)}, with the penalties the fine search charges: a glider's want of room is what
+   * prices low air.
+   *
+   * @param player the navigating player
+   * @param excluded the step types an operator has turned off
+   * @param environment the environment of the world the estimate is for
+   * @param weights the penalties the fine search charges
+   * @return the cost model
+   */
+  public static MinecraftAgent forPlayer(
+      CobblestonePlayer player,
+      Set<MinecraftStepType> excluded,
+      Environment environment,
+      CostWeights weights) {
     boolean walks = !excluded.contains(MinecraftStepType.WALK);
     int soulSpeed = walks ? player.soulSpeedLevel() : 0;
-    // An elytra is ignored, as in the fine search, until gliding is modelled properly (#99).
     boolean flies = !excluded.contains(MinecraftStepType.FLY) && player.canFly();
+    boolean glides =
+        !excluded.contains(MinecraftStepType.FLY)
+            && !excluded.contains(MinecraftStepType.ELYTRA)
+            && player.canGlide();
+    // Through the air a glider is quickest boosted, and slowest gliding down without a rocket.
+    // Near the ground, in low air and wherever a body stands, a boost has too little room: it
+    // pays at least a third of the cramped penalty, so gliding down may be quicker. Takeoff is the
+    // exception, a boost from the ground through a few blocks of low air.
+    double air = flies ? FLY : Double.NaN;
+    double lowAir = air;
+    double lowRise = Double.NaN;
+    double lowLevel = air;
+    if (glides) {
+      boolean rockets = player.rocketFlightDuration() > 0;
+      double cramped = BOOST + weights.crampedGliding() * LOW_AIR_ROOM;
+      air = least(air, rockets ? BOOST : GLIDE_DOWN);
+      lowAir = least(lowAir, rockets ? Math.min(GLIDE_DOWN, cramped) : GLIDE_DOWN);
+      // Gliding only comes down: a climb through low air is a boost there, or flight.
+      if (rockets) {
+        lowRise = flies ? Math.min(FLY, cramped) : cramped;
+      }
+      lowLevel = least(lowLevel, rockets ? Math.min(GLIDE_LEVEL, cramped) : GLIDE_LEVEL);
+    }
     boolean boats =
         !excluded.contains(MinecraftStepType.BOAT)
             && (player.hasBoatInInventory() || player.isInBoat());
@@ -162,7 +249,10 @@ public final class MinecraftAgent implements RegionAgent<RegionClass> {
             : SWIM - (SWIM - WALK) * Math.min(player.depthStriderLevel(), 3) / 3.0,
         boats ? BOAT : Double.NaN,
         excluded.contains(MinecraftStepType.CLIMB) ? Double.NaN : CLIMB,
-        flies ? FLY : Double.NaN,
+        air,
+        lowAir,
+        lowRise,
+        lowLevel,
         !excluded.contains(MinecraftStepType.MINE),
         environment);
   }
@@ -226,6 +316,14 @@ public final class MinecraftAgent implements RegionAgent<RegionClass> {
     }
     double rate = rates[clazz.ordinal()];
     double cost = (has(rate) ? rate : FALLBACK_COST_PER_BLOCK) * length;
+    if (clazz == RegionClass.LOW_AIR && has(lowRise) && dy > 0) {
+      cost = Math.max(cost, lowRise * dy);
+    }
+    double level = levels[clazz.ordinal()];
+    if (has(level)) {
+      double across = Math.sqrt(dx * dx + dz * dz) - GLIDE_REACH * Math.max(0, -dy);
+      cost = Math.max(cost, level * across);
+    }
     if (clazz == RegionClass.WATER_SURFACE && has(boat)) {
       // A boat crosses the surface; anything vertical in the crossing, where a surface steps down
       // a fall of water, is swum.

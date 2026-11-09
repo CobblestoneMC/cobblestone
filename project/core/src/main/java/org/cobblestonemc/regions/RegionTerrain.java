@@ -61,10 +61,10 @@ public interface RegionTerrain<C, K extends Enum<K> & RegionKind> {
    * z)} is {@code cells[(y << 2s) | (z << s) | x]}: its class, or {@code null} for a cell that
    * belongs to no region, such as one nothing can enter or break.
    *
-   * <p><b>A cell's class may read the cells directly above and below it, and nothing farther.</b> A
-   * block change is forgotten from the sections holding the cells it can change, which are its own
-   * and the ones over and under it. Cells outside {@code bounds} are not the domain's: they belong
-   * to no region and are not to be read.
+   * <p><b>A cell's class may read cells straight above and below it, as far as the next section and
+   * nothing farther.</b> A block change is forgotten from the sections holding the cells it can
+   * change, which are its own and the ones over and under it. Cells outside {@code bounds} are not
+   * the domain's: they belong to no region and are not to be read.
    *
    * @param terrain the terrain the section is read from
    * @param originX the section's lowest X

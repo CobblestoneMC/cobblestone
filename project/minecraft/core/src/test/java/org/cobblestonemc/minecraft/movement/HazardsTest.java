@@ -12,7 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.Set;
 import org.cobblestonemc.Cell;
 import org.cobblestonemc.Movement;
+import org.cobblestonemc.api.TraversalState;
 import org.cobblestonemc.minecraft.MinecraftBlock;
+import org.cobblestonemc.minecraft.MinecraftKeys;
 import org.cobblestonemc.minecraft.TestBlocks;
 import org.cobblestonemc.minecraft.TestMovements;
 import org.cobblestonemc.minecraft.TestMovements.Moves;
@@ -43,7 +45,7 @@ class HazardsTest {
   @Test
   void dangerousTerrainCostsByHowNearItPasses() {
     TestWorld world = ground("lava").set(3, 1, 0, TestBlocks.lava()).build();
-    CostWeights wide = new CostWeights(8.0, 300.0, 1.0, 2, 10.0, 5.0, 16, 50.0);
+    CostWeights wide = new CostWeights(8.0, 300.0, 1.0, 2, 10.0, 10.0, 5.0, 16, 50.0);
     Moves moves =
         TestMovements.from(
             MinecraftMovementBehavior.forPlayer(
@@ -79,6 +81,21 @@ class HazardsTest {
         alongTheEdge.time() + WEIGHTS.dangerousTerrain() * alongTheEdge.time(),
         alongTheEdge.cost(),
         1e-9);
+  }
+
+  @Test
+  void aLedgeIsNothingToAPlayerInTheAir() {
+    // Hanging over the drop, and not standing beside it: there is nothing to walk off.
+    TestWorld world = TestWorld.builder("over").floor(0, -8, -8, 0, 8, TestBlocks.solid()).build();
+    Movement<MinecraftStepPayload> glide =
+        TestMovements.from(
+                behavior(TestPlayer.glider().vulnerable()),
+                world,
+                new Cell(4, 20, 0),
+                TraversalState.DEFAULT.with(MinecraftKeys.GLIDING, true))
+            .to(new Cell(5, 19, 0), MinecraftStepType.ELYTRA);
+
+    assertEquals(glide.time(), glide.cost(), 1e-9);
   }
 
   @Test

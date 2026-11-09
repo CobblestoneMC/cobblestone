@@ -91,9 +91,13 @@ public final class MinecraftMovementBehavior
       CostWeights weights,
       Threats threats) {
     // Flight is cheaper than walking, falling and climbing and reaches every cell they do, so a
-    // flier skips them. An elytra is ignored until gliding is modelled properly (#99): the old
-    // model flew a glider like a short flier, under trees and through houses.
+    // flier skips them. Gliding is not flight: a glider takes off from the ground and lands on it.
     boolean flies = !excluded.contains(MinecraftStepType.FLY) && player.canFly();
+    boolean glides =
+        !excluded.contains(MinecraftStepType.FLY)
+            && !excluded.contains(MinecraftStepType.ELYTRA)
+            && !flies
+            && player.canGlide();
     boolean walks = !excluded.contains(MinecraftStepType.WALK);
     boolean boats = !excluded.contains(MinecraftStepType.BOAT);
     int flightHeight = flies ? 2 : 0;
@@ -108,6 +112,8 @@ public final class MinecraftMovementBehavior
             !excluded.contains(MinecraftStepType.CLIMB) && !flies,
             !excluded.contains(MinecraftStepType.HORSE),
             flightHeight,
+            glides,
+            glides ? Math.max(0, Math.min(3, player.rocketFlightDuration())) : 0,
             boats && player.hasBoatInInventory(),
             boats && (player.hasBoatInInventory() || player.isInBoat()),
             Math.max(0, enderPearls),
@@ -118,6 +124,7 @@ public final class MinecraftMovementBehavior
     Hazards hazards =
         new Hazards(
             priced.dangerousTerrain() > 0 ? priced.dangerousTerrainRadius() : 0,
+            glides && player.rocketFlightDuration() > 0 && priced.crampedGliding() > 0,
             can.paddle(),
             !player.canFly());
     // A player already in a boat starts in it. Getting out is always open to them, so excluding
@@ -147,10 +154,17 @@ public final class MinecraftMovementBehavior
       Cell from, MinecraftWorld world, TraversalState state, Cell goal, Edges edges) {
     MinecraftKeys.Vehicle vehicle = state.get(MinecraftKeys.VEHICLE);
     FutureOr<Edges> local;
-    if (vehicle == null) {
+    if (state.get(MinecraftKeys.GLIDING) != null) {
+      return BlockLookup.fetch(chunks, world, from, cells(from, DISMOUNTED), goal)
+          .map(
+              view -> {
+                Gliding.offer(can, from, state, view, edges);
+                return edges.movements();
+              });
+    } else if (vehicle == null) {
       local =
           BlockLookup.fetch(chunks, world, from, cells(from, dismountedOffsets), goal)
-              .flatMap(view -> dismounted(from, world, state, view, edges));
+              .flatMap(view -> dismounted(from, world, state, goal, view, edges));
     } else if (vehicle == MinecraftKeys.Vehicle.BOAT) {
       // Getting out is always open to a player in a boat; only paddling needs the boat ability.
       local =
@@ -184,15 +198,44 @@ public final class MinecraftMovementBehavior
   }
 
   private FutureOr<Edges> dismounted(
-      Cell from, MinecraftWorld world, TraversalState state, BlockView view, Edges edges) {
+      Cell from,
+      MinecraftWorld world,
+      TraversalState state,
+      Cell goal,
+      BlockView view,
+      Edges edges) {
     Dismounted.offer(can, mining, world, from, state, view, edges);
     if (can.boardBoat()) {
       Vehicles.boardBoat(from, state, view, edges);
     }
-    if (can.fall()) {
-      return Falls.offer(chunks, world, from, state, view, edges);
+    if (can.glide()) {
+      Gliding.deploy(from, state, view, edges);
     }
-    return FutureOr.of(edges);
+    FutureOr<Edges> offered =
+        can.fall() ? Falls.offer(chunks, world, from, state, view, edges) : FutureOr.of(edges);
+    if (can.glide() && can.rockets() > 0) {
+      double extra;
+      if (Geometry.standable(view, from)) {
+        extra = 0;
+      } else if (Geometry.atTheSurface(view, from)) {
+        extra = MovementCosts.WATER_TAKEOFF;
+      } else {
+        return offered;
+      }
+      return offered.flatMap(
+          collected ->
+              Takeoff.offer(chunks, world, from, goal, can.rockets(), extra, state, collected));
+    }
+    return offered;
+  }
+
+  /**
+   * Returns the penalties this behavior charges on top of time.
+   *
+   * @return the weights
+   */
+  public CostWeights weights() {
+    return weights;
   }
 
   /**
@@ -205,6 +248,10 @@ public final class MinecraftMovementBehavior
     double cheapest = MovementCosts.WALK;
     if (can.flightHeight() > 0) {
       cheapest = Math.min(cheapest, MovementCosts.FLY);
+    }
+    if (can.glide()) {
+      cheapest =
+          Math.min(cheapest, can.rockets() > 0 ? MovementCosts.BOOST : MovementCosts.GLIDE_DOWN);
     }
     if (can.fall()) {
       cheapest = Math.min(cheapest, MovementCosts.FALL_PER_BLOCK);

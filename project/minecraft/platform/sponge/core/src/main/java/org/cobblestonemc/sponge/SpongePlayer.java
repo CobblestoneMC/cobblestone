@@ -32,6 +32,7 @@ import org.spongepowered.api.item.enchantment.EnchantmentType;
 import org.spongepowered.api.item.enchantment.EnchantmentTypes;
 import org.spongepowered.api.item.inventory.ItemStack;
 import org.spongepowered.api.item.inventory.Slot;
+import org.spongepowered.api.util.Ticks;
 
 /** An {@link CobblestonePlayer} wrapping a Sponge {@link ServerPlayer} (re-resolved by UUID). */
 final class SpongePlayer implements CobblestonePlayer {
@@ -86,14 +87,29 @@ final class SpongePlayer implements CobblestonePlayer {
 
   @Override
   public boolean canGlide() {
-    // An elytra plus at least one firework rocket somewhere in the inventory (enough to sustain a
-    // glide), used to model thin 1-block flight for reaching an end gateway.
+    // Worn, and not broken: an elytra with one point of durability left will not open.
     return player()
-        .map(
-            player ->
-                player.inventory().contains(ItemTypes.ELYTRA.get())
-                    && player.inventory().contains(ItemTypes.FIREWORK_ROCKET.get()))
+        .map(ServerPlayer::chest)
+        .filter(chest -> chest.type().equals(ItemTypes.ELYTRA.get()))
+        .map(chest -> chest.get(Keys.ITEM_DURABILITY).orElse(Integer.MAX_VALUE) > 1)
         .orElse(false);
+  }
+
+  @Override
+  public int rocketFlightDuration() {
+    Optional<ServerPlayer> player = player();
+    if (player.isEmpty()) {
+      return 0;
+    }
+    int longest = 0;
+    for (Slot slot : player.get().inventory().slots()) {
+      ItemStack stack = slot.peek();
+      if (stack.type().equals(ItemTypes.FIREWORK_ROCKET.get())) {
+        long flight = stack.get(Keys.FIREWORK_FLIGHT_MODIFIER).map(Ticks::ticks).orElse(1L);
+        longest = Math.max(longest, (int) Math.max(1, Math.min(3, flight)));
+      }
+    }
+    return longest;
   }
 
   @Override

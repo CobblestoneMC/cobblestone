@@ -20,7 +20,9 @@ import org.cobblestonemc.minecraft.MinecraftBlock;
  * @param swim swim through water
  * @param climb climb ladders, vines and scaffolding
  * @param horse ride a horse once mounted
- * @param flightHeight the body height a flier needs (2 flying, 1 gliding), or 0 if it cannot fly
+ * @param flightHeight the body height a flier needs, 2, or 0 if it cannot fly
+ * @param glide glide on an elytra
+ * @param rockets the longest Flight Duration among the rockets held for boosting, or 0
  * @param boardBoat place a boat from the inventory and board it
  * @param paddle travel by boat once in one
  * @param enderPearls how many ender pearls may be thrown
@@ -37,6 +39,8 @@ record Abilities(
     boolean climb,
     boolean horse,
     int flightHeight,
+    boolean glide,
+    int rockets,
     boolean boardBoat,
     boolean paddle,
     int enderPearls,

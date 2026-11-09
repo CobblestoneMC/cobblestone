@@ -33,6 +33,11 @@ final class Surroundings {
   /** Nothing to price: every strength is 0. */
   static final Surroundings NONE = new Surroundings(Hazards.NONE, null, null, null);
 
+  /**
+   * How many blocks of room a boosted glide needs on every side: with less, it may strike a block.
+   */
+  static final int BOOST_CLEARANCE = 4;
+
   /** How far from the shore a boat counts as beside it. */
   static final int COAST_RADIUS = 2;
 
@@ -68,29 +73,38 @@ final class Surroundings {
       TraversalState state,
       Cell goal,
       Hazards hazards) {
-    Hazards meets = hazards.meetable(state.get(MinecraftKeys.VEHICLE));
+    Hazards meets =
+        hazards.meetable(
+            state.get(MinecraftKeys.VEHICLE), state.get(MinecraftKeys.GLIDING) != null);
     if (meets.isNone()) {
       return FutureOr.of(NONE);
     }
     int radius = 1;
     int dyLow = 0;
+    int dyHigh = 3;
     if (meets.dangerRadius() > 0) {
       radius = Math.max(radius, 1 + meets.dangerRadius());
       dyLow = Math.min(dyLow, meets.ledges() ? -(MovementCosts.SAFE_FALL_BLOCKS + 2) : -2);
     }
+    if (meets.cramped()) {
+      // A neighbor's room, out to one short of the clearance.
+      radius = Math.max(radius, BOOST_CLEARANCE);
+      dyLow = Math.min(dyLow, -BOOST_CLEARANCE);
+      dyHigh = Math.max(dyHigh, BOOST_CLEARANCE);
+    }
     if (meets.coast()) {
       radius = Math.max(radius, 1 + COAST_RADIUS);
     }
-    FutureOr<BlockView> box = BlockLookup.fetchBox(chunks, world, from, radius, dyLow, 3, goal);
-    return box.map(
-        b ->
-            new Surroundings(
-                meets,
-                from,
-                b,
-                meets.dangerRadius() > 0
-                    ? dangerousColumns(b, from, 1 + meets.dangerRadius(), meets.ledges())
-                    : null));
+    return BlockLookup.fetchBox(chunks, world, from, radius, dyLow, dyHigh, goal)
+        .map(
+            b ->
+                new Surroundings(
+                    meets,
+                    from,
+                    b,
+                    meets.dangerRadius() > 0
+                        ? dangerousColumns(b, from, 1 + meets.dangerRadius(), meets.ledges())
+                        : null));
   }
 
   /**
@@ -114,6 +128,29 @@ final class Surroundings {
       }
     }
     return falloff(nearest, r);
+  }
+
+  /**
+   * How short of room a boosted glide at {@code to} is: 1 right beside a block, falling off to 0 at
+   * {@link #BOOST_CLEARANCE} blocks of room. 0 for anyone not boosting a glide.
+   */
+  double cramped(Cell to) {
+    if (!hazards.cramped()) {
+      return 0.0;
+    }
+    int reach = BOOST_CLEARANCE - 1;
+    int nearest = Integer.MAX_VALUE;
+    for (int dx = -reach; dx <= reach; dx++) {
+      for (int dy = -reach; dy <= reach; dy++) {
+        for (int dz = -reach; dz <= reach; dz++) {
+          if (!box.at(to, dx, dy, dz).isPassable()) {
+            nearest =
+                Math.min(nearest, Math.max(Math.abs(dx), Math.max(Math.abs(dy), Math.abs(dz))));
+          }
+        }
+      }
+    }
+    return falloff(nearest, reach);
   }
 
   /** How close a boat at {@code to} is to the shore. 0 for anyone not boating. */
