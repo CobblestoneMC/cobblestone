@@ -87,7 +87,7 @@ final class NavigateCommand {
   private final PaperIntegrationRegistry integrations;
   private final SearchRegistry<Location> searches;
   private final SearchGate gate;
-  private final Supplier<SearchSettings> searchSettings;
+  private final Supplier<MinecraftSearchSettings> searchSettings;
   private final CobblestoneLogger log;
   private final Messages messages;
   private final RecentDestinations recents;
@@ -98,7 +98,7 @@ final class NavigateCommand {
       PaperIntegrationRegistry integrations,
       SearchRegistry<Location> searches,
       SearchGate gate,
-      Supplier<SearchSettings> searchSettings,
+      Supplier<MinecraftSearchSettings> searchSettings,
       CobblestoneLogger log,
       Messages messages,
       RecentDestinations recents) {
@@ -326,11 +326,10 @@ final class NavigateCommand {
         platformApi.navigatePlayerToDestination(
             player,
             destination.destination(),
-            new MinecraftSearchSettings(
-                searchSettings.get(),
-                flags.excludedModes(),
-                flags.excludedWorlds(),
-                flags.excludedDimensions()));
+            searchSettings
+                .get()
+                .excluding(
+                    flags.excludedModes(), flags.excludedWorlds(), flags.excludedDimensions()));
     searches.track(uuid, handle);
     // Hovering shows where the search is headed — for a fixed place, its coordinates, so the player
     // can still get there by hand if no route turns up.
@@ -454,11 +453,11 @@ final class NavigateCommand {
           .navigatePlayer(
               player,
               target,
-              new MinecraftSearchSettings(
-                  GUIDE_SETTINGS,
-                  flags.excludedModes(),
-                  flags.excludedWorlds(),
-                  flags.excludedDimensions()))
+              searchSettings
+                  .get()
+                  .withSettings(GUIDE_SETTINGS)
+                  .excluding(
+                      flags.excludedModes(), flags.excludedWorlds(), flags.excludedDimensions()))
           .future()
           .handle(NavigateCommand::convertUpdateResult);
     };
@@ -478,11 +477,10 @@ final class NavigateCommand {
           platformApi.navigatePlayerToDestination(
               player,
               destination.destination(),
-              new MinecraftSearchSettings(
-                  searchSettings.get(),
-                  flags.excludedModes(),
-                  flags.excludedWorlds(),
-                  flags.excludedDimensions()));
+              searchSettings
+                  .get()
+                  .excluding(
+                      flags.excludedModes(), flags.excludedWorlds(), flags.excludedDimensions()));
       searches.track(uuid, handle);
       return handle
           .future()

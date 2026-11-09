@@ -11,6 +11,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Boat;
@@ -92,6 +93,25 @@ final class PaperPlayer implements CobblestonePlayer {
     return player()
         .map(player -> player.getInventory().getBoots())
         .map(boots -> boots.getEnchantmentLevel(Enchantment.SOUL_SPEED))
+        .orElse(0);
+  }
+
+  @Override
+  public boolean takesDamage() {
+    return player()
+        .map(
+            player ->
+                (player.getGameMode() == GameMode.SURVIVAL
+                        || player.getGameMode() == GameMode.ADVENTURE)
+                    && !player.isInvulnerable())
+        .orElse(true);
+  }
+
+  @Override
+  public int depthStriderLevel() {
+    return player()
+        .map(player -> player.getInventory().getBoots())
+        .map(boots -> boots.getEnchantmentLevel(Enchantment.DEPTH_STRIDER))
         .orElse(0);
   }
 

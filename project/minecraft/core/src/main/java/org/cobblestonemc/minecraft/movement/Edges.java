@@ -26,15 +26,25 @@ import org.jetbrains.annotations.Nullable;
  * On a tie, an edge with no {@link Movement#restricted() restriction} wins.
  *
  * <p>Rules offer what a step takes in seconds, and what it does to the player; this prices the harm
- * with the search's {@link CostWeights} and adds it to the cost, never to the time.
+ * with the search's {@link CostWeights} and adds it to the cost, never to the time. Where a step
+ * ends up is priced here too, from the expansion's {@link Surroundings}, so no rule has to: how
+ * near dangerous terrain it passes, and how much the shore slows a boat.
  */
 final class Edges {
 
   private final Map<Key, Movement<MinecraftStepPayload>> best = new LinkedHashMap<>();
   private final CostWeights weights;
+  private final Surroundings surroundings;
 
-  Edges(CostWeights weights) {
+  /**
+   * Collects the movements out of one cell, pricing what is around it.
+   *
+   * @param weights what penalties are priced with
+   * @param surroundings what is around the expanding cell
+   */
+  Edges(CostWeights weights, Surroundings surroundings) {
     this.weights = weights;
+    this.surroundings = surroundings;
   }
 
   /** The weights this expansion's penalties are priced with. */
@@ -54,22 +64,33 @@ final class Edges {
       MinecraftStepType type,
       TraversalState state,
       @Nullable Supplier<FutureOr<Boolean>> restricted) {
-    add(cell, time, 0.0, type, state, restricted);
+    addPenalized(cell, time, 0.0, type, state, restricted);
   }
 
   /** Offers a movement taking {@code time} seconds that deals {@code halfHearts} of damage. */
   void addHurting(
       Cell cell, double time, double halfHearts, MinecraftStepType type, TraversalState state) {
-    add(cell, time, weights.damage(halfHearts), type, state, null);
+    addPenalized(cell, time, weights.damage(halfHearts), type, state, null);
   }
 
-  private void add(
+  /**
+   * Offers a movement taking {@code time} seconds that a rule has already found a {@code penalty}
+   * for, on top of what its destination costs.
+   */
+  void addPenalized(
       Cell cell,
       double time,
       double penalty,
       MinecraftStepType type,
       TraversalState state,
       @Nullable Supplier<FutureOr<Boolean>> restricted) {
+    if (type == MinecraftStepType.BOAT) {
+      time *= 1 + MovementCosts.COAST_SLOWDOWN * surroundings.coast(cell);
+    }
+    // A fall is priced by the damage it does, not by the drop it goes over.
+    if (type != MinecraftStepType.FALL) {
+      penalty += weights.dangerousTerrain() * time * surroundings.danger(cell);
+    }
     add(
         new Movement<>(
             cell,

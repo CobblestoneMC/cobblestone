@@ -130,7 +130,7 @@ class MinecraftMovementBehaviorTest {
 
   @Test
   void anEnderPearlReachesAGoalInRange() {
-    CobblestonePlayer player = TestPlayer.walker();
+    CobblestonePlayer player = TestPlayer.walker().vulnerable();
     TestWorld world = TestWorld.builder("w").floor(0, -1, -1, 1, 1, TestBlocks.solid()).build();
     Cell goal = new Cell(10, 8, 0);
     Collection<Movement<MinecraftStepPayload>> movements =

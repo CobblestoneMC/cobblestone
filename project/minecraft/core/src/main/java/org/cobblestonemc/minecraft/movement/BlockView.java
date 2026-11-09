@@ -99,7 +99,11 @@ final class BlockView {
 
   /** Stores a fetched block. Cells outside the box are dropped — they can only read as unknown. */
   void put(Cell cell, MinecraftBlock block) {
-    int index = indexOf(cell.x(), cell.y(), cell.z());
+    put(cell.x(), cell.y(), cell.z(), block);
+  }
+
+  void put(int x, int y, int z, MinecraftBlock block) {
+    int index = indexOf(x, y, z);
     if (index >= 0) {
       blocks[index] = block;
     }

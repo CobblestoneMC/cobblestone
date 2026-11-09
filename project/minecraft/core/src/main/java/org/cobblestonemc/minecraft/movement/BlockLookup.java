@@ -51,6 +51,67 @@ final class BlockLookup {
     return fill(chunks, world, BlockView.bounding(cells), cells, destination);
   }
 
+  /**
+   * Fetches every block of a box around {@code from} into a view of its own, chunk by chunk. For a
+   * read of the whole neighborhood rather than a few cells: no cell is listed, so a box of hundreds
+   * of blocks allocates nothing per block. Cells outside the world stay unknown.
+   */
+  static FutureOr<BlockView> fetchBox(
+      ChunkSource chunks,
+      MinecraftWorld world,
+      Cell from,
+      int xzRadius,
+      int dyLow,
+      int dyHigh,
+      Cell destination) {
+    BlockView view = BlockView.around(from, xzRadius, dyLow, dyHigh);
+    int minX = from.x() - xzRadius;
+    int maxX = from.x() + xzRadius;
+    int minZ = from.z() - xzRadius;
+    int maxZ = from.z() + xzRadius;
+    int minY = Math.max(from.y() + dyLow, world.minY());
+    int maxY = Math.min(from.y() + dyHigh, world.maxY());
+    if (minY > maxY) {
+      return FutureOr.of(view);
+    }
+    List<CompletableFuture<Void>> pending = null;
+    for (int chunkX = minX >> 4; chunkX <= maxX >> 4; chunkX++) {
+      for (int chunkZ = minZ >> 4; chunkZ <= maxZ >> 4; chunkZ++) {
+        int x0 = Math.max(minX, chunkX << 4);
+        int x1 = Math.min(maxX, (chunkX << 4) + 15);
+        int z0 = Math.max(minZ, chunkZ << 4);
+        int z1 = Math.min(maxZ, (chunkZ << 4) + 15);
+        FutureOr<MinecraftChunk> chunk = chunks.chunk(new Cell(x0, minY, z0), world, destination);
+        if (chunk.isImmediate()) {
+          readBox(view, chunk.value(), x0, x1, minY, maxY, z0, z1);
+        } else {
+          if (pending == null) {
+            pending = new ArrayList<>(4);
+          }
+          pending.add(chunk.future().thenAccept(c -> readBox(view, c, x0, x1, minY, maxY, z0, z1)));
+        }
+      }
+    }
+    if (pending == null) {
+      return FutureOr.of(view);
+    }
+    // Each chunk writes its own disjoint slots; see fill.
+    return FutureOr.ofFuture(
+        CompletableFuture.allOf(pending.toArray(new CompletableFuture<?>[0]))
+            .thenApply(ignored -> view));
+  }
+
+  private static void readBox(
+      BlockView view, MinecraftChunk chunk, int x0, int x1, int y0, int y1, int z0, int z1) {
+    for (int x = x0; x <= x1; x++) {
+      for (int z = z0; z <= z1; z++) {
+        for (int y = y0; y <= y1; y++) {
+          view.put(x, y, z, chunk.block(x & 15, y, z & 15));
+        }
+      }
+    }
+  }
+
   /** Resolves each distinct chunk the cells fall in and writes their blocks into the view. */
   private static FutureOr<BlockView> fill(
       ChunkSource chunks,

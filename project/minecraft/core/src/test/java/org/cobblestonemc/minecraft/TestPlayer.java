@@ -12,7 +12,13 @@ import java.util.Optional;
 import java.util.UUID;
 import org.cobblestonemc.Position;
 
-/** A configurable {@link CobblestonePlayer} for movement tests. */
+/**
+ * A configurable {@link CobblestonePlayer} for movement tests.
+ *
+ * <p>One that cannot be hurt unless a test asks for {@link #vulnerable()}: a test world is a few
+ * blocks floating in the void, so every step in it runs along a drop, and a test of how a step
+ * moves would otherwise be measuring the danger of the drop.
+ */
 public final class TestPlayer implements CobblestonePlayer {
 
   private final boolean canFly;
@@ -20,14 +26,39 @@ public final class TestPlayer implements CobblestonePlayer {
   private final boolean hasBoat;
   private final boolean inBoat;
   private final int soulSpeed;
+  private final boolean takesDamage;
+  private final int depthStrider;
 
   private TestPlayer(
       boolean canFly, boolean canGlide, boolean hasBoat, boolean inBoat, int soulSpeed) {
+    this(canFly, canGlide, hasBoat, inBoat, soulSpeed, false, 0);
+  }
+
+  private TestPlayer(
+      boolean canFly,
+      boolean canGlide,
+      boolean hasBoat,
+      boolean inBoat,
+      int soulSpeed,
+      boolean takesDamage,
+      int depthStrider) {
     this.canFly = canFly;
     this.canGlide = canGlide;
     this.hasBoat = hasBoat;
     this.inBoat = inBoat;
     this.soulSpeed = soulSpeed;
+    this.takesDamage = takesDamage;
+    this.depthStrider = depthStrider;
+  }
+
+  /** This player, but one that can be hurt, as in survival. */
+  public TestPlayer vulnerable() {
+    return new TestPlayer(canFly, canGlide, hasBoat, inBoat, soulSpeed, true, depthStrider);
+  }
+
+  /** This player, in boots with Depth Strider of the given level. */
+  public TestPlayer striding(int depthStrider) {
+    return new TestPlayer(canFly, canGlide, hasBoat, inBoat, soulSpeed, takesDamage, depthStrider);
   }
 
   public static TestPlayer walker() {
@@ -81,6 +112,16 @@ public final class TestPlayer implements CobblestonePlayer {
   @Override
   public int soulSpeedLevel() {
     return soulSpeed;
+  }
+
+  @Override
+  public boolean takesDamage() {
+    return takesDamage;
+  }
+
+  @Override
+  public int depthStriderLevel() {
+    return depthStrider;
   }
 
   @Override

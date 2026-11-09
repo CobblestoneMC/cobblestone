@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 
 class FallingTest {
 
-  private final TestPlayer player = TestPlayer.walker();
+  private final TestPlayer player = TestPlayer.walker().vulnerable();
   private final MinecraftMovementBehavior walker =
       MinecraftMovementBehavior.forPlayer(
           TestWorld.CHUNKS, player, Set.of(), null, 0, CostWeights.defaults());
@@ -58,7 +58,7 @@ class FallingTest {
             .build();
     MinecraftMovementBehavior careless =
         MinecraftMovementBehavior.forPlayer(
-            TestWorld.CHUNKS, player, Set.of(), null, 0, new CostWeights(0.0, 300.0));
+            TestWorld.CHUNKS, player, Set.of(), null, 0, CostWeights.defaults().harmless());
     Movement<MinecraftStepPayload> landing =
         TestMovements.from(careless, world, new Cell(0, 5, 0)).to(new Cell(1, 1, 0));
 
@@ -99,7 +99,7 @@ class FallingTest {
         TestMovements.from(walker, world, new Cell(0, 5, 0)).to(new Cell(1, 4, 0));
 
     assertEquals(MinecraftStepType.SWIM, entering.payload().stepType());
-    assertEquals(MovementCosts.SWIM * MovementCosts.DIAGONAL, entering.cost(), 1e-9);
+    assertEquals(MovementCosts.SWIM * MovementCosts.DIAGONAL, entering.time(), 1e-9);
   }
 
   @Test

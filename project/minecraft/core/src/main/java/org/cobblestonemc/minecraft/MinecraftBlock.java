@@ -167,6 +167,16 @@ public interface MinecraftBlock {
     return false;
   }
 
+  /**
+   * Returns whether this block is most likely part of a player's build, which a route should not
+   * break when it can help it; see {@link BuiltBlocks}.
+   *
+   * @return {@code true} if built
+   */
+  default boolean isBuilt() {
+    return false;
+  }
+
   /** whether this block is a pressure plate (can activate an adjacent iron door). */
   default boolean isPressurePlate() {
     return false;

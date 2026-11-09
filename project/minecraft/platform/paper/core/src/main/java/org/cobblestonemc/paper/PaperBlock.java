@@ -7,11 +7,13 @@
 
 package org.cobblestonemc.paper;
 
+import java.util.Locale;
 import java.util.Set;
 import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Openable;
+import org.cobblestonemc.minecraft.BuiltBlocks;
 import org.cobblestonemc.minecraft.MinecraftBlock;
 import org.cobblestonemc.minecraft.MiningClass;
 
@@ -161,6 +163,11 @@ final class PaperBlock implements MinecraftBlock {
   }
 
   @Override
+  public boolean isBuilt() {
+    return traits.isBuilt;
+  }
+
+  @Override
   public boolean isOpen() {
     return data instanceof Openable openable && openable.isOpen();
   }
@@ -209,6 +216,7 @@ final class PaperBlock implements MinecraftBlock {
     private final boolean isTrapdoor;
     private final boolean opensByHand;
     private final boolean isPressurePlate;
+    private final boolean isBuilt;
 
     private Traits(Material material) {
       this.stateful = isDoor(material);
@@ -230,6 +238,8 @@ final class PaperBlock implements MinecraftBlock {
       this.isTrapdoor = PaperBlock.isTrapdoor(material);
       this.opensByHand = PaperBlock.opensByHand(material);
       this.isPressurePlate = PaperBlock.isPressurePlate(material);
+      // By name: a modern material's name is its id, upper-cased.
+      this.isBuilt = BuiltBlocks.isBuilt(material.name().toLowerCase(Locale.ROOT));
     }
 
     static Traits of(Material material) {

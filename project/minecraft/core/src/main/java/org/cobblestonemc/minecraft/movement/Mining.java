@@ -58,6 +58,7 @@ final class Mining {
     }
     double breakTime = 0.0;
     int broken = 0;
+    int built = 0;
     List<CheckTarget> targets = null;
     for (Cell cell : breakCells) {
       MinecraftBlock block = view.at(cell);
@@ -73,6 +74,9 @@ final class Mining {
       }
       breakTime += time;
       broken++;
+      if (block.isBuilt()) {
+        built++;
+      }
       if (breakChecker != null) {
         if (targets == null) {
           targets = new ArrayList<>(breakCells.length);
@@ -83,8 +87,13 @@ final class Mining {
     if (broken == 0) {
       return; // the way is already clear
     }
-    edges.add(
-        dest, breakTime + moveCost, MinecraftStepType.MINE, state, restricted(world, targets));
+    edges.addPenalized(
+        dest,
+        breakTime + moveCost,
+        edges.weights().builtBlock() * built,
+        MinecraftStepType.MINE,
+        state,
+        restricted(world, targets));
   }
 
   private static boolean uncoversLava(BlockView view, Cell cell) {

@@ -12,6 +12,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import org.cobblestonemc.Position;
 import org.cobblestonemc.minecraft.CobblestonePlayer;
 import org.cobblestonemc.minecraft.MinecraftWorld;
@@ -21,10 +22,13 @@ import org.spongepowered.api.data.value.Value;
 import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.entity.EntityType;
 import org.spongepowered.api.entity.EntityTypes;
+import org.spongepowered.api.entity.living.player.gamemode.GameMode;
+import org.spongepowered.api.entity.living.player.gamemode.GameModes;
 import org.spongepowered.api.entity.living.player.server.ServerPlayer;
 import org.spongepowered.api.item.ItemType;
 import org.spongepowered.api.item.ItemTypes;
 import org.spongepowered.api.item.enchantment.Enchantment;
+import org.spongepowered.api.item.enchantment.EnchantmentType;
 import org.spongepowered.api.item.enchantment.EnchantmentTypes;
 import org.spongepowered.api.item.inventory.ItemStack;
 import org.spongepowered.api.item.inventory.Slot;
@@ -118,9 +122,32 @@ final class SpongePlayer implements CobblestonePlayer {
 
   @Override
   public int soulSpeedLevel() {
-    return player().flatMap(player -> player.feet().get(Keys.APPLIED_ENCHANTMENTS)).stream()
+    return enchantment(ServerPlayer::feet, EnchantmentTypes.SOUL_SPEED.get());
+  }
+
+  @Override
+  public boolean takesDamage() {
+    return player()
+        .map(
+            player -> {
+              GameMode mode = player.gameMode().get();
+              return (mode.equals(GameModes.SURVIVAL.get())
+                      || mode.equals(GameModes.ADVENTURE.get()))
+                  && !player.get(Keys.INVULNERABLE).orElse(false);
+            })
+        .orElse(true);
+  }
+
+  @Override
+  public int depthStriderLevel() {
+    return enchantment(ServerPlayer::feet, EnchantmentTypes.DEPTH_STRIDER.get());
+  }
+
+  /** The level of an enchantment on what the player wears in one slot, or 0 without it. */
+  private int enchantment(Function<ServerPlayer, ItemStack> worn, EnchantmentType type) {
+    return player().flatMap(player -> worn.apply(player).get(Keys.APPLIED_ENCHANTMENTS)).stream()
         .flatMap(List::stream)
-        .filter(enchantment -> enchantment.type().equals(EnchantmentTypes.SOUL_SPEED.get()))
+        .filter(enchantment -> enchantment.type().equals(type))
         .mapToInt(Enchantment::level)
         .max()
         .orElse(0);

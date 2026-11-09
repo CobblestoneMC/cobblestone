@@ -9,7 +9,6 @@ package org.cobblestonemc.plugin.trip;
 
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -55,7 +54,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
   private final TripManager<E, A, L> trips;
   private final SearchRegistry<L> searches;
   private final SearchGate gate;
-  private final Supplier<SearchSettings> searchSettings;
+  private final Supplier<MinecraftSearchSettings> searchSettings;
   private final long liveIntervalMillis;
   private final RegionStores regionStores;
 
@@ -63,7 +62,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
       TripManager<E, A, L> trips,
       SearchRegistry<L> searches,
       SearchGate gate,
-      Supplier<SearchSettings> searchSettings,
+      Supplier<MinecraftSearchSettings> searchSettings,
       long liveIntervalMillis,
       RegionStores regionStores) {
     this.trips = trips;
@@ -306,8 +305,7 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
       if (!isOnline(player)) {
         return CompletableFuture.completedFuture(Optional.empty());
       }
-      MinecraftSearchSettings settings =
-          new MinecraftSearchSettings(GUIDE_SETTINGS, Set.of(), Set.of(), Set.of());
+      MinecraftSearchSettings settings = searchSettings.get().withSettings(GUIDE_SETTINGS);
       return search(player, target, settings).future().handle(AbstractTripService::successPath);
     };
   }
@@ -325,6 +323,6 @@ public abstract class AbstractTripService<P, L, E, A extends TripAgent<E>> {
   }
 
   private MinecraftSearchSettings defaults() {
-    return new MinecraftSearchSettings(searchSettings.get(), Set.of(), Set.of(), Set.of());
+    return searchSettings.get();
   }
 }

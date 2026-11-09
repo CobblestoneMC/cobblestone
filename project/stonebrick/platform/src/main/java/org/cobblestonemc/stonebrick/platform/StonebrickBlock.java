@@ -166,4 +166,9 @@ final class StonebrickBlock implements MinecraftBlock {
   public boolean isPressurePlate() {
     return traits.has(BlockTraits.PRESSURE_PLATE);
   }
+
+  @Override
+  public boolean isBuilt() {
+    return traits.has(BlockTraits.BUILT);
+  }
 }

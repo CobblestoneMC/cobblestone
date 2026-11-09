@@ -18,6 +18,8 @@ import java.util.List;
 import org.cobblestonemc.CobblestoneLogger;
 import org.cobblestonemc.api.SearchSettings;
 import org.cobblestonemc.minecraft.ChunkLoadPolicy;
+import org.cobblestonemc.minecraft.api.CostWeights;
+import org.cobblestonemc.minecraft.api.MinecraftSearchSettings;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -29,6 +31,10 @@ class SearchConfigTest {
   private final List<String> warnings = new ArrayList<>();
 
   private SearchSettings read(String yaml) throws IOException {
+    return readMinecraft(yaml).settings();
+  }
+
+  private MinecraftSearchSettings readMinecraft(String yaml) throws IOException {
     Path file = directory.resolve("config.yml");
     if (yaml != null) {
       Files.writeString(file, yaml);
@@ -60,7 +66,7 @@ class SearchConfigTest {
             new ConfigPlatform(
                 "Test", ChunkLoadPolicy.ALLOW_LOAD, List.of(ChunkLoadPolicy.ALLOW_LOAD), ""));
     config.load();
-    return SearchConfig.read(config, keys);
+    return SearchConfig.readMinecraft(config, keys);
   }
 
   @Test
@@ -85,6 +91,24 @@ class SearchConfigTest {
     SearchSettings regions = read(tuned + "    heuristic: regions\n");
     assertEquals(SearchSettings.Heuristic.REGIONS, regions.heuristic());
     assertEquals(1.7, regions.heuristicWeight(), "not carried over to REGIONS");
+  }
+
+  @Test
+  void theCostsDefaultToTheApisDefaults() throws IOException {
+    assertEquals(CostWeights.defaults(), readMinecraft(null).costWeights());
+  }
+
+  @Test
+  void theCostsAreReadAndANegativeOneIsReadAsZero() throws IOException {
+    CostWeights costs =
+        readMinecraft(
+                "search:\n  costs:\n    built_block: 25.0\n    dangerous_terrain: -3.0\n"
+                    + "    dangerous_terrain_radius: 4\n")
+            .costWeights();
+    assertEquals(25.0, costs.builtBlock());
+    assertEquals(0.0, costs.dangerousTerrain());
+    assertEquals(4, costs.dangerousTerrainRadius());
+    assertEquals(CostWeights.defaults().damagePerHalfHeart(), costs.damagePerHalfHeart());
   }
 
   @Test
