@@ -4,7 +4,6 @@ plugins {
 }
 
 group = "org.cobblestonemc"
-version = "0.3.0"
 
 repositories {
     mavenCentral()
